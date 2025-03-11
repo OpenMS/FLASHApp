@@ -27,6 +27,7 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
    - Choose **General Settings** (e.g., `keep_empty_out`, `write_detail`).
    - Configure **FD settings** like `report_FDR`, `merging_method`, `min_mass`, `max_mass`, `min_charge`.
    - Adjust **SD settings** for deconvolution accuracy.
+4. If you want to know more about each parameter go to this link: https://openms.de/FLASHDeconv
 
  
 ![Configure Parameters](/static/Images/flashdeconv_configure.png)
@@ -90,9 +91,6 @@ The **Layout Manager** allows users to customize the experiment display settings
    - **Annotated spectrum**
    - **Mass table**
    - **2D plot**
-  (Shows mass distribution)
-
-
 3. Click **Save** to apply changes.
 
 
@@ -185,6 +183,8 @@ Modify Ex Parameters (max_mod_mass, max_mod_count).Adjust **general settings** s
 1. Choose the experiment.
 2. View the selected one from Layout manager.
 
+![Download Results](/static/Images/FlashTnT_Viewer.png)
+
 ---
 
 ## **6️⃣ Manual Result Upload & Example Data**
@@ -210,15 +210,30 @@ Modify Ex Parameters (max_mod_mass, max_mod_count).Adjust **general settings** s
 
 ## **📖 Need Help?**
 
-If you have any issues or questions, refer to the **FAQs** or contact support.
+If you have any questions or need assistance, feel free to contact our support team.
 
-FLASHApp Doctors:
+### **FLASHApp Support Contacts:**
+- **Tom Müller**: [tom.mueller@uni-tuebingen.de](mailto:tom.mueller@uni-tuebingen.de)
+- **Ayesha Feroz**: [ayesha.feroz@uni-tuebingen.de](mailto:ayesha.feroz@uni-tuebingen.de)
 
--**Tom Müller** : tom.mueller@uni-tuebingen.de
+---
 
--**Ayesha Feroz** : ayesha.feroz@uni-tuebingen.de
+## **📚 Relevant Publications**
+For more information about the research behind FLASHDeconv & FLASHTnT, refer to the following publications:
 
-**You're now ready to use FLASHDeconv & FLASHTnT!**
+- **Jeong, K., Kim, J., Gaikwad, M., Hidayah, S. N., Heikaus, L., Schlüter, H., & Kohlbacher, O.** (2020).  
+  *FLASHDeconv: Ultrafast, high-quality feature deconvolution for top-down proteomics.*  
+  **Cell Systems, 10(2), 213-218.e6**  
+  📄 [Read the paper](https://doi.org/10.1016/j.cels.2020.01.003)
+
+- **Müller, T. D., Siraj, A., Walter, A., Kim, J., Wein, S., von Kleist, J., Feroz, A., Pilz, M., Jeong, K., Sing, J. C., Charkow, J., Röst, H. L., & Sachsenberg, T.** (2024, November 20).  
+  *OpenMS webapps: Building user-friendly solutions for MS analysis.*  
+  📄 [Read on arXiv](https://arxiv.org/abs/2411.13189)
+
+---
+
+🚀 **You're now ready to use FLASHDeconv & FLASHTnT!**
+
 
 
 
