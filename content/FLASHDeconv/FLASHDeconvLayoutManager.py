@@ -7,10 +7,10 @@ COMPONENT_OPTIONS=[
     'MS1 deconvolved heatmap',
     'Scan table',
     'Deconvolved spectrum (Scan table needed)',
-    'Annotated spectrum (Scan table needed)',
+    'Raw spectrum (Scan table needed)',
     'Mass table (Scan table needed)',
     '3D S/N plot (Mass table needed)',
-    'QScore ECDF Plot (report_FDR must be enabled)'
+    'Score Distribution Plot'
     # "Sequence view" and "Internal fragment map" is added when "input_sequence" is submitted
 ]
 

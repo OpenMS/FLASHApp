@@ -7,7 +7,7 @@ COMPONENT_OPTIONS=[
     'Sequence view (Protein table needed)',
     'Internal fragment map (Protein table needed)',
     'Tag table (Protein table needed)',
-    'Spectrum view (Tag table needed)',
+    'Sequence tag view (Tag table needed)',
 ]
 
 COMPONENT_NAMES=[
