@@ -183,16 +183,29 @@ elif "num_of_experiment_to_show" in st.session_state and \
     resetSettingsToDefault(st.session_state.num_of_experiment_to_show)
 
 ### title and setting buttons
-c1, c2, c3, c4 = st.columns([6, 1, 1, 1])
+c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
 c1.title("Layout Manager")
 
+# side-by-side view option for 2 experiments
+if 'side_by_side_view' not in st.session_state:
+    st.session_state['side_by_side_view'] = False
+if (
+    'num_of_experiment_to_show' in st.session_state
+    and st.session_state.num_of_experiment_to_show == 2
+):
+    v_space(1, c2)
+    st.session_state['side_by_side_view'] = c2.checkbox(
+        "Side-by-Side View", value=st.session_state['side_by_side_view'],
+        help="If checked, experiments will be shown side-by-side"
+    )
+
 # Load existing layout setting file
-v_space(1, c2)
-c2.button("Load Setting", key="load_btn_clicked")
+v_space(1, c3)
+c3.button("Load Setting", key="load_btn_clicked")
 
 # Save current layout setting (only after "Saved" button)
-v_space(1, c3)
-c3.download_button(
+v_space(1, c4)
+c4.download_button(
     label="Save Setting",
     data=json.dumps(getTrimmedLayoutSetting()),
     file_name='FLASHViewer_layout_settings.json',
@@ -201,8 +214,8 @@ c3.download_button(
 )
 
 # Reset settings to default
-v_space(1, c4)
-c4.button("Reset Setting", key="reset_btn_clicked")
+v_space(1, c5)
+c5.button("Reset Setting", key="reset_btn_clicked")
 
 ### space for File Uploader, when "Load Setting" button is clicked
 if "load_btn_clicked" in st.session_state and st.session_state.load_btn_clicked:

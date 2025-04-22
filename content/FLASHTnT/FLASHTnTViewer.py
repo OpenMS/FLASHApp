@@ -261,41 +261,73 @@ if len(results) == 0:
 # Map names to index
 name_to_index = {n : i for i, n in enumerate(results)}
 
-### for only single experiment on one view
-st.selectbox(
-    "choose experiment", results, 
-    key="selected_experiment_dropdown_tagger", 
-    index=name_to_index[st.session_state.selected_experiment0_tagger] if 'selected_experiment0_tagger' in st.session_state else None,
-    on_change=select_experiment
-)
-
-if 'selected_experiment0_tagger' in st.session_state:
-    layout_info = DEFAULT_LAYOUT
-    if "saved_layout_setting_tagger" in st.session_state:  # when layout manager was used
-        layout_info = st.session_state["saved_layout_setting_tagger"][0]
-    with st.spinner('Loading component...'):
-        sendDataToJS(st.session_state.selected_experiment0_tagger, layout_info)
-
-
-### for multiple experiments on one view
-if "saved_layout_setting_tagger" in st.session_state and len(st.session_state["saved_layout_setting_tagger"]) > 1:
-
-    for exp_index, exp_layout in enumerate(st.session_state["saved_layout_setting_tagger"]):
-        if exp_index == 0: continue  # skip the first experiment
-
-        st.divider() # horizontal line
-
+if (
+    "saved_layout_setting" in st.session_state 
+     and len(st.session_state["saved_layout_setting"]) == 2
+     and st.session_state.side_by_side_view
+):
+    c1, c2 = st.columns(2)
+    with c1:
         st.selectbox(
             "choose experiment", results, 
-            key=f'selected_experiment_dropdown_{exp_index}_tagger',
-            index = name_to_index[st.session_state[f'selected_experiment{exp_index}_tagger']] if f'selected_experiment{exp_index}_tagger' in st.session_state else None,
+            key="selected_experiment_dropdown_tagger", 
+            index=name_to_index[st.session_state.selected_experiment0_tagger] if 'selected_experiment0_tagger' in st.session_state else None,
             on_change=select_experiment
         )
-
-        # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
-        if f"selected_experiment{exp_index}_tagger" in st.session_state:
-            layout_info = st.session_state["saved_layout_setting_tagger"][exp_index]
+        if 'selected_experiment0_tagger' in st.session_state:
+            layout_info = DEFAULT_LAYOUT
+            if "saved_layout_setting_tagger" in st.session_state:  # when layout manager was used
+                layout_info = st.session_state["saved_layout_setting_tagger"][0]
             with st.spinner('Loading component...'):
-                sendDataToJS(st.session_state["selected_experiment%d_tagger" % exp_index], layout_info, 'flash_viewer_grid_%d' % exp_index)
+                sendDataToJS(st.session_state.selected_experiment0_tagger, layout_info)
+    with c2:
+        st.selectbox(
+            "choose experiment", results, 
+            key=f'selected_experiment_dropdown_1_tagger',
+            index = name_to_index[st.session_state[f'selected_experiment1_tagger']] if f'selected_experiment1_tagger' in st.session_state else None,
+            on_change=select_experiment
+        )
+        if f"selected_experiment1_tagger" in st.session_state:
+            layout_info = st.session_state["saved_layout_setting_tagger"][1]
+            with st.spinner('Loading component...'):
+                sendDataToJS(st.session_state["selected_experiment1_tagger"], layout_info, 'flash_viewer_grid_1')
+
+else:
+    ### for only single experiment on one view
+    st.selectbox(
+        "choose experiment", results, 
+        key="selected_experiment_dropdown_tagger", 
+        index=name_to_index[st.session_state.selected_experiment0_tagger] if 'selected_experiment0_tagger' in st.session_state else None,
+        on_change=select_experiment
+    )
+
+    if 'selected_experiment0_tagger' in st.session_state:
+        layout_info = DEFAULT_LAYOUT
+        if "saved_layout_setting_tagger" in st.session_state:  # when layout manager was used
+            layout_info = st.session_state["saved_layout_setting_tagger"][0]
+        with st.spinner('Loading component...'):
+            sendDataToJS(st.session_state.selected_experiment0_tagger, layout_info)
+
+
+    ### for multiple experiments on one view
+    if "saved_layout_setting_tagger" in st.session_state and len(st.session_state["saved_layout_setting_tagger"]) > 1:
+
+        for exp_index, exp_layout in enumerate(st.session_state["saved_layout_setting_tagger"]):
+            if exp_index == 0: continue  # skip the first experiment
+
+            st.divider() # horizontal line
+
+            st.selectbox(
+                "choose experiment", results, 
+                key=f'selected_experiment_dropdown_{exp_index}_tagger',
+                index = name_to_index[st.session_state[f'selected_experiment{exp_index}_tagger']] if f'selected_experiment{exp_index}_tagger' in st.session_state else None,
+                on_change=select_experiment
+            )
+
+            # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
+            if f"selected_experiment{exp_index}_tagger" in st.session_state:
+                layout_info = st.session_state["saved_layout_setting_tagger"][exp_index]
+                with st.spinner('Loading component...'):
+                    sendDataToJS(st.session_state["selected_experiment%d_tagger" % exp_index], layout_info, 'flash_viewer_grid_%d' % exp_index)
 
 save_params(params)
