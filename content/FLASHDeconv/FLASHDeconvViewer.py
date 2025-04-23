@@ -140,8 +140,8 @@ def setSequenceViewInDefaultView():
 
 def select_experiment():
     st.session_state.selected_experiment0 = st.session_state.selected_experiment_dropdown
-    if "saved_layout_setting" in st.session_state and len(st.session_state["saved_layout_setting"]) > 1:
-        for exp_index in range(1, len(st.session_state["saved_layout_setting"])):
+    if len(layout) > 1:
+        for exp_index in range(1, len(layout)):
             if st.session_state[f'selected_experiment_dropdown_{exp_index}'] is None:
                 continue
             st.session_state[f"selected_experiment{exp_index}"] = st.session_state[f'selected_experiment_dropdown_{exp_index}']
@@ -163,6 +163,15 @@ file_manager = FileManager(
 )
 results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
 
+if file_manager.result_exists('layout', 'layout'):
+    layout = file_manager.get_results('layout', 'layout')['layout']
+    side_by_side = layout['side_by_side']
+    layout = layout['layout']
+    
+else:
+    layout = [DEFAULT_LAYOUT]
+    side_by_side = False
+
 ### if no input file is given, show blank page
 if len(results) == 0:
     st.error('No results to show yet. Please run a workflow first!')
@@ -171,11 +180,7 @@ if len(results) == 0:
 # Map names to index
 name_to_index = {n : i for i, n in enumerate(results)}
 
-if (
-    "saved_layout_setting" in st.session_state 
-     and len(st.session_state["saved_layout_setting"]) == 2
-     and st.session_state.side_by_side_view
-):
+if len(layout) == 2 and side_by_side:
     c1, c2 = st.columns(2)
     with c1:
         st.selectbox(
@@ -185,11 +190,8 @@ if (
             on_change=select_experiment
         )
         if 'selected_experiment0' in st.session_state:
-            layout_info = DEFAULT_LAYOUT
-            if "saved_layout_setting" in st.session_state:  # when layout manager was used
-                layout_info = st.session_state["saved_layout_setting"][0]
             with st.spinner('Loading component...'):
-                sendDataToJS(st.session_state.selected_experiment0, layout_info)
+                sendDataToJS(st.session_state.selected_experiment0, layout[0])
     with c2:
         st.selectbox(
             "choose experiment", results, 
@@ -198,9 +200,8 @@ if (
             on_change=select_experiment
         )
         if f"selected_experiment1" in st.session_state:
-            layout_info = st.session_state["saved_layout_setting"][1]
             with st.spinner('Loading component...'):
-                sendDataToJS(st.session_state["selected_experiment1"], layout_info, 'flash_viewer_grid_1')
+                sendDataToJS(st.session_state["selected_experiment1"], layout[1], 'flash_viewer_grid_1')
 
 else:
     ### for only single experiment on one view
@@ -213,17 +214,13 @@ else:
 
 
     if 'selected_experiment0' in st.session_state:
-        layout_info = DEFAULT_LAYOUT
-        if "saved_layout_setting" in st.session_state:  # when layout manager was used
-            layout_info = st.session_state["saved_layout_setting"][0]
         with st.spinner('Loading component...'):
-            sendDataToJS(st.session_state.selected_experiment0, layout_info)
-
+            sendDataToJS(st.session_state.selected_experiment0, layout[0])
 
     ### for multiple experiments on one view
-    if "saved_layout_setting" in st.session_state and len(st.session_state["saved_layout_setting"]) > 1:
+    if len(layout) > 1:
 
-        for exp_index, exp_layout in enumerate(st.session_state["saved_layout_setting"]):
+        for exp_index, exp_layout in enumerate(layout):
             if exp_index == 0: continue  # skip the first experiment
 
             st.divider()  # horizontal line
@@ -236,8 +233,7 @@ else:
             )
             # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
             if f"selected_experiment{exp_index}" in st.session_state:
-                layout_info = st.session_state["saved_layout_setting"][exp_index]
                 with st.spinner('Loading component...'):
-                    sendDataToJS(st.session_state["selected_experiment%d" % exp_index], layout_info, 'flash_viewer_grid_%d' % exp_index)
+                    sendDataToJS(st.session_state["selected_experiment%d" % exp_index], layout[exp_index], 'flash_viewer_grid_%d' % exp_index)
 
 save_params(params)
