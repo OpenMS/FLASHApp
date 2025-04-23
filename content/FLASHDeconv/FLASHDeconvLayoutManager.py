@@ -151,6 +151,20 @@ def getTrimmedLayoutSetting():
             trimmed_layout_setting.append(rows)
     return trimmed_layout_setting
 
+def getExpandedLayoutSetting(trimmed_layout_setting):
+    expanded_layout_setting = []
+    for exp in trimmed_layout_setting:
+        rows = []
+        for row in exp:
+            cols = []
+            for col in row:
+                if col:
+                    cols.append(COMPONENT_OPTIONS[COMPONENT_NAMES.index(col)])
+            if cols:
+                rows.append(cols)
+        if rows:
+            expanded_layout_setting.append(rows)
+    return expanded_layout_setting
 
 def handleEditAndSaveButtons():
     # if "Edit" button was clicked,
@@ -213,7 +227,14 @@ handleEditAndSaveButtons()
 
 # initialize setting information
 if "layout_setting" not in st.session_state:
-    resetSettingsToDefault()
+    if get_layout() is not None:
+        # load layout setting from cache
+        st.session_state['layout_setting'] = getExpandedLayoutSetting(get_layout()[0])
+        st.session_state['num_of_experiment_to_show'] = len(st.session_state.layout_setting)
+        st.session_state['side_by_side_view'] = get_layout()[1]
+        st.session_state["edit_mode"] = False
+    else:
+        resetSettingsToDefault()
 # the "num_of_experiment_to_show" changed
 elif "num_of_experiment_to_show" in st.session_state and \
         len(st.session_state.layout_setting) != st.session_state.num_of_experiment_to_show:
