@@ -222,7 +222,7 @@ if "layout_setting_tagger" not in st.session_state:
     if get_layout() is not None:
         # load layout setting from cache
         st.session_state['layout_setting_tagger'] = getExpandedLayoutSetting(get_layout()[0])
-        st.session_state['num_of_experiment_to_show'] = len(st.session_state.layout_setting)
+        st.session_state['num_of_experiment_to_show'] = len(st.session_state.layout_setting_tagger)
         st.session_state['side_by_side_view'] = get_layout()[1]
         st.session_state["edit_mode"] = False
     else:
