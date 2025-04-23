@@ -1,7 +1,7 @@
 {
     "app-name": "FLASHApp",
     "github-user": "OpenMS",
-    "repository-name": "FLASHViewer",
+    "repository-name": "FLASHApp",
     "analytics": {
         "google-analytics": {
             "enabled": false,
