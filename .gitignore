@@ -6,7 +6,7 @@ build.log
 run_app.spec
 clean-up-workspaces.log
 
-# FLASHViewer
+# FLASHApp
 workspaces
 Pipfile
 workspaces-flashtaggerviewer
