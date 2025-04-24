@@ -13,8 +13,8 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
    - **Browse Files** to manually select the `.mzML` file.
 4. Click **"Add MS Data"** to confirm the upload.
 
+![Upload](/static/images/flashdeconv_upload.png)
 
-![Configure Parameters](/static/Images/flashdeconv_upload.png)
 
 ---
 
@@ -30,7 +30,7 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 4. If you want to know more about each parameter go to this link: https://openms.de/FLASHDeconv
 
  
-![Configure Parameters](/static/Images/flashdeconv_configure.png)
+![Configure Parameters](/static/images/flashdeconv_configure.png)
 
 ---
 
@@ -42,7 +42,7 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 4. Monitor the **log output** to track progress.
 
   
-![Run Workflow](/static/Images/flashdeconv_run.png)
+![Run Workflow](/static/images/flashdeconv_run.png)
 
 ---
 
@@ -63,7 +63,7 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 4. Click **"Add files to workspace"** to finalize.
 
 
-![Manual Upload](/static/Images/flashdeconv_manual_upload.png)
+![Manual Upload](/static/images/flashdeconv_manual_upload.png)
 
 ---
 
@@ -74,7 +74,7 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 3. The example data will appear in the uploaded experiments table.
 
  
-![Example Data](/static/Images/flashdeconv_example_data.png)
+![Example Data](/static/images/flashdeconv_example_data.png)
 
 ---
 
@@ -84,17 +84,17 @@ The **Layout Manager** allows users to customize the experiment display settings
 
 1. Select the **number of experiments** to view at once.
 2. Click **"Select..."** to choose components to add:
-   - **MS1 raw heatmap**
-   - **MS1 deconvolved heatmap**
-   - **Scan table**
-   - **Deconvolved spectrum**
-   - **Annotated spectrum**
-   - **Mass table**
-   - **2D plot**
+   - **MS1 raw heatmap** - 2D heatmap of raw MS signals with m/z (y-axis), retention time (x-axis), and intensity as color gradient.
+   - **MS1 deconvolved heatmap** - Displays raw MS signals as a 2D heatmap with monoisotopic mass (y-axis), retention time (x-axis), and intensity as a color gradient.
+   - **Scan table** - Lists scan details (e.g., number, retention time, precursor mass). 
+   - **Deconvolved spectrum** - Plots deconvolved spectrum for a scan (summed intensity vs. monoisotopic mass).
+   - **Raw spectrum** - Plots raw spectrum for a scan(intensity vs m/z).
+   - **Mass table** - Display deconvolved masses for a selected scan with properties.
+   - **3D S/N plot** - Visualizes S/N ratio of deconvolved masses in 3D.
 3. Click **Save** to apply changes.
 
 
-![Layout Manager](/static/Images/flashdeconv_layout_manager.png)
+![Layout Manager](/static/images/flashdeconv_layout_manager.png)
 
 ---
 
@@ -104,7 +104,7 @@ The **Layout Manager** allows users to customize the experiment display settings
 2. Choose an experiment from the dropdown.
 3. View the selected one from Layout manager: scan table, mass table, annotated spectrum, and deconvolved spectrum etc.
 
-![FLASHViewer](/static/Images/flashdeconv_viewer.png)
+![FLASHViewer](/static/images/flashdeconv_viewer.png)
 
 ---
 
@@ -115,7 +115,7 @@ The **Layout Manager** allows users to customize the experiment display settings
 3. Click **"Prepare Download"** to generate the downloadable files.
 4. To delete an experiment, click the **trash icon** next to the experiment name.
 
-![Download Results](/static/Images/flashdeconv_download.png)
+![Download Results](/static/images/flashdeconv_download.png)
 
 ---
 
@@ -128,13 +128,13 @@ The **Layout Manager** allows users to customize the experiment display settings
 1. Navigate to **FLASHTnT > Workflow** in the sidebar.
 2. Click **"File Upload"** to upload your `.mzML` file.
 
-![Download Results](/static/Images/flashTnT_upload.png)
+![Download Results](/static/images/flashTnT_upload.png)
 
 3. Click the **"Database"** tab to upload the necessary **FASTA** database files.
 4. Click **"Add Database"** to confirm the upload.
 
 
-![Download Results](/static/Images/flashTnT_databaseupload.png)
+![Download Results](/static/images/flashTnT_databaseupload.png)
 ---
 ## **2️⃣ Configuring Parameters**
 1. Click the **"Configure"** tab.
@@ -142,18 +142,17 @@ The **Layout Manager** allows users to customize the experiment display settings
 3. Choose the **FASTA database** file.
 4. There are two sub-tabs for configuring parameters: **FLASHDeconv** and **FLASHTnT**.
 5. Adjust FLASHTnT parameters:
-Modify Ex Parameters (max_mod_mass, max_mod_count).Adjust **general settings** such as:
-   - Threads
-   - FDR settings
-   - Ion types (`b`, `y`)
-   - Modification mass limits
-   - Tag lengths
+Adjust **general settings** such as:
+   - **FDR settings** (prsm_fdr, pro_fdr) – Set thresholds for precursor and proteoform-level FDR (e.g., 1.00%).
+   - **Ion types** (ion_type) – Ion series to consider when generating tags (e.g., b, y).
+   - **Max modification count** (max_mod_count) – Maximum number of allowed modifications per protein.
+
    
 5. Click **Save** to apply settings.
 
 
-![Download Results](/static/Images/flashtnt_configure.png)
-![Download Results](/static/Images/flashTnT_configure2.png)
+![Download Results](/static/images/flashtnt_configure.png)
+![Download Results](/static/images/flashTnT_configure2.png)
 
 
 ---
@@ -164,17 +163,22 @@ Modify Ex Parameters (max_mod_mass, max_mod_count).Adjust **general settings** s
 2. Click **"Start Workflow"** to begin.
 3. Monitor the progress in the log output.
 
-![Download Results](/static/Images/flashtnt_run.png)
+![Download Results](/static/images/flashtnt_run.png)
 
 ---
 
 ## **4️⃣ Layout Manager**
 
-1. Navigate to **Layout Manager**.
-2. Select an experiment to view at once e.g, 1,2,3,4 or 5.
-3. Now based on experiment number select the component to be added like **Protein table, Sequence view, Internal Fragment Map, Tag table, and Spectrum View**.
+1. Navigate to Layout Manager.
+2. Select how many experiments to display simultaneously (e.g., 1–5).
+3. Choose **components** to add for each experiment:
+- **Protein Table** – Lists proteins identified by FLASHTnT, including accession, modifications, and score.
+- **Sequence View** – Annotates tags, PTMs, and fragments. Visualizes FLASHTnT results; for FLASHDeconv data must be user-supplied.
+- **Internal Fragment Map** – Shows internal fragment ions from the selected scan
+- **Tag Table** – Lists sequence tags with corresponding information.
+- **Spectrum View** – Shows the annotated spectrum with matched peaks.
 
-![Download Results](/static/Images/layoutmanager_tnt.png)
+![Download Results](/static/images/layoutmanager_tnt.png)
 
 ---
 
@@ -183,7 +187,7 @@ Modify Ex Parameters (max_mod_mass, max_mod_count).Adjust **general settings** s
 1. Choose the experiment.
 2. View the selected one from Layout manager.
 
-![Download Results](/static/Images/FlashTnT_Viewer.png)
+![Download Results](/static/images/FlashTnT_Viewer.png)
 
 ---
 
@@ -192,7 +196,7 @@ Modify Ex Parameters (max_mod_mass, max_mod_count).Adjust **general settings** s
 1. Click **"Manual Result Upload"** to upload manually processed data.
 2. Click **"Example Data"** to load a sample dataset.
 
-![Download Results](/static/Images/manual_result_upload.png)
+![Download Results](/static/images/manual_result_upload.png)
 
 ---
 
@@ -203,7 +207,7 @@ Modify Ex Parameters (max_mod_mass, max_mod_count).Adjust **general settings** s
 3. Click **"Prepare Download"** to generate the downloadable files.
 4. To delete an experiment, click the **trash icon** next to the experiment name.
  
-![Download Results](/static/Images/download_tnt.png)
+![Download Results](/static/images/download_tnt.png)
 
 ---
 
@@ -228,8 +232,11 @@ For more information about the research behind FLASHDeconv & FLASHTnT, refer to 
 
 - **Müller, T. D., Siraj, A., Walter, A., Kim, J., Wein, S., von Kleist, J., Feroz, A., Pilz, M., Jeong, K., Sing, J. C., Charkow, J., Röst, H. L., & Sachsenberg, T.** (2024, November 20).  
   *OpenMS webapps: Building user-friendly solutions for MS analysis.*  
-  📄 [Read on arXiv](https://arxiv.org/abs/2411.13189)
+  📄 [Read the paper](https://pubs.acs.org/doi/10.1021/acs.jproteome.4c00872)
 
+- **Müller, T., Kim, J., Almaguer, A., et al.** (2025, April 17).
+ *FLASHApp: Interactive Data Analysis and Visualization for Top-Down Proteomics.*
+ 📄 [Read the paper](https://www.authorea.com/users/914240/articles/1287405-flashapp-interactive-data-analysis-and-visualization-for-top-down-proteomics?commit=1447908dbdd26d9a2312890c9c400d96f2b171f7)
 ---
 
 🚀 **You're now ready to use FLASHDeconv & FLASHTnT!**
