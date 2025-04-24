@@ -20,13 +20,6 @@ else:
 
 # Process Markdown content and replace image references
 for line in content:
-    # Custom image placeholder for flashdeconv_configure.png
-    if "[FLASHDECONV_CONFIGURE_IMAGE]" in line:
-        image_path = image_folder / "flashdeconv_configure.png"
-        if image_path.exists():
-            st.image(str(image_path), caption="FLASHDeconv Configuration", width=300)
-        else:
-            st.warning("⚠️ Image 'flashdeconv_configure.png' not found.")
 
     # Markdown-style image (e.g., ![alt text](path/to/image.png))
     elif line.strip().startswith("!["):
