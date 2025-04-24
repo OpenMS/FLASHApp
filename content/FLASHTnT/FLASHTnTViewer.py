@@ -160,7 +160,7 @@ def sendDataToJS(selected_data, layout_info_per_exp, grid_key='flash_viewer_grid
 
     components = []
     data_to_send = {}
-    per_scan_contents = {'spectrum_view': False, 'sequence_view': False}
+    per_scan_contents = {'spectrum_view': False, 'fragment_ions': False}
     for row in layout_info_per_exp:
         components_of_this_row = []
         for _, comp_name in enumerate(row):
@@ -178,9 +178,10 @@ def sendDataToJS(selected_data, layout_info_per_exp, grid_key='flash_viewer_grid
                 data_to_send['tag_table'] = tag_df
                 component_arguments = Tabulator('TagTable')
             elif comp_name == 'sequence_view':
-                per_scan_contents['sequence_view'] = True
+                per_scan_contents['fragment_ions'] = True
                 component_arguments = SequenceView()
             elif comp_name == 'internal_fragment_map':
+                per_scan_contents['fragment_ions'] = True
                 data_to_send['internal_fragment_data'] = internal_fragment_data
                 component_arguments = InternalFragmentMap()
 
@@ -202,7 +203,7 @@ def sendDataToJS(selected_data, layout_info_per_exp, grid_key='flash_viewer_grid
                 tmp_df.rename(columns={'mzarray': 'MonoMass_Anno', 'intarray': 'SumIntensity_Anno'}, inplace=True)
                 dfs.append(tmp_df)                               
                 
-            elif key == 'sequence_view':
+            elif key == 'fragment_ions':
                 # Deconvolved data
                 tmp_df = spec_df[['mzarray']].copy()
                 tmp_df.rename(columns={'mzarray': 'MonoMass'}, inplace=True)
