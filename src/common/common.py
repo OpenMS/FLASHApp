@@ -127,7 +127,7 @@ def page_setup(page: str = "") -> dict[str, Any]:
         unsafe_allow_html=True,
     )
 
-    st.logo("assets/pyopenms_transparent_background.png")
+    st.logo("assets/OpenMS.png")
 
     # Create google analytics if consent was given
     if (
