@@ -34,9 +34,9 @@ ARG PORT=8501
 ARG GITHUB_TOKEN
 ENV GH_TOKEN=${GITHUB_TOKEN}
 # Streamlit app Gihub user name (to download artifact from).
-ARG GITHUB_USER=t0mdavid-m
+ARG GITHUB_USER=OpenMS
 # Streamlit app Gihub repository name (to download artifact from).
-ARG GITHUB_REPO=FLASHViewer 
+ARG GITHUB_REPO=FLASHApp
 # Name of the zip file containing the windows executable
 ARG ASSET_NAME=OpenMS-App.zip
 

@@ -1,16 +1,20 @@
-import streamlit as st
-from src.common.common import page_setup, v_space, save_params
 import json
+
+import streamlit as st
+
+from src.common.common import page_setup, v_space, save_params
+from src.workflow.FileManager import FileManager
+from pathlib import Path
 
 COMPONENT_OPTIONS=[
     'MS1 raw heatmap',
     'MS1 deconvolved heatmap',
     'Scan table',
     'Deconvolved spectrum (Scan table needed)',
-    'Annotated spectrum (Scan table needed)',
+    'Raw spectrum (Scan table needed)',
     'Mass table (Scan table needed)',
     '3D S/N plot (Mass table needed)',
-    'QScore ECDF Plot (report_FDR must be enabled)'
+    'Score Distribution Plot'
     # "Sequence view" and "Internal fragment map" is added when "input_sequence" is submitted
 ]
 
@@ -26,12 +30,37 @@ COMPONENT_NAMES=[
     # "sequence view" and "internal fragment map" added when "input_sequence" is submitted
 ]
 
+# Setup cache access
+file_manager = FileManager(
+    st.session_state["workspace"],
+    Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+)
+
+def set_layout(layout, side_by_side=False):
+    file_manager.store_data('layout', 'layout', 
+        {
+            'layout': layout,
+            'side_by_side': side_by_side
+        }
+    )
+
+def get_layout():
+    # Check if layout has been set
+    if not file_manager.result_exists('layout', 'layout'):
+        return None
+    # fetch layout from cache
+    layout = file_manager.get_results('layout', 'layout')['layout']
+
+    return layout['layout'], layout['side_by_side'] 
 
 def resetSettingsToDefault(num_of_exp=1):
     st.session_state["layout_setting"] = [[['']]] # 1D: experiment, 2D: row, 3D: column, element=component name
     st.session_state["num_of_experiment_to_show"] = num_of_exp
     for index in range(1, num_of_exp):
         st.session_state.layout_setting.append([['']])
+    if file_manager.result_exists('layout', 'layout'):
+        file_manager.remove_results('layout')
+    st.session_state["edit_mode"] = True
 
 
 def containerForNewComponent(exp_index, row_index, col_index):
@@ -122,18 +151,31 @@ def getTrimmedLayoutSetting():
             trimmed_layout_setting.append(rows)
     return trimmed_layout_setting
 
+def getExpandedLayoutSetting(trimmed_layout_setting):
+    expanded_layout_setting = []
+    for exp in trimmed_layout_setting:
+        rows = []
+        for row in exp:
+            cols = []
+            for col in row:
+                if col:
+                    cols.append(COMPONENT_OPTIONS[COMPONENT_NAMES.index(col)])
+            if cols:
+                rows.append(cols)
+        if rows:
+            expanded_layout_setting.append(rows)
+    return expanded_layout_setting
 
 def handleEditAndSaveButtons():
     # if "Edit" button was clicked,
     if "edit_btn_clicked" in st.session_state and st.session_state["edit_btn_clicked"]:
-        # reset variables based on "saved_layout_setting"
-        st.session_state["num_of_experiment_to_show"] = len(st.session_state["saved_layout_setting"])
+        st.session_state["edit_mode"] = True
+        # reset variables based on saved layout setting
+        st.session_state["num_of_experiment_to_show"] = len(get_layout()[0]) if get_layout() is not None else 1
         st.session_state["layout_setting"] = [[[COMPONENT_OPTIONS[COMPONENT_NAMES.index(col)]
                                                 for col in row if col]
                                                for row in exp if row]
-                                              for exp in st.session_state.saved_layout_setting]
-        # remove saved state, if any
-        del st.session_state["saved_layout_setting"]
+                                              for exp in get_layout()[0]]
 
     # if "Save" button was clicked,
     if "layout_saved" in st.session_state and st.session_state["layout_saved"]:
@@ -141,14 +183,13 @@ def handleEditAndSaveButtons():
         st.session_state['save_btn_error_message'] = got_error # to show error msg at the end
         if not got_error:
             # get only submitted info from "layout_setting"
-            st.session_state["saved_layout_setting"] = getTrimmedLayoutSetting()
+            set_layout(getTrimmedLayoutSetting(), side_by_side=st.session_state['side_by_side_view'])
+            st.session_state["edit_mode"] = False
 
 
 def handleSettingButtons():
     if "reset_btn_clicked" in st.session_state and st.session_state.reset_btn_clicked:
         resetSettingsToDefault()
-        if "saved_layout_setting" in st.session_state:
-            del st.session_state["saved_layout_setting"]
 
     if "uploaded_json_file" in st.session_state and st.session_state.uploaded_json_file is not None:
         uploaded_layout = json.load(st.session_state.uploaded_json_file)
@@ -179,28 +220,54 @@ params = page_setup()
 setSequenceView()
 
 # handles "onclick" of buttons
+if st.session_state.get("edit_mode") is None:
+    st.session_state["edit_mode"] = True
 handleSettingButtons()
 handleEditAndSaveButtons()
 
 # initialize setting information
 if "layout_setting" not in st.session_state:
-    resetSettingsToDefault()
+    if get_layout() is not None:
+        # load layout setting from cache
+        st.session_state['layout_setting'] = getExpandedLayoutSetting(get_layout()[0])
+        st.session_state['num_of_experiment_to_show'] = len(st.session_state.layout_setting)
+        st.session_state['side_by_side_view'] = get_layout()[1]
+        st.session_state["edit_mode"] = False
+    else:
+        resetSettingsToDefault()
 # the "num_of_experiment_to_show" changed
 elif "num_of_experiment_to_show" in st.session_state and \
         len(st.session_state.layout_setting) != st.session_state.num_of_experiment_to_show:
     resetSettingsToDefault(st.session_state.num_of_experiment_to_show)
 
 ### title and setting buttons
-c1, c2, c3, c4 = st.columns([6, 1, 1, 1])
+c1, c2, c3, c4, c5 = st.columns([6, 1, 1, 1, 1])
 c1.title("Layout Manager")
 
+# side-by-side view option for 2 experiments
+if 'side_by_side_view' not in st.session_state:
+    st.session_state['side_by_side_view'] = False
+if (
+    ('num_of_experiment_to_show' in st.session_state
+     and st.session_state.num_of_experiment_to_show == 2)
+    or 
+    (not st.session_state.edit_mode
+     and (get_layout() is not None and len(get_layout()[0]) == 2))
+):
+    v_space(1, c2)
+    st.session_state['side_by_side_view'] = c2.checkbox(
+        "Side-by-Side View", value=st.session_state['side_by_side_view'],
+        help="If checked, experiments will be shown side-by-side",
+        disabled=(not st.session_state.edit_mode)
+    )
+
 # Load existing layout setting file
-v_space(1, c2)
-c2.button("Load Setting", key="load_btn_clicked")
+v_space(1, c3)
+c3.button("Load Setting", key="load_btn_clicked")
 
 # Save current layout setting (only after "Saved" button)
-v_space(1, c3)
-c3.download_button(
+v_space(1, c4)
+c4.download_button(
     label="Save Setting",
     data=json.dumps(getTrimmedLayoutSetting()),
     file_name='FLASHViewer_layout_settings.json',
@@ -209,18 +276,18 @@ c3.download_button(
 )
 
 # Reset settings to default
-v_space(1, c4)
-c4.button("Reset Setting", key="reset_btn_clicked")
+v_space(1, c5)
+c5.button("Reset Setting", key="reset_btn_clicked")
 
 ### space for File Uploader, when "Load Setting" button is clicked
 if "load_btn_clicked" in st.session_state and st.session_state.load_btn_clicked:
     st.file_uploader("Choose a json file", type="json", key="uploaded_json_file")
 
 ### Main part
-if "saved_layout_setting" in st.session_state:
+if (not st.session_state.edit_mode) and (get_layout() is not None):
     # show saved-mode
-    for index_of_experiment in range(len(st.session_state.saved_layout_setting)):
-        layout_info_per_experiment = st.session_state.saved_layout_setting[index_of_experiment]
+    for index_of_experiment in range(len(get_layout()[0])):
+        layout_info_per_experiment = get_layout()[0][index_of_experiment]
         with st.expander("Experiment #%d"%(index_of_experiment+1), expanded=True):
             for row_index, row in enumerate(layout_info_per_experiment):
                 st_cols = st.columns(len(row))
@@ -238,10 +305,8 @@ else:
 
 ### buttons for edit/save
 _, edit_btn_col, save_btn_col = st.columns([9, 1, 1])
-edit_btn_col.button("Edit", key="edit_btn_clicked",
-                    disabled=False if "saved_layout_setting" in st.session_state else True)
-save_btn_col.button("Save", key="layout_saved",
-                    disabled=True if "saved_layout_setting" in st.session_state else False)
+edit_btn_col.button("Edit", key="edit_btn_clicked", disabled=st.session_state.edit_mode)
+save_btn_col.button("Save", key="layout_saved", disabled=(not st.session_state.edit_mode))
 
 ### showing error/success message
 if "save_btn_error_message" in st.session_state and st.session_state.layout_saved:
