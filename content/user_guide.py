@@ -22,7 +22,7 @@ else:
 for line in content:
 
     # Markdown-style image (e.g., ![alt text](path/to/image.png))
-    elif line.strip().startswith("!["):
+    if line.strip().startswith("!["):
         start = line.find("(") + 1
         end = line.find(")")
         image_name = line[start:end].split("/")[-1]
