@@ -160,7 +160,7 @@ def sendDataToJS(selected_data, layout_info_per_exp, grid_key='flash_viewer_grid
 
     components = []
     data_to_send = {}
-    per_scan_contents = {'spectrum_view': False, 'sequence_view': False}
+    per_scan_contents = {'spectrum_view': False, 'fragment_ions': False}
     for row in layout_info_per_exp:
         components_of_this_row = []
         for _, comp_name in enumerate(row):
