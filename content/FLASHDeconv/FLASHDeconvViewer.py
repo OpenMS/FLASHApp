@@ -7,9 +7,10 @@ from pathlib import Path
 from src.common.common import page_setup, save_params
 from src.masstable import getMSSignalDF, getSpectraTableDF
 from src.components import PlotlyHeatmap, PlotlyLineplot, Plotly3Dplot, Tabulator, SequenceView, InternalFragmentMap, \
-                           FlashViewerComponent, flash_viewer_grid_component, FDRPlotly
+                           FlashViewerComponent, flash_viewer_grid_component, FDRDensityPlotly
 from src.sequence import getFragmentDataFromSeq, getInternalFragmentDataFromSeq
 from src.workflow.FileManager import FileManager
+from scipy.stats import gaussian_kde
 
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
@@ -74,11 +75,20 @@ def sendDataToJS(selected_data, layout_info_per_exp, grid_key='flash_viewer_grid
                 data_to_send['internal_fragment_data'] = {0: getInternalFragmentDataFromSeq(st.session_state.input_sequence)}
                 component_arguments = InternalFragmentMap()
             elif comp_name == 'fdr_plot':
+                print(fdr_dfs)
                 if fdr_dfs is not None:
-                    ecdf_target, ecdf_decoy = ecdf(fdr_dfs)
-                    data_to_send['ecdf_target'] = ecdf_target
-                    data_to_send['ecdf_decoy'] = ecdf_decoy
-                component_arguments = FDRPlotly()
+                    #ecdf_target, ecdf_decoy = ecdf(fdr_dfs)
+                    #data_to_send['ecdf_target'] = ecdf_target
+                    #data_to_send['ecdf_decoy'] = ecdf_decoy
+                    # 🔴 NEW:
+                    density_target, density_decoy = density_distribution(fdr_dfs)
+                    print(density_target)
+                    print(density_decoy)
+                    data_to_send['density_target'] = density_target
+                    data_to_send['density_decoy'] = density_decoy
+                #component_arguments = FDRPlotly()
+                # 🔴 NEW:
+                component_arguments = FDRDensityPlotly()
 
             components_of_this_row.append(FlashViewerComponent(component_arguments))
         components.append(components_of_this_row)
@@ -118,19 +128,36 @@ def sendDataToJS(selected_data, layout_info_per_exp, grid_key='flash_viewer_grid
 
     flash_viewer_grid_component(components=components, data=data_to_send, component_key=grid_key)
 
-def ecdf(df):
-    target_qscores = df[df['TargetDecoyType'] == 0]['Qscore']
-    decoy_qscores = df[df['TargetDecoyType'] > 0]['Qscore']
+#def ecdf(df):
+    #target_qscores = df[df['TargetDecoyType'] == 0]['Qscore']
+    #decoy_qscores = df[df['TargetDecoyType'] > 0]['Qscore']
 
-    ecdf_target = pd.DataFrame({
-        'x' : np.sort(target_qscores),
-        'y' : np.arange(1, len(target_qscores) + 1) / len(target_qscores)
-    })
-    ecdf_decoy = pd.DataFrame({
-        'x' : np.sort(decoy_qscores),
-        'y' : np.arange(1, len(decoy_qscores) + 1) / len(decoy_qscores)
-    })
-    return ecdf_target, ecdf_decoy
+    #ecdf_target = pd.DataFrame({
+        #'x' : np.sort(target_qscores),
+        #'y' : np.arange(1, len(target_qscores) + 1) / len(target_qscores)
+   # })
+    #ecdf_decoy = pd.DataFrame({
+        #'x' : np.sort(decoy_qscores),
+        #'y' : np.arange(1, len(decoy_qscores) + 1) / len(decoy_qscores)
+   # })
+    #return ecdf_target, ecdf_decoy
+# 🔴 NEW FUNCTION
+
+
+def density_distribution(df):
+    target_qscores = df[df['TargetDecoyType'] == 0]['Qscore'].dropna()
+    decoy_qscores = df[df['TargetDecoyType'] > 0]['Qscore'].dropna()
+
+    x_target = np.linspace(target_qscores.min(), target_qscores.max(), 200)
+    x_decoy = np.linspace(decoy_qscores.min(), decoy_qscores.max(), 200)
+
+    kde_target = gaussian_kde(target_qscores)
+    kde_decoy = gaussian_kde(decoy_qscores)
+
+    density_target = pd.DataFrame({'x': x_target, 'y': kde_target(x_target)})
+    density_decoy = pd.DataFrame({'x': x_decoy, 'y': kde_decoy(x_decoy)})
+
+    return density_target, density_decoy
 
 def setSequenceViewInDefaultView():
     if 'input_sequence' in st.session_state and st.session_state.input_sequence:
@@ -153,7 +180,6 @@ def select_experiment():
 # page initialization
 params = page_setup()
 
-st.title("FLASHViewer")
 setSequenceViewInDefaultView()
 
 # Get available results

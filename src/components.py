@@ -4,7 +4,7 @@ import streamlit.components.v1 as st_components
 
 # Create a _RELEASE constant. We'll set this to False while we're developing
 # the component, and True when we're ready to package and distribute it.
-_RELEASE = True
+_RELEASE = False
 
 
 def flash_viewer_grid_component(components, data, component_key='flash_viewer_grid'):
@@ -70,9 +70,14 @@ class PlotlyLineplot:
         self.title = title
         self.componentName = "PlotlyLineplot"
 
-class FDRPlotly:
+#class FDRPlotly:
+    #def __init__(self):
+        #self.title = 'QScore ECDF Plot'
+        #self.componentName = "FDRPlotly"
+# 🔴 REPLACED WITH:
+class FDRDensityPlotly:
     def __init__(self):
-        self.title = 'QScore ECDF Plot'
+        self.title = 'QScore Density Distribution Plot'
         self.componentName = "FDRPlotly"
 
 class PlotlyLineplotTagger:

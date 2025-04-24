@@ -10,7 +10,6 @@ from src.components import flash_viewer_grid_component, FlashViewerComponent, FL
 # page initialization
 params = page_setup()
 
-st.title('FLASHViewer')
 
 # Get available results
 file_manager = FileManager(
