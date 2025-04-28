@@ -48,4 +48,4 @@ c1.markdown(
 - Want to save your progress or share it with your team? Simply bookmark / share the URL!
 """
 )
-c2.image("assets/pyopenms_transparent_background.png", width=300)
+c2.image("assets/OpenMS.png", width=300)
