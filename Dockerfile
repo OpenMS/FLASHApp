@@ -144,6 +144,7 @@ WORKDIR /app
 
 COPY .streamlit/ /app/.streamlit
 COPY assets/ /app/assets
+COPY static/ /app/static
 COPY clean-up-workspaces.py /app/clean-up-workspaces.py
 COPY content/ /app/content
 # COPY docs/ /app/docs
