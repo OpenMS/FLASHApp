@@ -12,7 +12,7 @@ dependencies:
 - pip:
   # dependencies only available through pip
   # streamlit dependencies
-  - streamlit>=1.39.0
+  - streamlit==1.39.0
   - captcha==0.5.0
   - pyopenms_viz>=0.1.2
   - streamlit-js-eval
