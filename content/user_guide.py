@@ -8,7 +8,7 @@ st.title("📖 User Guide")
 
 # Define paths
 md_file = Path("content", "user_guide.md")
-image_folder = Path("static", "Images")
+image_folder = Path("static", "images")
 
 # Read the User Guide Markdown file
 if md_file.exists():

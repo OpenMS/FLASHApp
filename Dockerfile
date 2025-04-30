@@ -147,7 +147,6 @@ COPY assets/ /app/assets
 COPY static/ /app/static
 COPY clean-up-workspaces.py /app/clean-up-workspaces.py
 COPY content/ /app/content
-# COPY docs/ /app/docs
 COPY example-data/ /app/example-data
 COPY gdpr_consent/ /app/gdpr_consent
 COPY hooks/ /app/hooks
