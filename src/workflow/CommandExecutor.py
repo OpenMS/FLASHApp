@@ -60,7 +60,7 @@ class CommandExecutor:
         end_time = time.time()
         self.logger.log(f"Total time to run {len(commands)} commands: {end_time - start_time:.2f} seconds", 1)
 
-    def run_command(self, command: list[str]) -> None:
+    def run_command(self, command: list[str], cwd=None) -> None:
         """
         Executes a specified shell command and logs its execution details.
 
@@ -78,7 +78,7 @@ class CommandExecutor:
         start_time = time.time()
         
         # Execute the command
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
         child_pid = process.pid
         
         # Record the PID to keep track of running processes associated with this workspace/workflow
