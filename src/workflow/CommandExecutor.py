@@ -73,6 +73,9 @@ class CommandExecutor:
         # Ensure all command parts are strings
         command = [str(c) for c in command]
 
+        # Log cwd
+        if cwd is not None:
+            self.logger.log(f'Preparing command... cwd is set to \'{cwd}\'')
         # Log the execution start
         self.logger.log(f"Running command:\n"+' '.join(command)+"\nWaiting for command to finish...", 1)   
         start_time = time.time()
