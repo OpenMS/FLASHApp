@@ -1,9 +1,11 @@
+import re
 import json
 import time
 import multiprocessing
 
 import streamlit as st
 
+from time import sleep
 from pathlib import Path
 from os import makedirs, listdir
 from shutil import copyfile, rmtree
@@ -408,6 +410,125 @@ class DeconvWorkflow(WorkflowManager):
 
             # Remove temporary folder
             rmtree(folder_path)
+
+class IdaWorkflow(WorkflowManager):
+
+    def __init__(self) -> None:
+        # Initialize the parent class with the workflow name.
+        super().__init__("FLASHIda", st.session_state["workspace"])
+        self.script_path = join('src', 'FLASHIda', 'run.py')
+        self.tool_name = 'FLASHIdaRunner'
+
+    def configure(self) -> None:
+        self.ui.input_widget(
+            key="executable", name="Path to FLASHIda.exe", default='',
+            widget_type="text"
+        )
+        self.ui.input_widget(
+            key="raw-files", name="Path to raw files", default='',
+            widget_type="text"
+        )
+        self.ui.input_widget(
+            key="method-files", name="Path to method files", default='',
+            widget_type="text"
+        )
+
+    def execution(self) -> None:
+        params = self.parameter_manager.get_parameters_from_json()
+
+        # Validate FLASHIda executable input
+        flashida_path = Path(params['executable'])
+        if flashida_path.suffix.lower() != '.exe':
+            self.logger.log(
+                f'FLASHIda executable was provided with extension '
+                f'\'{flashida_path.suffix}\'. Expected \'.exe\''
+            )
+            return
+        if flashida_path.is_file():
+            self.logger.log(f'Found FLASHIda executable!')
+        else:
+            self.logger.log(f'{flashida_path} is not a file.')
+            return
+        
+        # Validate method file input
+        methods_folder_path = Path(params['method-files'])
+        if methods_folder_path.is_dir() and (params['method-files'] != ''):
+            self.logger.log(f'Found methods folder!')
+        else:
+            self.logger.log(
+                f'Method folder \'{methods_folder_path}\' '
+                f'is not a folder.'
+            )
+            return
+        
+        # Validate raw file input
+        raw_folder_path = Path(params['raw-files'])
+        if raw_folder_path.is_dir() and (params['raw-files'] != ''):
+            self.logger.log(f'Found raw file folder!')
+        else:
+            self.logger.log(
+                f'Raw folder \'{raw_folder_path}\' '
+                f'is not a folder.'
+            )
+            return
+        
+        # Find existing raw files
+        ignored_raws, ignored_methods = self._find_raws(raw_folder_path)
+        if len(ignored_raws) > 0:
+            self.logger.log(
+                'Found the following existing raw files that match the scheme:'
+            )
+            for i, (file, method) in enumerate(zip(ignored_raws,ignored_methods)):
+                self.logger.log(f'{i+1}:\t{file}\t({method}.xml)')
+            self.logger.log('Ignoring these files!')
+
+        self.logger.log('Listening for new raw files...')
+        while(True):
+            # Scan every 1s
+            sleep(1)
+            
+            # Search for new raws
+            new_raws, new_methods = self._find_raws(raw_folder_path)
+            for raw, method in zip(new_raws, new_methods):
+                if raw not in ignored_raws:
+                    break
+            else:
+                continue
+            
+            self.logger.log(f'Detected new raw \'{raw}\'')
+
+            # Ignore raw in future cycles
+            ignored_raws.append(raw)
+            ignored_methods.append(method)
+            
+            # Validate method
+            method_path = Path(methods_folder_path, f'{method}.xml')
+            method_path = Path(raw_folder_path, raw)
+            if method_path.is_file():
+                self.logger.log(f'Found method \'{method_path}\'!')
+                self.executor.run_command(
+                    [flashida_path, '-m', method_path, '-r', raw]
+                )
+                self.logger.log(raw)
+                self.logger.log(method)
+            else:
+                self.logger.log(
+                    f'Method \'{method_path}\' is not valid. Ignoring...'
+                )
+
+    def _find_raws(self, raw_path):
+        # Find existing raw files
+        raws = []
+        methods = []
+        method_pattern = r'FLASHIda_([^_]+)(?:_[^.]*)?\.raw'
+        for file in listdir(raw_path):
+            if not Path(raw_path, file).is_file():
+                continue
+            match = re.search(method_pattern, file)
+            if match:
+                raws.append(str(file))
+                methods.append(match.group(1))
+        return raws, methods
 
 
 class QuantWorkflow(WorkflowManager):
