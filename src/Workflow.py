@@ -421,7 +421,7 @@ class IdaWorkflow(WorkflowManager):
 
     def configure(self) -> None:
         self.ui.input_widget(
-            key="executable", name="Path to FLASHIda.exe", default='',
+            key="executable", name="Path to Flash.exe", default='',
             widget_type="text"
         )
         self.ui.input_widget(
