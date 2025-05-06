@@ -503,18 +503,22 @@ class IdaWorkflow(WorkflowManager):
             
             # Validate method
             method_path = Path(methods_folder_path, f'{method}.xml')
-            method_path = Path(raw_folder_path, raw)
+            raw_path = Path(raw_folder_path, raw)
             if method_path.is_file():
                 self.logger.log(f'Found method \'{method_path}\'!')
+                self.logger.log(f'Starting FLASHDeconv...')
                 self.executor.run_command(
-                    [flashida_path, '-m', method_path, '-r', raw]
+                    [flashida_path, '-m', method_path, '-r', raw_path],
+                    cwd = flashida_path.parent
                 )
-                self.logger.log(raw)
-                self.logger.log(method)
+                self.logger.log('Listening for new raw files...')
+
             else:
                 self.logger.log(
                     f'Method \'{method_path}\' is not valid. Ignoring...'
                 )
+                self.logger.log('Listening for new raw files...')
+
 
     def _find_raws(self, raw_path):
         # Find existing raw files
