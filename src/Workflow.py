@@ -9,9 +9,9 @@ from os import makedirs, listdir
 from shutil import copyfile, rmtree
 from os.path import join, splitext, basename, exists, dirname
 
-from .parse.tnt import parseTnT
-from .parse.deconv import parseDeconv
-from .workflow.WorkflowManager import WorkflowManager
+from src.parse.tnt import parseTnT
+from src.parse.deconv import parseDeconv
+from src.workflow.WorkflowManager import WorkflowManager
 
 DEFAULT_THREADS = 8
 
@@ -208,19 +208,7 @@ class TagWorkflow(WorkflowManager):
                     dataset_id, str(file).replace('.', '_'), 
                     Path(folder_path, file), file_name=file
                 )
-            results = self.file_manager.get_results(
-                dataset_id, [
-                    'out_deconv_mzML', 'anno_annotated_mzML',
-                    'tags_tsv', 'protein_tsv'
-                ]
-            )
-            parsedResults = parseTnT(
-                results['out_deconv_mzML'], results['anno_annotated_mzML'], 
-                results['tags_tsv'], results['protein_tsv']
-            )
-            for k, v in parsedResults.items():
-                self.file_manager.store_data(dataset_id, k, v)
-
+            # Store Settings
             FDsettings = self.executor.parameter_manager.get_parameters_from_json()['FLASHDeconv']
             self.file_manager.store_data(
                 dataset_id, 'FD_parameters', FDsettings
@@ -242,6 +230,34 @@ class TagWorkflow(WorkflowManager):
             self.file_manager.store_file(
                 dataset_id, 'FTnT_parameters_json', json_file, 
                 file_name='FTnT_parameters.json'
+            )
+            # Fetch results
+            results = self.file_manager.get_results(
+                dataset_id, [
+                    'out_deconv_mzML', 'anno_annotated_mzML',
+                    'tags_tsv', 'protein_tsv'
+                ]
+            )
+            out_tsv_ms1 = None
+            if self.file_manager.result_exists(dataset_id, 'spec1_tsv'):
+                out_tsv_ms1 = self.file_manager.get_results(
+                    dataset_id, ['spec1_tsv']
+                )['spec1_tsv']
+            out_tsv_ms2 = None
+            if self.file_manager.result_exists(dataset_id, 'spec2_tsv'):
+                out_tsv_ms2 = self.file_manager.get_results(
+                    dataset_id, ['spec2_tsv']
+                )['spec2_tsv']
+            # Parse data
+            parseDeconv(
+                self.file_manager, dataset_id,
+                results['out_deconv_mzML'], results['anno_annotated_mzML'], 
+                out_tsv_ms1, out_tsv_ms2, logger=self.logger
+            )
+            parseTnT(
+                self.file_manager, dataset_id,
+                results['out_deconv_mzML'], results['anno_annotated_mzML'], 
+                results['tags_tsv'], results['protein_tsv'], logger=self.logger
             )
 
             # Remove temporary folder
@@ -360,7 +376,7 @@ class DeconvWorkflow(WorkflowManager):
                 )
             results = self.file_manager.get_results(
                 dataset_id, 
-                ['out_deconv_mzML', 'anno_annotated_mzML', 'out_tsv']
+                ['out_deconv_mzML', 'anno_annotated_mzML']
             )
             out_tsv_ms1 = None
             if self.file_manager.result_exists(dataset_id, 'spec1_tsv'):
@@ -372,12 +388,12 @@ class DeconvWorkflow(WorkflowManager):
                 out_tsv_ms2 = self.file_manager.get_results(
                     dataset_id, ['spec2_tsv']
                 )['spec2_tsv']
-            parsedResults = parseDeconv(
+            parseDeconv(
+                self.file_manager, dataset_id,
                 results['out_deconv_mzML'], results['anno_annotated_mzML'], 
-                out_tsv_ms1, out_tsv_ms2
+                out_tsv_ms1, out_tsv_ms2, logger=self.logger
             )
-            for k, v in parsedResults.items():
-                self.file_manager.store_data(dataset_id, k, v)
+            
             FDsettings = self.executor.parameter_manager.get_parameters_from_json()['FLASHDeconv']
             self.file_manager.store_data(
                 dataset_id, 'FD_parameters', FDsettings

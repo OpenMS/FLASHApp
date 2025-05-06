@@ -15,7 +15,7 @@ COMPONENT_NAMES=[
     'sequence_view', 
     'internal_fragment_map',
     'tag_table',
-    'deconv_spectrum'
+    'combined_spectrum'
 ]
 
 

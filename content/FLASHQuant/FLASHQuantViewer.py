@@ -4,8 +4,8 @@ from pathlib import Path
 
 from src.workflow.FileManager import FileManager
 from src.common.common import page_setup, save_params
-from src.components import flash_viewer_grid_component, FlashViewerComponent, FLASHQuant
-
+# from src.render.components import flash_viewer_grid_component, FlashViewerComponent, FLASHQuant
+from src.render.render import render_grid
 
 # page initialization
 params = page_setup()
@@ -34,10 +34,15 @@ name_to_index = {n : i for i, n in enumerate(results)}
 st.selectbox("choose experiment", results, key="selected_experiment0_quant")
 selected_exp0 = st.session_state.selected_experiment0_quant
 
-# Get data
-quant_df = file_manager.get_results(selected_exp0, 'quant_dfs')['quant_dfs']
+render_grid(
+    st.session_state.selected_experiment0_quant, [['quant_visualization']],
+    file_manager, 'flashquant', 'selected_experiment0_quant'
+)
 
-component = [[FlashViewerComponent(FLASHQuant())]]
-flash_viewer_grid_component(components=component, data={'quant_data': quant_df, 'dataset': selected_exp0}, component_key='flash_viewer_grid')
+# # Get data
+# quant_df = file_manager.get_results(selected_exp0, 'quant_dfs')['quant_dfs']
+
+# component = [[FlashViewerComponent(FLASHQuant())]]
+# flash_viewer_grid_component(components=component, data={'quant_data': quant_df, 'dataset': selected_exp0}, component_key='flash_viewer_grid')
 
 save_params(params)
