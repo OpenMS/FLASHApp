@@ -1122,8 +1122,10 @@ class StreamlitUI:
                 tool_text.append(tool)
         if len(tool_text) > 1:
             tool_text = ", ".join(tool_text[:-1]) + " and " + tool_text[-1]
-        else:
+        elif len(tool_text) == 1:
             tool_text = tool_text[0]
+        else:
+            tool_text = ''
 
         result = subprocess.run(
             "FileFilter --help", shell=True, text=True, capture_output=True
