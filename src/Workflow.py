@@ -425,6 +425,10 @@ class IdaWorkflow(WorkflowManager):
             widget_type="text"
         )
         self.ui.input_widget(
+            key="executable-secondary", name="Path to secondary Flash.exe", default='',
+            widget_type="text"
+        )
+        self.ui.input_widget(
             key="raw-files", name="Path to raw files", default='',
             widget_type="text"
         )
@@ -436,7 +440,7 @@ class IdaWorkflow(WorkflowManager):
     def execution(self) -> None:
         params = self.parameter_manager.get_parameters_from_json()
 
-        # Validate FLASHIda executable input
+        # Validate primary FLASHIda executable input
         flashida_path = Path(params['executable'])
         if flashida_path.suffix.lower() != '.exe':
             self.logger.log(
@@ -448,6 +452,20 @@ class IdaWorkflow(WorkflowManager):
             self.logger.log(f'Found FLASHIda executable!')
         else:
             self.logger.log(f'{flashida_path} is not a file.')
+            return
+        
+        # Validate secondary FLASHIda executable input
+        flashida_secondary_path = Path(params['executable-secondary'])
+        if flashida_secondary_path.suffix.lower() != '.exe':
+            self.logger.log(
+                f'Secondary FLASHIda executable was provided with extension '
+                f'\'{flashida_secondary_path.suffix}\'. Expected \'.exe\''
+            )
+            return
+        if flashida_secondary_path.is_file():
+            self.logger.log(f'Found Secondary FLASHIda executable!')
+        else:
+            self.logger.log(f'{flashida_secondary_path} is not a file.')
             return
         
         # Validate method file input
@@ -473,13 +491,20 @@ class IdaWorkflow(WorkflowManager):
             return
         
         # Find existing raw files
-        ignored_raws, ignored_methods = self._find_raws(raw_folder_path)
-        if len(ignored_raws) > 0:
+        ign_raws, ign_methods, ign_secondary_flags = self._find_raws(
+            raw_folder_path
+        )
+        if len(ign_raws) > 0:
             self.logger.log(
                 'Found the following existing raw files that match the scheme:'
             )
-            for i, (file, method) in enumerate(zip(ignored_raws,ignored_methods)):
-                self.logger.log(f'{i+1}:\t{file}\t({method}.xml)')
+            for i, (file, method, secondary) in enumerate(
+                zip(ign_raws, ign_methods, ign_secondary_flags)
+            ):
+                self.logger.log(
+                    f"{i+1}:\t{file}\t({method}.xml\t"
+                    f"{'secondary' if secondary else 'primary'})"
+                )
             self.logger.log('Ignoring these files!')
 
         self.logger.log('Listening for new raw files...')
@@ -488,9 +513,9 @@ class IdaWorkflow(WorkflowManager):
             sleep(1)
             
             # Search for new raws
-            new_raws, new_methods = self._find_raws(raw_folder_path)
-            for raw, method in zip(new_raws, new_methods):
-                if raw not in ignored_raws:
+            new_raws, new_methods, new_secs = self._find_raws(raw_folder_path)
+            for raw, method, secondary in zip(new_raws, new_methods, new_secs):
+                if raw not in ign_raws:
                     break
             else:
                 continue
@@ -498,18 +523,22 @@ class IdaWorkflow(WorkflowManager):
             self.logger.log(f'Detected new raw \'{raw}\'')
 
             # Ignore raw in future cycles
-            ignored_raws.append(raw)
-            ignored_methods.append(method)
+            ign_raws.append(raw)
+            ign_methods.append(method)
+            ign_secondary_flags.append(secondary)
             
             # Validate method
             method_path = Path(methods_folder_path, f'{method}.xml')
             raw_path = Path(raw_folder_path, raw)
+            self.logger.log(secondary)
+            self.logger.log(flashida_secondary_path)
+            exe_path = flashida_secondary_path if secondary else flashida_path
             if method_path.is_file():
                 self.logger.log(f'Found method \'{method_path}\'!')
                 self.logger.log(f'Starting FLASHDeconv...')
                 self.executor.run_command(
-                    [flashida_path, '-m', method_path, '-r', raw_path],
-                    cwd = flashida_path.parent
+                    [exe_path, '-m', method_path, '-r', raw_path],
+                    cwd = exe_path.parent
                 )
                 self.logger.log('Listening for new raw files...')
 
@@ -524,15 +553,25 @@ class IdaWorkflow(WorkflowManager):
         # Find existing raw files
         raws = []
         methods = []
-        method_pattern = r'FLASHIda_([^_]+)(?:_[^.]*)?\.raw'
+        secondary_flags = []
+        method_pattern = r'.*FLASHIda_([^.]+)\.raw'
         for file in listdir(raw_path):
             if not Path(raw_path, file).is_file():
                 continue
             match = re.search(method_pattern, file)
             if match:
                 raws.append(str(file))
-                methods.append(match.group(1))
-        return raws, methods
+                full_suffix = match.group(1)
+                parts = full_suffix.split('_', 1)
+                method = parts[0]
+                methods.append(method)
+                suffix = parts[1] if len(parts) > 1 else None
+                if suffix is not None:
+                    suffix = suffix.split('_')[0] if '_' in suffix else suffix
+                    suffix = suffix.split('.')[0] if '.' in suffix else suffix
+                secondary = suffix == '2' if suffix else False
+                secondary_flags.append(secondary)
+        return raws, methods, secondary_flags
 
 
 class QuantWorkflow(WorkflowManager):
