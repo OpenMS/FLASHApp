@@ -8,3 +8,4 @@ captcha==0.5.0
 pyopenms>=3.2.0
 pyarrow<16
 streamlit-js-eval
+scipy>=1.15
