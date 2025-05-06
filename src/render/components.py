@@ -6,7 +6,7 @@ import streamlit.components.v1 as st_components
 
 # Create a _RELEASE constant. We'll set this to False while we're developing
 # the component, and True when we're ready to package and distribute it.
-_RELEASE = False
+_RELEASE = True
 
 
 _component_func = None
@@ -22,7 +22,7 @@ def get_component_function():
         )
         else:
             parent_dir = os.path.dirname(os.path.abspath(__file__))
-            build_dir = os.path.join(parent_dir, '..', "js-component", "dist")
+            build_dir = os.path.join(parent_dir, '..', '..', "js-component", "dist")
             st.session_state['_component_func'] = st_components.declare_component("flash_viewer_grid", path=build_dir)
             
     return st.session_state['_component_func']

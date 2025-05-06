@@ -29,6 +29,9 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
             'DatabaseSequence' : 'sequence'
         }
     )
+    protein_df['description'] = protein_df['description'].apply(
+        lambda x: x[:50] + '...' if len(x) > 50 else x
+    )
     file_manager.store_data(dataset_id, 'protein_dfs', protein_df)
 
     # tag_table
