@@ -99,10 +99,10 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
             data_to_send['internal_fragment_data'] = data['internal_fragment_data']
         component_arguments = InternalFragmentMap(title="Internal Fragment Map")    
     elif comp_name == 'fdr_plot':
-        data = file_manager.get_results(selected_data,  ['ecdf_target'])
-        data_to_send['ecdf_target'] = data['ecdf_target']
-        data = file_manager.get_results(selected_data,  ['ecdf_decoy'])
-        data_to_send['ecdf_decoy'] = data['ecdf_decoy']
+        data = file_manager.get_results(selected_data,  ['density_target'])
+        data_to_send['density_target'] = data['density_target']
+        data = file_manager.get_results(selected_data,  ['density_decoy'])
+        data_to_send['density_decoy'] = data['density_decoy']
         component_arguments = FDRPlotly(title="FDR Plot")
     elif comp_name == 'protein_table':
         # TODO: Unify lookup or remove in vue

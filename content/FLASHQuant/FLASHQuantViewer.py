@@ -10,7 +10,6 @@ from src.render.render import render_grid
 # page initialization
 params = page_setup()
 
-st.title('FLASHViewer')
 
 # Get available results
 file_manager = FileManager(

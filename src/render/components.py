@@ -66,12 +66,10 @@ class PlotlyLineplot:
         self.title = title
         self.componentName = "PlotlyLineplot"
 
-
 class FDRPlotly:
     def __init__(self, title):
         self.title = title
         self.componentName = "FDRPlotly"
-
 
 class PlotlyLineplotTagger:
     def __init__(self, title):

@@ -26,7 +26,6 @@ def select_experiment():
 
 # page initialization
 params = page_setup("TaggerViewer")
-st.title('FLASHViewer')
 
 # Get available results
 file_manager = FileManager(

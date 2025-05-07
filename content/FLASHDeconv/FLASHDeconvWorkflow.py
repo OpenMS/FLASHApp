@@ -107,7 +107,7 @@ with t[3]:
             st.success("Example files loaded!")
 
     with tabs[0]:
-        st.subheader("**Upload FLASHDeconv output files (\*_annotated.mzML & \*_deconv.mzML) or spec1/2 TSV files (ECDF Plot only)**")
+        st.subheader("**Upload FLASHDeconv output files (\*_annotated.mzML & \*_deconv.mzML) or spec1/2 TSV files (Qscore Density Plot only)**")
         st.info(
             """
             **💡 How to upload files**
