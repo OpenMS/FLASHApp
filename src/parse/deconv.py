@@ -105,9 +105,9 @@ def parseDeconv(
         fdr_dfs = pd.concat(fdr_dfs, axis=0, ignore_index=True)
         if 'TargetDecoyType' not in fdr_dfs.columns:
             fdr_dfs['TargetDecoyType'] = 0
-        ecdf_target, ecdf_decoy = fdr_density_distribution(fdr_dfs)
-        file_manager.store_data(dataset_id, 'ecdf_target', ecdf_target)
-        file_manager.store_data(dataset_id, 'ecdf_decoy', ecdf_decoy)
+        density_target, density_decoy = fdr_density_distribution(fdr_dfs)
+        file_manager.store_data(dataset_id, 'density_target', density_target)
+        file_manager.store_data(dataset_id, 'density_decoy', density_decoy)
 
 
 def fdr_density_distribution(df):
