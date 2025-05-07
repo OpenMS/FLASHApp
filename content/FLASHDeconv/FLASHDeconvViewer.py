@@ -21,7 +21,6 @@ def select_experiment():
 
 # page initialization
 params = page_setup()
-st.title("FLASHViewer")
 
 # Get available results
 file_manager = FileManager(
