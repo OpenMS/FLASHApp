@@ -111,16 +111,20 @@ def parseDeconv(
 
 
 def fdr_density_distribution(df):
+
+    # Find density targets
     target_qscores = df[df['TargetDecoyType'] == 0]['Qscore'].dropna()
-    decoy_qscores = df[df['TargetDecoyType'] > 0]['Qscore'].dropna()
-
     x_target = np.linspace(target_qscores.min(), target_qscores.max(), 200)
-    x_decoy = np.linspace(decoy_qscores.min(), decoy_qscores.max(), 200)
-
     kde_target = gaussian_kde(target_qscores)
-    kde_decoy = gaussian_kde(decoy_qscores)
-
     density_target = pd.DataFrame({'x': x_target, 'y': kde_target(x_target)})
-    density_decoy = pd.DataFrame({'x': x_decoy, 'y': kde_decoy(x_decoy)})
+
+    # Find density decoys (if present)
+    decoy_qscores = df[df['TargetDecoyType'] > 0]['Qscore'].dropna()
+    if len(decoy_qscores) > 0:
+        x_decoy = np.linspace(decoy_qscores.min(), decoy_qscores.max(), 200)
+        kde_decoy = gaussian_kde(decoy_qscores)
+        density_decoy = pd.DataFrame({'x': x_decoy, 'y': kde_decoy(x_decoy)})
+    else:
+        density_decoy = pd.DataFrame(columns=['x', 'y'])
 
     return density_target, density_decoy
