@@ -85,15 +85,10 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
         else:
             filtered_table = data['per_scan_data'].to_table(filter=(ds.field("index") == scan_index))
             if mass_index is not None:
-                print('mass_index', mass_index)
-                print(filtered_table.to_pandas().head())
-                # filtered_table = filtered_table.take([mass_index])
-
                 df = filtered_table.to_pandas()
                 df['SignalPeaks'] = df['SignalPeaks'].apply(lambda peaks: peaks[mass_index] if len(peaks) > mass_index else None)
                 df['NoisyPeaks'] = df['NoisyPeaks'].apply(lambda peaks: peaks[mass_index] if len(peaks) > mass_index else None)
                 filtered_table = df
-                print(filtered_table.head())
             data['per_scan_data'] = filtered_table
 
 
