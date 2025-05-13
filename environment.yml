@@ -10,7 +10,7 @@ dependencies:
 - mono==6.12.0.90
 - pyarrow<16
 - scipy>=1.15
-- pyarrow>=15
+- pyarrow
 - pip:
   # dependencies only available through pip
   # streamlit dependencies
