@@ -6,7 +6,7 @@ import streamlit.components.v1 as st_components
 
 # Create a _RELEASE constant. We'll set this to False while we're developing
 # the component, and True when we're ready to package and distribute it.
-_RELEASE = True
+_RELEASE = False
 
 
 _component_func = None

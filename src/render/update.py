@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import pyarrow.dataset as ds
 
 from src.render.compression import downsample_heatmap
 from src.render.sequence import getFragmentDataFromSeq, getInternalFragmentDataFromSeq
@@ -69,13 +70,32 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
     # Filter data if possible
     if component in [
         'Annotated Spectrum', 'Deconvolved Spectrum', 
-        'Augmented Deconvolved Spectrum', 'Precursor Signals', 
+        'Augmented Deconvolved Spectrum', 
         'Mass Table', 'Sequence View', 'Internal Fragment Map'
     ]:
         if 'scanIndex' not in selection_store:
             data['per_scan_data'] = data['per_scan_data'].iloc[0:0,:]
         else:
             data['per_scan_data'] = data['per_scan_data'].iloc[selection_store['scanIndex']:selection_store['scanIndex']+1,:]
+    elif component == 'Precursor Signals':
+        scan_index = selection_store.get("scanIndex")
+        mass_index = selection_store.get("massIndex")
+        if scan_index is None:
+            data['per_scan_data'] = data['per_scan_data'].to_table(filter=(ds.field("index") == -1)).slice(0, 0)
+        else:
+            filtered_table = data['per_scan_data'].to_table(filter=(ds.field("index") == scan_index))
+            if mass_index is not None:
+                print('mass_index', mass_index)
+                print(filtered_table.to_pandas().head())
+                # filtered_table = filtered_table.take([mass_index])
+
+                df = filtered_table.to_pandas()
+                df['SignalPeaks'] = df['SignalPeaks'].apply(lambda peaks: peaks[mass_index] if len(peaks) > mass_index else None)
+                df['NoisyPeaks'] = df['NoisyPeaks'].apply(lambda peaks: peaks[mass_index] if len(peaks) > mass_index else None)
+                filtered_table = df
+                print(filtered_table.head())
+            data['per_scan_data'] = filtered_table
+
 
     elif (component == 'Deconvolved MS1 Heatmap'):
         if 'heatmap_deconv' in selection_store:

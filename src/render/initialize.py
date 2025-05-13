@@ -77,7 +77,7 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data_to_send['per_scan_data'] = data['mass_table']
         component_arguments = Tabulator('MassTable')
     elif comp_name == '3D_SN_plot':
-        data = file_manager.get_results(selected_data,  ['threedim_SN_plot'])
+        data = file_manager.get_results(selected_data,  ['threedim_SN_plot'], use_pyarrow=True)
         data_to_send['per_scan_data'] = data['threedim_SN_plot']
         component_arguments = Plotly3Dplot(title="Precursor Signals")
     elif comp_name == 'sequence_view':
