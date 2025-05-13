@@ -6,6 +6,7 @@ import sqlite3
 
 import pandas as pd
 import pickle as pkl
+import pyarrow.dataset as ds
 
 from io import BytesIO
 from pathlib import Path
@@ -400,7 +401,7 @@ class FileManager:
 
         return [row[0] for row in self.cache_cursor.fetchall()]
     
-    def get_results(self, dataset_id, name_tags, partial=False):
+    def get_results(self, dataset_id, name_tags, partial=False, use_pyarrow=False):
         results = {}
         # Retrieve files as Path objects
         file_columns = self._get_column_list('stored_files')
@@ -437,7 +438,10 @@ class FileManager:
                         raise KeyError(f"{c} does not exist for {dataset_id}")
                 file_path = Path(r)
                 if file_path.suffix == '.pq':
-                    data = pd.read_parquet(file_path)
+                    if use_pyarrow:
+                        data = ds.dataset(file_path, format="parquet")
+                    else:
+                        data = pd.read_parquet(file_path)
                 else:
                     with gzip.open(file_path, 'rb') as f:
                         data = pkl.load(f)
