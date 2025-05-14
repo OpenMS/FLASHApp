@@ -104,6 +104,12 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data = file_manager.get_results(selected_data,  ['density_decoy'])
         data_to_send['density_decoy'] = data['density_decoy']
         component_arguments = FDRPlotly(title="FDR Plot")
+    elif comp_name == 'id_fdr_plot':
+        data = file_manager.get_results(selected_data,  ['density_id_target'])
+        data_to_send['density_target'] = data['density_id_target']
+        data = file_manager.get_results(selected_data,  ['density_id_decoy'])
+        data_to_send['density_decoy'] = data['density_id_decoy']
+        component_arguments = FDRPlotly(title="FDR Plot")
     elif comp_name == 'protein_table':
         # TODO: Unify lookup or remove in vue
         data = file_manager.get_results(selected_data,  ['scan_table'])
