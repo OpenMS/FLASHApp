@@ -1,12 +1,14 @@
+[browser]
+gatherUsageStats = false
+
 [global]
 developmentMode = false
 
 [server]
+maxUploadSize =  2000 #MB
 port = 8501 # should be same as configured in deployment repo
-maxUploadSize = 2000
 
 [theme]
-
 # The preset Streamlit theme that your custom theme inherits from. One of "light" or "dark".
 # base =
 
