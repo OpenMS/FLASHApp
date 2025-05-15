@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.4
 # This Dockerfile builds OpenMS, the TOPP tools, pyOpenMS and thidparty tools.
 # It also adds a basic streamlit server that serves a pyOpenMS-based app.
 # hints:
@@ -10,7 +9,7 @@
 
 
 # Build JS-component
-FROM --platform=$BUILDPLATFORM node:21 AS js-build
+FROM node:21 AS js-build
 
 # JS Component
 ARG VUE_REPO=https://github.com/t0mdavid-m/openms-streamlit-vue-component.git
@@ -41,9 +40,6 @@ ARG GITHUB_REPO=FLASHApp
 # Name of the zip file containing the windows executable
 ARG ASSET_NAME=OpenMS-App.zip
 
-# Add BuildKit-specific arguments
-ARG BUILDKIT_INLINE_CACHE=1
-ARG DOCKER_BUILDKIT=1
 
 USER root
 
@@ -85,7 +81,7 @@ SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
 
 # Install up-to-date cmake via mamba and packages for pyOpenMS build.
 RUN mamba install cmake
-RUN pip install --upgrade pip && python -m pip install -U 'setuptools<80.4' nose 'Cython<3.1' autowrap pandas 'numpy==1.26.4' pytest
+RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython<3.1' autowrap pandas 'numpy==1.26.4' pytest
 
 # Clone OpenMS branch and the associcated contrib+thirdparties+pyOpenMS-doc submodules.
 RUN git clone --recursive --depth=1 -b ${OPENMS_BRANCH} --single-branch ${OPENMS_REPO} && cd /OpenMS

@@ -15,13 +15,4 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build the full Docker image
-      env:
-        DOCKER_BUILDKIT: 1
-        COMPOSE_DOCKER_CLI_BUILD: 1
-      run: |
-        docker build . --file Dockerfile \
-          --tag streamlitapp:latest \
-          --progress=plain \
-          --build-arg BUILDKIT_INLINE_CACHE=1 \
-          --build-arg DOCKER_BUILDKIT=1 \
-          --output type=docker
+      run: docker build . --file Dockerfile --tag streamlitapp:latest
