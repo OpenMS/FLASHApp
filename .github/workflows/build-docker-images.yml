@@ -14,6 +14,5 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-
-      - name: Test Docker build without exporting layers
-        run: docker build --target run-app -f Dockerfile .
+      - name: Build the full Docker image
+        run: docker build . --file Dockerfile --tag streamlitapp:latest -output type=tar,dest=/dev/null
