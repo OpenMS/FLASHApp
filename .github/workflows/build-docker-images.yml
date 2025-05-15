@@ -15,4 +15,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build the full Docker image
-      run: docker build . --file Dockerfile --tag streamlitapp:latest --output=type=none
+      run: |
+        export DOCKER_BUILDKIT=1
+        docker build . --file Dockerfile --tag streamlitapp:latest --output=type=none
