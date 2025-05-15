@@ -73,8 +73,7 @@ RUN wget -q \
 RUN mamba --version
 
 # Setup mamba environment.
-COPY environment.yml ./environment.yml
-RUN mamba env create -f environment.yml
+RUN mamba create -n streamlit-env python=3.10
 RUN echo "mamba activate streamlit-env" >> ~/.bashrc
 SHELL ["/bin/bash", "--rcfile", "~/.bashrc"]
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
@@ -115,6 +114,10 @@ RUN make -j4 pyopenms
 WORKDIR /openms-build/pyOpenMS
 RUN pip install dist/*.whl
 
+# Install other dependencies (excluding pyopenms)
+COPY requirements.txt ./requirements.txt 
+RUN grep -v '^pyopenms' requirements.txt > requirements_cleaned.txt && mv requirements_cleaned.txt requirements.txt
+RUN pip install -r requirements.txt
 
 WORKDIR /
 RUN mkdir openms
@@ -172,13 +175,14 @@ RUN mamba run -n streamlit-env python hooks/hook-analytics.py
 # Set Online Deployment
 RUN jq '.online_deployment = true' settings.json > tmp.json && mv tmp.json settings.json
 
-# Download latest OpenMS App executable for Windows from Github actions workflow.
+# Download latest OpenMS App executable as a ZIP file
 RUN if [ -n "$GH_TOKEN" ]; then \
         echo "GH_TOKEN is set, proceeding to download the release asset..."; \
-        gh release download --repo ${GITHUB_USER}/${GITHUB_REPO} --pattern "${ASSET_NAME}" --dir /app; \
+        gh release download -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
     else \
         echo "GH_TOKEN is not set, skipping the release asset download."; \
     fi
+
 
 # Run app as container entrypoint.
 EXPOSE $PORT
