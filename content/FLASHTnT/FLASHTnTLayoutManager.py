@@ -12,6 +12,9 @@ COMPONENT_OPTIONS=[
     'Internal fragment map (Protein table needed)',
     'Tag table (Protein table needed)',
     'Sequence tag view (Tag table needed)',
+    'Score Distribution Plot',
+    'MS1 raw heatmap',
+    'MS1 deconvolved heatmap'
 ]
 
 COMPONENT_NAMES=[
@@ -19,7 +22,10 @@ COMPONENT_NAMES=[
     'sequence_view', 
     'internal_fragment_map',
     'tag_table',
-    'combined_spectrum'
+    'combined_spectrum',
+    'id_fdr_plot',
+    'ms1_raw_heatmap',
+    'ms1_deconv_heat_map'
 ]
 
 # Setup cache access
