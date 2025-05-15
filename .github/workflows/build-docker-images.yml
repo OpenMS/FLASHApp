@@ -18,7 +18,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          driver: docker-container  # Enables full BuildKit features
+          install: true
+          driver: docker-container
+          use: true
 
-      - name: Test Docker build without export
+      - name: Create a new builder instance
+        run: |
+          docker buildx create --use --name mybuilder --driver docker-container
+          docker buildx inspect --bootstrap
+
+      - name: Test Docker build without exporting layers
         run: docker buildx build --file Dockerfile --output=type=none .
