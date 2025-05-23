@@ -1004,6 +1004,7 @@ class StreamlitUI:
                 st.rerun()
         elif c1.button("Start Workflow", type="primary", use_container_width=True):
             start_workflow_function()
+            time.sleep(3)
             st.rerun()
         log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
         if log_path.exists():
