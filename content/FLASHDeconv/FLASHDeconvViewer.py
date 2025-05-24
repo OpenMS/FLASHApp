@@ -8,8 +8,6 @@ from src.render.render import render_grid
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                   ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
-if 'input_sequence' in st.session_state and st.session_state.input_sequence:
-    DEFAULT_LAYOUT = DEFAULT_LAYOUT + [['sequence_view']]
 
 def select_experiment():
     st.session_state.selected_experiment0 = st.session_state.selected_experiment_dropdown
@@ -27,6 +25,19 @@ file_manager = FileManager(
     st.session_state["workspace"],
     Path(st.session_state['workspace'], 'flashdeconv', 'cache')
 )
+
+def get_sequence():
+    # Check if layout has been set
+    if not file_manager.result_exists('sequence', 'sequence'):
+        return None
+    # fetch layout from cache
+    sequence = file_manager.get_results('sequence', 'sequence')['sequence']
+
+    return sequence['input_sequence'], sequence['fixed_mod_cysteine'], sequence['fixed_mod_methionine'] 
+
+if get_sequence() is not None:
+    DEFAULT_LAYOUT = DEFAULT_LAYOUT + [['sequence_view']]
+
 results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
 
 if file_manager.result_exists('layout', 'layout'):
