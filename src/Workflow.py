@@ -26,7 +26,7 @@ class TagWorkflow(WorkflowManager):
     def upload(self)-> None:
         t = st.tabs(["MS data", "Database"])
         with t[0]:
-            example_data = ['example-data/flashtagger/example_spectrum_%d.mzML' % n for n in [1, 2]]
+            example_data = [f'example-data/flashtagger/example_spectrum_{n}.mzML' for n in ['aqpz', 'antibody']]
             self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML", fallback=example_data)
         with t[1]:
             self.ui.upload_widget(key="fasta-file", name="Database", file_types="fasta",
