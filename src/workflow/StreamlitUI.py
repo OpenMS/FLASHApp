@@ -989,10 +989,8 @@ class StreamlitUI:
                     f.write(up.read().decode("utf-8"))
                 streamlit_js_eval(js_expressions="parent.window.location.reload()")
 
-    def execution_section(self, start_workflow_function) -> None:
-        with st.expander("**Summary**"):
-            st.markdown(self.export_parameters_markdown())
-
+    @st.fragment(run_every=5)
+    def show_log(self, start_workflow_function):
         c1, c2 = st.columns(2)
         # Select log level, this can be changed at run time or later without re-running the workflow
         log_level = c1.selectbox(
@@ -1028,6 +1026,13 @@ class StreamlitUI:
                     if not "WORKFLOW FINISHED" in content:
                         st.error("**Errors occurred, check log file.**")
                     st.code(content, language="neon", line_numbers=False)
+
+
+    def execution_section(self, start_workflow_function) -> None:
+        with st.expander("**Summary**"):
+            st.markdown(self.export_parameters_markdown())
+
+        self.show_log(start_workflow_function)
 
     def results_section(self, custom_results_function) -> None:
         custom_results_function()
