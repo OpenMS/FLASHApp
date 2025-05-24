@@ -20,7 +20,6 @@ def parseDeconv(
     for df, descriptor in zip([deconv_df, anno_df], ['deconv', 'raw']):
 
         # Create full sized version
-        logger.log(df.columns)
         heatmap = getMSSignalDF(df)
 
         # Store full sized version
@@ -28,7 +27,6 @@ def parseDeconv(
             dataset_id, f'ms1_{descriptor}_heatmap', heatmap
         )
 
-        logger.log(heatmap.columns)
         # Store compressed versions
         for size in reversed(compute_compression_levels(20000, len(heatmap), logger=logger)):
             
