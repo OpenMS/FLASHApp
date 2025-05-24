@@ -327,6 +327,8 @@ def render_sidebar(page: str = "") -> None:
                     # Define callback function to change workspace
                     def change_workspace():
                         for key in params.keys():
+                            if key in ['controllo']:
+                                continue
                             if key in st.session_state.keys():
                                 del st.session_state[key]
                         st.session_state.workspace = Path(
