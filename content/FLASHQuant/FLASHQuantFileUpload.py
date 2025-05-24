@@ -68,63 +68,41 @@ def process_uploaded_files(uploaded_files):
                 wf.file_manager.store_data(unparsed_dataset, k, v)
 
 
-tabs = st.tabs(["File Upload", "Example Data"])
-
-# Load Example Data
-with tabs[1]:
-    st.markdown("An example truncated file from the E. coli & ThermoFisher Pierce Intact Protein Standard Mix dataset.")
-    _, c2, _ = st.columns(3)
-    if c2.button("Load Example Data", type="primary"):
-        # loading and copying example files into default workspace
-        for filename_postfix, name_tag in zip(
-            ['*.fq.tsv', '*.fq.mts.tsv', '*.fq_shared.tsv'],
-            ['quant_tsv', 'trace_tsv', 'conflict_tsv']
-        ):
-            for file in Path("example-data/flashquant").glob(filename_postfix):
-                wf.file_manager.store_file(
-                    file.name.replace(filename_postfix[1:], ''), 
-                    name_tag, file, remove=False
-                )
-        process_uploaded_files([])
-        st.success("Example files loaded!")
-
 # Upload files via upload widget
-with tabs[0]:
-    # Upload files via upload widget
-    st.subheader("**Upload FLASHQuant output files**")
+st.subheader("**Upload FLASHQuant output files**")
 
-    # Display info how to upload files
-    st.info(
-        """
-    **💡 How to upload files**
-    
-    1. Browse files on your computer or drag and drops files
-    2. Click the **Add the uploaded quant files** button to use them in the workflows
-    
-    Select data for analysis from the uploaded files shown below.
-    
-    **💡 Make sure that the same number of FLASHQuant result files (\*fq.tsv and \*fq.mts.tsv) are uploaded!**
-    
-    **💡 To visualize conflict resolution, \*fq_shared.tsv files should be uploaded**
+# Display info how to upload files
+st.info(
     """
-    )
-    with st.form('files_uploader_form', clear_on_submit=True):
-        uploaded_files = st.file_uploader(
-            "FLASHQuant output files", accept_multiple_files=True
-        )
-        _, c2, _ = st.columns(3)
-        # User needs to click button to upload selected files
-        if c2.form_submit_button("Add files to workspace", type="primary"):
-                if uploaded_files:
-                    # A list of files is required, since online allows only single upload, create a list
-                    if type(uploaded_files) != list:
-                        uploaded_files = [uploaded_files]
+**💡 How to upload files**
 
-                    # opening file dialog and closing without choosing a file results in None upload
-                    process_uploaded_files(uploaded_files)
-                    st.success("Successfully added uploaded files!")
-                else:
-                    st.warning("Upload some files before adding them.")
+1. Browse files on your computer or drag and drops files
+2. Click the **Add the uploaded quant files** button to use them in the workflows
+
+Select data for analysis from the uploaded files shown below.
+
+**💡 Make sure that the same number of FLASHQuant result files (\*fq.tsv and \*fq.mts.tsv) are uploaded!**
+
+**💡 To visualize conflict resolution, \*fq_shared.tsv files should be uploaded**
+"""
+)
+with st.form('files_uploader_form', clear_on_submit=True):
+    uploaded_files = st.file_uploader(
+        "FLASHQuant output files", accept_multiple_files=True
+    )
+    _, c2, _ = st.columns(3)
+    # User needs to click button to upload selected files
+    if c2.form_submit_button("Add files to workspace", type="primary"):
+            if uploaded_files:
+                # A list of files is required, since online allows only single upload, create a list
+                if type(uploaded_files) != list:
+                    uploaded_files = [uploaded_files]
+
+                # opening file dialog and closing without choosing a file results in None upload
+                process_uploaded_files(uploaded_files)
+                st.success("Successfully added uploaded files!")
+            else:
+                st.warning("Upload some files before adding them.")
 
 # File Upload Table
 experiments = (
