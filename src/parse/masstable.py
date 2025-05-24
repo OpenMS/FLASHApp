@@ -193,15 +193,47 @@ def getSpectraTableDF(deconv_df: pd.DataFrame):
 
 
 def getMSSignalDF(anno_df: pd.DataFrame):
-    ints = np.concatenate([anno_df.loc[index, "intarray"] for index in anno_df.index])
-    mzs = np.concatenate([anno_df.loc[index, "mzarray"] for index in anno_df.index])
+    scan_idxs = np.concatenate(
+        [
+            [index]*len(anno_df.loc[index, "intarray"]) 
+            for index in anno_df.index
+        ],
+        dtype=np.int32
+    )
+    mass_idxs = np.concatenate(
+        [
+            list(range(len(anno_df.loc[index, "intarray"]))) 
+            for index in anno_df.index
+        ],
+        dtype=np.int32
+    )
+    ints = np.concatenate(
+        [
+            anno_df.loc[index, "intarray"] 
+            for index in anno_df.index
+        ],
+        dtype=np.float32
+    )
+    mzs = np.concatenate(
+        [
+            anno_df.loc[index, "mzarray"] 
+            for index in anno_df.index
+        ],
+        dtype=np.float32
+    )
     rts = np.concatenate(
         [
             np.full(len(anno_df.loc[index, "mzarray"]), anno_df.loc[index, "RT"])
             for index in anno_df.index
-        ]
+        ],
+        dtype=np.float32
     )
-    ms_df = pd.DataFrame({'mass': mzs, 'rt': rts, 'intensity': ints})
+
+    ms_df = pd.DataFrame({
+        'mass': mzs, 'rt': rts, 'intensity': ints, 
+        'scan_idx': scan_idxs, 'mass_idx': mass_idxs, 
+    })
+
     ms_df.dropna(subset=['intensity'], inplace=True) # remove Nan
     ms_df = ms_df[ms_df['intensity']>0]
     ms_df.sort_values(by='intensity', inplace=True)
