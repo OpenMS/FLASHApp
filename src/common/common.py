@@ -264,6 +264,17 @@ def page_setup(page: str = "") -> dict[str, Any]:
         st.query_params.workspace = st.session_state.workspace.name
 
     # Make sure the necessary directories exist
+    if not st.session_state.workspace.is_dir():
+        # Copy default workspace if newly created
+        if (
+            (st.session_state.workspace.name == 'default') 
+            or (st.session_state.location == 'online')
+        ):
+            shutil.copytree(
+                Path('example-data', 'workspaces', 'default'), 
+                st.session_state.workspace
+            )
+            
     st.session_state.workspace.mkdir(parents=True, exist_ok=True)
     Path(st.session_state.workspace, "mzML-files").mkdir(parents=True, exist_ok=True)
 
