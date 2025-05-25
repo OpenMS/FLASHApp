@@ -265,17 +265,36 @@ def page_setup(page: str = "") -> dict[str, Any]:
 
     # Make sure the necessary directories exist
     if not st.session_state.workspace.is_dir():
-        # Copy default workspace if newly created
-        if (
-            (st.session_state.workspace.name == 'default') 
-            or (st.session_state.location == 'online')
-        ):
-            shutil.copytree(
-                Path('example-data', 'workspaces', 'default'), 
-                st.session_state.workspace
-            )
-            
-    st.session_state.workspace.mkdir(parents=True, exist_ok=True)
+        # Online mode: copy demo / default workspaces
+        if st.session_state.location == 'online':
+            # Get a list of all preloaded workspace names
+            workspaces = [
+                p.name for p in Path('example-data', 'workspaces').iterdir() 
+                if p.is_dir()
+            ]
+            # If a prepared workspace is accessed make a copy
+            if st.session_state.workspace.name in workspaces:
+                demo_dataset = st.session_state.workspace.name
+                workspace_id = str(uuid.uuid1())
+                st.session_state.workspace = Path(workspaces_dir, workspace_id)
+                st.query_params.workspace = workspace_id
+                shutil.copytree(
+                    Path('example-data', 'workspaces', demo_dataset), 
+                    st.session_state.workspace
+                )
+            # Otherwise fall back to default workspace
+            else:
+                shutil.copytree(
+                    Path('example-data', 'workspaces', 'default'), 
+                    st.session_state.workspace
+                )
+        # Offline Mode: Copy all prepared workspaces
+        else:
+            if st.session_state.workspace.name == 'default':
+                shutil.copytree(
+                    Path('example-data', 'workspaces'), 
+                    st.session_state.workspace.parent
+                )
     Path(st.session_state.workspace, "mzML-files").mkdir(parents=True, exist_ok=True)
 
     # Render the sidebar
