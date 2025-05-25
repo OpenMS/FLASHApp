@@ -32,6 +32,10 @@ class WorkflowManager:
         Starts the workflow process and adds its process id to the pid directory.
         The workflow itself needs to be a process, otherwise streamlit will wait for everything to finish before updating the UI again.
         """
+        # Catch double presses of the button while app is in frozen state
+        if self.executor.pid_dir.exists(): 
+            return
+
         # Delete the log file if it already exists
         shutil.rmtree(Path(self.workflow_dir, "logs"), ignore_errors=True)
         # Start workflow process
@@ -40,8 +44,6 @@ class WorkflowManager:
         # Add workflow process id to pid dir
         self.executor.pid_dir.mkdir()
         Path(self.executor.pid_dir, str(workflow_process.pid)).touch()
-        time.sleep(3)
-        st.rerun()
 
     def workflow_process(self) -> None:
         """
