@@ -1,0 +1,7 @@
+{
+    "mzML-files": [],
+    "threads": 14,
+    "FLASHDeconv": {
+        "SD:tol": "10.0\n10.0"
+    }
+}

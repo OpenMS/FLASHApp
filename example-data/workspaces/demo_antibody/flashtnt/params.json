@@ -1,0 +1,16 @@
+{
+    "mzML-files": [
+        "../workspaces-FLASHApp/demo_antibody/flashtnt/input-files/mzML-files/example_spectrum_antibody.mzML"
+    ],
+    "fasta-file": "../workspaces-FLASHApp/demo_antibody/flashtnt/input-files/fasta-file/example_database.fasta",
+    "threads": 14,
+    "few_proteins": true,
+    "FLASHDeconv": {
+        "SD:tol": "5\n5",
+        "SD:max_charge": 30
+    },
+    "FLASHTnT": {
+        "ion_type": "b\ny",
+        "tag:min_length": 4
+    }
+}

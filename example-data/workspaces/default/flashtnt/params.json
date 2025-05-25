@@ -1,0 +1,12 @@
+{
+    "mzML-files": [],
+    "fasta-file": "../workspaces-FLASHApp/default/flashtnt/input-files/fasta-file/example_database.fasta",
+    "threads": 14,
+    "few_proteins": true,
+    "FLASHDeconv": {
+        "SD:tol": "10.0\n10.0"
+    },
+    "FLASHTnT": {
+        "ion_type": "b\ny"
+    }
+}
