@@ -10,7 +10,7 @@
         "SD:max_charge": 30
     },
     "FLASHTnT": {
-        "ion_type": "b\ny",
+        "ion_type": "b\nc\ny\nz",
         "tag:min_length": 4
     }
 }
