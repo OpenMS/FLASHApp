@@ -321,7 +321,10 @@ class FileManager:
         data_path = self._store_data(dataset_id, name_tag, data)
 
         # Store reference in index
-        self._add_entry('stored_data', dataset_id, name_tag, data_path)
+        data_path = data_path.resolve()
+        cache_path = self.cache_path.resolve()
+        relative_data_path = data_path.relative_to(cache_path)
+        self._add_entry('stored_data', dataset_id, name_tag, relative_data_path)
         
     def store_file(self, dataset_id: str, name_tag: str, file: Path | BytesIO, 
                    remove: bool = True, file_name = None) -> None:
@@ -359,7 +362,10 @@ class FileManager:
                 file.unlink()
 
         # Store reference in index
-        self._add_entry('stored_files', dataset_id, name_tag, target_path)
+        target_path = target_path.resolve()
+        cache_path = self.cache_path.resolve()
+        relative_target_path = target_path.relative_to(cache_path)
+        self._add_entry('stored_files', dataset_id, name_tag, relative_target_path)
 
     def get_results_list(self, name_tags: List[str], partial=False) -> List[str]:
         """
@@ -419,7 +425,7 @@ class FileManager:
                         continue
                     else:
                         raise KeyError(f"{c} does not exist for {dataset_id}")
-                results[c] = Path(r)
+                results[c] = Path(self.cache_path, r)
         # Retrieve data as Python objects
         data_columns = self._get_column_list('stored_data')
         data_columns = [c for c in data_columns if c in name_tags]
@@ -436,7 +442,7 @@ class FileManager:
                         continue
                     else:
                         raise KeyError(f"{c} does not exist for {dataset_id}")
-                file_path = Path(r)
+                file_path = Path(self.cache_path, r)
                 if file_path.suffix == '.pq':
                     if use_pyarrow:
                         data = ds.dataset(file_path, format="parquet")
