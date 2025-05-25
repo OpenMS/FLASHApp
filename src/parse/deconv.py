@@ -26,6 +26,7 @@ def parseDeconv(
         file_manager.store_data(
             dataset_id, f'ms1_{descriptor}_heatmap', heatmap
         )
+
         # Store compressed versions
         for size in reversed(compute_compression_levels(20000, len(heatmap), logger=logger)):
             

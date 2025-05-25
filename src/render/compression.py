@@ -51,6 +51,6 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
         ['mass_bin', 'rt_bin'], group_keys=False, sort=False
     ).head(max_peaks_per_bin).reset_index(drop=True)
 
-    return data.sort_values(by='intensity', ascending=True).loc[
-        :, ['rt', 'mass', 'intensity']
-    ]
+    return data.sort_values(by='intensity', ascending=True).drop(
+        columns=['rank', 'mass_bin', 'rt_bin']
+    )
