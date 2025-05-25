@@ -1,0 +1,41 @@
+STARTING WORKFLOW
+
+Processing example_spectrum_aqpz:
+
+-> Running FLASHDeconv...
+
+Running command:
+FLASHDeconv -in ../workspaces-FLASHApp/demo_aqpz/flashdeconv/input-files/mzML-files/example_spectrum_aqpz.mzML -out ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/out.tsv -out_spec1 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec1.tsv -out_spec2 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec2.tsv -out_spec3 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec3.tsv -out_spec4 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec4.tsv -out_mzml ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/out_deconv.mzML -out_quant ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms2.feature -SD:tol 10.0 10.0 -FD:report_FDR -threads 14 -ini ../workspaces-FLASHApp/demo_aqpz/flashdeconv/ini/FLASHDeconv.ini
+Waiting for command to finish...
+
+Process finished:
+FLASHDeconv -in ../workspaces-FLASHApp/demo_aqpz/flashdeconv/input-files/mzML-files/example_spectrum_aqpz.mzML -out ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/out.tsv -out_spec1 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec1.tsv -out_spec2 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec2.tsv -out_spec3 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec3.tsv -out_spec4 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/spec4.tsv -out_mzml ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/out_deconv.mzML -out_quant ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/demo_aqpz/FLASHDeconvOutput/example_spectrum_aqpz_20250525-092833/toppic_ms2.feature -SD:tol 10.0 10.0 -FD:report_FDR -threads 14 -ini ../workspaces-FLASHApp/demo_aqpz/flashdeconv/ini/FLASHDeconv.ini
+Total time to run command: 7.38 seconds
+
+Initializing ... 
+Progress of 'loading mzML':
+  Progress of 'loading spectra list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+  Progress of 'loading chromatogram list':
+  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
+-- done [took 0.00 s (CPU), 0.01 s (Wall) @ 45.35 MiB/s] -- 
+Processing : ../workspaces-FLASHApp/demo_aqpz/flashdeconv/input-files/mzML-files/example_spectrum_aqpz.mzML
+Filtering low peaks in spectra ... Done
+Calculating Averagines ... Done
+Progress of 'running FLASHDeconv':
+-- done [took 0.61 s (CPU), 0.37 s (Wall)] -- 
+So far, FLASHDeconv found 207 masses in 1 MS2 spectra out of 1
+FLASHDeconv run complete. Now writing the results in output files ...
+writing spectrum tsv for MS level 2 ...
+1 spectra and 1 chromatograms stored.
+writing quantification tsv ...
+<1 spectra and 1 chromatograms stored.> occurred 2 times
+writing topfd *.feature for MS level 2 ...
+writing topfd *.msalign for MS level 2 ...
+FLASHDeconv took 7.35 s (wall), 7.58 s (CPU), 0.06 s (system), 7.52 s (user); Peak Memory Usage: 532 MB.
+
+
+-> Processing Results...
+
+WORKFLOW FINISHED
+

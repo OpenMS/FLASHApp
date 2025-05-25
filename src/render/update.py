@@ -3,7 +3,25 @@ import streamlit as st
 import pyarrow.dataset as ds
 
 from src.render.compression import downsample_heatmap
+from src.workflow.FileManager import FileManager
 from src.render.sequence import getFragmentDataFromSeq, getInternalFragmentDataFromSeq
+from pathlib import Path
+
+
+def get_sequence():
+    # Setup cache access
+    file_manager = FileManager(
+        st.session_state["workspace"],
+        Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+    )
+
+    # Check if sequence has been set
+    if not file_manager.result_exists('sequence', 'sequence'):
+        return None
+    # fetch sequence from cache
+    sequence = file_manager.get_results('sequence', 'sequence')['sequence']
+
+    return sequence['input_sequence'], sequence['fixed_mod_cysteine'], sequence['fixed_mod_methionine']
 
 
 # Ignore raw data for caching, too ressource intensive
@@ -51,11 +69,11 @@ def update_data(data, out_components, additional_data, tool):
         and (tool != 'flashtnt')
     ):
         data['sequence_data'] = {
-            0: render_sequence_data(st.session_state.input_sequence)
+            0: render_sequence_data(get_sequence()[0])
         }
     if (component == 'Internal Fragment Map') and (tool != 'flashtnt'):
         data['internal_fragment_data'] = {
-            0: render_internal_fragment_data(st.session_state.input_sequence)
+            0: render_internal_fragment_data(get_sequence()[0])
         }
     
     return data  

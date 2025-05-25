@@ -85,57 +85,35 @@ with t[3]:
             for k, v in parsed_data.items():
                 wf.file_manager.store_data(unparsed_dataset, k, v)
 
-    # make directory to store deconv and anno mzML files & initialize data storage
-    tabs = st.tabs(["File Upload", "Example Data"])
+    st.subheader("**Upload FLASHDeconv output files (\*_annotated.mzML & \*_deconv.mzML) or spec1/2 TSV files (Qscore Density Plot only)**")
+    st.info(
+        """
+        **💡 How to upload files**
 
-    # Load Example Data
-    with tabs[1]:
-        st.markdown("An example truncated file from the ThermoFisher Pierce Intact Protein Standard Mix dataset.")
-        _, c2, _ = st.columns(3)
-        if c2.button("Load Example Data", type="primary"):
-            # loading and copying example files into default workspace
-            for filename_postfix, name_tag in zip(
-                ['*_deconv.mzML', '*_annotated.mzML', '*_spec1.tsv'],
-                ["out_deconv_mzML", "anno_annotated_mzML", "spec1_tsv"]
-            ):
-                for file in Path("example-data", "flashdeconv").glob(filename_postfix):
-                    wf.file_manager.store_file(
-                        file.name.replace(filename_postfix[1:], ''), 
-                        name_tag, file, remove=False
-                    )
-            process_uploaded_files([])
-            st.success("Example files loaded!")
+        1. Browse files on your computer or drag and drops files
+        2. Click the **Add the uploaded files** button to use them in the workflows
 
-    with tabs[0]:
-        st.subheader("**Upload FLASHDeconv output files (\*_annotated.mzML & \*_deconv.mzML) or spec1/2 TSV files (Qscore Density Plot only)**")
-        st.info(
-            """
-            **💡 How to upload files**
+        Select data for analysis from the uploaded files shown below.
 
-            1. Browse files on your computer or drag and drops files
-            2. Click the **Add the uploaded files** button to use them in the workflows
-
-            Select data for analysis from the uploaded files shown below.
-
-            **💡 Make sure that the same number of deconvolved and annotated mzML files are uploaded!**
-            """
+        **💡 Make sure that the same number of deconvolved and annotated mzML files are uploaded!**
+        """
+    )
+    with st.form('input_files', clear_on_submit=True):
+        uploaded_files = st.file_uploader(
+            "FLASHDeconv output mzML files or TSV files", accept_multiple_files=True, type=["mzML", "tsv"]
         )
-        with st.form('input_files', clear_on_submit=True):
-            uploaded_files = st.file_uploader(
-                "FLASHDeconv output mzML files or TSV files", accept_multiple_files=True, type=["mzML", "tsv"]
-            )
-            _, c2, _ = st.columns(3)
-            if c2.form_submit_button("Add files to workspace", type="primary"):
-                if uploaded_files:
-                    # A list of files is required, since online allows only single upload, create a list
-                    if type(uploaded_files) != list:
-                        uploaded_files = [uploaded_files]
+        _, c2, _ = st.columns(3)
+        if c2.form_submit_button("Add files to workspace", type="primary"):
+            if uploaded_files:
+                # A list of files is required, since online allows only single upload, create a list
+                if type(uploaded_files) != list:
+                    uploaded_files = [uploaded_files]
 
-                    # opening file dialog and closing without choosing a file results in None upload
-                    process_uploaded_files(uploaded_files)
-                    st.success("Successfully added uploaded files!")
-                else:
-                    st.warning("Upload some files before adding them.")
+                # opening file dialog and closing without choosing a file results in None upload
+                process_uploaded_files(uploaded_files)
+                st.success("Successfully added uploaded files!")
+            else:
+                st.warning("Upload some files before adding them.")
 
     # File Upload Table
     experiments = (

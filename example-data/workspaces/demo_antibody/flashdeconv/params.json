@@ -1,0 +1,11 @@
+{
+    "mzML-files": [
+        "../workspaces-FLASHApp/demo_antibody/flashdeconv/input-files/mzML-files/example_spectrum_antibody.mzML"
+    ],
+    "threads": 14,
+    "FLASHDeconv": {
+        "SD:tol": "5\n5",
+        "SD:max_charge": 30,
+        "FD:report_FDR": "true"
+    }
+}

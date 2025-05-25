@@ -8,7 +8,6 @@ clean-up-workspaces.log
 gdpr_consent/node_modules/
 
 # FLASHApp
-workspaces
 Pipfile
 workspaces-flashtaggerviewer
 

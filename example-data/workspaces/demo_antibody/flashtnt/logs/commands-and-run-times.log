@@ -1,0 +1,28 @@
+STARTING WORKFLOW
+
+Processing example_spectrum_antibody:
+
+-> Running FLASHDeconv...
+
+Running command:
+FLASHDeconv -in ../workspaces-FLASHApp/demo_antibody/flashtnt/input-files/mzML-files/example_spectrum_antibody.mzML -out ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/out.tsv -out_spec1 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec1.tsv -out_spec2 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec2.tsv -out_spec3 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec3.tsv -out_spec4 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec4.tsv -out_mzml ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/out_deconv.mzML -out_quant ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms2.feature -SD:tol 5 5 -SD:max_charge 30 -threads 14 -ini ../workspaces-FLASHApp/demo_antibody/flashtnt/ini/FLASHDeconv.ini
+Waiting for command to finish...
+
+Process finished:
+FLASHDeconv -in ../workspaces-FLASHApp/demo_antibody/flashtnt/input-files/mzML-files/example_spectrum_antibody.mzML -out ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/out.tsv -out_spec1 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec1.tsv -out_spec2 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec2.tsv -out_spec3 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec3.tsv -out_spec4 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/spec4.tsv -out_mzml ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/out_deconv.mzML -out_quant ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/toppic_ms2.feature -SD:tol 5 5 -SD:max_charge 30 -threads 14 -ini ../workspaces-FLASHApp/demo_antibody/flashtnt/ini/FLASHDeconv.ini
+Total time to run command: 4.73 seconds
+
+-> Running FLASHTnT...
+
+Running command:
+FLASHTnT -in ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/out_deconv.mzML -fasta ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/database.fasta -out_tag ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/tags.tsv -out_pro ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/protein.tsv -out_prsm ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/prsms.tsv -ion_type b y -tag:min_length 4 -threads 14 -ini ../workspaces-FLASHApp/demo_antibody/flashtnt/ini/FLASHTnT.ini
+Waiting for command to finish...
+
+Process finished:
+FLASHTnT -in ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/out_deconv.mzML -fasta ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/database.fasta -out_tag ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/tags.tsv -out_pro ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/protein.tsv -out_prsm ../workspaces-FLASHApp/demo_antibody/FLASHTaggerOutput/example_spectrum_antibody_20250525-100107/prsms.tsv -ion_type b y -tag:min_length 4 -threads 14 -ini ../workspaces-FLASHApp/demo_antibody/flashtnt/ini/FLASHTnT.ini
+Total time to run command: 0.86 seconds
+
+-> Processing Results...
+
+WORKFLOW FINISHED
+

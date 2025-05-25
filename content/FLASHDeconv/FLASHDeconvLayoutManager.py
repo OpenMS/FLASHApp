@@ -36,6 +36,15 @@ file_manager = FileManager(
     Path(st.session_state['workspace'], 'flashdeconv', 'cache')
 )
 
+def get_sequence():
+    # Check if layout has been set
+    if not file_manager.result_exists('sequence', 'sequence'):
+        return None
+    # fetch layout from cache
+    sequence = file_manager.get_results('sequence', 'sequence')['sequence']
+
+    return sequence['input_sequence'], sequence['fixed_mod_cysteine'], sequence['fixed_mod_methionine']
+
 def set_layout(layout, side_by_side=False):
     file_manager.store_data('layout', 'layout', 
         {
@@ -205,7 +214,7 @@ def handleSettingButtons():
 
 
 def setSequenceView():
-    if 'input_sequence' in st.session_state and st.session_state.input_sequence:
+    if get_sequence() is not None:
         global COMPONENT_OPTIONS
         COMPONENT_OPTIONS = COMPONENT_OPTIONS + ['Sequence view (Mass table needed)',
                                                  'Internal fragment map (Mass table needed)']

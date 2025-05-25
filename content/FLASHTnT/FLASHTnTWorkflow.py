@@ -78,61 +78,38 @@ with t[3]:
             for k, v in parsed_data.items():
                 wf.file_manager.store_data(unparsed_dataset, k, v)
 
-    tabs = st.tabs(["File Upload", "Example Data"])
-
-    # Load Example Data
-    with tabs[1]:
-        # TODO: Adde xplanations for example data
-        #st.markdown("An example truncated file from the E. coli dataset.")
-        _, c2, _ = st.columns(3)
-        if c2.button("Load Example Data", type="primary"):
-            # loading and copying example files into default workspace
-            for filename_postfix, name_tag in zip(
-                ['*_deconv.mzML', '*_annotated.mzML', '*_tagged.tsv', '*_protein.tsv'],
-                ['out_deconv_mzML', 'anno_annotated_mzML', 'tags_tsv', 'protein_tsv']
-            ):
-                for file in Path("example-data", "flashtagger").glob(filename_postfix):
-                    wf.file_manager.store_file(
-                        file.name.replace(filename_postfix[1:], ''), 
-                        name_tag, file, remove=False
-                    )
-            process_uploaded_files([])
-            # parsing the example files is done in parseUploadedFiles later
-            st.success("Example files loaded!")
-
     # Upload files via upload widget
-    with tabs[0]:
-        st.subheader("**Upload FLASHDeconv & FLASHTagger output files (\*_annotated.mzML, \*_deconv.mzML, \*_tagged.tsv & \*_protein.tsv)**")
-        # Display info how to upload files
-        st.info(
-            """
-        **💡 How to upload files**
-        
-        1. Browse files on your computer or drag and drops files
-        2. Click the **Add files to workspace** button to use them in the viewer
-        
-        Select data for analysis from the uploaded files shown below.
-        
-        **💡 Make sure that the same number of deconvolved and annotated mzML and FLASHTagger output files files are uploaded!**
+    st.subheader("**Upload FLASHDeconv & FLASHTagger output files (\*_annotated.mzML, \*_deconv.mzML, \*_tagged.tsv & \*_protein.tsv)**")
+    # Display info how to upload files
+    st.info(
         """
+    **💡 How to upload files**
+    
+    1. Browse files on your computer or drag and drops files
+    2. Click the **Add files to workspace** button to use them in the viewer
+    
+    Select data for analysis from the uploaded files shown below.
+    
+    **💡 Make sure that the same number of deconvolved and annotated mzML and FLASHTagger output files files are uploaded!**
+    """
+    )
+    with st.form('input_mzML', clear_on_submit=True):
+        uploaded_file = st.file_uploader(
+            "FLASHDeconv & FLASHTagger output files", accept_multiple_files=True, type=["mzML", "tsv"]
         )
-        with st.form('input_mzML', clear_on_submit=True):
-            uploaded_file = st.file_uploader(
-                "FLASHDeconv & FLASHTagger output files", accept_multiple_files=True, type=["mzML", "tsv"]
-            )
-            _, c2, _ = st.columns(3)
-            # User needs to click button to upload selected files
-            if c2.form_submit_button("Add files to workspace", type="primary"):
-                if uploaded_file:
-                    # A list of files is required, since online allows only single upload, create a list
-                    if type(uploaded_file) != list:
-                        uploaded_file = [uploaded_file]
+        _, c2, _ = st.columns(3)
+        # User needs to click button to upload selected files
+        if c2.form_submit_button("Add files to workspace", type="primary"):
+            if uploaded_file:
+                # A list of files is required, since online allows only single upload, create a list
+                if type(uploaded_file) != list:
+                    uploaded_file = [uploaded_file]
 
-                    # opening file dialog and closing without choosing a file results in None upload
-                    process_uploaded_files(uploaded_file)
-                    st.success("Successfully added uploaded files!")
-                else:
-                    st.warning("Upload some files before adding them.")
+                # opening file dialog and closing without choosing a file results in None upload
+                process_uploaded_files(uploaded_file)
+                st.success("Successfully added uploaded files!")
+            else:
+                st.warning("Upload some files before adding them.")
 
     # File Upload Table
     experiments = (
