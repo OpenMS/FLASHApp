@@ -1,12 +1,17 @@
 {
-    "mzML-files": [],
+    "mzML-files": [
+        "../workspaces-FLASHApp/default/flashtnt/input-files/mzML-files/example_spectrum_aqpz.mzML",
+        "../workspaces-FLASHApp/default/flashtnt/input-files/mzML-files/example_spectrum_antibody.mzML"
+    ],
     "fasta-file": "../workspaces-FLASHApp/default/flashtnt/input-files/fasta-file/example_database.fasta",
     "threads": 14,
     "few_proteins": true,
     "FLASHDeconv": {
-        "SD:tol": "10.0\n10.0"
+        "SD:tol": "5\n5",
+        "SD:max_charge": 30
     },
     "FLASHTnT": {
-        "ion_type": "b\ny"
+        "ion_type": "b\nc\ny\nz",
+        "tag:min_length": 4
     }
 }
