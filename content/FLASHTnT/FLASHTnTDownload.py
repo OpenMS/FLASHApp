@@ -58,7 +58,7 @@ else:
                             for filepath in file_manager.get_results(
                                 experiment, targets, partial=True
                             ).values():
-                                f.write(filepath)
+                                f.write(filepath, arcname=Path(filepath).name)
                         zip_buffer.seek(0)
                         file_manager.store_file(
                             experiment, 'download_archive', zip_buffer, 
