@@ -5,9 +5,9 @@ myenv
 build.log
 run_app.spec
 clean-up-workspaces.log
+gdpr_consent/node_modules/
 
 # FLASHApp
-workspaces
 Pipfile
 workspaces-flashtaggerviewer
 
@@ -23,4 +23,7 @@ workspaces-flashtaggerviewer
 # Temp files
 **/__pycache__
 .DS_Store
+*-embed-amd64
+*~
+
 

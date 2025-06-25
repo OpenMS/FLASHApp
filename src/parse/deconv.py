@@ -3,7 +3,7 @@ import numpy as np
 
 from src.parse.masstable import parseFLASHDeconvOutput, getMSSignalDF, getSpectraTableDF
 from src.render.compression import downsample_heatmap, compute_compression_levels
-
+from scipy.stats import gaussian_kde
 
 def parseDeconv(
         file_manager, dataset_id, out_deconv_mzML, anno_annotated_mzML, 
@@ -26,6 +26,7 @@ def parseDeconv(
         file_manager.store_data(
             dataset_id, f'ms1_{descriptor}_heatmap', heatmap
         )
+
         # Store compressed versions
         for size in reversed(compute_compression_levels(20000, len(heatmap), logger=logger)):
             
@@ -105,21 +106,26 @@ def parseDeconv(
         fdr_dfs = pd.concat(fdr_dfs, axis=0, ignore_index=True)
         if 'TargetDecoyType' not in fdr_dfs.columns:
             fdr_dfs['TargetDecoyType'] = 0
-        ecdf_target, ecdf_decoy = ecdf(fdr_dfs)
-        file_manager.store_data(dataset_id, 'ecdf_target', ecdf_target)
-        file_manager.store_data(dataset_id, 'ecdf_decoy', ecdf_decoy)
+        density_target, density_decoy = fdr_density_distribution(fdr_dfs)
+        file_manager.store_data(dataset_id, 'density_target', density_target)
+        file_manager.store_data(dataset_id, 'density_decoy', density_decoy)
 
-    
-def ecdf(df):
-    target_qscores = df[df['TargetDecoyType'] == 0]['Qscore']
-    decoy_qscores = df[df['TargetDecoyType'] > 0]['Qscore']
 
-    ecdf_target = pd.DataFrame({
-        'x' : np.sort(target_qscores),
-        'y' : np.arange(1, len(target_qscores) + 1) / len(target_qscores)
-    })
-    ecdf_decoy = pd.DataFrame({
-        'x' : np.sort(decoy_qscores),
-        'y' : np.arange(1, len(decoy_qscores) + 1) / len(decoy_qscores)
-    })
-    return ecdf_target, ecdf_decoy
+def fdr_density_distribution(df):
+
+    # Find density targets
+    target_qscores = df[df['TargetDecoyType'] == 0]['Qscore'].dropna()
+    x_target = np.linspace(target_qscores.min(), target_qscores.max(), 200)
+    kde_target = gaussian_kde(target_qscores)
+    density_target = pd.DataFrame({'x': x_target, 'y': kde_target(x_target)})
+
+    # Find density decoys (if present)
+    decoy_qscores = df[df['TargetDecoyType'] > 0]['Qscore'].dropna()
+    if len(decoy_qscores) > 0:
+        x_decoy = np.linspace(decoy_qscores.min(), decoy_qscores.max(), 200)
+        kde_decoy = gaussian_kde(decoy_qscores)
+        density_decoy = pd.DataFrame({'x': x_decoy, 'y': kde_decoy(x_decoy)})
+    else:
+        density_decoy = pd.DataFrame(columns=['x', 'y'])
+
+    return density_target, density_decoy

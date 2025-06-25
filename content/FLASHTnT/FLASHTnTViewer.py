@@ -23,10 +23,19 @@ def select_experiment():
                 continue
             st.session_state[f"selected_experiment{exp_index}_tagger"] = st.session_state[f'selected_experiment_dropdown_{exp_index}_tagger']
 
+def validate_selected_index(file_manager, selected_experiment):
+    results = file_manager.get_results_list(
+        ['deconv_dfs', 'anno_dfs', 'tag_dfs', 'protein_dfs']
+    )
+    if selected_experiment in st.session_state:
+        if st.session_state[selected_experiment] in results:
+            return name_to_index[st.session_state[selected_experiment]]
+        else:
+            del st.session_state[selected_experiment]
+    return None
 
 # page initialization
 params = page_setup("TaggerViewer")
-st.title('FLASHViewer')
 
 # Get available results
 file_manager = FileManager(
@@ -60,7 +69,7 @@ if len(layout) == 2 and side_by_side:
         st.selectbox(
             "choose experiment", results, 
             key="selected_experiment_dropdown_tagger", 
-            index=name_to_index[st.session_state.selected_experiment0_tagger] if 'selected_experiment0_tagger' in st.session_state else None,
+            index=validate_selected_index(file_manager, 'selected_experiment0_tagger'),
             on_change=select_experiment
         )
         if 'selected_experiment0_tagger' in st.session_state:
@@ -69,7 +78,7 @@ if len(layout) == 2 and side_by_side:
         st.selectbox(
             "choose experiment", results, 
             key=f'selected_experiment_dropdown_1_tagger',
-            index = name_to_index[st.session_state[f'selected_experiment1_tagger']] if f'selected_experiment1_tagger' in st.session_state else None,
+            index=validate_selected_index(file_manager, 'selected_experiment1_tagger'),
             on_change=select_experiment
         )
         if f"selected_experiment1_tagger" in st.session_state:
@@ -81,7 +90,7 @@ else:
     st.selectbox(
         "choose experiment", results, 
         key="selected_experiment_dropdown_tagger", 
-        index=name_to_index[st.session_state.selected_experiment0_tagger] if 'selected_experiment0_tagger' in st.session_state else None,
+        index=validate_selected_index(file_manager, 'selected_experiment0_tagger'),
         on_change=select_experiment
     )
 
@@ -99,7 +108,7 @@ else:
             st.selectbox(
                 "choose experiment", results, 
                 key=f'selected_experiment_dropdown_{exp_index}_tagger',
-                index = name_to_index[st.session_state[f'selected_experiment{exp_index}_tagger']] if f'selected_experiment{exp_index}_tagger' in st.session_state else None,
+                index=validate_selected_index(file_manager, f'selected_experiment{exp_index}_tagger'),
                 on_change=select_experiment
             )
 

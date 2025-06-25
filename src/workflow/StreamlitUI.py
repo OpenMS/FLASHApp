@@ -1000,9 +1000,52 @@ class StreamlitUI:
                     f.write(up.read().decode("utf-8"))
                 streamlit_js_eval(js_expressions="parent.window.location.reload()")
 
+    @st.fragment(run_every=5)
+    def show_log(self, start_workflow_function):
+        c1, c2 = st.columns(2)
+        # Select log level, this can be changed at run time or later without re-running the workflow
+        log_level = c1.selectbox(
+            "log details", ["minimal", "commands and run times", "all"], key="log_level"
+        )
+        if self.executor.pid_dir.exists():
+            if c1.button("Stop Workflow", type="primary", use_container_width=True):
+                self.executor.stop()
+                st.rerun()
+        elif c1.button("Start Workflow", type="primary", use_container_width=True):
+            start_workflow_function()
+            time.sleep(3)
+            st.rerun()
+        log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
+        if log_path.exists():
+            if self.executor.pid_dir.exists():
+                with st.spinner("**Workflow running...**"):
+                    with open(log_path, "r", encoding="utf-8") as f:
+                        st.code(
+                            "".join(f.readlines()[-30:]),
+                            language="neon",
+                            line_numbers=False,
+                        )
+                    time.sleep(2)
+                st.rerun()
+            else:
+                st.markdown(
+                    f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
+                )
+                with open(log_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    # Check if workflow finished successfully
+                    if not "WORKFLOW FINISHED" in content:
+                        st.error("**Errors occurred, check log file.**")
+                    st.code(content, language="neon", line_numbers=False)
+
+
     def execution_section(self, start_workflow_function) -> None:
         with st.expander("**Summary**"):
             st.markdown(self.export_parameters_markdown())
+
+        if OS_PLATFORM == 'win32':
+            self.show_log(start_workflow_function)
+            return
 
         c1, c2 = st.columns(2)
         # Select log level, this can be changed at run time or later without re-running the workflow
@@ -1015,6 +1058,7 @@ class StreamlitUI:
                 st.rerun()
         elif c1.button("Start Workflow", type="primary", use_container_width=True):
             start_workflow_function()
+            time.sleep(3)
             st.rerun()
         log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
         if log_path.exists():

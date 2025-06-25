@@ -1,6 +1,38 @@
 import streamlit as st
 import re
 from src.common.common import page_setup, save_params, v_space
+from src.workflow.FileManager import FileManager
+from pathlib import Path
+
+
+# Setup cache access
+file_manager = FileManager(
+    st.session_state["workspace"],
+    Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+)
+
+def set_sequence(input_sequence, fixed_mod_cysteine=None, fixed_mod_methionine=None):
+    file_manager.store_data('sequence', 'sequence', 
+        {
+            'input_sequence' : input_sequence, 
+            'fixed_mod_cysteine' : fixed_mod_cysteine, 
+            'fixed_mod_methionine' : fixed_mod_methionine
+        }
+    )
+
+def get_sequence():
+    # Check if layout has been set
+    if not file_manager.result_exists('sequence', 'sequence'):
+        return None
+    # fetch layout from cache
+    sequence = file_manager.get_results('sequence', 'sequence')['sequence']
+
+    return sequence['input_sequence'], sequence['fixed_mod_cysteine'], sequence['fixed_mod_methionine'] 
+
+def emptySequenceInput():
+    if file_manager.result_exists('sequence', 'sequence'):
+        file_manager.remove_results('sequence')
+    st.session_state['reset_sequence_input'] = True
 
 fixed_mod_cysteine = ['No modification',
                       'Carbamidomethyl (+57)',
@@ -26,14 +58,6 @@ def validateSequenceInput(input_seq):
         return False
     return True
 
-
-def emptySequenceInput():
-    for key in ['input_sequence', 'fixed_mod_cysteine', 'fixed_mod_methionine']:
-        if key in st.session_state:
-            del st.session_state[key]
-    st.session_state['reset_sequence_input'] = True
-
-
 # page initialization
 params = page_setup()
 
@@ -48,17 +72,22 @@ v_space(1, c2)
 if c2.button('Reset'):
     emptySequenceInput()
 
-# if any sequence was submitted before
-if 'input_sequence' in st.session_state and st.session_state.input_sequence \
-        and 'sequence_text' not in st.session_state:
-    st.session_state['sequence_text'] = st.session_state.input_sequence
-# if any modification was submitted before
-if 'fixed_mod_cysteine' in st.session_state and st.session_state.fixed_mod_cysteine \
-        and 'selected_fixed_mod_cysteine' not in st.session_state:
-    st.session_state['selected_fixed_mod_cysteine'] = st.session_state.fixed_mod_cysteine
-if 'fixed_mod_methionine' in st.session_state and st.session_state.fixed_mod_methionine \
-        and 'selected_fixed_mod_methionine' not in st.session_state:
-    st.session_state['selected_fixed_mod_methionine'] = st.session_state.fixed_mod_methionine
+cached_data = get_sequence() 
+if cached_data is not None:
+    seq, cys_mod, met_mod = cached_data
+
+    if 'sequence_text' not in st.session_state:
+        st.session_state['sequence_text'] = seq
+    if (
+        (cys_mod is not None) 
+        and ('selected_fixed_mod_cysteine' not in st.session_state)
+    ):
+        st.session_state['selected_fixed_mod_cysteine'] = cys_mod
+    if (
+        (met_mod is not None)
+        and ('selected_fixed_mod_methionine' not in st.session_state)
+    ):
+        st.session_state['selected_fixed_mod_methionine'] = met_mod
 
 # clean up the entries of form, if needed
 if st.session_state['reset_sequence_input']:
@@ -80,23 +109,26 @@ with st.form('sequence_input'):
     _, c2 = st.columns([8, 1])
     submitted = c2.form_submit_button("Save")
     if submitted:
-        if 'input_sequence' in st.session_state:  # initialize
-            del st.session_state['input_sequence']
         if st.session_state['sequence_text'] == '':
             emptySequenceInput()
             st.rerun()
         elif validateSequenceInput(st.session_state['sequence_text']):
-            st.success('Proteoform sequence is submitted: ' + st.session_state['sequence_text'])
-            # save information for sequence view
-            st.session_state['input_sequence'] = ''.join(st.session_state['sequence_text'].split()).upper()
 
-            st.session_state['fixed_mod_cysteine'], st.session_state['fixed_mod_methionine'] = '', ''
+            st.success('Proteoform sequence is submitted: ' + st.session_state['sequence_text'])
+
+            # save information for sequence view
+            seq = ''.join(st.session_state['sequence_text'].split()).upper()
+            cys_mod = None
+            met_mod = None
             if 'selected_fixed_mod_cysteine' in st.session_state \
                     and st.session_state['selected_fixed_mod_cysteine'] != 'No modification':
-                st.session_state['fixed_mod_cysteine'] = st.session_state.selected_fixed_mod_cysteine
+                cys_mod = st.session_state.selected_fixed_mod_cysteine
             if 'selected_fixed_mod_methionine' in st.session_state \
                     and st.session_state['selected_fixed_mod_methionine'] != 'No modification':
-                st.session_state['fixed_mod_methionine'] = st.session_state.selected_fixed_mod_methionine
+                met_mod = st.session_state.selected_fixed_mod_methionine
+
+            set_sequence(seq, cys_mod, met_mod)
+
         else:
             st.error('Error: sequence input is not valid')
 

@@ -8,8 +8,6 @@ from src.render.render import render_grid
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                   ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
-if 'input_sequence' in st.session_state and st.session_state.input_sequence:
-    DEFAULT_LAYOUT = DEFAULT_LAYOUT + [['sequence_view']]
 
 def select_experiment():
     st.session_state.selected_experiment0 = st.session_state.selected_experiment_dropdown
@@ -19,15 +17,36 @@ def select_experiment():
                 continue
             st.session_state[f"selected_experiment{exp_index}"] = st.session_state[f'selected_experiment_dropdown_{exp_index}']
 
+def validate_selected_index(file_manager, selected_experiment):
+    results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
+    if selected_experiment in st.session_state:
+        if st.session_state[selected_experiment] in results:
+            return name_to_index[st.session_state[selected_experiment]]
+        else:
+            del st.session_state[selected_experiment]
+    return None
+
 # page initialization
 params = page_setup()
-st.title("FLASHViewer")
 
 # Get available results
 file_manager = FileManager(
     st.session_state["workspace"],
     Path(st.session_state['workspace'], 'flashdeconv', 'cache')
 )
+
+def get_sequence():
+    # Check if layout has been set
+    if not file_manager.result_exists('sequence', 'sequence'):
+        return None
+    # fetch layout from cache
+    sequence = file_manager.get_results('sequence', 'sequence')['sequence']
+
+    return sequence['input_sequence'], sequence['fixed_mod_cysteine'], sequence['fixed_mod_methionine'] 
+
+if get_sequence() is not None:
+    DEFAULT_LAYOUT = DEFAULT_LAYOUT + [['sequence_view']]
+
 results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
 
 if file_manager.result_exists('layout', 'layout'):
@@ -53,7 +72,7 @@ if len(layout) == 2 and side_by_side:
         st.selectbox(
             "choose experiment", results, 
             key="selected_experiment_dropdown", 
-            index=name_to_index[st.session_state.selected_experiment0] if 'selected_experiment0' in st.session_state else None,
+            index=validate_selected_index(file_manager, 'selected_experiment0'),
             on_change=select_experiment
         )
         if 'selected_experiment0' in st.session_state:
@@ -65,7 +84,7 @@ if len(layout) == 2 and side_by_side:
         st.selectbox(
             "choose experiment", results, 
             key=f'selected_experiment_dropdown_1',
-            index = name_to_index[st.session_state[f'selected_experiment1']] if f'selected_experiment1' in st.session_state else None,
+            index=validate_selected_index(file_manager, 'selected_experiment1'),
             on_change=select_experiment
         )
         if f"selected_experiment1" in st.session_state:
@@ -81,7 +100,7 @@ else:
     st.selectbox(
         "choose experiment", results, 
         key="selected_experiment_dropdown", 
-        index=name_to_index[st.session_state.selected_experiment0] if 'selected_experiment0' in st.session_state else None,
+        index=validate_selected_index(file_manager, 'selected_experiment0'),
         on_change=select_experiment
     )
 
@@ -103,7 +122,7 @@ else:
             st.selectbox(
                 "choose experiment", results, 
                 key=f'selected_experiment_dropdown_{exp_index}',
-                index = name_to_index[st.session_state[f'selected_experiment{exp_index}']] if f'selected_experiment{exp_index}' in st.session_state else None,
+                index=validate_selected_index(file_manager, f'selected_experiment{exp_index}'),
                 on_change=select_experiment
             )
             # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment

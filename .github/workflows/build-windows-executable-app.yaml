@@ -14,7 +14,8 @@ env:
   OPENMS_VERSION: 3.2.0 
   PYTHON_VERSION: 3.11.0
   # Name of the installer
-  APP_NAME: FLASHApp-0.70
+  APP_NAME: FLASHApp-0.8.4
+  APP_UpgradeCode: "69ae44ad-d554-4e3c-8715-7c4daf60f8bb"
 
 jobs:
   build-vue-js-component:
@@ -58,6 +59,17 @@ jobs:
         repository: t0mdavid-m/OpenMS
         ref: FVdeploy
         path: 'OpenMS'
+    
+    # Temporary fix - until seqan is back online or new OpenMS release (3.4)
+    - name: Get latest cibuild.cmake
+      working-directory: OpenMS
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git fetch origin develop
+        git checkout origin/develop -- tools/ci/cibuild.cmake
+        git checkout origin/develop -- tools/ci/citest.cmake
+        git checkout origin/develop -- tools/ci/cipackage.cmake
 
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
@@ -213,6 +225,13 @@ jobs:
         name: vue-js-dist
         path: js-dist
 
+    - name: Set Version in settings.json
+      run: |
+        $VERSION="${{ github.event.release.tag_name }}"
+        $content = Get-Content -Raw settings.json | ConvertFrom-Json
+        $content.version = $VERSION
+        $content | ConvertTo-Json -Depth 100 | Set-Content settings.json
+
     - name: Download package as artifact
       uses: actions/download-artifact@v4
       with:
@@ -227,7 +246,7 @@ jobs:
         cp -r openms-package/share ../share
 
     - name: Set up Python (regular distribution)
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }} # Use the same version as the embeddable version
     
@@ -276,7 +295,15 @@ jobs:
 
     - name: Create .bat file
       run: |
-          echo " start /min .\python-${{ env.PYTHON_VERSION }}\python -m streamlit run app.py local" > ${{ env.APP_NAME }}.bat
+        echo '@echo off' > ${{ env.APP_NAME }}.bat
+        echo '' >> ${{ env.APP_NAME }}.bat
+        echo 'REM Create .streamlit directory in user''s home if it doesn''t exist' >> ${{ env.APP_NAME }}.bat
+        echo 'if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit"' >> ${{ env.APP_NAME }}.bat
+        echo '' >> ${{ env.APP_NAME }}.bat
+        echo 'REM Create credentials.toml with empty email to disable email prompt' >> ${{ env.APP_NAME }}.bat
+        echo 'copy /Y ".streamlit\credentials.toml" "%USERPROFILE%\.streamlit\credentials.toml" > nul' >> ${{ env.APP_NAME }}.bat
+        echo '' >> ${{ env.APP_NAME }}.bat
+        echo 'start /min .\python-${{ env.PYTHON_VERSION }}\python -m streamlit run app.py local' >> ${{ env.APP_NAME }}.bat
 
     - name: Create All-in-one executable folder
       run: |
@@ -359,7 +386,7 @@ jobs:
         cat <<EOF > streamlit_exe.wxs
         <?xml version="1.0"?>
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-          <Product Id="8434b940-a943-40f1-ab1f-4db3feedb4ba" Name="${{ env.APP_NAME }}" Language="1033" Version="1.0.0.0" Codepage="1252" Manufacturer="OpenMS Developer Team" UpgradeCode="8d28e8c7-45dc-446c-b889-99a6aea2f1a5">
+          <Product Id="*" Name="${{ env.APP_NAME }}" Language="1033" Version="1.0.0.0" Codepage="1252" Manufacturer="OpenMS Developer Team" UpgradeCode="${{ env.APP_UpgradeCode }}">
             <Package Id="*" InstallerVersion="300" Compressed="yes" InstallPrivileges="elevated" Platform="x64" />
             <Media Id="1" Cabinet="streamlit.cab" EmbedCab="yes" />
         

@@ -12,6 +12,9 @@ COMPONENT_OPTIONS=[
     'Internal fragment map (Protein table needed)',
     'Tag table (Protein table needed)',
     'Sequence tag view (Tag table needed)',
+    'Score Distribution Plot',
+    'MS1 raw heatmap',
+    'MS1 deconvolved heatmap'
 ]
 
 COMPONENT_NAMES=[
@@ -19,7 +22,10 @@ COMPONENT_NAMES=[
     'sequence_view', 
     'internal_fragment_map',
     'tag_table',
-    'combined_spectrum'
+    'combined_spectrum',
+    'id_fdr_plot',
+    'ms1_raw_heatmap',
+    'ms1_deconv_heat_map'
 ]
 
 # Setup cache access
@@ -195,21 +201,8 @@ def handleSettingButtons():
                                                for exp in uploaded_layout]
             st.session_state.num_of_experiment_to_show = len(uploaded_layout)
 
-
-def setSequenceView():
-    if 'input_sequence' in st.session_state and st.session_state.input_sequence:
-        global COMPONENT_OPTIONS
-        COMPONENT_OPTIONS = COMPONENT_OPTIONS + ['Sequence view (Mass table needed)',
-                                                 'Internal fragment map (Mass table needed)']
-        global COMPONENT_NAMES
-        COMPONENT_NAMES = COMPONENT_NAMES + ['sequence_view', 'internal_fragment_map']
-
-
 # page initialization
 params = page_setup()
-
-# when sequence is submitted, add "Sequence View" as a component option
-#setSequenceView()
 
 # handles "onclick" of buttons
 if st.session_state.get("edit_mode") is None:

@@ -13,6 +13,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Build the full Docker image
-      run: docker build . --file Dockerfile --tag streamlitapp:latest
+      - uses: actions/checkout@v3
+      - name: Build the full Docker image
+        run: docker build --file Dockerfile --tag streamlitapp:latest --output type=tar,dest=/dev/null . 

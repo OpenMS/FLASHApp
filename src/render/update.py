@@ -1,8 +1,27 @@
 import pandas as pd
 import streamlit as st
+import pyarrow.dataset as ds
 
 from src.render.compression import downsample_heatmap
+from src.workflow.FileManager import FileManager
 from src.render.sequence import getFragmentDataFromSeq, getInternalFragmentDataFromSeq
+from pathlib import Path
+
+
+def get_sequence():
+    # Setup cache access
+    file_manager = FileManager(
+        st.session_state["workspace"],
+        Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+    )
+
+    # Check if sequence has been set
+    if not file_manager.result_exists('sequence', 'sequence'):
+        return None
+    # fetch sequence from cache
+    sequence = file_manager.get_results('sequence', 'sequence')['sequence']
+
+    return sequence['input_sequence'], sequence['fixed_mod_cysteine'], sequence['fixed_mod_methionine']
 
 
 # Ignore raw data for caching, too ressource intensive
@@ -50,11 +69,11 @@ def update_data(data, out_components, additional_data, tool):
         and (tool != 'flashtnt')
     ):
         data['sequence_data'] = {
-            0: render_sequence_data(st.session_state.input_sequence)
+            0: render_sequence_data(get_sequence()[0])
         }
     if (component == 'Internal Fragment Map') and (tool != 'flashtnt'):
         data['internal_fragment_data'] = {
-            0: render_internal_fragment_data(st.session_state.input_sequence)
+            0: render_internal_fragment_data(get_sequence()[0])
         }
     
     return data  
@@ -69,13 +88,27 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
     # Filter data if possible
     if component in [
         'Annotated Spectrum', 'Deconvolved Spectrum', 
-        'Augmented Deconvolved Spectrum', 'Precursor Signals', 
+        'Augmented Deconvolved Spectrum', 
         'Mass Table', 'Sequence View', 'Internal Fragment Map'
     ]:
         if 'scanIndex' not in selection_store:
             data['per_scan_data'] = data['per_scan_data'].iloc[0:0,:]
         else:
             data['per_scan_data'] = data['per_scan_data'].iloc[selection_store['scanIndex']:selection_store['scanIndex']+1,:]
+    elif component == 'Precursor Signals':
+        scan_index = selection_store.get("scanIndex")
+        mass_index = selection_store.get("massIndex")
+        if scan_index is None:
+            data['per_scan_data'] = data['per_scan_data'].to_table(filter=(ds.field("index") == -1)).slice(0, 0)
+        else:
+            filtered_table = data['per_scan_data'].to_table(filter=(ds.field("index") == scan_index))
+            if mass_index is not None:
+                df = filtered_table.to_pandas()
+                df['SignalPeaks'] = df['SignalPeaks'].apply(lambda peaks: peaks[mass_index] if len(peaks) > mass_index else None)
+                df['NoisyPeaks'] = df['NoisyPeaks'].apply(lambda peaks: peaks[mass_index] if len(peaks) > mass_index else None)
+                filtered_table = df
+            data['per_scan_data'] = filtered_table
+
 
     elif (component == 'Deconvolved MS1 Heatmap'):
         if 'heatmap_deconv' in selection_store:

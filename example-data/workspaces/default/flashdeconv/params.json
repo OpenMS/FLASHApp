@@ -1,0 +1,10 @@
+{
+    "mzML-files": [
+        "../workspaces-FLASHApp/default/flashdeconv/input-files/mzML-files/example_fd.mzML"
+    ],
+    "threads": 14,
+    "FLASHDeconv": {
+        "SD:tol": "5\n5",
+        "FD:report_FDR": "true"
+    }
+}

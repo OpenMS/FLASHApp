@@ -1,6 +1,7 @@
 {
     "app-name": "FLASHApp",
     "github-user": "OpenMS",
+    "version": "0.8.4",
     "repository-name": "FLASHApp",
     "analytics": {
         "google-analytics": {
@@ -13,5 +14,8 @@
         }
     },
     "online_deployment": false,
-    "enable_flashida": true
+    "enable_flashida": true,
+    "enable_workspaces": true,
+    "test": true,
+    "workspaces_dir": ".."
 }
