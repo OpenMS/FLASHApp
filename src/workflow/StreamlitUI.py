@@ -852,6 +852,9 @@ class StreamlitUI:
                 if value is None:
                     st.error("Value not specified for parameter.")
                     continue
+                if isinstance(value, list):
+                    value = '\n'.join(map(str, value))
+                    entry['widget_type'] = 'textarea'
                 hide = entry["hide"] if "hide" in entry else False
                 # no need to display input and output files widget or hidden parameters
                 if hide:
