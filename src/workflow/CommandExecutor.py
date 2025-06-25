@@ -257,7 +257,13 @@ class CommandExecutor:
             # run command without params
             self.run_command(["python", str(path)])
         elif isinstance(defaults, list):
-            defaults = {entry["key"]: entry["value"] for entry in defaults}
+            subsection = ''
+            defaults = {}
+            for entry in defaults:
+                if isinstance(entry, str):
+                    subsection = entry
+                    continue
+                defaults[f'{subsection}:{entry["key"]}'] = entry["value"]
             # load paramters from JSON file
             params = {k: v for k, v in self.parameter_manager.get_parameters_from_json().items() if path.name in k}
             # update defaults

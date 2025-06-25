@@ -841,10 +841,18 @@ class StreamlitUI:
         elif isinstance(defaults, list):
             # display input widget for every entry in defaults
             # input widgets in n number of columns
+            subsection = ''
             cols = st.columns(num_cols)
             i = 0
             for entry in defaults:
-                key = f"{path.name}:{entry['key']}" if "key" in entry else None
+                if isinstance(entry, str):
+                    subsection = entry
+                    st.markdown(f'**{entry}**')
+                    continue
+                if len(subsection) > 0:
+                    key = f"{path.name}:{subsection}:{entry['key']}" if "key" in entry else None
+                else:
+                    key = f"{path.name}:{entry['key']}" if "key" in entry else None
                 if key is None:
                     st.error("Key not specified for parameter.")
                     continue
