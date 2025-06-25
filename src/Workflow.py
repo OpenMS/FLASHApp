@@ -4,6 +4,7 @@ import time
 import multiprocessing
 
 import streamlit as st
+import pyopenms as oms
 
 from time import sleep
 from pathlib import Path
@@ -411,6 +412,8 @@ class DeconvWorkflow(WorkflowManager):
             # Remove temporary folder
             rmtree(folder_path)
 
+
+
 class IdaWorkflow(WorkflowManager):
 
     def __init__(self) -> None:
@@ -572,6 +575,79 @@ class IdaWorkflow(WorkflowManager):
                 secondary = suffix == '2' if suffix else False
                 secondary_flags.append(secondary)
         return raws, methods, secondary_flags
+
+
+
+class IdaSimulatorWorkflow(WorkflowManager):
+
+    def __init__(self) -> None:
+        # Initialize the parent class with the workflow name.
+        super().__init__("FLASHIdaSimulator", st.session_state["workspace"])
+        self.script_path = join('scripts', 'flashida', 'write_method.py')
+        self.tool_name = 'FLASHIdaRunner'
+    
+    def upload(self)-> None:
+        self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML")
+
+    def configure(self) -> None:
+        
+        self.ui.select_input_file("mzML-files", name='Dataset')
+
+        self.ui.input_widget(
+            key="executable", name="Path to Flash.exe", default='',
+            widget_type="text"
+        )
+
+        self.ui.input_python(self.script_path)
+
+    def execution(self) -> None:
+        params = self.parameter_manager.get_parameters_from_json()
+
+        # Make sure output directory exists
+        base_path = dirname(self.workflow_dir)
+        
+        # Get input files
+        in_mzml = self.file_manager.get_files(self.params["mzML-files"])[0]
+
+        # Generate output folder
+        current_base = splitext(basename(in_mzml))[0]
+        current_time = time.strftime("%Y%m%d-%H%M%S")
+        dataset_id = '%s_%s'%(current_base, current_time)
+        folder_path = join(base_path, 'FLASHIdaOutput', '%s_%s'%(current_base, current_time))
+        makedirs(folder_path)
+
+        # Generate temp paths for output files
+        input_txt = join(folder_path, 'simulation_data.txt')
+        input_xml = join(folder_path, 'method.xml')
+        output_tsv = join(folder_path, 'simulation_data.txt')
+
+
+        # Convert input mzML to input format
+        self.logger.log('Converting mzML to simulation input format...')
+        exp = oms.MSExperiment()
+        oms.MzMLFile().load(in_mzml, exp)
+        output = ""
+        for s in exp.getSpectra():
+            if s.getMSLevel() > 1:
+                continue
+            output += f'Spec\t{s.getRT()}\n'
+            for mz, intensity in zip(*s.get_peaks()):
+                output += f'{mz}\t{intensity}\n'
+        with open(input_txt, 'w') as f:
+            f.write(output)
+
+        # Write method.xml
+        self.logger.log('Generating parameter file...')
+        self.executor.run_python(
+            self.script_path, {'input_xml' : join(folder_path, 'method.xml')}
+        )
+
+        # Run simulator
+        self.logger.log('Running FLASHIda simulator...')
+        self.executor.run_command(
+            [params['executable'], input_txt, output_tsv, input_xml],
+            cwd = Path(params['executable']).parent
+        )
 
 
 class QuantWorkflow(WorkflowManager):
