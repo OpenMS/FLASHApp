@@ -50,6 +50,7 @@ DEFAULTS = [
     'IDA',
     {'key': 'MaxMs2CountPerMs1', 'name': 'MaxMs2CountPerMs1','value': 4},
     {'key': 'QScoreThreshold', 'name': 'QScoreThreshold', 'value': 0.2},
+    {'key': 'TQScoreThreshold', 'name': 'TQScoreThreshold', 'value': 0.99},
     {'key': 'MinCharge', 'name': 'MinCharge', 'value': 4},
     {'key': 'MaxCharge', 'name': 'MaxCharge', 'value': 50},
     {'key': 'MinMass', 'name': 'MinMass', 'value': 500},

@@ -658,12 +658,12 @@ class IdaSimulatorWorkflow(WorkflowManager):
     
         # Fetch results
         results = self.file_manager.get_results(
-            dataset_id, ['simulation_results']
+            dataset_id, ['simulation_results_tsv']
         )
         
         # Parse data
         parseIda(
-            self.file_manager, dataset_id, results['simulation_results']
+            self.file_manager, dataset_id, results['simulation_results_tsv']
         )
 
         # Remove temporary folder
