@@ -10,10 +10,11 @@ from time import sleep
 from pathlib import Path
 from os import makedirs, listdir
 from shutil import copyfile, rmtree
-from os.path import join, splitext, basename, exists, dirname
+from os.path import join, splitext, basename, exists, dirname, abspath
 
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
+from src.parse.ida import parseIda
 from src.workflow.WorkflowManager import WorkflowManager
 
 DEFAULT_THREADS = 8
@@ -619,22 +620,21 @@ class IdaSimulatorWorkflow(WorkflowManager):
         # Generate temp paths for output files
         input_txt = join(folder_path, 'simulation_data.txt')
         input_xml = join(folder_path, 'method.xml')
-        output_tsv = join(folder_path, 'simulation_data.txt')
+        output_tsv = join(folder_path, 'simulation_results.tsv')
 
 
         # Convert input mzML to input format
         self.logger.log('Converting mzML to simulation input format...')
         exp = oms.MSExperiment()
         oms.MzMLFile().load(in_mzml, exp)
-        output = ""
+        output = []
         for s in exp.getSpectra():
             if s.getMSLevel() > 1:
                 continue
-            output += f'Spec\t{s.getRT()}\n'
-            for mz, intensity in zip(*s.get_peaks()):
-                output += f'{mz}\t{intensity}\n'
+            output.append(f'Spec\t{s.getRT()}\n')
+            output += [f'{mz}\t{intensity}\n' for mz, intensity in zip(*s.get_peaks())]
         with open(input_txt, 'w') as f:
-            f.write(output)
+            f.writelines(output)
 
         # Write method.xml
         self.logger.log('Generating parameter file...')
@@ -645,9 +645,29 @@ class IdaSimulatorWorkflow(WorkflowManager):
         # Run simulator
         self.logger.log('Running FLASHIda simulator...')
         self.executor.run_command(
-            [params['executable'], input_txt, output_tsv, input_xml],
+            [params['executable'], abspath(input_txt), abspath(output_tsv), abspath(input_xml)],
             cwd = Path(params['executable']).parent
         )
+
+        # Store all files
+        for file in listdir(folder_path):
+            self.file_manager.store_file(
+                dataset_id, str(file).replace('.', '_'), 
+                Path(folder_path, file), file_name=file
+            )
+    
+        # Fetch results
+        results = self.file_manager.get_results(
+            dataset_id, ['simulation_results']
+        )
+        
+        # Parse data
+        parseIda(
+            self.file_manager, dataset_id, results['simulation_results']
+        )
+
+        # Remove temporary folder
+        rmtree(folder_path)
 
 
 class QuantWorkflow(WorkflowManager):

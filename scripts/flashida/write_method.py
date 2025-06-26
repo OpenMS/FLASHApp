@@ -1,6 +1,5 @@
 import json
 import sys
-import pyopenms as oms
 
 import xml.etree.ElementTree as ET
 
@@ -98,6 +97,8 @@ if __name__ == "__main__":
             for item in value.split('\n'):
                 element = ET.SubElement(tag, 'string')
                 element.text = item.strip().replace('\\\\', '\\')
+        elif isinstance(value, bool):
+            tag.text = str(value).lower()
         else:
             tag.text = str(value)
     tree = ET.ElementTree(root)
