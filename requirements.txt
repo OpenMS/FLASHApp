@@ -3,7 +3,7 @@
 # preferably use the batteries included or simple docker file for local hosting
 streamlit==1.43.0
 numpy==1.26.4 # pandas and numpy are dependencies of pyopenms, however, pyopenms needs numpy<=1.26.4
-plotly==5.22.0
+plotly==6.2.0
 captcha==0.7.1
 pyopenms>=3.2.0
 pyarrow<16
