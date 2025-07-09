@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.Workflow import DeconvWorkflow
 from src.parse.deconv import parseDeconv
-from src.common.common import page_setup
+from src.common.common import page_setup, save_params
 
 
 params = page_setup()
@@ -171,3 +171,5 @@ with t[3]:
             wf.file_manager.clear_cache()
             st.success("All files removed!")
             st.rerun()
+
+save_params(params)
