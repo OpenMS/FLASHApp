@@ -534,8 +534,6 @@ class IdaWorkflow(WorkflowManager):
             # Validate method
             method_path = Path(methods_folder_path, f'{method}.xml')
             raw_path = Path(raw_folder_path, raw)
-            self.logger.log(secondary)
-            self.logger.log(flashida_secondary_path)
             exe_path = flashida_secondary_path if secondary else flashida_path
             if method_path.is_file():
                 self.logger.log(f'Found method \'{method_path}\'!')
