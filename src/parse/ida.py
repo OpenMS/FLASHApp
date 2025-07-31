@@ -5,7 +5,7 @@ from src.parse.masstable import parseFLASHDeconvOutput, getMSSignalDF, getSpectr
 from src.render.compression import downsample_heatmap, compute_compression_levels
 from scipy.stats import gaussian_kde
 
-def parseIda(
+def parseIdaSimulator(
         file_manager, dataset_id, out_simulation, logger=None
 ):
     
@@ -36,3 +36,15 @@ def parseIda(
         file_manager.store_data(
             dataset_id, f'ms1_deconv_heatmap_{size}', heatmap
         )
+
+def parseIda(
+        file_manager, dataset_id, spec2_tsv, id_tsv
+):
+    ids = pd.read_csv(id_tsv, skiprows=25, sep='\t')
+    scans = pd.read_csv(spec2_tsv, sep='\t')
+    scans = scans.drop_duplicates(subset='ScanNum', keep='first')
+    scans['identified'] = scans['ScanNum'].isin(ids['Scan(s)'])
+    file_manager.store_data(
+        dataset_id, 'ms2_dfs', scans
+    )
+    

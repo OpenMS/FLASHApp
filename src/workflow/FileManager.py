@@ -379,7 +379,12 @@ class FileManager:
             set(self._get_column_list('stored_data')) 
             | set(self._get_column_list('stored_files'))
         )
-        name_tags = [n for n in name_tags if n in available_columns]
+
+        name_tags_available = [n for n in name_tags if n in available_columns]
+        if not partial and len(name_tags) != len(name_tags_available):
+            return []
+        name_tags = name_tags_available
+        
         if len(name_tags) == 0:
             return []
         

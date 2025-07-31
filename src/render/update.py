@@ -86,7 +86,12 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
     component = out_components[0][0]['componentArgs']['title']
 
     # Filter data if possible
-    if component in [
+    if (component == 'Augmented Annotated Spectrum' and tool == 'flashida'):
+        if 'precursorScanIndex' not in selection_store:
+            data['per_scan_data'] = data['per_scan_data'].iloc[0:0,:]
+        else:
+            data['per_scan_data'] = data['per_scan_data'].iloc[selection_store['precursorScanIndex']:selection_store['precursorScanIndex']+1,:]
+    elif component in [
         'Annotated Spectrum', 'Deconvolved Spectrum', 
         'Augmented Deconvolved Spectrum', 
         'Mass Table', 'Sequence View', 'Internal Fragment Map'

@@ -14,7 +14,7 @@ from os.path import join, splitext, basename, exists, dirname, abspath
 
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
-from src.parse.ida import parseIda
+from src.parse.ida import parseIdaSimulator
 from src.workflow.WorkflowManager import WorkflowManager
 
 DEFAULT_THREADS = 8
@@ -660,7 +660,7 @@ class IdaSimulatorWorkflow(WorkflowManager):
         )
         
         # Parse data
-        parseIda(
+        parseIdaSimulator(
             self.file_manager, dataset_id, results['simulation_results_tsv']
         )
 
