@@ -19,7 +19,7 @@ def inject_workflow_button_css():
             text-align: center;
             cursor: pointer;
             transition: all 0.3s ease;
-            height: 240px;
+            height: max(280px, 20vh);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -75,21 +75,21 @@ def inject_workflow_button_css():
         }
         
         .workflow-emoji {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
+            font-size: clamp(2.5rem, 4vw, 5rem);
+            margin-bottom: clamp(0.75rem, 1.5vh, 1.5rem);
             transition: transform 0.3s ease;
         }
         
         .workflow-title {
-            font-size: 1.5rem;
+            font-size: clamp(1.25rem, 2.5vw, 2rem);
             font-weight: 700;
             color: #29379b;
-            margin-bottom: 0.5rem;
+            margin-bottom: clamp(0.375rem, 0.75vh, 0.75rem);
             transition: color 0.3s ease;
         }
         
         .workflow-subtitle {
-            font-size: 1rem;
+            font-size: clamp(0.875rem, 1.5vw, 1.25rem);
             color: #6c757d;
             font-weight: 500;
             transition: color 0.3s ease;
@@ -138,24 +138,44 @@ def inject_workflow_button_css():
             border-top: 1px solid #dee2e6;
         }
         
-        /* Responsive design */
-        @media (max-width: 768px) {
+        /* Responsive design with dynamic scaling */
+        
+        /* Wide screens (> 1440px) - Maximum size */
+        @media (min-width: 1441px) {
             .workflow-button {
-                height: 200px;
-                padding: 1.5rem 1rem;
+                height: max(400px, 25vh);
+                padding: clamp(2.5rem, 3vw, 4rem) clamp(2rem, 2.5vw, 3rem);
+                max-width: 500px;
+                margin: 0 auto 1.5rem auto;
+            }
+        }
+        
+        /* Desktop (1024px - 1440px) - Significantly larger */
+        @media (min-width: 1024px) and (max-width: 1440px) {
+            .workflow-button {
+                height: max(320px, 22vh);
+                padding: clamp(2rem, 2.5vw, 3rem) clamp(1.75rem, 2vw, 2.5rem);
+                max-width: 450px;
+                margin: 0 auto 1.25rem auto;
+            }
+        }
+        
+        /* Tablet (768px - 1023px) - Slightly larger */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .workflow-button {
+                height: max(260px, 18vh);
+                padding: clamp(1.75rem, 2vw, 2.5rem) clamp(1.5rem, 1.75vw, 2rem);
+                max-width: 400px;
+                margin: 0 auto 1rem auto;
+            }
+        }
+        
+        /* Mobile landscape (481px - 767px) - Moderate size */
+        @media (min-width: 481px) and (max-width: 767px) {
+            .workflow-button {
+                height: max(240px, 16vh);
+                padding: 1.5rem 1.25rem;
                 margin-bottom: 1rem;
-            }
-            
-            .workflow-emoji {
-                font-size: 2.5rem;
-            }
-            
-            .workflow-title {
-                font-size: 1.25rem;
-            }
-            
-            .workflow-subtitle {
-                font-size: 0.9rem;
             }
             
             .hero-title {
@@ -167,23 +187,46 @@ def inject_workflow_button_css():
             }
         }
         
+        /* Mobile portrait (≤ 480px) - Compact size */
         @media (max-width: 480px) {
             .workflow-button {
-                height: 180px;
-                padding: 1rem;
-            }
-            
-            .workflow-emoji {
-                font-size: 2rem;
-            }
-            
-            .workflow-title {
-                font-size: 1.1rem;
+                height: max(200px, 14vh);
+                padding: 1.25rem 1rem;
+                margin-bottom: 1rem;
             }
             
             .hero-title {
                 font-size: 1.75rem;
             }
+            
+            .hero-subtitle {
+                font-size: 1rem;
+            }
+        }
+        
+        /* Optimize column spacing for workflow buttons */
+        .main .block-container [data-testid="column"] {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        /* Ensure first and last columns have proper edge spacing */
+        .main .block-container [data-testid="column"]:first-child {
+            padding-left: 0 !important;
+        }
+        
+        .main .block-container [data-testid="column"]:last-child {
+            padding-right: 0 !important;
+        }
+        
+        /* Reduce button margins for tighter layout */
+        .workflow-button {
+            margin-bottom: 0.5rem !important;
+        }
+        
+        /* Container spacing optimization */
+        .stColumn > div {
+            padding-top: 0 !important;
         }
         </style>
         """,
@@ -219,13 +262,13 @@ def create_navigation_button(emoji, title, subtitle, page_path):
             border: 2px solid #dee2e6 !important;
             border-radius: 12px !important;
             padding: 2rem 1.5rem !important;
-            height: 240px !important;
-            min-height: 240px !important;
+            height: max(280px, 20vh) !important;
+            min-height: max(280px, 20vh) !important;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
             transition: all 0.3s ease !important;
             margin-bottom: 1rem !important;
             color: #29379b !important;
-            font-size: 1.5rem !important;
+            font-size: clamp(1.25rem, 2.5vw, 2rem) !important;
             font-weight: 700 !important;
             display: flex !important;
             flex-direction: column !important;
@@ -238,7 +281,7 @@ def create_navigation_button(emoji, title, subtitle, page_path):
         
         .st-key-{button_key} button p {{
             color: #29379b !important;
-            font-size: 1.5rem !important;
+            font-size: clamp(1.25rem, 2.5vw, 2rem) !important;
             font-weight: 700 !important;
             margin: 0 !important;
         }}
@@ -278,7 +321,7 @@ def create_navigation_button(emoji, title, subtitle, page_path):
         .st-key-{button_key} button::after {{
             content: "{subtitle}";
             display: block;
-            font-size: 1rem !important;
+            font-size: clamp(0.875rem, 1.5vw, 1.25rem) !important;
             font-weight: 500 !important;
             color: #6c757d !important;
             margin-top: 0.5rem !important;
@@ -313,8 +356,9 @@ def render_workflow_selection():
         unsafe_allow_html=True,
     )
     
-    # Main workflow selection buttons in 3-column layout
-    col1, col2, col3 = st.columns(3)
+    # Main workflow selection buttons with centered, compact layout
+    # Use spacing columns to center buttons and prevent wide-screen spreading
+    spacer1, col1, col2, col3, spacer2 = st.columns([1, 2, 2, 2, 1], gap="small")
     
     with col1:
         create_navigation_button(
