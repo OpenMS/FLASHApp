@@ -190,36 +190,115 @@ def inject_workflow_button_css():
         unsafe_allow_html=True,
     )
 
-def create_workflow_button(emoji, title, subtitle, workflow_key, page_name):
-    """Create a workflow selection button with navigation."""
-    button_html = f"""
-    <div class="workflow-button" onclick="location.href='#{workflow_key}-{page_name}'">
-        <div class="workflow-emoji">{emoji}</div>
-        <div class="workflow-title">{title}</div>
-        <div class="workflow-subtitle">{subtitle}</div>
-    </div>
-    """
-    
-    if st.markdown(button_html, unsafe_allow_html=True):
-        return True
-    return False
-
 def create_navigation_button(emoji, title, subtitle, page_path):
-    """Create a workflow button that navigates to the specified page."""
-    button_html = f"""
-    <div class="workflow-button">
-        <div class="workflow-emoji">{emoji}</div>
-        <div class="workflow-title">{title}</div>
-        <div class="workflow-subtitle">{subtitle}</div>
-    </div>
-    """
+    """Create a functional workflow button that navigates to the specified page."""
     
-    # Display the styled button
-    st.markdown(button_html, unsafe_allow_html=True)
+    # Create unique key for this button
+    button_key = f"{title.lower().replace(' ', '_')}_nav_btn"
     
-    # Create a button for navigation
-    if st.button(f"Start {title}", key=f"{title.lower()}_nav_btn", use_container_width=True, type="primary"):
+    # Create the button with custom styling applied via CSS classes
+    button_label = f"{emoji} {title}"
+    
+    # Use Streamlit's button with custom styling
+    if st.button(
+        label=button_label,
+        key=button_key,
+        help=f"Navigate to {title} - {subtitle}",
+        use_container_width=True,
+        type="primary"
+    ):
         st.switch_page(page_path)
+    
+    # Apply custom CSS styling using the key-based selector approach
+    st.markdown(
+        f"""
+        <style>
+        /* Target the specific button using key-based selector */
+        .st-key-{button_key} button {{
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+            border: 2px solid #dee2e6 !important;
+            border-radius: 12px !important;
+            padding: 2rem 1.5rem !important;
+            height: 240px !important;
+            min-height: 240px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+            transition: all 0.3s ease !important;
+            margin-bottom: 1rem !important;
+            color: #29379b !important;
+            font-size: 1.5rem !important;
+            font-weight: 700 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            align-items: center !important;
+            text-align: center !important;
+            line-height: 1.4 !important;
+            width: 100% !important;
+        }}
+        
+        .st-key-{button_key} button p {{
+            color: #29379b !important;
+            font-size: 1.5rem !important;
+            font-weight: 700 !important;
+            margin: 0 !important;
+        }}
+        
+        .st-key-{button_key} button:hover {{
+            background: linear-gradient(135deg, #29379b 0%, #1e2a7a 100%) !important;
+            border-color: #29379b !important;
+            transform: translateY(-4px) !important;
+            box-shadow: 0 8px 24px rgba(41, 55, 155, 0.3) !important;
+        }}
+        
+        .st-key-{button_key} button:hover p {{
+            color: white !important;
+        }}
+        
+        .st-key-{button_key} button:active {{
+            background: linear-gradient(135deg, #1e2a7a 0%, #162159 100%) !important;
+            border-color: #1e2a7a !important;
+            transform: translateY(-2px) scale(0.98) !important;
+            box-shadow: 0 4px 12px rgba(41, 55, 155, 0.4) !important;
+        }}
+        
+        .st-key-{button_key} button:active p {{
+            color: white !important;
+        }}
+        
+        .st-key-{button_key} button:focus {{
+            background: linear-gradient(135deg, #29379b 0%, #1e2a7a 100%) !important;
+            border-color: #29379b !important;
+        }}
+        
+        .st-key-{button_key} button:focus p {{
+            color: white !important;
+        }}
+        
+        /* Add subtitle styling using pseudo-element */
+        .st-key-{button_key} button::after {{
+            content: "{subtitle}";
+            display: block;
+            font-size: 1rem !important;
+            font-weight: 500 !important;
+            color: #6c757d !important;
+            margin-top: 0.5rem !important;
+        }}
+        
+        .st-key-{button_key} button:hover::after {{
+            color: #e9ecef !important;
+        }}
+        
+        .st-key-{button_key} button:active::after {{
+            color: #e9ecef !important;
+        }}
+        
+        .st-key-{button_key} button:focus::after {{
+            color: #e9ecef !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def render_workflow_selection():
     """Render the main workflow selection section."""
