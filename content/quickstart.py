@@ -403,87 +403,68 @@ def render_enhanced_download_section():
         # Add spacing
         st.markdown("<br><hr><br>", unsafe_allow_html=True)
         
-        st.markdown(
-            """
-            <div style="
-                background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%);
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 1.5rem;
-                margin: 1rem 0;
-                text-align: center;
-            ">
+        # Create Streamlit container with key for styling (similar to button approach)
+        container_key = "windows_download_container"
+        
+        with st.container(key=container_key):
+            st.markdown(
+                """
                 <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
                     Want to use FLASHApp offline?
                 </h4>
-                <p style="color: #868e96; font-size: 0.9rem; margin-bottom: 1rem;">
+                <p style="color: #6c757d; margin-bottom: 1rem;">
                     FLASHApp is best enjoyed online but you can download an offline version for Windows systems below.
                 </p>
-            </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            
+            # Center the Windows download button
+            col1, col2, col3 = st.columns([2, 2, 2])
+            with col2:
+                with open("OpenMS-App.zip", "rb") as file:
+                    st.download_button(
+                        label="📥 Download for Windows",
+                        data=file,
+                        file_name="OpenMS-App.zip",
+                        mime="archive/zip",
+                        type="secondary",
+                        use_container_width=True,
+                        help="Download FLASHApp for Windows systems"
+                    )
+            
+            st.markdown(
+                """
+                <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
+                    Extract the zip file and run the installer (.msi) to install the app.<br>
+                    Launch using the desktop icon after installation.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        
+        # Apply container styling using key-based CSS targeting (similar to button styling approach)
+        st.markdown(
+            f"""
+            <style>
+            /* Target the specific container using key-based selector */
+            .st-key-{container_key} {{
+                background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%) !important;
+                border: 1px solid #e0e0e0 !important;
+                border-radius: 8px !important;
+                padding: 1.5rem !important;
+                margin: 1rem 0 !important;
+                text-align: center !important;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+            }}
+            
+            .st-key-{container_key} > div {{
+                background: transparent !important;
+            }}
+            </style>
             """,
             unsafe_allow_html=True,
         )
-        
-        # Center the download button with smaller size
-        col1, col2, col3 = st.columns([2, 2, 2])
-        with col2:
-            with open("OpenMS-App.zip", "rb") as file:
-                st.download_button(
-                    label="📥 Download ZIP",
-                    data=file,
-                    file_name="OpenMS-App.zip",
-                    mime="archive/zip",
-                    type="secondary",
-                    use_container_width=True,
-                )
-        
-        st.markdown(
-            """
-            <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
-                Extract the zip file and run the installer (.msi) to install the app.<br>
-                Launch using the desktop icon after installation.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-def render_footer():
-    """Render the footer section with new features and OpenMS logo."""
-    st.markdown(
-        """
-        <div class="footer-section">
-        """,
-        unsafe_allow_html=True,
-    )
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.markdown(
-            """
-            ## ⭐ What's New
-            
-            **🔄 FLASHViewer is now FLASHApp**
-            - Enhanced workflow selection interface
-            - Improved navigation and user experience
-            - Modern, responsive design for all devices
-            
-            **🔗 Share & Collaborate**
-            - Bookmark your progress with shareable URLs
-            - Team collaboration made simple
-            - Resume work from any device
-            
-            **⚡ Performance Improvements**
-            - Faster data processing and visualization
-            - Optimized memory usage
-            - Enhanced stability and reliability
-            """
-        )
-    
-    with col2:
-        st.image("assets/OpenMS.png", width=300)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # Main execution
 def main():
@@ -497,6 +478,5 @@ def main():
     
     render_enhanced_download_section()
     
-    render_footer()
 
 main()
