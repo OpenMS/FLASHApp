@@ -749,6 +749,7 @@ class StreamlitUI:
                             value=float(p["value"]),
                             step=1.0,
                             help=p["description"],
+                            format="%0.5f",
                             key=key,
                         )
 
