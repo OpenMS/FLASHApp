@@ -481,14 +481,9 @@ def main():
     # Render main sections
     render_workflow_selection()
     
-    v_space(2)
     
     render_enhanced_download_section()
     
     render_footer()
 
-# Execute main function
-if __name__ == "__main__":
-    main()
-else:
-    main()
+main()
