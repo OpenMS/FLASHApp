@@ -345,16 +345,30 @@ def create_navigation_button(emoji, title, subtitle, page_path):
 
 def render_workflow_selection():
     """Render the main workflow selection section."""
-    # Hero section
+    # Hero section with title on left and OpenMS logo on right
     st.markdown(
         """
         <div class="hero-section">
-            <h1 class="hero-title">👋 Quick Start</h1>
-            <p class="hero-subtitle">FLASHApp: Choose Your Analysis Workflow</p>
-        </div>
         """,
         unsafe_allow_html=True,
     )
+    
+    # Create columns for title and logo
+    spacer1, title_col, logo_col, spacer2 = st.columns([1, 4.5, 1.5, 1])
+    
+    with title_col:
+        st.markdown(
+            """
+            <h1 class="hero-title">👋 FLASHApp</h1>
+            <p class="hero-subtitle">A platform for your favourite FLASH Tools!</p>
+            """,
+            unsafe_allow_html=True,
+        )
+    
+    with logo_col:
+        st.image("assets/OpenMS.png", width=200)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
     
     # Main workflow selection buttons with centered, compact layout
     # Use spacing columns to center buttons and prevent wide-screen spreading
