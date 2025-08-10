@@ -399,28 +399,41 @@ def render_workflow_selection():
         )
 
 def render_enhanced_download_section():
-    """Render the enhanced Windows download section."""
     if Path("OpenMS-App.zip").exists():
+        # Add spacing
+        st.markdown("<br><hr><br>", unsafe_allow_html=True)
+        
         st.markdown(
             """
-            <div class="download-section">
-                <h3>🪟 Download for Windows</h3>
-                <p>Get the standalone Windows application for offline use</p>
+            <div style="
+                background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%);
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 1.5rem;
+                margin: 1rem 0;
+                text-align: center;
+            ">
+                <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
+                    Want to use FLASHApp offline?
+                </h4>
+                <p style="color: #868e96; font-size: 0.9rem; margin-bottom: 1rem;">
+                    FLASHApp is best enjoyed online but you can download an offline version for Windows systems below.
+                </p>
             </div>
             """,
             unsafe_allow_html=True,
         )
         
-        # Center the download button
-        col1, col2, col3 = st.columns([1, 2, 1])
+        # Center the download button with smaller size
+        col1, col2, col3 = st.columns([2, 2, 2])
         with col2:
             with open("OpenMS-App.zip", "rb") as file:
                 st.download_button(
-                    label="📥 Download for Windows",
+                    label="📥 Download ZIP",
                     data=file,
                     file_name="OpenMS-App.zip",
                     mime="archive/zip",
-                    type="primary",
+                    type="secondary",
                     use_container_width=True,
                 )
         
