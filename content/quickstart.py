@@ -37,15 +37,40 @@ def inject_workflow_button_css():
             box-shadow: 0 8px 24px rgba(41, 55, 155, 0.3);
         }
         
+        .workflow-button:active {
+            background: linear-gradient(135deg, #1e2a7a 0%, #162159 100%);
+            border-color: #1e2a7a;
+            color: white !important;
+            transform: translateY(-2px) scale(0.98);
+            box-shadow: 0 4px 12px rgba(41, 55, 155, 0.4);
+        }
+        
+        .workflow-button:focus {
+            outline: 3px solid #29379b;
+            outline-offset: 2px;
+        }
+        
         .workflow-button:hover .workflow-emoji {
             transform: scale(1.1);
+        }
+        
+        .workflow-button:active .workflow-emoji {
+            transform: scale(1.05);
         }
         
         .workflow-button:hover .workflow-title {
             color: white !important;
         }
         
+        .workflow-button:active .workflow-title {
+            color: white !important;
+        }
+        
         .workflow-button:hover .workflow-subtitle {
+            color: #e9ecef !important;
+        }
+        
+        .workflow-button:active .workflow-subtitle {
             color: #e9ecef !important;
         }
         
