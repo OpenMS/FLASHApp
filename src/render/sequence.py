@@ -166,7 +166,8 @@ aa_masses = {
     'W': 186.079313,
     'Y': 163.063329,
     'V': 99.068414,
-    'X' : 0
+    'X' : 0,
+    'Z' : 0, # Glx does not have defined mass
 }
 
 def isMatchWithTolerance(A, t, s):
