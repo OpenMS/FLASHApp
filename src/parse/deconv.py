@@ -22,22 +22,26 @@ def parseDeconv(
         # Create full sized version
         heatmap = getMSSignalDF(df)
 
-        # Store full sized version
-        file_manager.store_data(
-            dataset_id, f'ms1_{descriptor}_heatmap', heatmap
-        )
+        for ms_level in [1, 2]:
+            
+            relevant_heatmap = heatmap[heatmap['MSLevel'] == ms_level].drop(columns=['MSLevel'])
 
-        # Store compressed versions
-        for size in reversed(compute_compression_levels(20000, len(heatmap), logger=logger)):
-            
-            
-            # Downsample iteratively
-            heatmap = downsample_heatmap(heatmap, max_datapoints=size)
-            # Store compressed version
+            # Store full sized version
             file_manager.store_data(
-                dataset_id, f'ms1_{descriptor}_heatmap_{size}', heatmap
+                dataset_id, f'ms{ms_level}_{descriptor}_heatmap', relevant_heatmap
             )
-    
+
+            # Store compressed versions
+            for size in reversed(compute_compression_levels(20000, len(relevant_heatmap), logger=logger)):
+                
+                
+                # Downsample iteratively
+                relevant_heatmap = downsample_heatmap(relevant_heatmap, max_datapoints=size)
+                # Store compressed version
+                file_manager.store_data(
+                    dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}', relevant_heatmap
+                )
+        
     spectra_df = getSpectraTableDF(deconv_df)
 
     # scan_table

@@ -176,6 +176,7 @@ def parseFLASHDeconvOutput(annotated, deconvolved, logger=None):
     df['NoisyPeaks'] = noisyPeaks
     df['CombinedPeaks'] = noisyPeaks
     df['MSLevel'] = msLevels
+    annotateddf['MSLevel'] = msLevels
     df['Scan'] = scans
     return df, annotateddf, tolerance,  massoffset, chargemass
 
@@ -214,6 +215,13 @@ def getMSSignalDF(anno_df: pd.DataFrame):
         ],
         dtype=np.float32
     )
+    levels = np.concatenate(
+        [
+            [anno_df.loc[index, 'MSLevel']]*len(anno_df.loc[index, "intarray"]) 
+            for index in anno_df.index
+        ],
+        dtype=np.int32
+    )
     mzs = np.concatenate(
         [
             anno_df.loc[index, "mzarray"] 
@@ -232,6 +240,7 @@ def getMSSignalDF(anno_df: pd.DataFrame):
     ms_df = pd.DataFrame({
         'mass': mzs, 'rt': rts, 'intensity': ints, 
         'scan_idx': scan_idxs, 'mass_idx': mass_idxs, 
+        'MSLevel' : levels
     })
 
     ms_df.dropna(subset=['intensity'], inplace=True) # remove Nan

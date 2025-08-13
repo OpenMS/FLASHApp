@@ -32,6 +32,28 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
 
         additional_data['deconv_heatmap_df'] = cached_compression_levels
         component_arguments = PlotlyHeatmap(title="Deconvolved MS1 Heatmap")
+    elif comp_name == 'ms2_deconv_heat_map':
+
+        # Fetch full dataset
+        data_full = file_manager.get_results(
+            selected_data,  ['ms2_deconv_heatmap']
+        )['ms2_deconv_heatmap']
+
+        # Fetch all caches
+        cached_compression_levels = []
+        for size in compute_compression_levels(20000, len(data_full)):
+            cached_compression_levels.append(
+                file_manager.get_results(
+                    selected_data,  [f'ms2_deconv_heatmap_{size}']
+                )[f'ms2_deconv_heatmap_{size}']
+            )
+        cached_compression_levels.append(data_full)
+
+        # Get smallest compression level
+        data_to_send['deconv_heatmap_df'] = cached_compression_levels[0]
+
+        additional_data['deconv_heatmap_df'] = cached_compression_levels
+        component_arguments = PlotlyHeatmap(title="Deconvolved MS2 Heatmap")
 
     elif comp_name == 'ms1_raw_heatmap':
 
@@ -56,6 +78,29 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         additional_data['raw_heatmap_df'] = cached_compression_levels
 
         component_arguments = PlotlyHeatmap(title="Raw MS1 Heatmap")
+    elif comp_name == 'ms2_raw_heatmap':
+
+        # Fetch full dataset
+        data_full = file_manager.get_results(
+            selected_data,  ['ms2_raw_heatmap']
+        )['ms2_raw_heatmap']
+
+        # Fetch all caches
+        cached_compression_levels = []
+        for size in compute_compression_levels(20000, len(data_full)):
+            cached_compression_levels.append(
+                file_manager.get_results(
+                    selected_data,  [f'ms2_raw_heatmap_{size}']
+                )[f'ms2_raw_heatmap_{size}']
+            )
+        cached_compression_levels.append(data_full)
+
+        # Get smallest compression level
+        data_to_send['raw_heatmap_df'] = cached_compression_levels[0]
+
+        additional_data['raw_heatmap_df'] = cached_compression_levels
+
+        component_arguments = PlotlyHeatmap(title="Raw MS2 Heatmap")
     elif comp_name == 'scan_table':
         data = file_manager.get_results(selected_data, ['scan_table'])
         data_to_send['per_scan_data'] = data['scan_table']
@@ -69,8 +114,8 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data_to_send['per_scan_data'] = data['combined_spectrum']
         component_arguments = PlotlyLineplotTagger(title="Augmented Deconvolved Spectrum")
     elif comp_name == 'anno_spectrum':
-        data = file_manager.get_results(selected_data,  ['anno_spectrum'])
-        data_to_send['per_scan_data'] = data['anno_spectrum']
+        data = file_manager.get_results(selected_data,  ['combined_spectrum'])
+        data_to_send['per_scan_data'] = data['combined_spectrum']
         component_arguments = PlotlyLineplot(title="Annotated Spectrum")
     elif comp_name == 'mass_table':
         data = file_manager.get_results(selected_data,  ['mass_table'])
