@@ -76,7 +76,8 @@ def render_flash_cli_tools_box():
 
         st.link_button(
             "📥 Download Command Line Tools",
-            "https://openms.readthedocs.io/en/latest/getting-started/installation.html",
+            "https://abibuilder.cs.uni-tuebingen.de/archive/openms/OpenMSInstaller/experimental/FVdeploy/",
+            use_container_width=True,
             type="secondary",   # matches the solid/primary button look
         )
 
@@ -140,21 +141,19 @@ def render_download_boxes_responsive():
         """,
         unsafe_allow_html=True,
     )
-    
+
+    spacer1, center_col, spacer2 = st.columns([2, 4, 2])
     # Render boxes based on count
     if num_boxes == 1:
         # Single box: centered
-        spacer1, center_col, spacer2 = st.columns([1, 2, 1])
-        render_flash_cli_tools_box()
-        apply_download_box_styling("flash_cli_tools_container")
+        with center_col:
+            render_flash_cli_tools_box()
+            apply_download_box_styling("flash_cli_tools_container")
                 
     elif num_boxes == 2:
-        # Two boxes: side by side
-        col1, col2 = st.columns(2)
-        with col1:
+        with center_col:
             render_windows_download_box()
             apply_download_box_styling("windows_download_container")
-        with col2:
             render_flash_cli_tools_box()
             apply_download_box_styling("flash_cli_tools_container")
 
