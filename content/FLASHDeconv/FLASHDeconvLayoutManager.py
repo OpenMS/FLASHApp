@@ -8,7 +8,9 @@ from pathlib import Path
 
 COMPONENT_OPTIONS=[
     'MS1 raw heatmap',
+    'MS2 raw heatmap',
     'MS1 deconvolved heatmap',
+    'MS2 deconvolved heatmap',
     'Scan table',
     'Deconvolved spectrum (Scan table needed)',
     'Raw spectrum (Scan table needed)',
@@ -20,7 +22,9 @@ COMPONENT_OPTIONS=[
 
 COMPONENT_NAMES=[
     'ms1_raw_heatmap',
+    'ms2_raw_heatmap',
     'ms1_deconv_heat_map',
+    'ms2_deconv_heat_map',
     'scan_table',
     'deconv_spectrum',
     'anno_spectrum',

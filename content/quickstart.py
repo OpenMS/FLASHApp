@@ -5,6 +5,159 @@ from src.common.common import page_setup, v_space
 
 page_setup(page="main")
 
+def render_download_box(container_key, title, description, icon="", subtitle=""):
+    """Render a styled download box container with consistent styling."""
+    with st.container(key=container_key):
+        st.markdown(
+            f"""
+            <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
+                {icon} {title}
+            </h4>
+            <p style="color: #6c757d; margin-bottom: 1rem;">
+                {description}
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+        
+        # Return context for button placement
+        return st.columns([1, 2, 1])
+
+def render_windows_download_box():
+    """Render the Windows app download box."""
+    if not Path("OpenMS-App.zip").exists():
+        return False
+        
+    cols = render_download_box(
+        container_key="windows_download_container",
+        title="FLASHApp for Windows",
+        description="FLASHApp is best enjoyed online but you can download an offline version for Windows systems below.",
+        icon=""
+    )
+    
+    # Center the download button
+    with cols[1]:
+        with open("OpenMS-App.zip", "rb") as file:
+            st.download_button(
+                label="📥 Download for Windows",
+                data=file,
+                file_name="OpenMS-App.zip",
+                mime="archive/zip",
+                type="secondary",
+                use_container_width=True,
+                help="Download FLASHApp for Windows systems"
+            )
+    
+    # Add subtitle text
+    st.markdown(
+        """
+        <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
+            Extract the zip file and run the installer (.msi) to install the app.
+            Launch using the desktop icon after installation.<br>
+            Even offline, it's still a web app - just packaged so you can use it without an internet connection.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    return True
+
+def render_flash_cli_tools_box():
+    """Render the FLASH* command line tools box."""
+    cols = render_download_box(
+        container_key="flash_cli_tools_container",
+        title="FLASH* Command Line Tools",
+        description="Access FLASH* tools (FLASHDeconv, FLASHTnT, etc.) through the command line interface as part of OpenMS.",
+        icon=""
+    )
+    
+    # Center the link button using Streamlit button with custom styling
+    with cols[1]:
+
+        st.link_button(
+            "📥 Download Command Line Tools",
+            "https://abibuilder.cs.uni-tuebingen.de/archive/openms/OpenMSInstaller/experimental/FVdeploy/",
+            use_container_width=True,
+            type="secondary",   # matches the solid/primary button look
+        )
+
+    
+    # Add subtitle text
+    st.markdown(
+        """
+        <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
+            FLASH* tools are a part of the OpenMS TOPP tools and can be used via command line interface for advanced custom automated workflows and scripting.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def apply_download_box_styling(container_key):
+    """Apply consistent styling to a download box container."""
+    st.markdown(
+        f"""
+        <style>
+        .st-key-{container_key} {{
+            background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%) !important;
+            border: 1px solid #e0e0e0 !important;
+            border-radius: 8px !important;
+            padding: 1.5rem !important;
+            margin: 1rem 0 !important;
+            text-align: center !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+        }}
+        
+        .st-key-{container_key} > div {{
+            background: transparent !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_download_boxes_responsive():
+    """Render download boxes in a responsive layout."""
+    # Collect available boxes
+    available_boxes = []
+    
+    # Check if Windows download is available
+    if Path("OpenMS-App.zip").exists():
+        available_boxes.append("windows")
+    
+    # Always include FLASH* CLI tools
+    available_boxes.append("flash_cli")
+    
+    num_boxes = len(available_boxes)
+    
+    if num_boxes == 0:
+        return
+    
+    # Section header
+    st.markdown(
+        """
+        <h4 style="color: #6c757d; margin-bottom: 1.5rem; font-size: 1.3rem; font-weight: 600; text-align: center;">
+            Want to use FLASHApp offline?
+        </h4>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    spacer1, center_col, spacer2 = st.columns([2, 4, 2])
+    # Render boxes based on count
+    if num_boxes == 1:
+        # Single box: centered
+        with center_col:
+            render_flash_cli_tools_box()
+            apply_download_box_styling("flash_cli_tools_container")
+                
+    elif num_boxes == 2:
+        with center_col:
+            render_windows_download_box()
+            apply_download_box_styling("windows_download_container")
+            render_flash_cli_tools_box()
+            apply_download_box_styling("flash_cli_tools_container")
+
+
 def inject_workflow_button_css():
     """Inject CSS for custom workflow button styling with responsive design."""
     st.markdown(
@@ -399,72 +552,12 @@ def render_workflow_selection():
         )
 
 def render_enhanced_download_section():
-    if Path("OpenMS-App.zip").exists():
-        # Add spacing
-        st.markdown("<br><hr><br>", unsafe_allow_html=True)
-        
-        # Create Streamlit container with key for styling (similar to button approach)
-        container_key = "windows_download_container"
-        
-        with st.container(key=container_key):
-            st.markdown(
-                """
-                <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
-                    Want to use FLASHApp offline?
-                </h4>
-                <p style="color: #6c757d; margin-bottom: 1rem;">
-                    FLASHApp is best enjoyed online but you can download an offline version for Windows systems below.
-                </p>
-                """,
-                unsafe_allow_html=True,
-            )
-            
-            # Center the Windows download button
-            col1, col2, col3 = st.columns([2, 2, 2])
-            with col2:
-                with open("OpenMS-App.zip", "rb") as file:
-                    st.download_button(
-                        label="📥 Download for Windows",
-                        data=file,
-                        file_name="OpenMS-App.zip",
-                        mime="archive/zip",
-                        type="secondary",
-                        use_container_width=True,
-                        help="Download FLASHApp for Windows systems"
-                    )
-            
-            st.markdown(
-                """
-                <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
-                    Extract the zip file and run the installer (.msi) to install the app.<br>
-                    Launch using the desktop icon after installation.
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        
-        # Apply container styling using key-based CSS targeting (similar to button styling approach)
-        st.markdown(
-            f"""
-            <style>
-            /* Target the specific container using key-based selector */
-            .st-key-{container_key} {{
-                background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%) !important;
-                border: 1px solid #e0e0e0 !important;
-                border-radius: 8px !important;
-                padding: 1.5rem !important;
-                margin: 1rem 0 !important;
-                text-align: center !important;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
-            }}
-            
-            .st-key-{container_key} > div {{
-                background: transparent !important;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
+    """Render the enhanced download section with modular components."""
+    # Add spacing
+    st.markdown("<br><hr><br>", unsafe_allow_html=True)
+    
+    # Render download boxes using responsive layout
+    render_download_boxes_responsive()
 
 # Main execution
 def main():

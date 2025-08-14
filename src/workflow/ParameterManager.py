@@ -71,6 +71,8 @@ class ParameterManager:
                         (ini_value != value) 
                         or (key.split(":1:")[1] in json_params[tool])
                     ):
+                        if isinstance(value, str):
+                            value = value.strip()
                         # store non-default value
                         json_params[tool][key.split(":1:")[1]] = value
         # Save to json file

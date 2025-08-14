@@ -110,18 +110,20 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
             data['per_scan_data'] = filtered_table
 
 
-    elif (component == 'Deconvolved MS1 Heatmap'):
-        if 'heatmap_deconv' in selection_store:
+    elif (component in ['Deconvolved MS1 Heatmap', 'Deconvolved MS2 Heatmap']):
+        selection = 'heatmap_deconv' if '1' in component else 'heatmap_deconv2'
+        if selection in selection_store:
             data['deconv_heatmap_df'] = render_heatmap(
                 additional_data['deconv_heatmap_df'], 
-                selection_store['heatmap_deconv'],
+                selection_store[selection],
                 additional_data['dataset'], component
             )
-    elif (component == 'Raw MS1 Heatmap'):
-        if 'heatmap_raw' in selection_store:
+    elif (component == ['Raw MS1 Heatmap', 'Raw MS2 Heatmap']):
+        selection = 'heatmap_raw' if '1' in component else 'heatmap_raw2'
+        if selection in selection_store:
             data['raw_heatmap_df'] = render_heatmap(
                 additional_data['raw_heatmap_df'], 
-                selection_store['heatmap_raw'],
+                selection_store[selection],
                 additional_data['dataset'], component
             )
 
