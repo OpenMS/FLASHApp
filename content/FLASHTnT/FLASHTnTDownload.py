@@ -62,7 +62,7 @@ else:
                         zip_buffer.seek(0)
                         file_manager.store_file(
                             experiment, 'download_archive', zip_buffer, 
-                            file_name=f'{experiment}.zip'
+                            file_name='download_archive.zip'
                         )
                     out_zip = file_manager.get_results(
                         experiment, ['download_archive']
