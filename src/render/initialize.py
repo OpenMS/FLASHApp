@@ -112,7 +112,11 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
     elif comp_name == 'combined_spectrum':
         data = file_manager.get_results(selected_data, ['combined_spectrum'])
         data_to_send['per_scan_data'] = data['combined_spectrum']
-        component_arguments = PlotlyLineplotTagger(title="Augmented Deconvolved Spectrum")
+        if tool == 'flashida':
+            title = "Augmented Annotated Spectrum"
+        else:
+            title = "Augmented Deconvolved Spectrum"
+        component_arguments = PlotlyLineplotTagger(title=title)
     elif comp_name == 'anno_spectrum':
         data = file_manager.get_results(selected_data,  ['combined_spectrum'])
         data_to_send['per_scan_data'] = data['combined_spectrum']
@@ -162,6 +166,13 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data = file_manager.get_results(selected_data,  ['protein_dfs'])
         data_to_send['protein_table'] = data['protein_dfs']
         component_arguments = Tabulator('ProteinTable')
+    elif comp_name == 'ms2_table':
+        # TODO: Unify lookup or remove in vue
+        data = file_manager.get_results(selected_data,  ['scan_table'])
+        data_to_send['per_scan_data'] = data['scan_table']
+        data = file_manager.get_results(selected_data,  ['ms2_dfs'])
+        data_to_send['id_table'] = data['ms2_dfs']
+        component_arguments = Tabulator('MS2Table')
     elif comp_name == 'tag_table':
         data = file_manager.get_results(selected_data,  ['tag_dfs'])
         data_to_send['tag_table'] = data['tag_dfs']

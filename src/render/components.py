@@ -6,7 +6,7 @@ import streamlit.components.v1 as st_components
 
 # Create a _RELEASE constant. We'll set this to False while we're developing
 # the component, and True when we're ready to package and distribute it.
-_RELEASE = True
+_RELEASE = False
 
 
 _component_func = None
@@ -50,6 +50,9 @@ class Tabulator:
         if table_type == 'ScanTable':
             self.title = 'Scan Table'
             self.componentName = "TabulatorScanTable"
+        elif table_type == 'MS2Table':
+            self.title = 'MS2 Table'
+            self.componentName = "TabulatorFragmentScanTable"
         elif table_type == 'MassTable':
             self.title = 'Mass Table'
             self.componentName = "TabulatorMassTable"

@@ -60,7 +60,7 @@ class CommandExecutor:
         end_time = time.time()
         self.logger.log(f"Total time to run {len(commands)} commands: {end_time - start_time:.2f} seconds", 1)
 
-    def run_command(self, command: list[str]) -> None:
+    def run_command(self, command: list[str], cwd=None) -> None:
         """
         Executes a specified shell command and logs its execution details.
 
@@ -73,12 +73,15 @@ class CommandExecutor:
         # Ensure all command parts are strings
         command = [str(c) for c in command]
 
+        # Log cwd
+        if cwd is not None:
+            self.logger.log(f'Preparing command... cwd is set to \'{cwd}\'')
         # Log the execution start
         self.logger.log(f"Running command:\n"+' '.join(command)+"\nWaiting for command to finish...", 1)   
         start_time = time.time()
         
         # Execute the command
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
         child_pid = process.pid
         
         # Record the PID to keep track of running processes associated with this workspace/workflow
@@ -254,7 +257,13 @@ class CommandExecutor:
             # run command without params
             self.run_command(["python", str(path)])
         elif isinstance(defaults, list):
-            defaults = {entry["key"]: entry["value"] for entry in defaults}
+            subsection = ''
+            defaults = {}
+            for entry in defaults:
+                if isinstance(entry, str):
+                    subsection = entry
+                    continue
+                defaults[f'{subsection}:{entry["key"]}'] = entry["value"]
             # load paramters from JSON file
             params = {k: v for k, v in self.parameter_manager.get_parameters_from_json().items() if path.name in k}
             # update defaults
