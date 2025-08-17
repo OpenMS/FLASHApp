@@ -174,10 +174,10 @@ jobs:
           WITH_GUI: "OFF"
           ADDRESS_SANITIZER: "Off"
           BUILD_TYPE: "Release"
-          OPENMP: "Off"
+          OPENMP: "On"
           USE_STATIC_BOOST: "On"
           #  BUILD_FLAGS: "-p:CL_MPCount=2" # For VS Generator and MSBuild
-          BUILD_FLAGS: "-j2" # Ninja will otherwise use all cores (doesn't go well in GHA)
+          BUILD_FLAGS: "-j4" # Ninja will otherwise use all cores (doesn't go well in GHA)
           CMAKE_CCACHE_EXE: "ccache"
           CCACHE_BASEDIR: ${{ github.workspace }}
           CCACHE_DIR: ${{ github.workspace }}/.ccache
