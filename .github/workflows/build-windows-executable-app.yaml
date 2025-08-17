@@ -14,7 +14,7 @@ env:
   OPENMS_VERSION: 3.2.0 
   PYTHON_VERSION: 3.11.0
   # Name of the installer
-  APP_NAME: FLASHApp-0.9.2
+  APP_NAME: FLASHApp-0.9.4
   APP_UpgradeCode: "69ae44ad-d554-4e3c-8715-7c4daf60f8bb"
 
 jobs:
@@ -174,10 +174,10 @@ jobs:
           WITH_GUI: "OFF"
           ADDRESS_SANITIZER: "Off"
           BUILD_TYPE: "Release"
-          OPENMP: "Off"
+          OPENMP: "On"
           USE_STATIC_BOOST: "On"
           #  BUILD_FLAGS: "-p:CL_MPCount=2" # For VS Generator and MSBuild
-          BUILD_FLAGS: "-j2" # Ninja will otherwise use all cores (doesn't go well in GHA)
+          BUILD_FLAGS: "-j4" # Ninja will otherwise use all cores (doesn't go well in GHA)
           CMAKE_CCACHE_EXE: "ccache"
           CCACHE_BASEDIR: ${{ github.workspace }}
           CCACHE_DIR: ${{ github.workspace }}/.ccache
