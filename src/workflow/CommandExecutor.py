@@ -173,6 +173,8 @@ class CommandExecutor:
                             command += [f"-{k}"]
                         elif v == 'false':
                             pass
+                        else:
+                            command += [f"-{k}", v]
                     else:
                         command += [f"-{k}", str(v)]
             # Add custom parameters
