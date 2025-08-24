@@ -421,7 +421,10 @@ def create_navigation_button(emoji, title, subtitle, page_path):
             transition: all 0.3s ease !important;
             margin-bottom: 1rem !important;
             color: #29379b !important;
-            font-size: clamp(1.25rem, 2.5vw, 2rem) !important;
+            font-size: clamp(1.25rem, 2.5vw, 1.5rem) !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
             font-weight: 700 !important;
             display: flex !important;
             flex-direction: column !important;
@@ -434,7 +437,10 @@ def create_navigation_button(emoji, title, subtitle, page_path):
         
         .st-key-{button_key} button p {{
             color: #29379b !important;
-            font-size: clamp(1.25rem, 2.5vw, 2rem) !important;
+            font-size: clamp(1.25rem, 2.5vw, 1.5rem) !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
             font-weight: 700 !important;
             margin: 0 !important;
         }}
@@ -474,7 +480,10 @@ def create_navigation_button(emoji, title, subtitle, page_path):
         .st-key-{button_key} button::after {{
             content: "{subtitle}";
             display: block;
-            font-size: clamp(0.875rem, 1.5vw, 1.25rem) !important;
+            font-size: clamp(0.875rem, 1.5vw, 1rem) !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
             font-weight: 500 !important;
             color: #6c757d !important;
             margin-top: 0.5rem !important;
