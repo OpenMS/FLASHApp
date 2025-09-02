@@ -992,7 +992,6 @@ class StreamlitUI:
                 streamlit_js_eval(js_expressions="parent.window.location.reload()")
 
 
-    @st.fragment()
     def execution_section(self, start_workflow_function) -> None:
         with st.expander("**Summary**"):
             st.markdown(self.export_parameters_markdown())
