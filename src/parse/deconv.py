@@ -20,6 +20,11 @@ def parseDeconv(
     file_manager.store_data(dataset_id, 'anno_dfs', anno_df)
     file_manager.store_data(dataset_id, 'deconv_dfs', deconv_df)
     
+    # Immediately reload as polars LazyFrames for efficient processing
+    results = file_manager.get_results(dataset_id, ['anno_dfs', 'deconv_dfs'], use_polars=True)
+    pl_anno = results['anno_dfs']
+    pl_deconv = results['deconv_dfs']
+    
     logger.log("10.0 %", level=2)
 
     # Preprocess data for the heatmaps
@@ -62,40 +67,46 @@ def parseDeconv(
     
     logger.log("20.0 %", level=2)
         
-    spectra_df = getSpectraTableDF(deconv_df)
-
-    # scan_table
-    scan_table = spectra_df.loc[
-        :,['index', 'Scan', 'MSLevel', 'RT', 'PrecursorMass', '#Masses']
-    ]
-    file_manager.store_data(dataset_id, 'scan_table', scan_table)
+    # scan_table - using native polars operations
+    spectra_lazy = (
+        pl_deconv
+        .with_row_index("index")
+        .with_columns([
+            pl.col('MinCharges').list.len().alias('#Masses')
+        ])
+        .select([
+            pl.col('index'),
+            pl.col('Scan'),
+            pl.col('MSLevel'),
+            pl.col('RT'),
+            pl.col('PrecursorMass'),
+            pl.col('#Masses')
+        ])
+    )
+    file_manager.store_data(dataset_id, 'scan_table', spectra_lazy)
 
     logger.log("30.0 %", level=2)
 
-    # Convert to polars for efficient operations
-    pl_deconv = pl.from_pandas(deconv_df.reset_index(names=['index']))
-    pl_anno = pl.from_pandas(anno_df.reset_index(names=['index']))
-    
-    # Create index-only table for joining
-    index_df = pl_deconv.select(pl.col('index'))
+    # Add row indices for joining operations
+    pl_deconv_indexed = pl_deconv.with_row_index("index")
+    pl_anno_indexed = pl_anno.with_row_index("index")
 
-    # anno_spectrum
-    anno_spectrum = (
-        pl_anno
+    # anno_spectrum - using native polars LazyFrame operations
+    anno_spectrum_lazy = (
+        pl_anno_indexed
         .select([
             pl.col('index'),
             pl.col('mzarray').alias('MonoMass_Anno'),
             pl.col('intarray').alias('SumIntensity_Anno')
         ])
-        .to_pandas()
     )
-    file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum)
+    file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum_lazy)
 
     logger.log("40.0 %", level=2)
 
-    # mass_table
-    mass_table = (
-        pl_deconv
+    # mass_table - using native polars LazyFrame operations
+    mass_table_lazy = (
+        pl_deconv_indexed
         .select([
             pl.col('index'),
             pl.col('mzarray').alias('MonoMass'),
@@ -108,43 +119,40 @@ def parseDeconv(
             pl.col('snr').alias('SNR'),
             pl.col('qscore').alias('QScore')
         ])
-        .to_pandas()
     )
-    file_manager.store_data(dataset_id, 'mass_table', mass_table)
+    file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy)
 
     logger.log("50.0 %", level=2)
 
-    # sequence_view
-    sequence_view = (
-        pl_deconv
+    # sequence_view - using native polars LazyFrame operations
+    sequence_view_lazy = (
+        pl_deconv_indexed
         .select([
             pl.col('index'),
             pl.col('mzarray').alias('MonoMass'),
             pl.col('PrecursorMass')
         ])
-        .to_pandas()
     )
-    file_manager.store_data(dataset_id, 'sequence_view', sequence_view)
+    file_manager.store_data(dataset_id, 'sequence_view', sequence_view_lazy)
 
     logger.log("60.0 %", level=2)
 
-    # deconv_spectrum
-    deconv_spectrum = (
-        pl_deconv
+    # deconv_spectrum - using native polars LazyFrame operations
+    deconv_spectrum_lazy = (
+        pl_deconv_indexed
         .select([
             pl.col('index'),
             pl.col('mzarray').alias('MonoMass'),
             pl.col('intarray').alias('SumIntensity')
         ])
-        .to_pandas()
     )
-    file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum)
+    file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum_lazy)
 
     logger.log("70.0 %", level=2)
 
-    # anno & deconv spectrum (combined_spectrum)
-    combined_spectrum = (
-        pl_deconv
+    # anno & deconv spectrum (combined_spectrum) - using native polars LazyFrame join
+    combined_spectrum_lazy = (
+        pl_deconv_indexed
         .select([
             pl.col('index'),
             pl.col('mzarray').alias('MonoMass'),
@@ -152,7 +160,7 @@ def parseDeconv(
             pl.col('SignalPeaks')
         ])
         .join(
-            pl_anno.select([
+            pl_anno_indexed.select([
                 pl.col('index'),
                 pl.col('mzarray').alias('MonoMass_Anno'),
                 pl.col('intarray').alias('SumIntensity_Anno')
@@ -160,24 +168,22 @@ def parseDeconv(
             on='index',
             how='left'
         )
-        .to_pandas()
     )
-    file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum)
+    file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum_lazy)
 
     logger.log("80.0 %", level=2)
 
-    # 3D_SN_plot
-    threedim_SN_plot = (
-        pl_deconv
+    # 3D_SN_plot - using native polars LazyFrame operations
+    threedim_SN_plot_lazy = (
+        pl_deconv_indexed
         .select([
             pl.col('index'),
             pl.col('PrecursorScan'),
             pl.col('SignalPeaks'),
             pl.col('NoisyPeaks')
         ])
-        .to_pandas()
     )
-    file_manager.store_data(dataset_id, 'threedim_SN_plot', threedim_SN_plot)
+    file_manager.store_data(dataset_id, 'threedim_SN_plot', threedim_SN_plot_lazy)
 
     logger.log("90.0 %", level=2)
 
