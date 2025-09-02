@@ -43,7 +43,7 @@ def parseDeconv(
             # Store full sized version - convert to pandas only at storage
             file_manager.store_data(
                 dataset_id, f'ms{ms_level}_{descriptor}_heatmap',
-                relevant_heatmap_lazy.collect().to_pandas()
+                relevant_heatmap_lazy
             )
 
             # Store compressed versions
@@ -57,7 +57,7 @@ def parseDeconv(
                 # Store compressed version - convert to pandas only at storage
                 file_manager.store_data(
                     dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}',
-                    current_heatmap_lazy.collect().to_pandas()
+                    current_heatmap_lazy
                 )
     
     logger.log("20.0 %", level=2)
