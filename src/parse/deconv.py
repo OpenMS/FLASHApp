@@ -9,13 +9,18 @@ def parseDeconv(
         file_manager, dataset_id, out_deconv_mzML, anno_annotated_mzML, 
         spec1_tsv=None, spec2_tsv=None, logger=None
 ):
+    logger.log("Progress of 'processing FLASHDeconv results':", level=2)
+    logger.log("0.0 %", level=2)
+
     # Parse input files
     deconv_df, anno_df, _, _, _ = parseFLASHDeconvOutput(
         anno_annotated_mzML, out_deconv_mzML, logger=logger
     )
-
     file_manager.store_data(dataset_id, 'anno_dfs', anno_df)
     file_manager.store_data(dataset_id, 'deconv_dfs', deconv_df)
+    
+    logger.log("10.0 %", level=2)
+
     # Preprocess data for the heatmaps
     for df, descriptor in zip([deconv_df, anno_df], ['deconv', 'raw']):
 
@@ -41,6 +46,8 @@ def parseDeconv(
                 file_manager.store_data(
                     dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}', relevant_heatmap
                 )
+    
+    logger.log("20.0 %", level=2)
         
     spectra_df = getSpectraTableDF(deconv_df)
 
@@ -49,6 +56,8 @@ def parseDeconv(
         :,['index', 'Scan', 'MSLevel', 'RT', 'PrecursorMass', '#Masses']
     ]
     file_manager.store_data(dataset_id, 'scan_table', scan_table)
+
+    logger.log("30.0 %", level=2)
 
     # Subsequent tables only share index
     scan_table = scan_table.loc[:, ['index']]
@@ -60,6 +69,8 @@ def parseDeconv(
     anno_spectrum = pd.concat([scan_table, anno_spectrum], axis=1)
     file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum)
 
+    logger.log("40.0 %", level=2)
+
     # mass_table
     mass_table = deconv_df.loc[
         :,['mzarray', 'intarray', 'MinCharges', 'MaxCharges', 'MinIsotopes', 'MaxIsotopes', 'cos', 'snr', 'qscore']
@@ -70,11 +81,15 @@ def parseDeconv(
     mass_table = pd.concat([scan_table, mass_table], axis=1)
     file_manager.store_data(dataset_id, 'mass_table', mass_table)
 
+    logger.log("50.0 %", level=2)
+
     # sequence_view
     sequence_view = deconv_df.loc[:, ['mzarray', 'PrecursorMass']]
     sequence_view.rename(columns={'mzarray': 'MonoMass'}, inplace=True)
     sequence_view = pd.concat([scan_table, sequence_view], axis=1)
     file_manager.store_data(dataset_id, 'sequence_view', sequence_view)
+
+    logger.log("60.0 %", level=2)
 
     # deconv_spectrum
     deconv_spectrum = deconv_df.loc[
@@ -85,6 +100,8 @@ def parseDeconv(
     deconv_spectrum = pd.concat([scan_table, deconv_spectrum], axis=1)
     file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum)
 
+    logger.log("70.0 %", level=2)
+
     # anno & deconv spectrum
     combined_spectrum = pd.concat(
         [deconv_spectrum, anno_spectrum.drop(columns=['index']), 
@@ -93,12 +110,16 @@ def parseDeconv(
     )
     file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum)
 
+    logger.log("80.0 %", level=2)
+
     # 3D_SN_plot
     threedim_SN_plot = deconv_df.loc[
         :, ['PrecursorScan', 'SignalPeaks', 'NoisyPeaks']
     ]
     threedim_SN_plot = pd.concat([scan_table, threedim_SN_plot], axis=1)
     file_manager.store_data(dataset_id, 'threedim_SN_plot', threedim_SN_plot)
+
+    logger.log("90.0 %", level=2)
 
     # fdr_plot
     fdr_dfs = []
@@ -113,6 +134,8 @@ def parseDeconv(
         density_target, density_decoy = fdr_density_distribution(fdr_dfs)
         file_manager.store_data(dataset_id, 'density_target', density_target)
         file_manager.store_data(dataset_id, 'density_decoy', density_decoy)
+    
+    logger.log("100.0 %", level=2)
 
 
 def fdr_density_distribution(df):

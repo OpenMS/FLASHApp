@@ -14,11 +14,14 @@ from src.render.sequence import (
 
 
 def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_tsv, logger=None):
+    logger.log("Progress of 'processing FLASHTnT results':", level=2)
+    logger.log("0.0 %", level=2)
 
     deconv_df, _, tolerance, _, _,  = parseFLASHDeconvOutput(
         anno_mzML, deconv_mzML
     )
     tag_df, protein_df = parseFLASHTaggerOutput(tag_tsv, protein_tsv)
+    logger.log("10.0 %", level=2)
     
     # protein_table
     protein_df['length'] = protein_df['DatabaseSequence'].apply(lambda x : len(x))
@@ -34,6 +37,7 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
         lambda x: x[:50] + '...' if len(x) > 50 else x
     )
     file_manager.store_data(dataset_id, 'protein_dfs', protein_df)
+    logger.log("30.0 %", level=2)
 
     # tag_table
 
@@ -72,6 +76,8 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
         }
     )
     file_manager.store_data(dataset_id, 'tag_dfs', tag_df)
+    logger.log("50.0 %", level=2)
+
     # sequence_view & internal_fragment_map
     sequence_data = {}
     internal_fragment_data = {}
@@ -142,6 +148,7 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
     file_manager.store_data(
         dataset_id, 'internal_fragment_data', internal_fragment_data
     )
+    logger.log("70.0 %", level=2)
 
     fragments = ['b', 'y']
     if file_manager.result_exists(dataset_id, 'FTnT_parameters_json'):
@@ -159,10 +166,12 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
     file_manager.store_data(
         dataset_id, 'settings', settings
     )
+    logger.log("90.0 %", level=2)
 
     density_target, density_decoy = fdr_density_distribution(protein_df, logger=logger)
     file_manager.store_data(dataset_id, 'density_id_target', density_target)
     file_manager.store_data(dataset_id, 'density_id_decoy', density_decoy)
+    logger.log("100.0 %", level=2)
 
 
 def fdr_density_distribution(df, logger=None):
