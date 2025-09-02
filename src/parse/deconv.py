@@ -25,27 +25,39 @@ def parseDeconv(
     # Preprocess data for the heatmaps
     for df, descriptor in zip([deconv_df, anno_df], ['deconv', 'raw']):
 
-        # Create full sized version
-        heatmap = getMSSignalDF(df)
+        # Create full sized version - returns polars LazyFrame
+        heatmap_lazy = getMSSignalDF(df)
 
         for ms_level in [1, 2]:
             
-            relevant_heatmap = heatmap[heatmap['MSLevel'] == ms_level].drop(columns=['MSLevel'])
+            # Filter for specific MS level using polars operations
+            relevant_heatmap_lazy = (
+                heatmap_lazy
+                .filter(pl.col('MSLevel') == ms_level)
+                .drop('MSLevel')
+            )
 
-            # Store full sized version
+            # Get count for compression level calculation
+            heatmap_count = relevant_heatmap_lazy.select(pl.len()).collect().item()
+
+            # Store full sized version - convert to pandas only at storage
             file_manager.store_data(
-                dataset_id, f'ms{ms_level}_{descriptor}_heatmap', relevant_heatmap
+                dataset_id, f'ms{ms_level}_{descriptor}_heatmap',
+                relevant_heatmap_lazy.collect().to_pandas()
             )
 
             # Store compressed versions
-            for size in reversed(compute_compression_levels(20000, len(relevant_heatmap), logger=logger)):
+            compression_levels = compute_compression_levels(20000, heatmap_count, logger=logger)
+            current_heatmap_lazy = relevant_heatmap_lazy
+            
+            for size in reversed(compression_levels):
+                # Downsample iteratively using polars-optimized function
+                current_heatmap_lazy = downsample_heatmap(current_heatmap_lazy, max_datapoints=size)
                 
-                
-                # Downsample iteratively
-                relevant_heatmap = downsample_heatmap(relevant_heatmap, max_datapoints=size)
-                # Store compressed version
+                # Store compressed version - convert to pandas only at storage
                 file_manager.store_data(
-                    dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}', relevant_heatmap
+                    dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}',
+                    current_heatmap_lazy.collect().to_pandas()
                 )
     
     logger.log("20.0 %", level=2)

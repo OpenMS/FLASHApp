@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from scipy.stats import binned_statistic_2d
 
@@ -8,7 +9,7 @@ def compute_compression_levels(minimal_size, total_amount, logger=None):
     if total_amount <= minimal_size:
         return []
     levels = np.logspace(
-        int(np.log10(minimal_size)), int(np.log10(total_amount)), 
+        int(np.log10(minimal_size)), int(np.log10(total_amount)),
         int(np.log10(total_amount)) - int(np.log10(minimal_size)) + 1,
         dtype='int'
     )*int(10**(np.log10(minimal_size)%1))
@@ -16,21 +17,61 @@ def compute_compression_levels(minimal_size, total_amount, logger=None):
 
 
 def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logger=None):
-
+    """
+    Downsample heatmap data using polars for efficient processing.
+    
+    Args:
+        data: polars LazyFrame or DataFrame with columns ['mass', 'rt', 'intensity', ...]
+        max_datapoints: Maximum number of points to keep
+        rt_bins: Number of retention time bins
+        mz_bins: Number of mass bins
+        logger: Optional logger
+    
+    Returns:
+        polars LazyFrame with downsampled data
+    """
     if (rt_bins * mz_bins) > max_datapoints:
         raise ValueError("Number of bins more than maximum datapoints.")
     
-    data = data.sort_values(['rt', 'intensity'], ascending=[True, False])
-    data['rank'] = data.groupby('rt').cumcount()
-    data = data.sort_values(['rank', 'intensity'], ascending=[True, False])
-
+    # Ensure we're working with a LazyFrame
+    if isinstance(data, pl.DataFrame):
+        data = data.lazy()
+    elif isinstance(data, pd.DataFrame):
+        data = pl.from_pandas(data).lazy()
+    
+    # Collect data to work with scipy binned_statistic_2d
+    # We need to collect here because scipy requires numpy arrays
+    collected_data = data.collect()
+    
+    # Sort by rt and intensity for ranking
+    sorted_data = (
+        collected_data
+        .sort(['rt', 'intensity'], descending=[False, True])
+        .with_columns([
+            pl.int_range(pl.len()).over('rt').alias('rank')
+        ])
+        .sort(['rank', 'intensity'], descending=[False, True])
+    )
+    
+    # Extract arrays for scipy
+    mass_array = sorted_data['mass'].to_numpy()
+    rt_array = sorted_data['rt'].to_numpy()
+    intensity_array = sorted_data['intensity'].to_numpy()
+    
+    # Use scipy for binning (still needed for the specific binning logic)
     count, _, __, mapping = binned_statistic_2d(
-        data['mass'], data['rt'], data['intensity'], 'count', 
+        mass_array, rt_array, intensity_array, 'count',
         [mz_bins, rt_bins], expand_binnumbers=True
     )
-    data['mass_bin'] = mapping[0]
-    data['rt_bin'] = mapping[1]
-
+    
+    # Add bin information back to polars DataFrame
+    binned_data = (
+        sorted_data
+        .with_columns([
+            pl.Series('mass_bin', mapping[0] - 1),  # scipy uses 1-based indexing
+            pl.Series('rt_bin', mapping[1] - 1)
+        ])
+    )
     
     # Compute maximum amount of peaks per bin that does not exceed limit
     counted_peaks = 0
@@ -43,14 +84,17 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
         # compute count for next value
         new_count = np.sum(count.flatten() >= (max_peaks_per_bin + 1))
 
-        if counted_peaks >= len(data):
+        if counted_peaks >= len(binned_data):
             break
-
-
-    data = data.groupby(
-        ['mass_bin', 'rt_bin'], group_keys=False, sort=False
-    ).head(max_peaks_per_bin).reset_index(drop=True)
-
-    return data.sort_values(by='intensity', ascending=True).drop(
-        columns=['rank', 'mass_bin', 'rt_bin']
+    
+    # Use polars for efficient groupby and head operations
+    result = (
+        binned_data
+        .lazy()
+        .group_by(['mass_bin', 'rt_bin'], maintain_order=False)
+        .head(max_peaks_per_bin)
+        .sort('intensity')
+        .drop(['rank', 'mass_bin', 'rt_bin'])
     )
+    
+    return result

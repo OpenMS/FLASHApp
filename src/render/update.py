@@ -37,7 +37,7 @@ def render_heatmap(full_data, selection, dataset_name, component_name):
         and (selection['yRange'][0] < 0)
         and (selection['yRange'][1] < 0)
     ):
-        return downsample_heatmap(full_data[0])
+        return downsample_heatmap(full_data[0]).collect()
     else:
         for dataset in full_data:
 
@@ -52,7 +52,7 @@ def render_heatmap(full_data, selection, dataset_name, component_name):
         if len(relevant_data) <= 20000:
             return relevant_data
         downsampled = downsample_heatmap(relevant_data)
-        return downsampled
+        return downsampled.collect()
 
 
 @st.cache_data(max_entries=1, show_spinner=False)

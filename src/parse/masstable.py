@@ -238,5 +238,5 @@ def getMSSignalDF(anno_df: pd.DataFrame):
         ])
     )
     
-    # Convert back to pandas to maintain API compatibility
-    return exploded_df.to_pandas()
+    # Return polars LazyFrame for efficient pipeline processing
+    return exploded_df.lazy()
