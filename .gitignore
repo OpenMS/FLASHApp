@@ -24,6 +24,8 @@ workspaces-flashtaggerviewer
 **/__pycache__
 .DS_Store
 *-embed-amd64
+get-pip.py
+run_app.bat
+python*
+gdpr_consent/node_modules/
 *~
-
-
