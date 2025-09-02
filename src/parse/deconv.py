@@ -1,4 +1,5 @@
 import pandas as pd
+import polars as pl
 import numpy as np
 
 from src.parse.masstable import parseFLASHDeconvOutput, getMSSignalDF, getSpectraTableDF
@@ -59,64 +60,111 @@ def parseDeconv(
 
     logger.log("30.0 %", level=2)
 
-    # Subsequent tables only share index
-    scan_table = scan_table.loc[:, ['index']]
+    # Convert to polars for efficient operations
+    pl_deconv = pl.from_pandas(deconv_df.reset_index(names=['index']))
+    pl_anno = pl.from_pandas(anno_df.reset_index(names=['index']))
+    
+    # Create index-only table for joining
+    index_df = pl_deconv.select(pl.col('index'))
 
     # anno_spectrum
-    anno_spectrum = anno_df.loc[:,['mzarray', 'intarray']]
-    anno_spectrum.rename(columns={'mzarray': 'MonoMass_Anno', 'intarray': 'SumIntensity_Anno'},
-                            inplace=True)
-    anno_spectrum = pd.concat([scan_table, anno_spectrum], axis=1)
+    anno_spectrum = (
+        pl_anno
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass_Anno'),
+            pl.col('intarray').alias('SumIntensity_Anno')
+        ])
+        .to_pandas()
+    )
     file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum)
 
     logger.log("40.0 %", level=2)
 
     # mass_table
-    mass_table = deconv_df.loc[
-        :,['mzarray', 'intarray', 'MinCharges', 'MaxCharges', 'MinIsotopes', 'MaxIsotopes', 'cos', 'snr', 'qscore']
-    ]
-    mass_table.rename(columns={'mzarray': 'MonoMass', 'intarray': 'SumIntensity', 'cos': 'CosineScore',
-                                    'snr': 'SNR', 'qscore': 'QScore'},
-                            inplace=True)
-    mass_table = pd.concat([scan_table, mass_table], axis=1)
+    mass_table = (
+        pl_deconv
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('intarray').alias('SumIntensity'),
+            pl.col('MinCharges'),
+            pl.col('MaxCharges'),
+            pl.col('MinIsotopes'),
+            pl.col('MaxIsotopes'),
+            pl.col('cos').alias('CosineScore'),
+            pl.col('snr').alias('SNR'),
+            pl.col('qscore').alias('QScore')
+        ])
+        .to_pandas()
+    )
     file_manager.store_data(dataset_id, 'mass_table', mass_table)
 
     logger.log("50.0 %", level=2)
 
     # sequence_view
-    sequence_view = deconv_df.loc[:, ['mzarray', 'PrecursorMass']]
-    sequence_view.rename(columns={'mzarray': 'MonoMass'}, inplace=True)
-    sequence_view = pd.concat([scan_table, sequence_view], axis=1)
+    sequence_view = (
+        pl_deconv
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('PrecursorMass')
+        ])
+        .to_pandas()
+    )
     file_manager.store_data(dataset_id, 'sequence_view', sequence_view)
 
     logger.log("60.0 %", level=2)
 
     # deconv_spectrum
-    deconv_spectrum = deconv_df.loc[
-        :,['mzarray', 'intarray']
-    ]
-    deconv_spectrum.rename(columns={'mzarray': 'MonoMass', 'intarray': 'SumIntensity'},
-                            inplace=True)
-    deconv_spectrum = pd.concat([scan_table, deconv_spectrum], axis=1)
+    deconv_spectrum = (
+        pl_deconv
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('intarray').alias('SumIntensity')
+        ])
+        .to_pandas()
+    )
     file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum)
 
     logger.log("70.0 %", level=2)
 
-    # anno & deconv spectrum
-    combined_spectrum = pd.concat(
-        [deconv_spectrum, anno_spectrum.drop(columns=['index']), 
-         deconv_df.loc[:, ['SignalPeaks']]],
-        axis=1
+    # anno & deconv spectrum (combined_spectrum)
+    combined_spectrum = (
+        pl_deconv
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('intarray').alias('SumIntensity'),
+            pl.col('SignalPeaks')
+        ])
+        .join(
+            pl_anno.select([
+                pl.col('index'),
+                pl.col('mzarray').alias('MonoMass_Anno'),
+                pl.col('intarray').alias('SumIntensity_Anno')
+            ]),
+            on='index',
+            how='left'
+        )
+        .to_pandas()
     )
     file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum)
 
     logger.log("80.0 %", level=2)
 
     # 3D_SN_plot
-    threedim_SN_plot = deconv_df.loc[
-        :, ['PrecursorScan', 'SignalPeaks', 'NoisyPeaks']
-    ]
-    threedim_SN_plot = pd.concat([scan_table, threedim_SN_plot], axis=1)
+    threedim_SN_plot = (
+        pl_deconv
+        .select([
+            pl.col('index'),
+            pl.col('PrecursorScan'),
+            pl.col('SignalPeaks'),
+            pl.col('NoisyPeaks')
+        ])
+        .to_pandas()
+    )
     file_manager.store_data(dataset_id, 'threedim_SN_plot', threedim_SN_plot)
 
     logger.log("90.0 %", level=2)

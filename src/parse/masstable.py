@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import polars as pl
 import numpy as np
 from pathlib import Path
 from pyopenms import MSExperiment, MzMLFile, SpectrumLookup, Constants
@@ -194,56 +195,48 @@ def getSpectraTableDF(deconv_df: pd.DataFrame):
 
 
 def getMSSignalDF(anno_df: pd.DataFrame):
-    scan_idxs = np.concatenate(
-        [
-            [index]*len(anno_df.loc[index, "intarray"]) 
-            for index in anno_df.index
-        ],
-        dtype=np.int32
+    # Convert to polars for efficient processing
+    pl_df = pl.from_pandas(anno_df.reset_index(names=['scan_idx']))
+    
+    # Create exploded dataframe with polars efficient operations
+    exploded_df = (
+        pl_df
+        .with_columns([
+            # Convert numpy arrays to polars lists
+            pl.col("mzarray").map_elements(lambda x: x.tolist() if hasattr(x, 'tolist') else list(x), return_dtype=pl.List(pl.Float32)),
+            pl.col("intarray").map_elements(lambda x: x.tolist() if hasattr(x, 'tolist') else list(x), return_dtype=pl.List(pl.Float32))
+        ])
+        .with_row_index("original_idx")
+        .select([
+            pl.col("scan_idx"),
+            pl.col("MSLevel"),
+            pl.col("RT"),
+            pl.col("mzarray").alias("mass"),
+            pl.col("intarray").alias("intensity")
+        ])
+        # Explode arrays to individual rows
+        .explode(["mass", "intensity"])
+        # Add mass index within each scan
+        .with_columns([
+            pl.int_range(pl.len()).over("scan_idx").alias("mass_idx")
+        ])
+        # Filter out NaN and zero intensities
+        .filter(
+            pl.col("intensity").is_not_null() &
+            (pl.col("intensity") > 0)
+        )
+        # Sort by intensity
+        .sort("intensity")
+        # Select final columns in correct order
+        .select([
+            pl.col("mass"),
+            pl.col("RT").alias("rt"),
+            pl.col("intensity"),
+            pl.col("scan_idx"),
+            pl.col("mass_idx"),
+            pl.col("MSLevel")
+        ])
     )
-    mass_idxs = np.concatenate(
-        [
-            list(range(len(anno_df.loc[index, "intarray"]))) 
-            for index in anno_df.index
-        ],
-        dtype=np.int32
-    )
-    ints = np.concatenate(
-        [
-            anno_df.loc[index, "intarray"] 
-            for index in anno_df.index
-        ],
-        dtype=np.float32
-    )
-    levels = np.concatenate(
-        [
-            [anno_df.loc[index, 'MSLevel']]*len(anno_df.loc[index, "intarray"]) 
-            for index in anno_df.index
-        ],
-        dtype=np.int32
-    )
-    mzs = np.concatenate(
-        [
-            anno_df.loc[index, "mzarray"] 
-            for index in anno_df.index
-        ],
-        dtype=np.float32
-    )
-    rts = np.concatenate(
-        [
-            np.full(len(anno_df.loc[index, "mzarray"]), anno_df.loc[index, "RT"])
-            for index in anno_df.index
-        ],
-        dtype=np.float32
-    )
-
-    ms_df = pd.DataFrame({
-        'mass': mzs, 'rt': rts, 'intensity': ints, 
-        'scan_idx': scan_idxs, 'mass_idx': mass_idxs, 
-        'MSLevel' : levels
-    })
-
-    ms_df.dropna(subset=['intensity'], inplace=True) # remove Nan
-    ms_df = ms_df[ms_df['intensity']>0]
-    ms_df.sort_values(by='intensity', inplace=True)
-    return ms_df
+    
+    # Convert back to pandas to maintain API compatibility
+    return exploded_df.to_pandas()
