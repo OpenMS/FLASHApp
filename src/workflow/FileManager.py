@@ -5,6 +5,7 @@ import random
 import sqlite3
 
 import pandas as pd
+import polars as pl
 import pickle as pkl
 import pyarrow.dataset as ds
 
@@ -18,10 +19,18 @@ class FileManager:
     into result directories, and handling file collections for processing tools. Designed
     to be flexible for handling both individual files and lists of files, with integration
     into a Streamlit workflow.
+    
+    Features advanced caching with optimized storage formats:
+    - Polars/Pandas DataFrames and LazyFrames: stored as parquet files for optimal performance
+    - Other data structures: stored as compressed pickle files
+    
+    Maintains backward compatibility while providing performance benefits for polars workflows.
 
     Methods:
         get_files: Returns a list of file paths as strings for the specified files, optionally with new file type and results subdirectory.
         collect: Collects all files in a single list (e.g. to pass to tools which can handle multiple input files at once).
+        store_data: Stores data with automatic format detection (polars/pandas/pickle).
+        get_results: Retrieves data with proper format restoration.
     """
 
     def __init__(
@@ -277,7 +286,7 @@ class FileManager:
 
     def _store_data(self, dataset_id: str, name_tag: str, data) -> None:
         """
-        Stores data as a cached file. Pandas DataFrames are stored as 
+        Stores data as a cached file. Pandas/Polars DataFrames are stored as 
         parquet files, while all other data structures are stored as
         compressed pickle.
         Args:
@@ -293,18 +302,26 @@ class FileManager:
         path = Path(self.cache_path, 'files', dataset_id)
         path.mkdir(parents=True, exist_ok=True)
         
-        # DataFrames are stored as apache parquet
-        if isinstance(data, pd.DataFrame):
+        # Polars DataFrames and LazyFrames are stored as parquet
+        if isinstance(data, (pl.DataFrame, pl.LazyFrame)):
+            path = Path(path, f"{name_tag}.pq")
+            # Convert LazyFrame to DataFrame for writing
+            if isinstance(data, pl.LazyFrame):
+                data = data.collect()
+            data.write_parquet(path)
+            return path
+        # Pandas DataFrames are stored as parquet
+        elif isinstance(data, pd.DataFrame):
             path = Path(path, f"{name_tag}.pq")
             with open(path, 'wb') as f:
                 data.to_parquet(f)
+            return path
         # Other data structures are stored as compressed pickle
         else:
             path = Path(path, f"{name_tag}.pkl.gz")
             with gzip.open(path, 'wb') as f:
                 pkl.dump(data, f)
-
-        return path
+            return path
 
     def store_data(self, dataset_id: str, name_tag: str, data) -> None:
         """
@@ -407,7 +424,7 @@ class FileManager:
 
         return [row[0] for row in self.cache_cursor.fetchall()]
     
-    def get_results(self, dataset_id, name_tags, partial=False, use_pyarrow=False):
+    def get_results(self, dataset_id, name_tags, partial=False, use_pyarrow=False, use_polars=False):
         results = {}
         # Retrieve files as Path objects
         file_columns = self._get_column_list('stored_files')
@@ -426,6 +443,7 @@ class FileManager:
                     else:
                         raise KeyError(f"{c} does not exist for {dataset_id}")
                 results[c] = Path(self.cache_path, r)
+        
         # Retrieve data as Python objects
         data_columns = self._get_column_list('stored_data')
         data_columns = [c for c in data_columns if c in name_tags]
@@ -446,7 +464,11 @@ class FileManager:
                 if file_path.suffix == '.pq':
                     if use_pyarrow:
                         data = ds.dataset(file_path, format="parquet")
+                    elif use_polars:
+                        # Load as polars DataFrame
+                        data = pl.scan_parquet(file_path)
                     else:
+                        # Default to pandas for backward compatibility
                         data = pd.read_parquet(file_path)
                 else:
                     with gzip.open(file_path, 'rb') as f:
