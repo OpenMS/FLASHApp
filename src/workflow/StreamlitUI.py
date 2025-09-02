@@ -1022,12 +1022,12 @@ class StreamlitUI:
         if pid_exists:
             if c1.button("Stop Workflow", type="primary", use_container_width=True):
                 self.executor.stop()
-                st.rerun()
+                st.rerun(scope='fragment')
         elif c1.button("Start Workflow", type="primary", use_container_width=True):
             start_workflow_function()
             with st.spinner("**Workflow starting...**"):
                 time.sleep(1)
-                st.rerun()
+                st.rerun(scope='fragment')
         
         if pid_exists:
             with st.status("**Workflow running...**", expanded=True):
@@ -1063,7 +1063,7 @@ class StreamlitUI:
                     )
                 # Update
                 time.sleep(1)
-                st.rerun()
+                st.rerun(scope='fragment')
 
         elif log_exists and not pid_exists:
             # Static display after completion
