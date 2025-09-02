@@ -3,9 +3,10 @@ import pyopenms as poms
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Any, Union, List, Literal
+from typing import Any, Union, List
 import json
 import os
+import re
 import sys
 import importlib.util
 import time
@@ -1052,7 +1053,8 @@ class StreamlitUI:
         
         pid_exists = self.executor.pid_dir.exists()
         log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
-        log_exists = log_path.exists()
+        log_path_complete = Path(self.workflow_dir, "logs", 'all' + ".log")
+        log_exists = log_path.exists() and log_path_complete.exists()
 
         if pid_exists:
             if c1.button("Stop Workflow", type="primary", use_container_width=True):
@@ -1060,25 +1062,43 @@ class StreamlitUI:
                 st.rerun()
         elif c1.button("Start Workflow", type="primary", use_container_width=True):
             start_workflow_function()
-            with st.spinner("**Workflow running...**"):
+            with st.spinner("**Workflow starting...**"):
                 time.sleep(1)
                 st.rerun()
+        
+        if pid_exists:
+            with st.status("**Workflow running...**", expanded=True):
+                if log_exists:
+                    percentage = -1
+                    label = None
+                    with open(log_path_complete, "r", encoding="utf-8") as f:
+                        for line in reversed(f.readlines()):
+                            line = line.strip()
+                            match = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
+                            if match and percentage < 0:
+                                percentage = float(match.group(1))/100
+                            match = re.search(r"Progress of\s+'([^']+)'", line)
+                            if match:
+                                label = match.group(1)
+                                break                            
+                            elif "Process finished:" in line:
+                                break
+                    if 0 <= percentage <= 1:
+                        st.progress(percentage, text=label)
 
-        if log_exists and pid_exists:
-            # Real-time display during execution
-            with st.spinner("**Workflow running...**"):
-                with open(log_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                if log_lines_count == "all":
-                    display_lines = lines
-                else:
-                    display_lines = lines[-st.session_state.log_lines_count:]
-                st.code(
-                    "".join(display_lines),
-                    language="neon",
-                    line_numbers=False,
-                )
-                # Faster polling for real-time updates
+
+                    with open(log_path, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                    if log_lines_count == "all":
+                        display_lines = lines
+                    else:
+                        display_lines = lines[-st.session_state.log_lines_count:]
+                    st.code(
+                        "".join(display_lines),
+                        language="neon",
+                        line_numbers=False,
+                    )
+                # Update
                 time.sleep(1)
                 st.rerun()
 
@@ -1093,10 +1113,6 @@ class StreamlitUI:
             if not "WORKFLOW FINISHED" in content:
                 st.error("**Errors occurred, check log file.**")
             st.code(content, language="neon", line_numbers=False)
-        elif pid_exists:
-            with st.spinner("**Workflow running...**"):
-                time.sleep(1)
-                st.rerun()
 
 
     def results_section(self, custom_results_function) -> None:
