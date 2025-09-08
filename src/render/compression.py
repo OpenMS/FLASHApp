@@ -39,19 +39,21 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
     elif isinstance(data, pd.DataFrame):
         data = pl.from_pandas(data).lazy()
     
-    # Collect data to work with scipy binned_statistic_2d
-    # We need to collect here because scipy requires numpy arrays
-    collected_data = data.collect()
-    
     # Sort by rt and intensity for ranking
     sorted_data = (
-        collected_data
+        data
         .sort(['rt', 'intensity'], descending=[False, True])
         .with_columns([
             pl.int_range(pl.len()).over('rt').alias('rank')
         ])
         .sort(['rank', 'intensity'], descending=[False, True])
     )
+
+    # We need to collect here because scipy requires numpy arrays
+    sorted_data = sorted_data.collect(engine="streaming")
+    
+    # Count peaks
+    total_count = sorted_data.select(pl.count()).item()
     
     # Extract arrays for scipy
     mass_array = sorted_data['mass'].to_numpy()
@@ -63,6 +65,9 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
         mass_array, rt_array, intensity_array, 'count',
         [mz_bins, rt_bins], expand_binnumbers=True
     )
+
+    # Back to lazy evaluation
+    sorted_data = sorted_data.lazy()
     
     # Add bin information back to polars DataFrame
     binned_data = (
@@ -84,14 +89,13 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
         # compute count for next value
         new_count = np.sum(count.flatten() >= (max_peaks_per_bin + 1))
 
-        if counted_peaks >= len(binned_data):
+        if counted_peaks >= total_count:
             break
     
     # Use polars for efficient groupby and head operations
     result = (
         binned_data
-        .lazy()
-        .group_by(['mass_bin', 'rt_bin'], maintain_order=False)
+        .group_by(['mass_bin', 'rt_bin'])
         .head(max_peaks_per_bin)
         .sort('intensity')
         .drop(['rank', 'mass_bin', 'rt_bin'])

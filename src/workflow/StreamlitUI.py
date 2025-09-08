@@ -14,7 +14,7 @@ from io import BytesIO
 import zipfile
 from datetime import datetime
 from streamlit_js_eval import streamlit_js_eval
-
+from streamlit_autorefresh import st_autorefresh
 
 from src.common.common import (
     OS_PLATFORM,
@@ -991,7 +991,6 @@ class StreamlitUI:
                     f.write(up.read().decode("utf-8"))
                 streamlit_js_eval(js_expressions="parent.window.location.reload()")
 
-
     def execution_section(self, start_workflow_function) -> None:
         with st.expander("**Summary**"):
             st.markdown(self.export_parameters_markdown())
@@ -1027,9 +1026,12 @@ class StreamlitUI:
             with st.spinner("**Workflow starting...**"):
                 time.sleep(1)
                 st.rerun()
+
+        error_box = st.empty()
+        with st.status("", expanded=True) as status:
         
-        if pid_exists:
-            with st.status("**Workflow running...**", expanded=True):
+            if pid_exists:
+                status.update(label="**Workflow running...**", state='running')
                 if log_exists:
                     percentage = -1
                     label = None
@@ -1055,27 +1057,31 @@ class StreamlitUI:
                         display_lines = lines
                     else:
                         display_lines = lines[-st.session_state.log_lines_count:]
-                    st.code(
-                        "".join(display_lines),
-                        language="neon",
-                        line_numbers=False,
+                    code_box = st.container(key='log')
+                    code_box.code(
+                        "".join(display_lines), language="neon",
+                        line_numbers=False
                     )
                 # Update
                 time.sleep(1)
                 st.rerun()
 
-        elif log_exists and not pid_exists:
-            # Static display after completion
-            st.markdown(
-                f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
-            )
-            with open(log_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            # Check if workflow finished successfully
-            if not "WORKFLOW FINISHED" in content:
-                st.error("**Errors occurred, check log file.**")
-            st.code(content, language="neon", line_numbers=False)
-
+            elif log_exists and not pid_exists:
+                status.update(state='complete')
+                # Static display after completion
+                st.markdown(
+                    f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
+                )
+                with open(log_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                # Check if workflow finished successfully
+                if not "WORKFLOW FINISHED" in content:
+                    status.update(label='Workflow completed.', state='error')
+                    error_box.error("**Errors occurred, check log file.**")
+                else:
+                    status.update(label='Workflow completed.', state='complete')
+                code_box = st.container(key='log')
+                code_box.code(content, language="neon", line_numbers=False)
 
     def results_section(self, custom_results_function) -> None:
         custom_results_function()

@@ -19,6 +19,8 @@ def parseDeconv(
     )
     file_manager.store_data(dataset_id, 'anno_dfs', anno_df)
     file_manager.store_data(dataset_id, 'deconv_dfs', deconv_df)
+    del deconv_df
+    del anno_df
     
     # Immediately reload as polars LazyFrames for efficient processing
     results = file_manager.get_results(dataset_id, ['anno_dfs', 'deconv_dfs'], use_polars=True)
@@ -28,7 +30,7 @@ def parseDeconv(
     logger.log("10.0 %", level=2)
 
     # Preprocess data for the heatmaps
-    for df, descriptor in zip([deconv_df, anno_df], ['deconv', 'raw']):
+    for df, descriptor in zip([pl_deconv, pl_anno], ['deconv', 'raw']):
 
         # Create full sized version - returns polars LazyFrame
         heatmap_lazy = getMSSignalDF(df)
@@ -42,10 +44,13 @@ def parseDeconv(
                 .drop('MSLevel')
             )
 
+            # Collect here as this is the data we are operating on
+            relevant_heatmap_lazy = relevant_heatmap_lazy.collect(streaming=True).lazy()
+
             # Get count for compression level calculation
             heatmap_count = relevant_heatmap_lazy.select(pl.len()).collect().item()
 
-            # Store full sized version - convert to pandas only at storage
+            # Store full sized version
             file_manager.store_data(
                 dataset_id, f'ms{ms_level}_{descriptor}_heatmap',
                 relevant_heatmap_lazy

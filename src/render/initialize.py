@@ -1,3 +1,5 @@
+import polars as pl
+
 from src.render.components import (
     PlotlyHeatmap, PlotlyLineplot, PlotlyLineplotTagger, Plotly3Dplot, 
     Tabulator, SequenceView, InternalFragmentMap, FlashViewerComponent, 
@@ -14,15 +16,15 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
 
         # Fetch full dataset
         data_full = file_manager.get_results(
-            selected_data,  ['ms1_deconv_heatmap']
+            selected_data,  ['ms1_deconv_heatmap'], use_polars=True
         )['ms1_deconv_heatmap']
 
         # Fetch all caches
         cached_compression_levels = []
-        for size in compute_compression_levels(20000, len(data_full)):
+        for size in compute_compression_levels(20000, data_full.select(pl.len()).collect(engine="streaming").item()):
             cached_compression_levels.append(
                 file_manager.get_results(
-                    selected_data,  [f'ms1_deconv_heatmap_{size}']
+                    selected_data,  [f'ms1_deconv_heatmap_{size}'], use_polars=True
                 )[f'ms1_deconv_heatmap_{size}']
             )
         cached_compression_levels.append(data_full)
@@ -36,15 +38,15 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
 
         # Fetch full dataset
         data_full = file_manager.get_results(
-            selected_data,  ['ms2_deconv_heatmap']
+            selected_data,  ['ms2_deconv_heatmap'], use_polars=True
         )['ms2_deconv_heatmap']
 
         # Fetch all caches
         cached_compression_levels = []
-        for size in compute_compression_levels(20000, len(data_full)):
+        for size in compute_compression_levels(20000, data_full.select(pl.len()).collect(engine="streaming").item()):
             cached_compression_levels.append(
                 file_manager.get_results(
-                    selected_data,  [f'ms2_deconv_heatmap_{size}']
+                    selected_data,  [f'ms2_deconv_heatmap_{size}'], use_polars=True
                 )[f'ms2_deconv_heatmap_{size}']
             )
         cached_compression_levels.append(data_full)
@@ -59,15 +61,15 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
 
         # Fetch full dataset
         data_full = file_manager.get_results(
-            selected_data,  ['ms1_raw_heatmap']
+            selected_data,  ['ms1_raw_heatmap'], use_polars=True
         )['ms1_raw_heatmap']
 
         # Fetch all caches
         cached_compression_levels = []
-        for size in compute_compression_levels(20000, len(data_full)):
+        for size in compute_compression_levels(20000, data_full.select(pl.len()).collect(engine="streaming").item()):
             cached_compression_levels.append(
                 file_manager.get_results(
-                    selected_data,  [f'ms1_raw_heatmap_{size}']
+                    selected_data,  [f'ms1_raw_heatmap_{size}'], use_polars=True
                 )[f'ms1_raw_heatmap_{size}']
             )
         cached_compression_levels.append(data_full)
@@ -82,15 +84,15 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
 
         # Fetch full dataset
         data_full = file_manager.get_results(
-            selected_data,  ['ms2_raw_heatmap']
+            selected_data,  ['ms2_raw_heatmap'], use_polars=True
         )['ms2_raw_heatmap']
 
         # Fetch all caches
         cached_compression_levels = []
-        for size in compute_compression_levels(20000, len(data_full)):
+        for size in compute_compression_levels(20000, data_full.select(pl.len()).collect(engine="streaming").item()):
             cached_compression_levels.append(
                 file_manager.get_results(
-                    selected_data,  [f'ms2_raw_heatmap_{size}']
+                    selected_data,  [f'ms2_raw_heatmap_{size}'], use_polars=True
                 )[f'ms2_raw_heatmap_{size}']
             )
         cached_compression_levels.append(data_full)

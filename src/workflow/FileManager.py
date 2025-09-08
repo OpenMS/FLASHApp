@@ -307,8 +307,9 @@ class FileManager:
             path = Path(path, f"{name_tag}.pq")
             # Convert LazyFrame to DataFrame for writing
             if isinstance(data, pl.LazyFrame):
-                data = data.collect()
-            data.write_parquet(path)
+                data = data.sink_parquet(path)
+            else:
+                data.write_parquet(path)
             return path
         # Pandas DataFrames are stored as parquet
         elif isinstance(data, pd.DataFrame):

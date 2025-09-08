@@ -196,7 +196,8 @@ def getSpectraTableDF(deconv_df: pd.DataFrame):
 
 def getMSSignalDF(anno_df: pd.DataFrame):
     # Convert to polars for efficient processing
-    pl_df = pl.from_pandas(anno_df.reset_index(names=['scan_idx']))
+    # pl_df = pl.from_pandas(anno_df.reset_index(names=['scan_idx']))
+    pl_df = anno_df.with_row_count(name="scan_idx")
     
     # Create exploded dataframe with polars efficient operations
     exploded_df = (
