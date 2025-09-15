@@ -1,1 +1,1 @@
-Scan	PrecursorScan	PrecursorMass	PrecursorSNR
+Scan	PrecursorScan	PrecursorMZ	RetentionTime	PrecursorQscore	Activation	ActivationEnergy	PrecursorCharge	IsolationLeft	IsolationRight	PrecursorMass	PrecursorSNR
