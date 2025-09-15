@@ -1031,7 +1031,10 @@ class StreamlitUI:
         with st.status("", expanded=True) as status:
         
             if pid_exists:
-                status.update(label="**Workflow running...**", state='running')
+                status.update(
+                    label="**Workflow running...**", state='running', 
+                    expanded=True
+                )
                 if log_exists:
                     percentage = -1
                     label = None
@@ -1067,7 +1070,7 @@ class StreamlitUI:
                 st.rerun()
 
             elif log_exists and not pid_exists:
-                status.update(state='complete')
+                status.update(state='complete', expanded=True)
                 # Static display after completion
                 st.markdown(
                     f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
@@ -1076,10 +1079,16 @@ class StreamlitUI:
                     content = f.read()
                 # Check if workflow finished successfully
                 if not "WORKFLOW FINISHED" in content:
-                    status.update(label='Workflow completed.', state='error')
+                    status.update(
+                        label='Workflow completed.', state='error', 
+                        expanded=True
+                    )
                     error_box.error("**Errors occurred, check log file.**")
                 else:
-                    status.update(label='Workflow completed.', state='complete')
+                    status.update(
+                        label='Workflow completed.', state='complete',
+                        expanded=True
+                    )
                 code_box = st.container(key='log')
                 code_box.code(content, language="neon", line_numbers=False)
 
