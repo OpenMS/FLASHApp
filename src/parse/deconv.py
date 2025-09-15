@@ -87,6 +87,7 @@ def parseDeconv(
             pl.col('PrecursorMass'),
             pl.col('#Masses')
         ])
+        .sort("index")
     )
     file_manager.store_data(dataset_id, 'scan_table', spectra_lazy)
 
@@ -104,6 +105,7 @@ def parseDeconv(
             pl.col('mzarray').alias('MonoMass_Anno'),
             pl.col('intarray').alias('SumIntensity_Anno')
         ])
+        .sort("index")
     )
     file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum_lazy)
 
@@ -124,6 +126,7 @@ def parseDeconv(
             pl.col('snr').alias('SNR'),
             pl.col('qscore').alias('QScore')
         ])
+        .sort("index")
     )
     file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy)
 
@@ -137,6 +140,7 @@ def parseDeconv(
             pl.col('mzarray').alias('MonoMass'),
             pl.col('PrecursorMass')
         ])
+        .sort("index")
     )
     file_manager.store_data(dataset_id, 'sequence_view', sequence_view_lazy)
 
@@ -150,6 +154,7 @@ def parseDeconv(
             pl.col('mzarray').alias('MonoMass'),
             pl.col('intarray').alias('SumIntensity')
         ])
+        .sort("index")
     )
     file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum_lazy)
 
@@ -173,6 +178,7 @@ def parseDeconv(
             on='index',
             how='left'
         )
+        .sort("index")
     )
     file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum_lazy)
 
