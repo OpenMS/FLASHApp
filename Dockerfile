@@ -73,7 +73,7 @@ RUN wget -q \
 RUN mamba --version
 
 # Setup mamba environment.
-RUN mamba create -n streamlit-env python=3.10
+RUN mamba create -n streamlit-env python=3.11
 RUN echo "mamba activate streamlit-env" >> ~/.bashrc
 SHELL ["/bin/bash", "--rcfile", "~/.bashrc"]
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
