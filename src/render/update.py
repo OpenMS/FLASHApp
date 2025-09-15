@@ -143,7 +143,7 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
             selected_data,
             additional_data['dataset'], component
         )
-    elif (component == ['Raw MS1 Heatmap', 'Raw MS2 Heatmap']):
+    elif (component in ['Raw MS1 Heatmap', 'Raw MS2 Heatmap']):
         selection = 'heatmap_raw' if '1' in component else 'heatmap_raw2'
         if selection not in selection_store:
             selected_data = {
