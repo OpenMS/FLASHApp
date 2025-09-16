@@ -14,7 +14,6 @@ from io import BytesIO
 import zipfile
 from datetime import datetime
 from streamlit_js_eval import streamlit_js_eval
-from streamlit_autorefresh import st_autorefresh
 
 from src.common.common import (
     OS_PLATFORM,
