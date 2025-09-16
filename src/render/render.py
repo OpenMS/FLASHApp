@@ -23,15 +23,13 @@ def render_component(
     
     # Get State
     state = state_tracker.getState()
-    state_no_counter = state.copy()
-    state_no_counter.pop('counter')
 
     # Update data with current session state
-    data = update_data(data, out_components, additional_data, tool)
+    data = update_data(data, out_components, state, additional_data, tool)
 
     # Filter data based on selection
     data = filter_data(
-        data, out_components, state_no_counter, additional_data, tool
+        data, out_components, state, additional_data, tool
     )
     
     # Hash updated. filtered data

@@ -3,9 +3,10 @@ import pyopenms as poms
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Any, Union, List, Literal
+from typing import Any, Union, List
 import json
 import os
+import re
 import sys
 import importlib.util
 import time
@@ -13,7 +14,6 @@ from io import BytesIO
 import zipfile
 from datetime import datetime
 from streamlit_js_eval import streamlit_js_eval
-
 
 from src.common.common import (
     OS_PLATFORM,
@@ -990,45 +990,6 @@ class StreamlitUI:
                     f.write(up.read().decode("utf-8"))
                 streamlit_js_eval(js_expressions="parent.window.location.reload()")
 
-    @st.fragment(run_every=5)
-    def show_log(self, start_workflow_function):
-        c1, c2 = st.columns(2)
-        # Select log level, this can be changed at run time or later without re-running the workflow
-        log_level = c1.selectbox(
-            "log details", ["minimal", "commands and run times", "all"], key="log_level"
-        )
-        if self.executor.pid_dir.exists():
-            if c1.button("Stop Workflow", type="primary", use_container_width=True):
-                self.executor.stop()
-                st.rerun()
-        elif c1.button("Start Workflow", type="primary", use_container_width=True):
-            start_workflow_function()
-            time.sleep(3)
-            st.rerun()
-        log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
-        if log_path.exists():
-            if self.executor.pid_dir.exists():
-                with st.spinner("**Workflow running...**"):
-                    with open(log_path, "r", encoding="utf-8") as f:
-                        st.code(
-                            "".join(f.readlines()[-30:]),
-                            language="neon",
-                            line_numbers=False,
-                        )
-                    time.sleep(2)
-                st.rerun()
-            else:
-                st.markdown(
-                    f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
-                )
-                with open(log_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    # Check if workflow finished successfully
-                    if not "WORKFLOW FINISHED" in content:
-                        st.error("**Errors occurred, check log file.**")
-                    st.code(content, language="neon", line_numbers=False)
-
-
     def execution_section(self, start_workflow_function) -> None:
         with st.expander("**Summary**"):
             st.markdown(self.export_parameters_markdown())
@@ -1052,7 +1013,8 @@ class StreamlitUI:
         
         pid_exists = self.executor.pid_dir.exists()
         log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
-        log_exists = log_path.exists()
+        log_path_complete = Path(self.workflow_dir, "logs", 'all' + ".log")
+        log_exists = log_path.exists() and log_path_complete.exists()
 
         if pid_exists:
             if c1.button("Stop Workflow", type="primary", use_container_width=True):
@@ -1060,44 +1022,74 @@ class StreamlitUI:
                 st.rerun()
         elif c1.button("Start Workflow", type="primary", use_container_width=True):
             start_workflow_function()
-            with st.spinner("**Workflow running...**"):
+            with st.spinner("**Workflow starting...**"):
                 time.sleep(1)
                 st.rerun()
 
-        if log_exists and pid_exists:
-            # Real-time display during execution
-            with st.spinner("**Workflow running...**"):
-                with open(log_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                if log_lines_count == "all":
-                    display_lines = lines
-                else:
-                    display_lines = lines[-st.session_state.log_lines_count:]
-                st.code(
-                    "".join(display_lines),
-                    language="neon",
-                    line_numbers=False,
+        error_box = st.empty()
+        with st.status("", expanded=True) as status:
+        
+            if pid_exists:
+                status.update(
+                    label="**Workflow running...**", state='running', 
+                    expanded=True
                 )
-                # Faster polling for real-time updates
+                if log_exists:
+                    percentage = -1
+                    label = None
+                    with open(log_path_complete, "r", encoding="utf-8") as f:
+                        for line in reversed(f.readlines()):
+                            line = line.strip()
+                            match = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
+                            if match and percentage < 0:
+                                percentage = float(match.group(1))/100
+                            match = re.search(r"Progress of\s+'([^']+)'", line)
+                            if match:
+                                label = match.group(1)
+                                break                            
+                            elif "Process finished:" in line:
+                                break
+                    if 0 <= percentage <= 1:
+                        st.progress(percentage, text=label)
+
+
+                    with open(log_path, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                    if log_lines_count == "all":
+                        display_lines = lines
+                    else:
+                        display_lines = lines[-st.session_state.log_lines_count:]
+                    code_box = st.container(key='log')
+                    code_box.code(
+                        "".join(display_lines), language="neon",
+                        line_numbers=False
+                    )
+                # Update
                 time.sleep(1)
                 st.rerun()
 
-        elif log_exists and not pid_exists:
-            # Static display after completion
-            st.markdown(
-                f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
-            )
-            with open(log_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            # Check if workflow finished successfully
-            if not "WORKFLOW FINISHED" in content:
-                st.error("**Errors occurred, check log file.**")
-            st.code(content, language="neon", line_numbers=False)
-        elif pid_exists:
-            with st.spinner("**Workflow running...**"):
-                time.sleep(1)
-                st.rerun()
-
+            elif log_exists and not pid_exists:
+                status.update(state='complete', expanded=True)
+                # Static display after completion
+                st.markdown(
+                    f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
+                )
+                with open(log_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                # Check if workflow finished successfully
+                if not "WORKFLOW FINISHED" in content:
+                    status.update(
+                        label='Workflow completed.', state='error', 
+                        expanded=True
+                    )
+                    error_box.error("**Errors occurred, check log file.**")
+                else:
+                    status.update(
+                        label='Workflow completed.', state='complete',
+                        expanded=True
+                    )
+                code_box = st.container(key='log')
+                code_box.code(content, language="neon", line_numbers=False)
 
     def results_section(self, custom_results_function) -> None:
         custom_results_function()

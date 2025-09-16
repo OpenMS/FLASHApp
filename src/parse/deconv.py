@@ -1,4 +1,5 @@
 import pandas as pd
+import polars as pl
 import numpy as np
 
 from src.parse.masstable import parseFLASHDeconvOutput, getMSSignalDF, getSpectraTableDF
@@ -9,96 +10,193 @@ def parseDeconv(
         file_manager, dataset_id, out_deconv_mzML, anno_annotated_mzML, 
         spec1_tsv=None, spec2_tsv=None, logger=None
 ):
+    logger.log("Progress of 'processing FLASHDeconv results':", level=2)
+    logger.log("0.0 %", level=2)
+
     # Parse input files
     deconv_df, anno_df, _, _, _ = parseFLASHDeconvOutput(
         anno_annotated_mzML, out_deconv_mzML, logger=logger
     )
-
     file_manager.store_data(dataset_id, 'anno_dfs', anno_df)
     file_manager.store_data(dataset_id, 'deconv_dfs', deconv_df)
-    # Preprocess data for the heatmaps
-    for df, descriptor in zip([deconv_df, anno_df], ['deconv', 'raw']):
+    del deconv_df
+    del anno_df
+    
+    # Immediately reload as polars LazyFrames for efficient processing
+    results = file_manager.get_results(dataset_id, ['anno_dfs', 'deconv_dfs'], use_polars=True)
+    pl_anno = results['anno_dfs']
+    pl_deconv = results['deconv_dfs']
+    
+    logger.log("10.0 %", level=2)
 
-        # Create full sized version
-        heatmap = getMSSignalDF(df)
+    # Preprocess data for the heatmaps
+    for df, descriptor in zip([pl_deconv, pl_anno], ['deconv', 'raw']):
+
+        # Create full sized version - returns polars LazyFrame
+        heatmap_lazy = getMSSignalDF(df)
 
         for ms_level in [1, 2]:
             
-            relevant_heatmap = heatmap[heatmap['MSLevel'] == ms_level].drop(columns=['MSLevel'])
+            # Filter for specific MS level using polars operations
+            relevant_heatmap_lazy = (
+                heatmap_lazy
+                .filter(pl.col('MSLevel') == ms_level)
+                .drop('MSLevel')
+            )
+
+            # Collect here as this is the data we are operating on
+            relevant_heatmap_lazy = relevant_heatmap_lazy.collect(streaming=True).lazy()
+
+            # Get count for compression level calculation
+            heatmap_count = relevant_heatmap_lazy.select(pl.len()).collect().item()
 
             # Store full sized version
             file_manager.store_data(
-                dataset_id, f'ms{ms_level}_{descriptor}_heatmap', relevant_heatmap
+                dataset_id, f'ms{ms_level}_{descriptor}_heatmap',
+                relevant_heatmap_lazy
             )
 
             # Store compressed versions
-            for size in reversed(compute_compression_levels(20000, len(relevant_heatmap), logger=logger)):
+            compression_levels = compute_compression_levels(20000, heatmap_count, logger=logger)
+            current_heatmap_lazy = relevant_heatmap_lazy
+            
+            for size in reversed(compression_levels):
+                # Downsample iteratively using polars-optimized function
+                current_heatmap_lazy = downsample_heatmap(current_heatmap_lazy, max_datapoints=size)
                 
-                
-                # Downsample iteratively
-                relevant_heatmap = downsample_heatmap(relevant_heatmap, max_datapoints=size)
-                # Store compressed version
+                # Store compressed version - convert to pandas only at storage
                 file_manager.store_data(
-                    dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}', relevant_heatmap
+                    dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}',
+                    current_heatmap_lazy
                 )
+    
+    logger.log("20.0 %", level=2)
         
-    spectra_df = getSpectraTableDF(deconv_df)
-
-    # scan_table
-    scan_table = spectra_df.loc[
-        :,['index', 'Scan', 'MSLevel', 'RT', 'PrecursorMass', '#Masses']
-    ]
-    file_manager.store_data(dataset_id, 'scan_table', scan_table)
-
-    # Subsequent tables only share index
-    scan_table = scan_table.loc[:, ['index']]
-
-    # anno_spectrum
-    anno_spectrum = anno_df.loc[:,['mzarray', 'intarray']]
-    anno_spectrum.rename(columns={'mzarray': 'MonoMass_Anno', 'intarray': 'SumIntensity_Anno'},
-                            inplace=True)
-    anno_spectrum = pd.concat([scan_table, anno_spectrum], axis=1)
-    file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum)
-
-    # mass_table
-    mass_table = deconv_df.loc[
-        :,['mzarray', 'intarray', 'MinCharges', 'MaxCharges', 'MinIsotopes', 'MaxIsotopes', 'cos', 'snr', 'qscore']
-    ]
-    mass_table.rename(columns={'mzarray': 'MonoMass', 'intarray': 'SumIntensity', 'cos': 'CosineScore',
-                                    'snr': 'SNR', 'qscore': 'QScore'},
-                            inplace=True)
-    mass_table = pd.concat([scan_table, mass_table], axis=1)
-    file_manager.store_data(dataset_id, 'mass_table', mass_table)
-
-    # sequence_view
-    sequence_view = deconv_df.loc[:, ['mzarray', 'PrecursorMass']]
-    sequence_view.rename(columns={'mzarray': 'MonoMass'}, inplace=True)
-    sequence_view = pd.concat([scan_table, sequence_view], axis=1)
-    file_manager.store_data(dataset_id, 'sequence_view', sequence_view)
-
-    # deconv_spectrum
-    deconv_spectrum = deconv_df.loc[
-        :,['mzarray', 'intarray']
-    ]
-    deconv_spectrum.rename(columns={'mzarray': 'MonoMass', 'intarray': 'SumIntensity'},
-                            inplace=True)
-    deconv_spectrum = pd.concat([scan_table, deconv_spectrum], axis=1)
-    file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum)
-
-    # anno & deconv spectrum
-    combined_spectrum = pd.concat(
-        [deconv_spectrum, anno_spectrum.drop(columns=['index']), 
-         deconv_df.loc[:, ['SignalPeaks']]],
-        axis=1
+    # scan_table - using native polars operations
+    spectra_lazy = (
+        pl_deconv
+        .with_row_index("index")
+        .with_columns([
+            pl.col('MinCharges').list.len().alias('#Masses')
+        ])
+        .select([
+            pl.col('index'),
+            pl.col('Scan'),
+            pl.col('MSLevel'),
+            pl.col('RT'),
+            pl.col('PrecursorMass'),
+            pl.col('#Masses')
+        ])
+        .sort("index")
     )
-    file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum)
+    file_manager.store_data(dataset_id, 'scan_table', spectra_lazy)
 
-    # 3D_SN_plot
-    threedim_SN_plot = deconv_df.loc[
-        :, ['PrecursorScan', 'SignalPeaks', 'NoisyPeaks']
-    ]
-    threedim_SN_plot = pd.concat([scan_table, threedim_SN_plot], axis=1)
-    file_manager.store_data(dataset_id, 'threedim_SN_plot', threedim_SN_plot)
+    logger.log("30.0 %", level=2)
+
+    # Add row indices for joining operations
+    pl_deconv_indexed = pl_deconv.with_row_index("index")
+    pl_anno_indexed = pl_anno.with_row_index("index")
+
+    # anno_spectrum - using native polars LazyFrame operations
+    anno_spectrum_lazy = (
+        pl_anno_indexed
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass_Anno'),
+            pl.col('intarray').alias('SumIntensity_Anno')
+        ])
+        .sort("index")
+    )
+    file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum_lazy)
+
+    logger.log("40.0 %", level=2)
+
+    # mass_table - using native polars LazyFrame operations
+    mass_table_lazy = (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('intarray').alias('SumIntensity'),
+            pl.col('MinCharges'),
+            pl.col('MaxCharges'),
+            pl.col('MinIsotopes'),
+            pl.col('MaxIsotopes'),
+            pl.col('cos').alias('CosineScore'),
+            pl.col('snr').alias('SNR'),
+            pl.col('qscore').alias('QScore')
+        ])
+        .sort("index")
+    )
+    file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy)
+
+    logger.log("50.0 %", level=2)
+
+    # sequence_view - using native polars LazyFrame operations
+    sequence_view_lazy = (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('PrecursorMass')
+        ])
+        .sort("index")
+    )
+    file_manager.store_data(dataset_id, 'sequence_view', sequence_view_lazy)
+
+    logger.log("60.0 %", level=2)
+
+    # deconv_spectrum - using native polars LazyFrame operations
+    deconv_spectrum_lazy = (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('intarray').alias('SumIntensity')
+        ])
+        .sort("index")
+    )
+    file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum_lazy)
+
+    logger.log("70.0 %", level=2)
+
+    # anno & deconv spectrum (combined_spectrum) - using native polars LazyFrame join
+    combined_spectrum_lazy = (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('mzarray').alias('MonoMass'),
+            pl.col('intarray').alias('SumIntensity'),
+            pl.col('SignalPeaks')
+        ])
+        .join(
+            pl_anno_indexed.select([
+                pl.col('index'),
+                pl.col('mzarray').alias('MonoMass_Anno'),
+                pl.col('intarray').alias('SumIntensity_Anno')
+            ]),
+            on='index',
+            how='left'
+        )
+        .sort("index")
+    )
+    file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum_lazy)
+
+    logger.log("80.0 %", level=2)
+
+    # 3D_SN_plot - using native polars LazyFrame operations
+    threedim_SN_plot_lazy = (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('PrecursorScan'),
+            pl.col('SignalPeaks'),
+            pl.col('NoisyPeaks')
+        ])
+    )
+    file_manager.store_data(dataset_id, 'threedim_SN_plot', threedim_SN_plot_lazy)
+
+    logger.log("90.0 %", level=2)
 
     # fdr_plot
     fdr_dfs = []
@@ -113,6 +211,8 @@ def parseDeconv(
         density_target, density_decoy = fdr_density_distribution(fdr_dfs)
         file_manager.store_data(dataset_id, 'density_target', density_target)
         file_manager.store_data(dataset_id, 'density_decoy', density_decoy)
+    
+    logger.log("100.0 %", level=2)
 
 
 def fdr_density_distribution(df):
