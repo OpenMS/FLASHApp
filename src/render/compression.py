@@ -50,7 +50,7 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
     )
 
     # We need to collect here because scipy requires numpy arrays
-    sorted_data = sorted_data.collect(engine="streaming")
+    sorted_data = sorted_data.collect()
     
     # Count peaks
     total_count = sorted_data.select(pl.count()).item()
