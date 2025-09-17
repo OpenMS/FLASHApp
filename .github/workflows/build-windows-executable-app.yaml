@@ -14,7 +14,7 @@ env:
   OPENMS_VERSION: 3.2.0 
   PYTHON_VERSION: 3.11.0
   # Name of the installer
-  APP_NAME: FLASHApp-0.9.10
+  APP_NAME: FLASHApp-0.9.11
   APP_UpgradeCode: "69ae44ad-d554-4e3c-8715-7c4daf60f8bb"
 
 jobs:
