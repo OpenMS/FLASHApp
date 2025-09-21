@@ -88,7 +88,7 @@ jobs:
         arch: x64
 
     - name: Setup build tools
-      shell: powershell
+      shell: bash
       run: |
         choco install ccache ninja -y --no-progress
         choco install cmake --version=3.31.1 -y --no-progress --force
