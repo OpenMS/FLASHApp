@@ -50,7 +50,7 @@ jobs:
         path: openms-streamlit-vue-component/dist
 
   build-openms:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
     - name: Checkout
@@ -201,7 +201,7 @@ jobs:
         path: ${{ github.workspace }}/OpenMS/bld/*.zip
 
   build-executable:
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: [build-openms, build-vue-js-component]
     
     steps:
