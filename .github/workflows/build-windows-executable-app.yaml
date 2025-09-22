@@ -59,7 +59,7 @@ jobs:
         repository: t0mdavid-m/OpenMS
         ref: FVdeploy
         path: 'OpenMS'
-
+    
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
@@ -148,26 +148,8 @@ jobs:
     - name: Build Windows
       shell: bash
       run: |
-          # Ensure cmake/ctest and choco tools are visible in bash
-          export PATH="/c/Program Files/CMake/bin:/c/ProgramData/chocolatey/bin:$PATH"
-
-          mkdir -p "$GITHUB_WORKSPACE/OpenMS/bld/"
-          # Print paths for debugging (somehting here frequently fails due to changes in runners)
-          which cmake || true
-          which ctest || true
-          which ninja || true
-          which ccache || true
-
-          # Give CMake the absolute ccache path to avoid lookup glitches
-          export CMAKE_CCACHE_EXE="C:/ProgramData/chocolatey/bin/ccache.exe"
-
-          # Run the dashboard but don't fail the step on a spurious 127
-          ctest --output-on-failure -V -S "$GITHUB_WORKSPACE/OpenMS/tools/ci/cibuild.cmake" || {
-            status=$?
-            echo "ctest exited with $status (treating as soft failure because dashboard already uploaded)."
-            # Treat only 'command not found' (127) as ignorable; rethrow others
-            if [ "$status" -ne 127 ]; then exit "$status"; fi
-          }
+          mkdir $GITHUB_WORKSPACE/OpenMS/bld/
+          ctest --output-on-failure -V -S $GITHUB_WORKSPACE/OpenMS/tools/ci/cibuild.cmake
       env:
           #OS_PREFIX_PATH: "${{ env.Qt5_DIR }}/lib/cmake;${{ env.Qt5_DIR }}"
           OPENMS_CONTRIB_LIBS: "${{ github.workspace }}/OpenMS/contrib"
@@ -219,7 +201,7 @@ jobs:
         path: ${{ github.workspace }}/OpenMS/bld/*.zip
 
   build-executable:
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: [build-openms, build-vue-js-component]
     
     steps:
