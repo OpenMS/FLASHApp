@@ -1,3 +1,8 @@
+# Needed as polars doesnt work well with forking on unix systems
+import multiprocessing as mp
+if mp.get_start_method(allow_none=True) != "spawn":
+    mp.set_start_method("spawn", force=True)
+
 import streamlit as st
 from pathlib import Path
 import json
