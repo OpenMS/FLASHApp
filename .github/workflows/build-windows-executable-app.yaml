@@ -277,7 +277,7 @@ jobs:
       run: |
         .\python-${{ env.PYTHON_VERSION }}\python -m pip install --force-reinstall -r requirements.txt --no-warn-script-location
         .\python-${{ env.PYTHON_VERSION }}\python -m pip uninstall polars --yes
-        .\python-${{ env.PYTHON_VERSION }}\python -m pip install 'polars-lts-cpu >= 1.0' --yes
+        .\python-${{ env.PYTHON_VERSION }}\python -m pip install 'polars-lts-cpu >= 1.0'
 
     - name: Set to offline deployment
       run: |
