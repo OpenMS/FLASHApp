@@ -4,6 +4,8 @@ from src.common.common import page_setup, save_params, v_space
 from src.workflow.FileManager import FileManager
 from pathlib import Path
 
+# page initialization
+params = page_setup()
 
 # Setup cache access
 file_manager = FileManager(
@@ -57,9 +59,6 @@ def validateSequenceInput(input_seq):
     if not pattern.match(seq):
         return False
     return True
-
-# page initialization
-params = page_setup()
 
 # for resetting the form (cannot be done after form is instantiated)
 if 'reset_sequence_input' not in st.session_state:
