@@ -30,18 +30,64 @@ if len(experiments) == 0:
     st.error('No results to show yet. Please run a workflow first!')
 else:
     # Table Header
-    columns = st.columns(3)
-    columns[0].write('**Run**')
+    columns = st.columns([1.1, 1, 1])
+    columns[0].write('**Name**')
     columns[1].write('**Download**')
     columns[2].write('**Delete Result Set**')
 
     # Table Body
     for i, experiment in enumerate(experiments):
         st.divider()
-        columns = st.columns(3)
-        columns[0].empty().write(experiment)
+        columns = st.columns([0.1, 1, 1, 1])
+        current_name = file_manager.get_display_name(experiment)
         
+        # Initialize edit mode session state for this experiment
+        edit_mode_key = f"edit_mode_{experiment}"
+        if edit_mode_key not in st.session_state:
+            st.session_state[edit_mode_key] = False
+        
+        # Display Name or Edit Input
         with columns[1]:
+            if st.session_state[edit_mode_key]:
+                # Edit mode: Show text input with current display name
+                new_name = st.text_input(
+                    "New name",
+                    value=current_name,
+                    key=f"input_{experiment}",
+                    label_visibility="collapsed"
+                )
+            else:
+                st.write(current_name)
+        
+        # Edit/Save Button
+        with columns[0]:
+            if st.session_state[edit_mode_key]:
+                # Show save button in edit mode
+                if st.button("💾", key=f"save_{experiment}", help="Save new name", use_container_width=True):
+                    new_name = st.session_state.get(f"input_{experiment}", "").strip()
+                    
+                    # Validate input
+                    if not new_name:
+                        st.error("Name cannot be empty")
+                    elif len(new_name) > 100:
+                        st.error("Name is too long (max 100 characters)")
+                    else:
+                        # Attempt to rename
+                        success = file_manager.rename_dataset(experiment, new_name)
+                        if success:
+                            st.success(f"Renamed to: {new_name}")
+                            st.session_state[edit_mode_key] = False
+                            st.rerun()
+                        else:
+                            st.error("Failed to rename dataset")
+            else:
+                # Show edit button in normal mode
+                if st.button("✏️", key=f"edit_{experiment}", help="Edit name", use_container_width=True):
+                    st.session_state[edit_mode_key] = True
+                    st.rerun()
+        
+        # Download
+        with columns[2]:
             button_placeholder = st.empty()
             
             # Show placeholder button before download is prepared
@@ -71,11 +117,12 @@ else:
                     with open(out_zip, 'rb') as f:
                         button_placeholder.download_button(
                             "Download ⬇️", f, 
-                            file_name = f'{experiment}.zip',
+                            file_name = f'{current_name}.zip',
                             use_container_width=True
                         )
 
-        with columns[2]:
-            if st.button(f"🗑️ {experiment}", use_container_width=True):
+        # Delete
+        with columns[3]:
+            if st.button(f"🗑️ {current_name}", use_container_width=True):
                 file_manager.remove_results(experiment)
                 st.rerun()
