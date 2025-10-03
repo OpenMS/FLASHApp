@@ -32,7 +32,7 @@ params = page_setup()
 # Get available results
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+    Path(st.session_state['workspace'], 'cache')
 )
 
 def get_sequence():
@@ -47,7 +47,7 @@ def get_sequence():
 if get_sequence() is not None:
     DEFAULT_LAYOUT = DEFAULT_LAYOUT + [['sequence_view']]
 
-results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
+results = file_manager.get_results_list(['threedim_SN_plot'])
 
 if file_manager.result_exists('layout', 'layout'):
     layout = file_manager.get_results('layout', 'layout')['layout']

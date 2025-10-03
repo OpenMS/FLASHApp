@@ -40,10 +40,10 @@ params = page_setup("TaggerViewer")
 # Get available results
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashtnt', 'cache')
+    Path(st.session_state['workspace'], 'cache')
 )
 results = file_manager.get_results_list(
-    ['deconv_dfs', 'anno_dfs', 'tag_dfs', 'protein_dfs']
+    ['internal_fragment_data']
 )
 
 if file_manager.result_exists('layout', 'layout'):
