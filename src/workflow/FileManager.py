@@ -63,6 +63,10 @@ class FileManager:
                             id TEXT PRIMARY KEY
                           );
         """)
+        
+        # Add display_name column to both tables
+        self._add_column('stored_data', 'display_name')
+        self._add_column('stored_files', 'display_name')
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -527,4 +531,75 @@ class FileManager:
                             id TEXT PRIMARY KEY
                           );
         """)
+    
+    def get_display_name(self, dataset_id: str) -> str:
+        """
+        Returns the display name for a dataset, falling back to dataset_id
+        if no custom display name exists.
+        
+        Args:
+            dataset_id (str): The ID of the dataset.
+            
+        Returns:
+            str: The display name or dataset_id as fallback.
+        """
+        # Try to get display_name from stored_data table
+        self.cache_cursor.execute("""
+            SELECT display_name
+            FROM stored_data
+            WHERE id = ? AND display_name IS NOT NULL
+        """, (dataset_id,))
+        result = self.cache_cursor.fetchone()
+        if result and result[0]:
+            return result[0]
+        
+        # Try to get display_name from stored_files table
+        self.cache_cursor.execute("""
+            SELECT display_name
+            FROM stored_files
+            WHERE id = ? AND display_name IS NOT NULL
+        """, (dataset_id,))
+        result = self.cache_cursor.fetchone()
+        if result and result[0]:
+            return result[0]
+        
+        # Fallback to dataset_id
+        return dataset_id
+    
+    def rename_dataset(self, dataset_id: str, new_display_name: str) -> bool:
+        """
+        Validates and updates the display name for a dataset.
+        
+        Args:
+            dataset_id (str): The ID of the dataset to rename.
+            new_display_name (str): The new display name.
+            
+        Returns:
+            bool: True on success, False on failure.
+        """
+        # Validation: non-empty name
+        if not new_display_name or not new_display_name.strip():
+            return False
+        
+        # Validation: reasonable length limit (100 characters)
+        if len(new_display_name) > 100:
+            return False
+        
+        # Trim whitespace
+        new_display_name = new_display_name.strip()
 
+        # Update display_name in stored_data table if entry exists
+        self.cache_cursor.execute("""
+            UPDATE stored_data
+            SET display_name = ?
+            WHERE id = ?
+        """, (new_display_name, dataset_id))
+        
+        # Update display_name in stored_files table if entry exists
+        self.cache_cursor.execute("""
+            UPDATE stored_files
+            SET display_name = ?
+            WHERE id = ?
+        """, (new_display_name, dataset_id))
+
+        return True
