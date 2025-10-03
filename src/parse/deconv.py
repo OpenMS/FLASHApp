@@ -69,6 +69,30 @@ def parseDeconv(
                     dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}',
                     current_heatmap_lazy
                 )
+
+    # Create TIC table
+    ms1_heatmap = file_manager.get_results(
+            dataset_id,  ['ms1_raw_heatmap'], use_polars=True
+    )['ms1_raw_heatmap']
+    ms1_heatmap = ms1_heatmap.with_columns(pl.lit(1).alias('level'))
+    ms1_heatmap = ms1_heatmap.drop(['mass', 'mass_idx'])
+    ms2_heatmap = file_manager.get_results(
+            dataset_id,  ['ms2_raw_heatmap'], use_polars=True
+    )['ms2_raw_heatmap']
+    ms2_heatmap = ms2_heatmap.with_columns(pl.lit(2).alias('level'))
+    ms2_heatmap = ms2_heatmap.drop(['mass', 'mass_idx'])
+    tic_data = pl.concat([ms1_heatmap, ms2_heatmap], how='vertical')
+    tic_data = (
+        tic_data.group_by('scan_idx')
+            .agg([
+                pl.col('rt').first().alias('rt'),
+                pl.col('level').first().alias('level'),
+                pl.col('intensity').sum().alias('tic'),
+            ])
+    )
+    file_manager.store_data(dataset_id, 'tic', tic_data)
+
+
     
     logger.log("20.0 %", level=2)
         
