@@ -481,6 +481,34 @@ class FileManager:
                 results[c] = data
         return results
     
+    def get_all_files_except(self, dataset_id: str, exclude_tags: List[str]) -> dict:
+        """
+        Retrieves all files for a dataset except those specified in the exclusion list.
+        
+        Args:
+            dataset_id (str): The ID of the dataset to retrieve files for.
+            exclude_tags (List[str]): List of name tags to exclude from the results.
+            
+        Returns:
+            dict: Dictionary mapping name_tags to file paths for all files except excluded ones.
+        """
+        # Get all column names from stored_files table
+        all_columns = self._get_column_list('stored_files')
+        
+        # Exclude internal columns
+        internal_columns = ['id', 'display_name']
+        
+        # Filter out internal columns and excluded tags
+        included_tags = [
+            col for col in all_columns 
+            if col not in internal_columns and col not in exclude_tags
+        ]
+        
+        # Retrieve the actual file paths using get_results with partial=True
+        results = self.get_results(dataset_id, included_tags, partial=True)
+        
+        return results
+    
     def result_exists(self, dataset_id, name_tag):
         
         # Check which table is correct
