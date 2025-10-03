@@ -1,49 +1,0 @@
-STARTING WORKFLOW
-
-Processing example_fd:
-
--> Running FLASHDeconv...
-
-Running command:
-FLASHDeconv -in ../workspaces-FLASHApp/default/flashdeconv/input-files/mzML-files/example_fd.mzML -out ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/out.tsv -out_spec1 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec1.tsv -out_spec2 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec2.tsv -out_spec3 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec3.tsv -out_spec4 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec4.tsv -out_mzml ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/out_deconv.mzML -out_quant ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms2.feature -SD:tol 10 10 -FD:report_FDR -threads 14 -ini ../workspaces-FLASHApp/default/flashdeconv/ini/FLASHDeconv.ini
-Waiting for command to finish...
-
-Process finished:
-FLASHDeconv -in ../workspaces-FLASHApp/default/flashdeconv/input-files/mzML-files/example_fd.mzML -out ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/out.tsv -out_spec1 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec1.tsv -out_spec2 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec2.tsv -out_spec3 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec3.tsv -out_spec4 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/spec4.tsv -out_mzml ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/out_deconv.mzML -out_quant ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/default/FLASHDeconvOutput/example_fd_20250823-152120/toppic_ms2.feature -SD:tol 10 10 -FD:report_FDR -threads 14 -ini ../workspaces-FLASHApp/default/flashdeconv/ini/FLASHDeconv.ini
-Total time to run command: 46.19 seconds
-
-Warning: Parameters file version (3.1.0-pre-FDdevelop-2025-05-02) does not match the version of this tool (3.1.0-pre-FVdeploy-2025-08-15).
-Your current parameters are still valid, but there might be new valid values or even new parameters. Upgrading the INI might be useful.
-Initializing ... 
-Progress of 'loading mzML':
-  Progress of 'loading spectra list':
-  -- done [took 0.13 s (CPU), 0.09 s (Wall)] -- 
-  Progress of 'loading chromatogram list':
-  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
--- done [took 0.14 s (CPU), 0.09 s (Wall) @ 155.4 MiB/s] -- 
-Processing : ../workspaces-FLASHApp/default/flashdeconv/input-files/mzML-files/example_fd.mzML
-Filtering low peaks in spectra ... Done
-Calculating Averagines ... Done
-Progress of 'running FLASHDeconv':
-  1.89 %                 2.84 %                 4.42 %                 5.99 %                 6.94 %                 7.89 %                 8.83 %                 10.09 %                 11.04 %                 12.30 %                 13.56 %                 14.83 %                 16.09 %                 17.03 %                 17.67 %                 18.93 %                 19.87 %                 20.82 %                 22.08 %                 23.03 %                 23.97 %                 24.92 %                 25.87 %                 26.81 %                 27.76 %                 29.02 %                 29.97 %                 30.91 %                 32.18 %                 33.12 %                 37.22 %                 45.11 %                 52.68 %                 63.41 %                 74.45 %                 83.60 %                 91.17 %                 97.48 %               -- done [took 01:17 m (CPU), 38.19 s (Wall)] -- 
-So far, FLASHDeconv found 23177 masses in 104 MS1 spectra out of 104
-So far, FLASHDeconv found 8240 masses in 212 MS2 spectra out of 213
-Mass tracer found 690 features
-FLASHDeconv run complete. Now writing the results in output files ...
-writing feature tsv ...
-writing spectrum tsv for MS level 1 ...
-writing spectrum tsv for MS level 2 ...
-266 spectra and 1 chromatograms stored.
-writing quantification tsv ...
-<266 spectra and 1 chromatograms stored.> occurred 2 times
-writing topfd *.feature for MS level 1 ...
-writing topfd *.feature for MS level 2 ...
-writing topfd *.msalign for MS level 1 ...
-writing topfd *.msalign for MS level 2 ...
-FLASHDeconv took 46.10 s (wall), 01:26 m (CPU), 2.95 s (system), 01:23 m (user); Peak Memory Usage: 667 MB.
-
-
--> Processing Results...
-
-WORKFLOW FINISHED
-
