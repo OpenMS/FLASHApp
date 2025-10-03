@@ -17,6 +17,7 @@ COMPONENT_OPTIONS=[
     'Mass table (Scan table needed)',
     '3D S/N plot (Mass table needed)',
     'Score Distribution Plot'
+    'TIC Chromatogram'
     # "Sequence view" and "Internal fragment map" is added when "input_sequence" is submitted
 ]
 
@@ -31,6 +32,7 @@ COMPONENT_NAMES=[
     'mass_table',
     '3D_SN_plot',
     'fdr_plot',
+    'tic_chromatogram',
     # "sequence view" and "internal fragment map" added when "input_sequence" is submitted
 ]
 

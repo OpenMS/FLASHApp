@@ -99,3 +99,9 @@ class FLASHQuant:
     def __init__(self):
         self.title = 'QuantVis'
         self.componentName = 'FLASHQuantView'
+
+
+class Chromatogram:
+    def __init__(self):
+        self.title = 'TIC'
+        self.componentName = 'TICChromatogram'

@@ -3,7 +3,7 @@ import polars as pl
 from src.render.components import (
     PlotlyHeatmap, PlotlyLineplot, PlotlyLineplotTagger, Plotly3Dplot, 
     Tabulator, SequenceView, InternalFragmentMap, FlashViewerComponent, 
-    FDRPlotly, FLASHQuant
+    FDRPlotly, FLASHQuant, Chromatogram
 )
 from src.render.compression import compute_compression_levels
 
@@ -172,6 +172,10 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data = file_manager.get_results(selected_data,  ['quant_dfs'])
         data_to_send['quant_data'] = data['quant_dfs']
         component_arguments = FLASHQuant()
+    elif comp_name == 'tic_chromatogram':
+        data = file_manager.get_results(selected_data,  ['tic'])
+        data_to_send['tic'] = data['tic']
+        component_arguments = Chromatogram()
 
     components = [[FlashViewerComponent(component_arguments)]]
 
