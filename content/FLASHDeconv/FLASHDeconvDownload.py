@@ -101,8 +101,8 @@ else:
                     ):
                         zip_buffer = BytesIO()
                         with ZipFile(zip_buffer, 'w', ZIP_DEFLATED) as f:
-                            for filepath in file_manager.get_results(
-                                experiment, targets, partial=True
+                            for filepath in file_manager.get_all_files_except(
+                                experiment, ['download_archive']
                             ).values():
                                 f.write(filepath, arcname=Path(filepath).name)
                         zip_buffer.seek(0)
