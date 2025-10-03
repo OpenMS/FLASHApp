@@ -45,7 +45,7 @@ def parseDeconv(
             )
 
             # Collect here as this is the data we are operating on
-            relevant_heatmap_lazy = relevant_heatmap_lazy.collect().lazy()
+            relevant_heatmap_lazy = relevant_heatmap_lazy.collect(streaming=True).lazy()
 
             # Get count for compression level calculation
             heatmap_count = relevant_heatmap_lazy.select(pl.len()).collect().item()
