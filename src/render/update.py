@@ -181,4 +181,30 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
                 ][selection_store['proteinIndex']]
             }
 
+    # Feature Level Information
+    if (component == 'Deconvolved MS1 Heatmap'):
+        if ('scanIndex' in selection_store) and ('massIndex' in selection_store):
+            feature_data = data['feature_data']
+            feature_info = feature_data.filter(
+                (pl.col("ScanIndex") == selection_store['scanIndex']) 
+                & (pl.col("MassIndex") == selection_store['massIndex'])
+            )
+            mass_row = feature_info.collect(streaming=True)
+            if mass_row.height == 0:
+                data['feature_data'] = pd.DataFrame()
+            else:
+                idx = mass_row.row(0, named=True)['FeatureIndex']
+                if idx is None:
+                    data['feature_data'] = pd.DataFrame()
+                else:
+                    feature_data = (
+                        feature_data
+                        .filter(pl.col("FeatureIndex") == idx)
+                        .sort("RetentionTime")
+                    )
+                    data['feature_data'] = feature_data.collect(streaming=True)
+        else:
+            data['feature_data'] = pd.DataFrame()
+
+
     return data

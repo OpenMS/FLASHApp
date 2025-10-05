@@ -33,6 +33,13 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data_to_send['deconv_heatmap_df'] = cached_compression_levels[0]
 
         additional_data['deconv_heatmap_df'] = cached_compression_levels
+
+        # Get feature annotations
+        feature_data = file_manager.get_results(
+            selected_data,  ['feature_dfs'], use_polars=True
+        )['feature_dfs']
+        data_to_send['feature_data'] = feature_data
+
         component_arguments = PlotlyHeatmap(title="Deconvolved MS1 Heatmap")
     elif comp_name == 'ms2_deconv_heat_map':
 

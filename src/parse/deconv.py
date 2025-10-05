@@ -8,7 +8,7 @@ from scipy.stats import gaussian_kde
 
 def parseDeconv(
         file_manager, dataset_id, out_deconv_mzML, anno_annotated_mzML, 
-        spec1_tsv=None, spec2_tsv=None, logger=None
+        spec1_tsv, spec2_tsv=None, logger=None
 ):
     logger.log("Progress of 'processing FLASHDeconv results':", level=2)
     logger.log("0.0 %", level=2)
@@ -21,6 +21,62 @@ def parseDeconv(
     file_manager.store_data(dataset_id, 'deconv_dfs', deconv_df)
     del deconv_df
     del anno_df
+
+    spec1_df = pd.read_csv(
+        spec1_tsv, sep='\t', usecols=[
+            'FeatureIndex', 'MonoisotopicMass', 'SumIntensity', 'RetentionTime', 
+            'ScanNum'
+        ]
+    )
+    spec1_df.loc[:,'Level'] = 1
+    file_manager.store_data(dataset_id, 'spec1_df', spec1_df)
+    spec2_df = pd.read_csv(
+        spec2_tsv, sep='\t', usecols=[
+            'FeatureIndex', 'MonoisotopicMass', 'SumIntensity', 'RetentionTime', 
+            'ScanNum'
+        ]
+    )
+    spec2_df.loc[:,'Level'] = 2
+    file_manager.store_data(dataset_id, 'spec2_df', spec2_df)
+    del spec1_df
+    del spec2_df
+    
+    features = file_manager.get_results(
+        dataset_id, ['spec1_df', 'spec2_df'], use_polars=True
+    )
+    # Build the base once
+    base = pl.concat([features["spec1_df"], features["spec2_df"]])
+
+    # Sort first so indices reflect first appearance order in the data
+    sorted_base = base.sort("RetentionTime")
+
+    # Create a ScanNum -> ScanIndex mapping in order of first occurrence
+    scan_index_map = (
+        sorted_base
+        .select("ScanNum")
+        .unique(maintain_order=True)
+        .with_row_count("ScanIndex")
+    )
+
+    # Build dataframe
+    features = (
+        sorted_base
+        # needed for MassIndex; global index after sort
+        .with_row_count("RowID")  
+        .with_columns(
+            # per-ScanNum 0-based MassIndex using RowID
+            (pl.col("RowID") - pl.col("RowID").min().over("ScanNum")).alias("MassIndex"),
+            # Retention time in seconds to comply with other datastructures
+            (pl.col("RetentionTime") * 60).alias("RetentionTime"),
+        )
+        # Attach scan index
+        .join(scan_index_map, on="ScanNum", how="left")
+        # For now we only consider features at ms1 level
+        .filter(pl.col("Level") == 1)
+        # Drop helper columns
+        .drop(["Level", "RowID"])
+    )
+    file_manager.store_data(dataset_id, 'feature_dfs', features)
     
     # Immediately reload as polars LazyFrames for efficient processing
     results = file_manager.get_results(dataset_id, ['anno_dfs', 'deconv_dfs'], use_polars=True)
