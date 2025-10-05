@@ -90,7 +90,9 @@ def parseDeconv(
                 pl.col('intensity').sum().alias('tic'),
             ])
     )
+    tic_data = tic_data.sort("scan_idx", descending=False)
     file_manager.store_data(dataset_id, 'tic', tic_data)
+
 
 
     

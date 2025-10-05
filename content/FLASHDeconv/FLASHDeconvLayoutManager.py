@@ -16,8 +16,8 @@ COMPONENT_OPTIONS=[
     'Raw spectrum (Scan table needed)',
     'Mass table (Scan table needed)',
     '3D S/N plot (Mass table needed)',
-    'Score Distribution Plot'
-    'TIC Chromatogram'
+    'Score Distribution Plot',
+    'TIC Chromatogram',
     # "Sequence view" and "Internal fragment map" is added when "input_sequence" is submitted
 ]
 
