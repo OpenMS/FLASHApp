@@ -208,8 +208,66 @@ def parseDeconv(
             pl.col('snr').alias('SNR'),
             pl.col('qscore').alias('QScore')
         ])
+    )
+    
+    # Add FeatureIndex arrays to mass_table
+    features = file_manager.get_results(dataset_id, ['feature_dfs'], use_polars=True)['feature_dfs']
+    
+    # Handle NaN FeatureIndex values by replacing with -1
+    features = features.with_columns([
+        pl.when(pl.col('FeatureIndex').is_null())
+          .then(pl.lit(-1))
+          .otherwise(pl.col('FeatureIndex'))
+          .alias('FeatureIndex')
+    ])
+    
+    # Group by ScanNum and create arrays of FeatureIndex ordered by MassIndex
+    feature_arrays = (
+        features
+        .sort(['ScanIndex', 'MassIndex'])
+        .group_by('ScanIndex')
+        .agg([
+            pl.col('FeatureIndex').alias('FeatureIndices')
+        ])
+    )
+    
+    # Get scan info with MSLevel and number of masses for creating -1 arrays
+    scan_info = (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('Scan'),
+            pl.col('MSLevel'),
+            pl.col('mzarray').list.len().alias('num_masses')
+        ])
+    )
+    
+    # Join feature arrays with scan info and create FeatureIndex column
+    scans_with_features = (
+        scan_info
+        .join(feature_arrays, left_on='index', right_on='ScanIndex', how='left')
+        .with_columns([
+            # For MS2 scans create array of -1s
+            pl.when(pl.col('MSLevel') == 2)
+              .then(
+                  pl.col('num_masses').map_elements(
+                      lambda n: [-1] * n,
+                      return_dtype=pl.List(pl.Int64)
+                  )
+              )
+              .otherwise(pl.col('FeatureIndices'))
+              .alias('FeatureIndex')
+        ])
+        .select(['index', 'FeatureIndex'])
+    )
+    
+    # Add FeatureIndex to mass_table
+    mass_table_lazy = (
+        mass_table_lazy
+        .join(scans_with_features, on='index', how='left')
         .sort("index")
     )
+    
     file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy)
 
     logger.log("50.0 %", level=2)
