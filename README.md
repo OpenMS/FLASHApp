@@ -57,3 +57,4 @@ After it has been built you can run the image with:
 `docker run -p 8501:8501 flashapp:latest`
 
 Navigate to `http://localhost:8501` in your browser.
+.
