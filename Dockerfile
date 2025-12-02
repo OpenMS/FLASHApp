@@ -107,7 +107,7 @@ RUN /bin/bash -c "cmake -DCMAKE_BUILD_TYPE='Release' -DCMAKE_PREFIX_PATH='/OpenM
 
 # Build TOPP tools and clean up.
 RUN make -j4 TOPP
-RUN rm -rf src doc CMakeFiles
+# RUN rm -rf src doc CMakeFiles
 
 # Build pyOpenMS wheels and install via pip.
 RUN make -j4 pyopenms
