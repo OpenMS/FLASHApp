@@ -59,6 +59,9 @@ class Tabulator:
         elif table_type == 'TagTable':
             self.title = 'Tag Table'
             self.componentName = "TabulatorTagTable"
+        elif table_type == 'FeatureTable':
+            self.title = 'Feature Table'
+            self.componentName = "TabulatorFeatureTable"
 
 
 class PlotlyLineplot:

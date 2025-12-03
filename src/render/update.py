@@ -186,7 +186,7 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
         if ('scanIndex' in selection_store) and ('massIndex' in selection_store):
             feature_data = data['feature_data']
             feature_info = feature_data.filter(
-                (pl.col("ScanIndex") == selection_store['scanIndex']) 
+                (pl.col("ScanIndex") == selection_store['scanIndex'])
                 & (pl.col("MassIndex") == selection_store['massIndex'])
             )
             mass_row = feature_info.collect(streaming=True)
@@ -205,6 +205,5 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
                     data['feature_data'] = feature_data.collect(streaming=True)
         else:
             data['feature_data'] = pd.DataFrame()
-
 
     return data

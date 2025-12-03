@@ -77,7 +77,32 @@ def parseDeconv(
         .drop(["Level", "RowID"])
     )
     file_manager.store_data(dataset_id, 'feature_dfs', features)
-    
+
+    # Create aggregated feature table for display
+    # Group by FeatureIndex and compute summary statistics
+    feature_table = (
+        features
+        .filter(pl.col('FeatureIndex').is_not_null() & (pl.col('FeatureIndex') >= 0))
+        .group_by('FeatureIndex')
+        .agg([
+            pl.col('MonoisotopicMass').mean().alias('MonoMass'),
+            pl.col('SumIntensity').sum().alias('TotalIntensity'),
+            pl.col('SumIntensity').max().alias('ApexIntensity'),
+            pl.col('RetentionTime').min().alias('RTStart'),
+            pl.col('RetentionTime').max().alias('RTEnd'),
+            pl.len().alias('NumScans'),
+            # Get the scan index at apex (max intensity)
+            pl.col('ScanIndex').sort_by('SumIntensity', descending=True).first().alias('ApexScanIndex'),
+            # Get the mass index at apex
+            pl.col('MassIndex').sort_by('SumIntensity', descending=True).first().alias('ApexMassIndex'),
+        ])
+        .with_columns([
+            (pl.col('RTEnd') - pl.col('RTStart')).alias('RTDuration'),
+        ])
+        .sort('FeatureIndex')
+    )
+    file_manager.store_data(dataset_id, 'feature_table', feature_table)
+
     # Immediately reload as polars LazyFrames for efficient processing
     results = file_manager.get_results(dataset_id, ['anno_dfs', 'deconv_dfs'], use_polars=True)
     pl_anno = results['anno_dfs']

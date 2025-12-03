@@ -183,6 +183,10 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data = file_manager.get_results(selected_data,  ['tic'])
         data_to_send['tic'] = data['tic']
         component_arguments = Chromatogram()
+    elif comp_name == 'feature_table':
+        data = file_manager.get_results(selected_data,  ['feature_table'])
+        data_to_send['feature_table'] = data['feature_table']
+        component_arguments = Tabulator('FeatureTable')
 
     components = [[FlashViewerComponent(component_arguments)]]
 
