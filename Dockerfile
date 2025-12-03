@@ -79,7 +79,6 @@ SHELL ["/bin/bash", "--rcfile", "~/.bashrc"]
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
 
 # Install up-to-date cmake via mamba and packages for pyOpenMS build.
-RUN mamba install 'pip<25'
 RUN mamba install cmake
 RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython<3.1' 'autowrap<0.23' pandas 'numpy==1.26.4' pytest
 
