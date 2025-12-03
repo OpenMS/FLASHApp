@@ -10,7 +10,7 @@ params = page_setup()
 # Setup cache access
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+    Path(st.session_state['workspace'], 'cache')
 )
 
 def set_sequence(input_sequence, fixed_mod_cysteine=None, fixed_mod_methionine=None):

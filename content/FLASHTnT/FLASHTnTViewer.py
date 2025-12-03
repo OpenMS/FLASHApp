@@ -16,12 +16,13 @@ DEFAULT_LAYOUT = [
 
 
 def select_experiment():
-    st.session_state.selected_experiment0_tagger = st.session_state.selected_experiment_dropdown_tagger
+    # Map display name back to experiment ID
+    st.session_state.selected_experiment0_tagger = display_name_to_id[st.session_state.selected_experiment_dropdown_tagger]
     if len(layout) > 1:
         for exp_index in range(1, len(layout)):
             if st.session_state[f'selected_experiment_dropdown_{exp_index}_tagger'] is None:
                 continue
-            st.session_state[f"selected_experiment{exp_index}_tagger"] = st.session_state[f'selected_experiment_dropdown_{exp_index}_tagger']
+            st.session_state[f"selected_experiment{exp_index}_tagger"] = display_name_to_id[st.session_state[f'selected_experiment_dropdown_{exp_index}_tagger']]
 
 def validate_selected_index(file_manager, selected_experiment):
     results = file_manager.get_results_list(
@@ -29,7 +30,10 @@ def validate_selected_index(file_manager, selected_experiment):
     )
     if selected_experiment in st.session_state:
         if st.session_state[selected_experiment] in results:
-            return name_to_index[st.session_state[selected_experiment]]
+            # Map experiment ID to display name for the dropdown index
+            exp_id = st.session_state[selected_experiment]
+            display_name = file_manager.get_display_name(exp_id)
+            return display_name_to_index[display_name]
         else:
             del st.session_state[selected_experiment]
     return None
@@ -40,10 +44,10 @@ params = page_setup("TaggerViewer")
 # Get available results
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashtnt', 'cache')
+    Path(st.session_state['workspace'], 'cache')
 )
 results = file_manager.get_results_list(
-    ['deconv_dfs', 'anno_dfs', 'tag_dfs', 'protein_dfs']
+    ['internal_fragment_data']
 )
 
 if file_manager.result_exists('layout', 'layout'):
@@ -60,15 +64,19 @@ if len(results) == 0:
     st.error('No results to show yet. Please run a workflow first!')
     st.stop()
 
-# Map names to index
+# Create display names and mappings
+display_names = [file_manager.get_display_name(exp_id) for exp_id in results]
+display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id in results}
+display_name_to_index = {n : i for i, n in enumerate(display_names)}
+# Keep backward compatibility mapping for experiment IDs
 name_to_index = {n : i for i, n in enumerate(results)}
 
 if len(layout) == 2 and side_by_side:
     c1, c2 = st.columns(2)
     with c1:
         st.selectbox(
-            "choose experiment", results, 
-            key="selected_experiment_dropdown_tagger", 
+            "choose experiment", display_names,
+            key="selected_experiment_dropdown_tagger",
             index=validate_selected_index(file_manager, 'selected_experiment0_tagger'),
             on_change=select_experiment
         )
@@ -76,7 +84,7 @@ if len(layout) == 2 and side_by_side:
             render_grid(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'flashtnt', 'selected_experiment0_tagger')
     with c2:
         st.selectbox(
-            "choose experiment", results, 
+            "choose experiment", display_names,
             key=f'selected_experiment_dropdown_1_tagger',
             index=validate_selected_index(file_manager, 'selected_experiment1_tagger'),
             on_change=select_experiment
@@ -88,8 +96,8 @@ if len(layout) == 2 and side_by_side:
 else:
     ### for only single experiment on one view
     st.selectbox(
-        "choose experiment", results, 
-        key="selected_experiment_dropdown_tagger", 
+        "choose experiment", display_names,
+        key="selected_experiment_dropdown_tagger",
         index=validate_selected_index(file_manager, 'selected_experiment0_tagger'),
         on_change=select_experiment
     )
@@ -106,7 +114,7 @@ else:
             st.divider() # horizontal line
 
             st.selectbox(
-                "choose experiment", results, 
+                "choose experiment", display_names,
                 key=f'selected_experiment_dropdown_{exp_index}_tagger',
                 index=validate_selected_index(file_manager, f'selected_experiment{exp_index}_tagger'),
                 on_change=select_experiment

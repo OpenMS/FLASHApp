@@ -63,13 +63,13 @@ class StreamlitUI:
         # create the files dir
         files_dir.mkdir(exist_ok=True, parents=True)
 
-        if fallback is not None:
-            # check if only fallback files are in files_dir, if yes, reset the directory before adding new files
-            if [Path(f).name for f in Path(files_dir).iterdir()] == [
-                Path(f).name for f in fallback
-            ]:
-                shutil.rmtree(files_dir)
-                files_dir.mkdir()
+        # if fallback is not None:
+        #     # check if only fallback files are in files_dir, if yes, reset the directory before adding new files
+        #     if [Path(f).name for f in Path(files_dir).iterdir()] == [
+        #         Path(f).name for f in fallback
+        #     ]:
+        #         shutil.rmtree(files_dir)
+        #         files_dir.mkdir()
 
         if not name:
             name = key.replace("-", " ")

@@ -15,22 +15,27 @@ from src.workflow.WorkflowManager import WorkflowManager
 
 DEFAULT_THREADS = 8
 
+EXAMPLE_DATA = [
+    'example-data/deconv/example_lc_ms.mzML',
+    'example-data/tnt/example_native_aqpz.mzML',
+    'example-data/tnt/example_native_antibody.mzML',
+]
+
 class TagWorkflow(WorkflowManager):
 
     def __init__(self) -> None:
         # Initialize the parent class with the workflow name.
-        super().__init__("FLASHTnT", st.session_state["workspace"])
+        super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
         self.tool_name = 'FLASHTaggerViewer'
 
 
     def upload(self)-> None:
         t = st.tabs(["MS data", "Database"])
         with t[0]:
-            example_data = [f'example-data/flashtagger/example_spectrum_{n}.mzML' for n in ['aqpz', 'antibody']]
-            self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML", fallback=example_data)
+            self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML", fallback=EXAMPLE_DATA)
         with t[1]:
             self.ui.upload_widget(key="fasta-file", name="Database", file_types="fasta",
-                                  fallback='example-data/flashtagger/example_database.fasta')
+                                  fallback='example-data/tnt/example_database.fasta')
 
 
     @st.fragment
@@ -273,13 +278,13 @@ class DeconvWorkflow(WorkflowManager):
 
     def __init__(self) -> None:
         # Initialize the parent class with the workflow name.
-        super().__init__("FLASHDeconv", st.session_state["workspace"])
+        super().__init__("FLASHDeconv", st.session_state["workspace"], share_cache=True)
         self.tool_name = 'FLASHDeconvViewer'
 
 
     def upload(self)-> None:
         self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML",
-                              fallback=['example-data/flashdeconv/example_fd.mzML'])
+                              fallback=EXAMPLE_DATA)
 
 
     def configure(self) -> None:

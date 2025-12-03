@@ -10,18 +10,22 @@ DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                   ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
 
 def select_experiment():
-    st.session_state.selected_experiment0 = st.session_state.selected_experiment_dropdown
+    # Map display name back to experiment ID
+    st.session_state.selected_experiment0 = display_name_to_id[st.session_state.selected_experiment_dropdown]
     if len(layout) > 1:
         for exp_index in range(1, len(layout)):
             if st.session_state[f'selected_experiment_dropdown_{exp_index}'] is None:
                 continue
-            st.session_state[f"selected_experiment{exp_index}"] = st.session_state[f'selected_experiment_dropdown_{exp_index}']
+            st.session_state[f"selected_experiment{exp_index}"] = display_name_to_id[st.session_state[f'selected_experiment_dropdown_{exp_index}']]
 
 def validate_selected_index(file_manager, selected_experiment):
     results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
     if selected_experiment in st.session_state:
         if st.session_state[selected_experiment] in results:
-            return name_to_index[st.session_state[selected_experiment]]
+            # Map experiment ID to display name for the dropdown index
+            exp_id = st.session_state[selected_experiment]
+            display_name = file_manager.get_display_name(exp_id)
+            return display_name_to_index[display_name]
         else:
             del st.session_state[selected_experiment]
     return None
@@ -32,7 +36,7 @@ params = page_setup()
 # Get available results
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+    Path(st.session_state['workspace'], 'cache')
 )
 
 def get_sequence():
@@ -47,7 +51,7 @@ def get_sequence():
 if get_sequence() is not None:
     DEFAULT_LAYOUT = DEFAULT_LAYOUT + [['sequence_view']]
 
-results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
+results = file_manager.get_results_list(['threedim_SN_plot'])
 
 if file_manager.result_exists('layout', 'layout'):
     layout = file_manager.get_results('layout', 'layout')['layout']
@@ -63,15 +67,19 @@ if len(results) == 0:
     st.error('No results to show yet. Please run a workflow first!')
     st.stop()
 
-# Map names to index
+# Create display names and mappings
+display_names = [file_manager.get_display_name(exp_id) for exp_id in results]
+display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id in results}
+display_name_to_index = {n : i for i, n in enumerate(display_names)}
+# Keep backward compatibility mapping for experiment IDs
 name_to_index = {n : i for i, n in enumerate(results)}
 
 if len(layout) == 2 and side_by_side:
     c1, c2 = st.columns(2)
     with c1:
         st.selectbox(
-            "choose experiment", results, 
-            key="selected_experiment_dropdown", 
+            "choose experiment", display_names,
+            key="selected_experiment_dropdown",
             index=validate_selected_index(file_manager, 'selected_experiment0'),
             on_change=select_experiment
         )
@@ -82,7 +90,7 @@ if len(layout) == 2 and side_by_side:
             )
     with c2:
         st.selectbox(
-            "choose experiment", results, 
+            "choose experiment", display_names,
             key=f'selected_experiment_dropdown_1',
             index=validate_selected_index(file_manager, 'selected_experiment1'),
             on_change=select_experiment
@@ -98,8 +106,8 @@ if len(layout) == 2 and side_by_side:
 else:
     ### for only single experiment on one view
     st.selectbox(
-        "choose experiment", results, 
-        key="selected_experiment_dropdown", 
+        "choose experiment", display_names,
+        key="selected_experiment_dropdown",
         index=validate_selected_index(file_manager, 'selected_experiment0'),
         on_change=select_experiment
     )
@@ -120,7 +128,7 @@ else:
             st.divider()  # horizontal line
 
             st.selectbox(
-                "choose experiment", results, 
+                "choose experiment", display_names,
                 key=f'selected_experiment_dropdown_{exp_index}',
                 index=validate_selected_index(file_manager, f'selected_experiment{exp_index}'),
                 on_change=select_experiment

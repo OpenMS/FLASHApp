@@ -1,94 +1,0 @@
-STARTING WORKFLOW
-
-Processing example_fd:
-
--> Creating decoy database with target:decoy ratio 1:10...
-
-Running command:
-DecoyDatabase -in ../workspaces-FLASHApp/default/flashtnt/input-files/fasta-file/uniprotkb_human_thioredoxin_AND_reviewe_2025_08_15.fasta -out ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/database.fasta -method shuffle -shuffle_decoy_ratio 10 -enzyme no cleavage
-Waiting for command to finish...
-
-Process finished:
-DecoyDatabase -in ../workspaces-FLASHApp/default/flashtnt/input-files/fasta-file/uniprotkb_human_thioredoxin_AND_reviewe_2025_08_15.fasta -out ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/database.fasta -method shuffle -shuffle_decoy_ratio 10 -enzyme no cleavage
-Total time to run command: 0.07 seconds
-
-Warning: Only one FASTA input file was provided, which might not contain contaminants. You probably want to have them! Just add the contaminant file to the input file list 'in'.
-DecoyDatabase took 0.04 s (wall), 0.04 s (CPU), 0.01 s (system), 0.03 s (user); Peak Memory Usage: 172 MB.
-
-
--> Running FLASHDeconv...
-
-Running command:
-FLASHDeconv -in ../workspaces-FLASHApp/default/flashtnt/input-files/mzML-files/example_fd.mzML -out ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/out.tsv -out_spec1 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec1.tsv -out_spec2 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec2.tsv -out_spec3 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec3.tsv -out_spec4 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec4.tsv -out_mzml ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/out_deconv.mzML -out_quant ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms2.feature -SD:tol 10 10 -SD:max_charge 30 -threads 14 -ini ../workspaces-FLASHApp/default/flashtnt/ini/FLASHDeconv.ini
-Waiting for command to finish...
-
-Process finished:
-FLASHDeconv -in ../workspaces-FLASHApp/default/flashtnt/input-files/mzML-files/example_fd.mzML -out ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/out.tsv -out_spec1 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec1.tsv -out_spec2 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec2.tsv -out_spec3 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec3.tsv -out_spec4 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/spec4.tsv -out_mzml ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/out_deconv.mzML -out_quant ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/quant.tsv -out_annotated_mzml ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/anno_annotated.mzML -out_msalign1 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms1.msalign -out_msalign2 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms2.msalign -out_feature1 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms1.feature -out_feature2 ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/toppic_ms2.feature -SD:tol 10 10 -SD:max_charge 30 -threads 14 -ini ../workspaces-FLASHApp/default/flashtnt/ini/FLASHDeconv.ini
-Total time to run command: 15.14 seconds
-
-Warning: Parameters file version (3.1.0-pre-FDdevelop-2025-05-02) does not match the version of this tool (3.1.0-pre-FVdeploy-2025-08-15).
-Your current parameters are still valid, but there might be new valid values or even new parameters. Upgrading the INI might be useful.
-Initializing ... 
-Progress of 'loading mzML':
-  Progress of 'loading spectra list':
-  -- done [took 0.14 s (CPU), 0.10 s (Wall)] -- 
-  Progress of 'loading chromatogram list':
-  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
--- done [took 0.14 s (CPU), 0.10 s (Wall) @ 147.3 MiB/s] -- 
-Processing : ../workspaces-FLASHApp/default/flashtnt/input-files/mzML-files/example_fd.mzML
-Filtering low peaks in spectra ... Done
-Calculating Averagines ... Done
-Progress of 'running FLASHDeconv':
-  0.95 %                 6.94 %                 11.36 %                 16.40 %                 19.87 %                 23.66 %                 27.13 %                 30.60 %                 35.96 %                 57.10 %                 83.28 %               -- done [took 29.66 s (CPU), 11.06 s (Wall)] -- 
-So far, FLASHDeconv found 11867 masses in 104 MS1 spectra out of 104
-So far, FLASHDeconv found 5647 masses in 213 MS2 spectra out of 213
-Mass tracer found 523 features
-FLASHDeconv run complete. Now writing the results in output files ...
-writing feature tsv ...
-writing spectrum tsv for MS level 1 ...
-writing spectrum tsv for MS level 2 ...
-317 spectra and 1 chromatograms stored.
-writing quantification tsv ...
-<317 spectra and 1 chromatograms stored.> occurred 2 times
-writing topfd *.feature for MS level 1 ...
-writing topfd *.feature for MS level 2 ...
-writing topfd *.msalign for MS level 1 ...
-writing topfd *.msalign for MS level 2 ...
-FLASHDeconv took 15.08 s (wall), 33.91 s (CPU), 1.90 s (system), 32.01 s (user); Peak Memory Usage: 172 MB.
-
-
--> Running FLASHTnT...
-
-Running command:
-FLASHTnT -in ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/out_deconv.mzML -fasta ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/database.fasta -out_tag ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/tags.tsv -out_pro ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/protein.tsv -out_prsm ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/prsms.tsv -ion_type b y -tag:min_length 4 -pro_fdr 0.01 -prsm_fdr 0.01 -threads 14 -ini ../workspaces-FLASHApp/default/flashtnt/ini/FLASHTnT.ini
-Waiting for command to finish...
-
-Process finished:
-FLASHTnT -in ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/out_deconv.mzML -fasta ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/database.fasta -out_tag ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/tags.tsv -out_pro ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/protein.tsv -out_prsm ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/prsms.tsv -ion_type b y -tag:min_length 4 -pro_fdr 0.01 -prsm_fdr 0.01 -threads 14 -ini ../workspaces-FLASHApp/default/flashtnt/ini/FLASHTnT.ini
-Total time to run command: 6.11 seconds
-
-Warning: Parameters file version (3.1.0-pre-FDdevelop-2025-05-02) does not match the version of this tool (3.1.0-pre-FVdeploy-2025-08-15).
-Your current parameters are still valid, but there might be new valid values or even new parameters. Upgrading the INI might be useful.
-Initializing ... 
-Progress of 'loading mzML':
-  Progress of 'loading spectra list':
-  -- done [took 0.09 s (CPU), 0.09 s (Wall)] -- 
-  Progress of 'loading chromatogram list':
-  -- done [took 0.00 s (CPU), 0.00 s (Wall)] -- 
--- done [took 0.09 s (CPU), 0.09 s (Wall) @ 25.43 MiB/s] -- 
-Finding sequence tags from deconvolved spectra ...
-Processing : ../workspaces-FLASHApp/default/FLASHTaggerOutput/example_fd_20250823-151911/out_deconv.mzML
-Progress of 'Finding sequence tags ...':
-  18.93 %               -- done [took 0.26 s (CPU), 0.27 s (Wall)] -- 
-Progress of 'Searching tags against database ...':
--- done [took 0.14 s (CPU), 0.15 s (Wall)] -- 
-Progress of 'Running candidate protein filtration and extension algorithm ...':
-  6.67 %                 14.67 %                 45.00 %                 87.33 %                 91.33 %               -- done [took 23.24 s (CPU), 4.99 s (Wall)] -- 
-FLASHTnT run complete. Now writing the results in output files ...
-FLASHTnT took 5.99 s (wall), 24.20 s (CPU), 13.68 s (system), 10.52 s (user); Peak Memory Usage: 1555 MB.
-
-
--> Processing Results...
-
-WORKFLOW FINISHED
-
