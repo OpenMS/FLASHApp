@@ -6,7 +6,7 @@ import streamlit.components.v1 as st_components
 
 # Create a _RELEASE constant. We'll set this to False while we're developing
 # the component, and True when we're ready to package and distribute it.
-_RELEASE = True
+_RELEASE = False
 
 
 _component_func = None
@@ -59,6 +59,9 @@ class Tabulator:
         elif table_type == 'TagTable':
             self.title = 'Tag Table'
             self.componentName = "TabulatorTagTable"
+        elif table_type == 'FeatureTable':
+            self.title = 'Feature Table'
+            self.componentName = "TabulatorFeatureTable"
 
 
 class PlotlyLineplot:
@@ -99,3 +102,9 @@ class FLASHQuant:
     def __init__(self):
         self.title = 'QuantVis'
         self.componentName = 'FLASHQuantView'
+
+
+class Chromatogram:
+    def __init__(self):
+        self.title = 'TIC'
+        self.componentName = 'TICChromatogram'

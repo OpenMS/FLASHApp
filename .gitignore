@@ -29,3 +29,4 @@ run_app.bat
 python*
 gdpr_consent/node_modules/
 *~
+CLAUDE.md

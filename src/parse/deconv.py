@@ -8,7 +8,7 @@ from scipy.stats import gaussian_kde
 
 def parseDeconv(
         file_manager, dataset_id, out_deconv_mzML, anno_annotated_mzML, 
-        spec1_tsv=None, spec2_tsv=None, logger=None
+        spec1_tsv, spec2_tsv=None, logger=None
 ):
     logger.log("Progress of 'processing FLASHDeconv results':", level=2)
     logger.log("0.0 %", level=2)
@@ -21,7 +21,88 @@ def parseDeconv(
     file_manager.store_data(dataset_id, 'deconv_dfs', deconv_df)
     del deconv_df
     del anno_df
+
+    spec1_df = pd.read_csv(
+        spec1_tsv, sep='\t', usecols=[
+            'FeatureIndex', 'MonoisotopicMass', 'SumIntensity', 'RetentionTime', 
+            'ScanNum'
+        ]
+    )
+    spec1_df.loc[:,'Level'] = 1
+    file_manager.store_data(dataset_id, 'spec1_df', spec1_df)
+    spec2_df = pd.read_csv(
+        spec2_tsv, sep='\t', usecols=[
+            'FeatureIndex', 'MonoisotopicMass', 'SumIntensity', 'RetentionTime', 
+            'ScanNum'
+        ]
+    )
+    spec2_df.loc[:,'Level'] = 2
+    file_manager.store_data(dataset_id, 'spec2_df', spec2_df)
+    del spec1_df
+    del spec2_df
     
+    features = file_manager.get_results(
+        dataset_id, ['spec1_df', 'spec2_df'], use_polars=True
+    )
+    # Build the base once
+    base = pl.concat([features["spec1_df"], features["spec2_df"]])
+
+    # Sort first so indices reflect first appearance order in the data
+    sorted_base = base.sort("RetentionTime")
+
+    # Create a ScanNum -> ScanIndex mapping in order of first occurrence
+    scan_index_map = (
+        sorted_base
+        .select("ScanNum")
+        .unique(maintain_order=True)
+        .with_row_count("ScanIndex")
+    )
+
+    # Build dataframe
+    features = (
+        sorted_base
+        # needed for MassIndex; global index after sort
+        .with_row_count("RowID")  
+        .with_columns(
+            # per-ScanNum 0-based MassIndex using RowID
+            (pl.col("RowID") - pl.col("RowID").min().over("ScanNum")).alias("MassIndex"),
+            # Retention time in seconds to comply with other datastructures
+            (pl.col("RetentionTime") * 60).alias("RetentionTime"),
+        )
+        # Attach scan index
+        .join(scan_index_map, on="ScanNum", how="left")
+        # For now we only consider features at ms1 level
+        .filter(pl.col("Level") == 1)
+        # Drop helper columns
+        .drop(["Level", "RowID"])
+    )
+    file_manager.store_data(dataset_id, 'feature_dfs', features)
+
+    # Create aggregated feature table for display
+    # Group by FeatureIndex and compute summary statistics
+    feature_table = (
+        features
+        .filter(pl.col('FeatureIndex').is_not_null() & (pl.col('FeatureIndex') >= 0))
+        .group_by('FeatureIndex')
+        .agg([
+            pl.col('MonoisotopicMass').mean().alias('MonoMass'),
+            pl.col('SumIntensity').sum().alias('TotalIntensity'),
+            pl.col('SumIntensity').max().alias('ApexIntensity'),
+            pl.col('RetentionTime').min().alias('RTStart'),
+            pl.col('RetentionTime').max().alias('RTEnd'),
+            pl.len().alias('NumScans'),
+            # Get the scan index at apex (max intensity)
+            pl.col('ScanIndex').sort_by('SumIntensity', descending=True).first().alias('ApexScanIndex'),
+            # Get the mass index at apex
+            pl.col('MassIndex').sort_by('SumIntensity', descending=True).first().alias('ApexMassIndex'),
+        ])
+        .with_columns([
+            (pl.col('RTEnd') - pl.col('RTStart')).alias('RTDuration'),
+        ])
+        .sort('FeatureIndex')
+    )
+    file_manager.store_data(dataset_id, 'feature_table', feature_table)
+
     # Immediately reload as polars LazyFrames for efficient processing
     results = file_manager.get_results(dataset_id, ['anno_dfs', 'deconv_dfs'], use_polars=True)
     pl_anno = results['anno_dfs']
@@ -45,7 +126,7 @@ def parseDeconv(
             )
 
             # Collect here as this is the data we are operating on
-            relevant_heatmap_lazy = relevant_heatmap_lazy.collect().lazy()
+            relevant_heatmap_lazy = relevant_heatmap_lazy.collect(streaming=True).lazy()
 
             # Get count for compression level calculation
             heatmap_count = relevant_heatmap_lazy.select(pl.len()).collect().item()
@@ -69,6 +150,32 @@ def parseDeconv(
                     dataset_id, f'ms{ms_level}_{descriptor}_heatmap_{size}',
                     current_heatmap_lazy
                 )
+
+    # Create TIC table
+    ms1_heatmap = file_manager.get_results(
+            dataset_id,  ['ms1_raw_heatmap'], use_polars=True
+    )['ms1_raw_heatmap']
+    ms1_heatmap = ms1_heatmap.with_columns(pl.lit(1).alias('level'))
+    ms1_heatmap = ms1_heatmap.drop(['mass', 'mass_idx'])
+    ms2_heatmap = file_manager.get_results(
+            dataset_id,  ['ms2_raw_heatmap'], use_polars=True
+    )['ms2_raw_heatmap']
+    ms2_heatmap = ms2_heatmap.with_columns(pl.lit(2).alias('level'))
+    ms2_heatmap = ms2_heatmap.drop(['mass', 'mass_idx'])
+    tic_data = pl.concat([ms1_heatmap, ms2_heatmap], how='vertical')
+    tic_data = (
+        tic_data.group_by('scan_idx')
+            .agg([
+                pl.col('rt').first().alias('rt'),
+                pl.col('level').first().alias('level'),
+                pl.col('intensity').sum().alias('tic'),
+            ])
+    )
+    tic_data = tic_data.sort("scan_idx", descending=False)
+    file_manager.store_data(dataset_id, 'tic', tic_data)
+
+
+
     
     logger.log("20.0 %", level=2)
         
@@ -126,8 +233,66 @@ def parseDeconv(
             pl.col('snr').alias('SNR'),
             pl.col('qscore').alias('QScore')
         ])
+    )
+    
+    # Add FeatureIndex arrays to mass_table
+    features = file_manager.get_results(dataset_id, ['feature_dfs'], use_polars=True)['feature_dfs']
+    
+    # Handle NaN FeatureIndex values by replacing with -1
+    features = features.with_columns([
+        pl.when(pl.col('FeatureIndex').is_null())
+          .then(pl.lit(-1))
+          .otherwise(pl.col('FeatureIndex'))
+          .alias('FeatureIndex')
+    ])
+    
+    # Group by ScanNum and create arrays of FeatureIndex ordered by MassIndex
+    feature_arrays = (
+        features
+        .sort(['ScanIndex', 'MassIndex'])
+        .group_by('ScanIndex')
+        .agg([
+            pl.col('FeatureIndex').alias('FeatureIndices')
+        ])
+    )
+    
+    # Get scan info with MSLevel and number of masses for creating -1 arrays
+    scan_info = (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('Scan'),
+            pl.col('MSLevel'),
+            pl.col('mzarray').list.len().alias('num_masses')
+        ])
+    )
+    
+    # Join feature arrays with scan info and create FeatureIndex column
+    scans_with_features = (
+        scan_info
+        .join(feature_arrays, left_on='index', right_on='ScanIndex', how='left')
+        .with_columns([
+            # For MS2 scans create array of -1s
+            pl.when(pl.col('MSLevel') == 2)
+              .then(
+                  pl.col('num_masses').map_elements(
+                      lambda n: [-1] * n,
+                      return_dtype=pl.List(pl.Int64)
+                  )
+              )
+              .otherwise(pl.col('FeatureIndices'))
+              .alias('FeatureIndex')
+        ])
+        .select(['index', 'FeatureIndex'])
+    )
+    
+    # Add FeatureIndex to mass_table
+    mass_table_lazy = (
+        mass_table_lazy
+        .join(scans_with_features, on='index', how='left')
         .sort("index")
     )
+    
     file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy)
 
     logger.log("50.0 %", level=2)

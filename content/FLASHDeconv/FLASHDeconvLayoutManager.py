@@ -15,8 +15,10 @@ COMPONENT_OPTIONS=[
     'Deconvolved spectrum (Scan table needed)',
     'Raw spectrum (Scan table needed)',
     'Mass table (Scan table needed)',
+    'Feature table',
     '3D S/N plot (Mass table needed)',
-    'Score Distribution Plot'
+    'Score Distribution Plot',
+    'TIC Chromatogram',
     # "Sequence view" and "Internal fragment map" is added when "input_sequence" is submitted
 ]
 
@@ -29,8 +31,10 @@ COMPONENT_NAMES=[
     'deconv_spectrum',
     'anno_spectrum',
     'mass_table',
+    'feature_table',
     '3D_SN_plot',
     'fdr_plot',
+    'tic_chromatogram',
     # "sequence view" and "internal fragment map" added when "input_sequence" is submitted
 ]
 

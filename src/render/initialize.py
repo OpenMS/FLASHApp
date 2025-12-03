@@ -3,7 +3,7 @@ import polars as pl
 from src.render.components import (
     PlotlyHeatmap, PlotlyLineplot, PlotlyLineplotTagger, Plotly3Dplot, 
     Tabulator, SequenceView, InternalFragmentMap, FlashViewerComponent, 
-    FDRPlotly, FLASHQuant
+    FDRPlotly, FLASHQuant, Chromatogram
 )
 from src.render.compression import compute_compression_levels
 
@@ -33,6 +33,13 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data_to_send['deconv_heatmap_df'] = cached_compression_levels[0]
 
         additional_data['deconv_heatmap_df'] = cached_compression_levels
+
+        # Get feature annotations
+        feature_data = file_manager.get_results(
+            selected_data,  ['feature_dfs'], use_polars=True
+        )['feature_dfs']
+        data_to_send['feature_data'] = feature_data
+
         component_arguments = PlotlyHeatmap(title="Deconvolved MS1 Heatmap")
     elif comp_name == 'ms2_deconv_heat_map':
 
@@ -172,6 +179,31 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data = file_manager.get_results(selected_data,  ['quant_dfs'])
         data_to_send['quant_data'] = data['quant_dfs']
         component_arguments = FLASHQuant()
+    elif comp_name == 'tic_chromatogram':
+        data = file_manager.get_results(selected_data,  ['tic', 'feature_table', 'feature_dfs'])
+        data_to_send['tic'] = data['tic']
+        data_to_send['feature_table'] = data.get('feature_table')
+        # feature_dfs contains per-scan intensity data for each feature
+        feature_dfs = data.get('feature_dfs')
+        if feature_dfs is not None:
+            # Convert DataFrame to list of dicts for JSON serialization
+            if hasattr(feature_dfs, 'collect'):
+                # It's a Polars LazyFrame
+                df = feature_dfs.collect()
+            elif hasattr(feature_dfs, 'to_dicts'):
+                # It's a Polars DataFrame
+                df = feature_dfs
+            else:
+                # It's a pandas DataFrame - convert to polars for consistent handling
+                df = pl.from_pandas(feature_dfs)
+            # Select only needed columns and drop nulls to ensure clean JSON
+            df = df.select(['FeatureIndex', 'RetentionTime', 'SumIntensity']).drop_nulls()
+            data_to_send['feature_dfs'] = df.to_dicts()
+        component_arguments = Chromatogram()
+    elif comp_name == 'feature_table':
+        data = file_manager.get_results(selected_data,  ['feature_table'])
+        data_to_send['feature_table'] = data['feature_table']
+        component_arguments = Tabulator('FeatureTable')
 
     components = [[FlashViewerComponent(component_arguments)]]
 
