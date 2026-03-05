@@ -53,7 +53,7 @@ RUN apt-get install -y --no-install-recommends --no-install-suggests libboost-da
                                                                      libboost-regex1.74-dev \
                                                                      libboost-math1.74-dev \
                                                                      libboost-random1.74-dev
-RUN apt-get install -y --no-install-recommends --no-install-suggests qtbase5-dev libqt5svg5-dev libqt5opengl5-dev
+RUN apt-get install -y --no-install-recommends --no-install-suggests qt6-base-dev libqt6svg6-dev libqt6opengl6-dev libqt6openglwidgets6 libgl-dev
 
 # Install Github CLI
 RUN (type -p wget >/dev/null || (apt-get update && apt-get install wget -y)) \
@@ -80,7 +80,7 @@ SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
 
 # Install up-to-date cmake via mamba and packages for pyOpenMS build.
 RUN mamba install cmake
-RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython<3.1' 'autowrap<0.23' pandas 'numpy==1.26.4' pytest
+RUN pip install --upgrade pip && python -m pip install -U setuptools nose cython "autowrap<=0.24" pandas numpy pytest
 
 # Clone OpenMS branch and the associcated contrib+thirdparties+pyOpenMS-doc submodules.
 RUN git clone --recursive --depth=1 -b ${OPENMS_BRANCH} --single-branch ${OPENMS_REPO} && cd /OpenMS
@@ -90,7 +90,7 @@ WORKDIR /OpenMS
 RUN mkdir /thirdparty && \
     git submodule update --init THIRDPARTY && \
     cp -r THIRDPARTY/All/* /thirdparty && \
-    cp -r THIRDPARTY/Linux/64bit/* /thirdparty && \
+    cp -r THIRDPARTY/Linux/x86_64/* /thirdparty && \
     chmod -R +x /thirdparty
 ENV PATH="/thirdparty/LuciPHOr2:/thirdparty/MSGFPlus:/thirdparty/Sirius:/thirdparty/ThermoRawFileParser:/thirdparty/Comet:/thirdparty/Fido:/thirdparty/MaRaCluster:/thirdparty/MyriMatch:/thirdparty/OMSSA:/thirdparty/Percolator:/thirdparty/SpectraST:/thirdparty/XTandem:/thirdparty/crux:${PATH}"
 
@@ -116,7 +116,7 @@ RUN pip install dist/*.whl
 
 # Install other dependencies (excluding pyopenms)
 COPY requirements.txt ./requirements.txt 
-RUN grep -v '^pyopenms' requirements.txt > requirements_cleaned.txt && mv requirements_cleaned.txt requirements.txt
+RUN grep -Ev '^pyopenms([=<>!~].*)?$' requirements.txt > requirements_cleaned.txt && mv requirements_cleaned.txt requirements.txt
 RUN pip install -r requirements.txt
 
 WORKDIR /
