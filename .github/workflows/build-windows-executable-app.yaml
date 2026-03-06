@@ -11,7 +11,7 @@ on:
 # Define needed TOPP tools here
 env:
   TOPP_TOOLS: "FLASHDeconv FLASHTnT DecoyDatabase"
-  OPENMS_VERSION: 3.2.0 
+  OPENMS_VERSION: 3.5.0
   PYTHON_VERSION: 3.11.0
   # Name of the installer
   APP_NAME: FLASHApp-0.9.15
@@ -61,14 +61,10 @@ jobs:
         path: 'OpenMS'
     
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4
       with:
-        version: '5.15.2' # 5.12.7 is broken https://bugreports.qt.io/browse/QTBUG-81715, > 5.15.2 is not available on official archives (https://github.com/miurahr/aqtinstall/issues/636)
-        host: 'windows' # default: win64_msvc2017_64
-        target: 'desktop'
-        install-deps: 'true'
-        cache: 'false'
-        aqtversion: '==3.1.*'
+        version: '6.8.3'
+        arch: 'win64_msvc2022_64'
 
     # https://github.com/marketplace/actions/visual-studio-shell
     - name: Set up Visual Studio shell
@@ -137,7 +133,7 @@ jobs:
           # add third-party binaries to PATH
           # use flat THIRDPARTY structure
           mkdir -p _thirdparty
-          cp -R OpenMS/THIRDPARTY/Windows/64bit/* _thirdparty/
+          cp -R OpenMS/THIRDPARTY/Windows/x86_64/* _thirdparty/
           cp -R OpenMS/THIRDPARTY/All/* _thirdparty/
           # add third-party binaries to PATH
           for thirdpartytool in ${{ github.workspace }}/_thirdparty/*
