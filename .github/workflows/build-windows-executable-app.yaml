@@ -153,7 +153,6 @@ jobs:
       shell: bash
       run: |
           mkdir $GITHUB_WORKSPACE/OpenMS/bld/
-          bash OpenMS/tools/ci/capture-env.sh -v $GITHUB_WORKSPACE/OpenMS/bld/CMakeCache.txt
           ctest --output-on-failure -V -S $GITHUB_WORKSPACE/OpenMS/tools/ci/cibuild.cmake
       env:
           OPENMS_CONTRIB_LIBS: "${{ github.workspace }}/OpenMS/contrib"
