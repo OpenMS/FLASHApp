@@ -36,7 +36,7 @@ class FileManager:
     def __init__(
         self,
         workflow_dir: Path,
-        cache_path: Path,
+        cache_path: Path = None,
     ):
         """
         Initializes the FileManager object with a the current workflow results directory.
@@ -44,7 +44,7 @@ class FileManager:
         self.workflow_dir = workflow_dir
 
         # Setup Caching
-        self.cache_path = cache_path
+        self.cache_path = cache_path if cache_path is not None else Path(workflow_dir, "cache")
         Path(self.cache_path, 'files').mkdir(parents=True, exist_ok=True)
         self._connect_to_sql()
         
