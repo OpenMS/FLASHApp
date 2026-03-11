@@ -188,7 +188,7 @@ def parseFLASHTaggerOutput(tags, proteins):
 
 
 def getSpectraTableDF(deconv_df: pd.DataFrame):
-    out_df = deconv_df[['Scan', 'MSLevel', 'RT', 'PrecursorMass']].copy()
+    out_df = deconv_df[['Scan', 'MSLevel', 'rt', 'PrecursorMass']].copy()
     out_df['#Masses'] = [len(ele) for ele in deconv_df['MinCharges']]
     out_df.reset_index(inplace=True)
     return out_df
@@ -204,16 +204,16 @@ def getMSSignalDF(anno_df: pd.DataFrame):
         pl_df
         .with_columns([
             # Convert numpy arrays to polars lists
-            pl.col("mzarray").map_elements(lambda x: x.tolist() if hasattr(x, 'tolist') else list(x), return_dtype=pl.List(pl.Float32)),
-            pl.col("intarray").map_elements(lambda x: x.tolist() if hasattr(x, 'tolist') else list(x), return_dtype=pl.List(pl.Float32))
+            pl.col("mz_array").map_elements(lambda x: x.tolist() if hasattr(x, 'tolist') else list(x), return_dtype=pl.List(pl.Float32)),
+            pl.col("intensity_array").map_elements(lambda x: x.tolist() if hasattr(x, 'tolist') else list(x), return_dtype=pl.List(pl.Float32))
         ])
         .with_row_index("original_idx")
         .select([
             pl.col("scan_idx"),
             pl.col("MSLevel"),
-            pl.col("RT"),
-            pl.col("mzarray").alias("mass"),
-            pl.col("intarray").alias("intensity")
+            pl.col("rt"),
+            pl.col("mz_array").alias("mass"),
+            pl.col("intensity_array").alias("intensity")
         ])
         # Explode arrays to individual rows
         .explode(["mass", "intensity"])
@@ -231,7 +231,7 @@ def getMSSignalDF(anno_df: pd.DataFrame):
         # Select final columns in correct order
         .select([
             pl.col("mass"),
-            pl.col("RT").alias("rt"),
+            pl.col("rt"),
             pl.col("intensity"),
             pl.col("scan_idx"),
             pl.col("mass_idx"),
