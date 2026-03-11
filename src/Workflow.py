@@ -22,6 +22,7 @@ EXAMPLE_DATA = [
 ]
 
 class TagWorkflow(WorkflowManager):
+    share_cache = True
 
     def __init__(self) -> None:
         # Initialize the parent class with the workflow name.
@@ -275,6 +276,7 @@ class TagWorkflow(WorkflowManager):
 
 
 class DeconvWorkflow(WorkflowManager):
+    share_cache = True
 
     def __init__(self) -> None:
         # Initialize the parent class with the workflow name.
@@ -426,6 +428,7 @@ class DeconvWorkflow(WorkflowManager):
 
 
 class QuantWorkflow(WorkflowManager):
+    share_cache = False
 
     def __init__(self) -> None:
         # Initialize the parent class with the workflow name.

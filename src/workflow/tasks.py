@@ -69,7 +69,14 @@ def execute_workflow(
 
         # Initialize workflow components
         logger = Logger(workflow_path)
-        file_manager = FileManager(workflow_path)
+
+        # Determine cache path based on workflow class configuration
+        share_cache = getattr(WorkflowClass, 'share_cache', False)
+        if share_cache:
+            cache_path = workflow_path.parent / 'cache'
+        else:
+            cache_path = workflow_path / 'cache'
+        file_manager = FileManager(workflow_path, cache_path)
         parameter_manager = ParameterManager(workflow_path)
         executor = CommandExecutor(workflow_path, logger, parameter_manager)
         executor.pid_dir.mkdir(parents=True, exist_ok=True)
