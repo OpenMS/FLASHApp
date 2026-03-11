@@ -79,7 +79,7 @@ SHELL ["/bin/bash", "--rcfile", "~/.bashrc"]
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
 
 # Install up-to-date cmake via mamba and packages for pyOpenMS build.
-RUN mamba install -y cmake libstdcxx-ng
+RUN mamba install -y cmake
 RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython>=3.1' 'autowrap==0.24' pandas 'numpy>=2.0' pytest
 
 # Clone OpenMS branch and the associcated contrib+thirdparties+pyOpenMS-doc submodules.
@@ -128,7 +128,7 @@ ENV PATH="/openms/bin/:${PATH}"
 
 # Copy TOPP tools bin directory, add to PATH.
 RUN cp -r openms-build/lib /openms/lib
-ENV LD_LIBRARY_PATH="/openms/lib/:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/openms/lib/:/root/miniforge3/envs/streamlit-env/lib:${LD_LIBRARY_PATH}"
 
 # Copy share folder, add to PATH, remove source directory.
 RUN cp -r OpenMS/share/OpenMS /openms/share
