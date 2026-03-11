@@ -83,7 +83,7 @@ def parseDeconv(
             pl.col('index'),
             pl.col('Scan'),
             pl.col('MSLevel'),
-            pl.col('rt'),
+            pl.col('rt').alias('RT'),
             pl.col('PrecursorMass'),
             pl.col('#Masses')
         ])
