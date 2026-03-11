@@ -59,12 +59,14 @@ jobs:
         repository: t0mdavid-m/OpenMS
         ref: FVdeploy
         path: 'OpenMS'
-    
-    - name: Install Qt
+
+    - name: Install Qt (Windows)
       uses: jurplel/install-qt-action@v4
       with:
-        version: '6.8.3'
+        version: '6.8.3'    ## Note this version is build with win64_msvc2022_64 and should always match what we use
         arch: 'win64_msvc2022_64'
+        cache: 'false'
+        archives: 'qtsvg qtimageformats qtbase'
 
     # https://github.com/marketplace/actions/visual-studio-shell
     - name: Set up Visual Studio shell
@@ -112,6 +114,12 @@ jobs:
         rm contrib_build-Windows.tar.gz
         ls
 
+    - name: Add contrib to PATH
+      shell: bash
+      run: |
+        # Add contrib library path for runtime DLL resolution
+        echo "${{ github.workspace }}/OpenMS/contrib/lib" >> $GITHUB_PATH
+
     - name: Setup ccache cache
       uses: actions/cache@v3
       with:
@@ -145,9 +153,9 @@ jobs:
       shell: bash
       run: |
           mkdir $GITHUB_WORKSPACE/OpenMS/bld/
+          bash OpenMS/tools/ci/capture-env.sh -v $GITHUB_WORKSPACE/OpenMS/bld/CMakeCache.txt
           ctest --output-on-failure -V -S $GITHUB_WORKSPACE/OpenMS/tools/ci/cibuild.cmake
       env:
-          #OS_PREFIX_PATH: "${{ env.Qt5_DIR }}/lib/cmake;${{ env.Qt5_DIR }}"
           OPENMS_CONTRIB_LIBS: "${{ github.workspace }}/OpenMS/contrib"
           CI_PROVIDER: "GitHub-Actions"
           CMAKE_GENERATOR: "Ninja"
@@ -157,6 +165,7 @@ jobs:
           ENABLE_TOPP_TESTING: "ON"
           ENABLE_CLASS_TESTING: "ON"
           WITH_GUI: "OFF"
+          WITH_PARQUET: "OFF"
           ADDRESS_SANITIZER: "Off"
           BUILD_TYPE: "Release"
           OPENMP: "On"
@@ -199,7 +208,7 @@ jobs:
   build-executable:
     runs-on: windows-2022
     needs: [build-openms, build-vue-js-component]
-    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -259,21 +268,16 @@ jobs:
         cp $PYTHON_DIR/DLLs/tcl86t.dll $EMBED_DIR/
         cp $PYTHON_DIR/DLLs/tk86t.dll $EMBED_DIR/
 
-    - name: Install pip
-      run: |
-        curl -O https://bootstrap.pypa.io/get-pip.py
-        ./python-${{ env.PYTHON_VERSION }}/python get-pip.py --no-warn-script-location
-        rm get-pip.py
-
     - name: Uncomment 'import site' in python311._pth file
       run: |
         sed -i 's/#import site/import site/' python-${{ env.PYTHON_VERSION }}/python311._pth
 
     - name: Install Required Packages
+      # Use system Python (which has pip and dev headers) to compile packages,
+      # installing into the embeddable Python's site-packages directory.
       run: |
-        .\python-${{ env.PYTHON_VERSION }}\python -m pip install --force-reinstall -r requirements.txt --no-warn-script-location
-        .\python-${{ env.PYTHON_VERSION }}\python -m pip uninstall polars --yes
-        .\python-${{ env.PYTHON_VERSION }}\python -m pip install 'polars-lts-cpu >= 1.0'
+        python -m pip install -r requirements.txt --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
+        python -m pip install 'polars-lts-cpu >= 1.0' --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
 
     - name: Set to offline deployment
       run: |
@@ -284,6 +288,15 @@ jobs:
     - name: Create .bat file
       run: |
         echo '@echo off' > ${{ env.APP_NAME }}.bat
+        echo 'setlocal EnableDelayedExpansion' > ${{ env.APP_NAME }}.bat
+        echo '' >> ${{ env.APP_NAME }}.bat
+        echo 'REM Set OpenMS data path for TOPP tools' >> ${{ env.APP_NAME }}.bat
+        echo 'set OPENMS_DATA_PATH=%~dp0share\OpenMS' >> ${{ env.APP_NAME }}.bat
+        echo '' >> ${{ env.APP_NAME }}.bat
+        echo 'REM Add each subfolder in share\OpenMS\THIRDPARTY to PATH' >> ${{ env.APP_NAME }}.bat
+        echo 'for /D %%D in ("%OPENMS_DATA_PATH%\THIRDPARTY\*") do (' >> ${{ env.APP_NAME }}.bat
+        echo '    set "PATH=!PATH!;%%D"' >> ${{ env.APP_NAME }}.bat
+        echo ')' >> ${{ env.APP_NAME }}.bat
         echo '' >> ${{ env.APP_NAME }}.bat
         echo 'REM Create .streamlit directory in user''s home if it doesn''t exist' >> ${{ env.APP_NAME }}.bat
         echo 'if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit"' >> ${{ env.APP_NAME }}.bat
@@ -375,7 +388,7 @@ jobs:
         <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
           <Product Id="*" Name="${{ env.APP_NAME }}" Language="1033" Version="1.0.0.0" Codepage="1252" Manufacturer="OpenMS Developer Team" UpgradeCode="${{ env.APP_UpgradeCode }}">
             <Package Id="*" InstallerVersion="300" Compressed="yes" InstallPrivileges="elevated" Platform="x64" />
-            <Media Id="1" Cabinet="streamlit.cab" EmbedCab="yes" />
+            <MediaTemplate EmbedCab="yes" MaximumUncompressedMediaSize="200" CabinetTemplate="data{0}.cab" />
         
             <!-- Folder structure -->
             <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />

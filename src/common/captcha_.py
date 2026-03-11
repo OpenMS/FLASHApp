@@ -208,12 +208,13 @@ def captcha_control():
         # Check if consent for tracking was given
         ga = st.session_state.settings['analytics']['google-analytics']['enabled']
         pp = st.session_state.settings['analytics']['piwik-pro']['enabled']
-        if (ga or pp) and (st.session_state.tracking_consent is None):
+        mt = st.session_state.settings['analytics']['matomo']['enabled']
+        if (ga or pp or mt) and (st.session_state.tracking_consent is None):
             consent_component = st_components.declare_component("gdpr_consent", path=Path("gdpr_consent"))
             with st.spinner():
                 # Ask for consent
                 st.session_state.tracking_consent = consent_component(
-                    google_analytics=ga, piwik_pro=pp
+                    google_analytics=ga, piwik_pro=pp, matomo=mt
                 )
                 if st.session_state.tracking_consent is None:
                     # No response by user yet
@@ -244,21 +245,25 @@ def captcha_control():
             st.image(data)
             c1, c2 = st.columns([70, 30])
             capta2_text = st.empty()
-            capta2_text = c1.text_input("Enter captcha text", max_chars=5)
+            capta2_text = c1.text_input("Enter captcha text", max_chars=5, key="captcha_input")
             c2.markdown("##")
             if c2.form_submit_button("Verify the code", type="primary"):
                 capta2_text = capta2_text.replace(" ", "")
                 # if the captcha is correct, the controllo session state is set to True
                 if st.session_state["Captcha"].lower() == capta2_text.lower().strip():
                     del st.session_state["Captcha"]
+                    if "captcha_input" in st.session_state:
+                        del st.session_state["captcha_input"]
                     col1.empty()
                     st.session_state["controllo"] = True
                     st.rerun()
                 else:
                     # if the captcha is wrong, the controllo session state is set to False and the captcha is regenerated
-                    st.error("🚨 Captch is wrong")
+                    st.error("🚨 CAPTCHA is wrong")
                     del st.session_state["Captcha"]
                     del st.session_state["controllo"]
+                    if "captcha_input" in st.session_state:
+                        del st.session_state["captcha_input"]
                     st.rerun()
             else:
                 # wait for the button click

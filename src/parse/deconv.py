@@ -83,7 +83,7 @@ def parseDeconv(
             pl.col('index'),
             pl.col('Scan'),
             pl.col('MSLevel'),
-            pl.col('RT'),
+            pl.col('rt').alias('RT'),
             pl.col('PrecursorMass'),
             pl.col('#Masses')
         ])
@@ -102,8 +102,8 @@ def parseDeconv(
         pl_anno_indexed
         .select([
             pl.col('index'),
-            pl.col('mzarray').alias('MonoMass_Anno'),
-            pl.col('intarray').alias('SumIntensity_Anno')
+            pl.col('mz_array').alias('MonoMass_Anno'),
+            pl.col('intensity_array').alias('SumIntensity_Anno')
         ])
         .sort("index")
     )
@@ -116,8 +116,8 @@ def parseDeconv(
         pl_deconv_indexed
         .select([
             pl.col('index'),
-            pl.col('mzarray').alias('MonoMass'),
-            pl.col('intarray').alias('SumIntensity'),
+            pl.col('mz_array').alias('MonoMass'),
+            pl.col('intensity_array').alias('SumIntensity'),
             pl.col('MinCharges'),
             pl.col('MaxCharges'),
             pl.col('MinIsotopes'),
@@ -137,7 +137,7 @@ def parseDeconv(
         pl_deconv_indexed
         .select([
             pl.col('index'),
-            pl.col('mzarray').alias('MonoMass'),
+            pl.col('mz_array').alias('MonoMass'),
             pl.col('PrecursorMass')
         ])
         .sort("index")
@@ -151,8 +151,8 @@ def parseDeconv(
         pl_deconv_indexed
         .select([
             pl.col('index'),
-            pl.col('mzarray').alias('MonoMass'),
-            pl.col('intarray').alias('SumIntensity')
+            pl.col('mz_array').alias('MonoMass'),
+            pl.col('intensity_array').alias('SumIntensity')
         ])
         .sort("index")
     )
@@ -165,15 +165,15 @@ def parseDeconv(
         pl_deconv_indexed
         .select([
             pl.col('index'),
-            pl.col('mzarray').alias('MonoMass'),
-            pl.col('intarray').alias('SumIntensity'),
+            pl.col('mz_array').alias('MonoMass'),
+            pl.col('intensity_array').alias('SumIntensity'),
             pl.col('SignalPeaks')
         ])
         .join(
             pl_anno_indexed.select([
                 pl.col('index'),
-                pl.col('mzarray').alias('MonoMass_Anno'),
-                pl.col('intarray').alias('SumIntensity_Anno')
+                pl.col('mz_array').alias('MonoMass_Anno'),
+                pl.col('intensity_array').alias('SumIntensity_Anno')
             ]),
             on='index',
             how='left'
