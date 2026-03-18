@@ -45,7 +45,7 @@ USER root
 
 # Install required Ubuntu packages.
 RUN apt-get -y update
-RUN apt-get install -y --no-install-recommends --no-install-suggests g++ autoconf automake patch libtool make git gpg wget ca-certificates curl jq libgtk2.0-dev openjdk-8-jdk cron
+RUN apt-get install -y --no-install-recommends --no-install-suggests g++ autoconf automake patch libtool make git gpg wget ca-certificates curl jq libgtk2.0-dev openjdk-8-jdk cron cmake
 RUN update-ca-certificates
 RUN apt-get install -y --no-install-recommends --no-install-suggests libsvm-dev libeigen3-dev coinor-libcbc-dev libglpk-dev libzip-dev zlib1g-dev libxerces-c-dev libbz2-dev libomp-dev libhdf5-dev
 RUN apt-get install -y --no-install-recommends --no-install-suggests libboost-date-time1.74-dev \
@@ -78,9 +78,6 @@ RUN echo "mamba activate streamlit-env" >> ~/.bashrc
 SHELL ["/bin/bash", "--rcfile", "~/.bashrc"]
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
 
-# Install cmake via pip (avoids conda libyaml-cpp transitive dep that causes
-# GLIBCXX linker conflicts under QEMU) and packages for pyOpenMS build.
-RUN pip install cmake
 RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython>=3.1' 'autowrap==0.24' pandas 'numpy>=2.0' pytest
 
 # Clone OpenMS branch and the associcated contrib+thirdparties+pyOpenMS-doc submodules.
@@ -105,8 +102,12 @@ WORKDIR /
 RUN mkdir /openms-build
 WORKDIR /openms-build
 
-# Configure.
-RUN /bin/bash -c "cmake -DCMAKE_BUILD_TYPE='Release' -DCMAKE_PREFIX_PATH='/OpenMS/contrib-build/;/usr/;/usr/local' -DHAS_XSERVER=OFF -DBOOST_USE_STATIC=OFF -DPYOPENMS=ON ../OpenMS -DPY_MEMLEAK_DISABLE=On -DOPENMP=ON"
+# Configure (two-pass: first without miniforge so cmake finds system C++ libs,
+# then reconfigure with miniforge for pyopenms).
+SHELL ["/bin/bash", "-c"]
+RUN cmake -DCMAKE_BUILD_TYPE='Release' -DCMAKE_PREFIX_PATH='/OpenMS/contrib-build/;/usr/;/usr/local' -DHAS_XSERVER=OFF -DBOOST_USE_STATIC=OFF -DOPENMP=ON ../OpenMS
+SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
+RUN cmake -DPYOPENMS=ON -DPY_MEMLEAK_DISABLE=On .
 
 # Build TOPP tools and clean up.
 RUN make -j4 TOPP
