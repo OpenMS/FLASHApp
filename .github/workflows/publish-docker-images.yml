@@ -1,0 +1,163 @@
+name: Publish Docker Images to GHCR
+
+on:
+  workflow_run:
+    workflows: ["Build executable for Windows"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g., v0.9.15)'
+        required: true
+
+jobs:
+
+  resolve-tag:
+    # Only run on successful completion of a release-triggered Windows build,
+    # or on manual dispatch
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'release')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      sha: ${{ steps.tag.outputs.sha }}
+    steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+            SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${TAG} --jq '.object.sha')
+          else
+            # workflow_run: get the tag from the head branch (release events set head_branch to the tag)
+            TAG="${{ github.event.workflow_run.head_branch }}"
+            SHA="${{ github.event.workflow_run.head_sha }}"
+          fi
+
+          # Strip leading 'v' for version
+          VERSION="${TAG#v}"
+
+          echo "Resolved tag=${TAG} version=${VERSION} sha=${SHA}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+
+  build-amd64:
+    needs: resolve-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/openms/flashapp
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo apt-get clean
+          df -h
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push amd64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ needs.resolve-tag.outputs.version }}-amd64
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-amd64
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-amd64,mode=max
+
+  build-arm64:
+    needs: resolve-tag
+    runs-on: ubuntu-22.04-arm
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/openms/flashapp
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo apt-get clean
+          df -h
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push arm64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.arm
+          push: true
+          tags: ${{ env.IMAGE }}:${{ needs.resolve-tag.outputs.version }}-arm64
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-arm64
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-arm64,mode=max
+
+  create-manifest:
+    needs: [resolve-tag, build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    env:
+      IMAGE: ghcr.io/openms/flashapp
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifests
+        run: |
+          VERSION="${{ needs.resolve-tag.outputs.version }}"
+
+          # Create versioned manifest
+          docker manifest create ${{ env.IMAGE }}:${VERSION} \
+            ${{ env.IMAGE }}:${VERSION}-amd64 \
+            ${{ env.IMAGE }}:${VERSION}-arm64
+
+          docker manifest push ${{ env.IMAGE }}:${VERSION}
+
+          # Create/update latest manifest
+          docker manifest create ${{ env.IMAGE }}:latest \
+            ${{ env.IMAGE }}:${VERSION}-amd64 \
+            ${{ env.IMAGE }}:${VERSION}-arm64
+
+          docker manifest push ${{ env.IMAGE }}:latest
