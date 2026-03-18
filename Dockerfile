@@ -45,8 +45,10 @@ USER root
 
 # Install required Ubuntu packages.
 RUN apt-get -y update
-RUN apt-get install -y --no-install-recommends --no-install-suggests g++ autoconf automake patch libtool make git gpg wget ca-certificates curl jq libgtk2.0-dev openjdk-8-jdk cron cmake
+RUN apt-get install -y --no-install-recommends --no-install-suggests g++ autoconf automake patch libtool make git gpg wget ca-certificates curl jq libgtk2.0-dev openjdk-8-jdk cron python3-pip
 RUN update-ca-certificates
+# Install cmake via pip to get version >= 3.24 (required by OpenMS externals; apt cmake is only 3.22 on Ubuntu 22.04)
+RUN pip3 install cmake
 RUN apt-get install -y --no-install-recommends --no-install-suggests libsvm-dev libeigen3-dev coinor-libcbc-dev libglpk-dev libzip-dev zlib1g-dev libxerces-c-dev libbz2-dev libomp-dev libhdf5-dev
 RUN apt-get install -y --no-install-recommends --no-install-suggests libboost-date-time1.74-dev \
                                                                      libboost-iostreams1.74-dev \
