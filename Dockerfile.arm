@@ -107,9 +107,9 @@ WORKDIR /openms-build
 # Configure (two-pass: first without miniforge so cmake finds system C++ libs,
 # then reconfigure with miniforge for pyopenms).
 SHELL ["/bin/bash", "-c"]
-RUN cmake -DCMAKE_BUILD_TYPE='Release' -DCMAKE_PREFIX_PATH='/OpenMS/contrib-build/;/usr/;/usr/local' -DHAS_XSERVER=OFF -DBOOST_USE_STATIC=OFF -DOPENMP=ON ../OpenMS
+RUN cmake -DCMAKE_BUILD_TYPE='Release' -DCMAKE_PREFIX_PATH='/OpenMS/contrib-build/;/usr/;/usr/local' -DCMAKE_IGNORE_PREFIX_PATH=/root/miniforge3 -DHAS_XSERVER=OFF -DBOOST_USE_STATIC=OFF -DOPENMP=ON ../OpenMS
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
-RUN cmake -DPYOPENMS=ON -DPY_MEMLEAK_DISABLE=On .
+RUN cmake -DPYOPENMS=ON -DPY_MEMLEAK_DISABLE=On -DCMAKE_IGNORE_PREFIX_PATH=/root/miniforge3 .
 
 # Build TOPP tools and clean up.
 RUN make -j4 TOPP
