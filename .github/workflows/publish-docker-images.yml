@@ -51,7 +51,6 @@ jobs:
           echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
 
   build-amd64:
-    if: false  # temporarily disabled — arm64-only test build
     needs: resolve-tag
     runs-on: ubuntu-latest
     permissions:
@@ -138,7 +137,6 @@ jobs:
           cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-arm64,mode=max
 
   create-manifest:
-    if: false  # temporarily disabled — arm64-only test build
     needs: [resolve-tag, build-amd64, build-arm64]
     runs-on: ubuntu-latest
     permissions:
