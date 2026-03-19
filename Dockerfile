@@ -190,7 +190,7 @@ service cron start\n\
 \n\
 # Start Redis server in background\n\
 echo "Starting Redis server..."\n\
-redis-server --daemonize yes --dir /var/lib/redis --appendonly no\n\
+redis-server --daemonize yes --dir /var/lib/redis --appendonly no --ignore-warnings ARM64-COW-BUG\n\
 \n\
 # Wait for Redis to be ready\n\
 until redis-cli ping > /dev/null 2>&1; do\n\

@@ -51,7 +51,6 @@ jobs:
           echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
 
   build-amd64:
-    if: false  # temporarily disabled — testing arm64 only
     needs: resolve-tag
     runs-on: ubuntu-latest
     permissions:
@@ -88,6 +87,7 @@ jobs:
           file: Dockerfile
           push: true
           tags: ${{ env.IMAGE }}:${{ needs.resolve-tag.outputs.version }}-amd64
+          provenance: false
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-amd64
@@ -130,13 +130,13 @@ jobs:
           file: Dockerfile.arm
           push: true
           tags: ${{ env.IMAGE }}:${{ needs.resolve-tag.outputs.version }}-arm64
+          provenance: false
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-arm64
           cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache-arm64,mode=max
 
   create-manifest:
-    if: false  # temporarily disabled — testing arm64 only
     needs: [resolve-tag, build-amd64, build-arm64]
     runs-on: ubuntu-latest
     permissions:
