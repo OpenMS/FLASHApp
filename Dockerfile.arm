@@ -22,7 +22,7 @@ WORKDIR /openms-streamlit-vue-component
 RUN npm install
 RUN npm run build
 
-FROM ubuntu:22.04 AS setup-build-system
+FROM ubuntu:24.04 AS setup-build-system
 WORKDIR /
 
 COPY --from=js-build openms-streamlit-vue-component/dist /app/js-component/dist
@@ -45,16 +45,14 @@ USER root
 
 # Install required Ubuntu packages.
 RUN apt-get -y update
-RUN apt-get install -y --no-install-recommends --no-install-suggests g++ autoconf automake patch libtool make git gpg wget ca-certificates curl jq libgtk2.0-dev openjdk-8-jdk cron python3-pip
+RUN apt-get install -y --no-install-recommends --no-install-suggests g++ autoconf automake patch libtool make git gpg wget ca-certificates curl jq libgtk2.0-dev openjdk-8-jdk cron cmake
 RUN update-ca-certificates
-# Install cmake via pip to get version >= 3.24 (required by OpenMS externals; apt cmake is only 3.22 on Ubuntu 22.04)
-RUN pip3 install cmake
 RUN apt-get install -y --no-install-recommends --no-install-suggests libsvm-dev libeigen3-dev coinor-libcbc-dev libglpk-dev libzip-dev zlib1g-dev libxerces-c-dev libbz2-dev libomp-dev libhdf5-dev
-RUN apt-get install -y --no-install-recommends --no-install-suggests libboost-date-time1.74-dev \
-                                                                     libboost-iostreams1.74-dev \
-                                                                     libboost-regex1.74-dev \
-                                                                     libboost-math1.74-dev \
-                                                                     libboost-random1.74-dev
+RUN apt-get install -y --no-install-recommends --no-install-suggests libboost-date-time-dev \
+                                                                     libboost-iostreams-dev \
+                                                                     libboost-regex-dev \
+                                                                     libboost-math-dev \
+                                                                     libboost-random-dev
 RUN apt-get install -y --no-install-recommends --no-install-suggests qt6-base-dev libqt6svg6-dev libqt6opengl6-dev libqt6openglwidgets6 libgl-dev
 
 # Install Github CLI
@@ -113,7 +111,7 @@ RUN cmake -DPYOPENMS=ON -DPY_MEMLEAK_DISABLE=On -DCMAKE_IGNORE_PREFIX_PATH=/root
 
 # Build TOPP tools and clean up.
 RUN make -j4 TOPP
-RUN rm -rf src doc CMakeFiles
+RUN rm -rf src doc
 
 # Build pyOpenMS wheels and install via pip.
 RUN make -j4 pyopenms
