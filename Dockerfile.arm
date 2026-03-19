@@ -1,7 +1,7 @@
 # This Dockerfile builds OpenMS, the TOPP tools, pyOpenMS and thidparty tools.
 # It also adds a basic streamlit server that serves a pyOpenMS-based app.
 # hints:
-# build image and give it a name (here: streamlitapp) with: docker build --no-cache -t streamlitapp:latest --build-arg GITHUB_TOKEN=<your-github-token> . 2>&1 | tee build.log
+# build image and give it a name (here: streamlitapp) with: docker build -f Dockerfile.arm --no-cache -t streamlitapp:latest-arm64 --build-arg GITHUB_TOKEN=<your-github-token> . 2>&1 | tee build.log
 # check if image was build: docker image ls
 # run container: docker run -p 8501:8501 streamlitappsimple:latest
 # debug container after build (comment out ENTRYPOINT) and run container with interactive /bin/bash shell
@@ -67,9 +67,9 @@ RUN (type -p wget >/dev/null || (apt-get update && apt-get install wget -y)) \
 # Download and install miniforge.
 ENV PATH="/root/miniforge3/bin:${PATH}"
 RUN wget -q \
-    https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh \
-    && bash Miniforge3-Linux-x86_64.sh -b \
-    && rm -f Miniforge3-Linux-x86_64.sh
+    https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh \
+    && bash Miniforge3-Linux-aarch64.sh -b \
+    && rm -f Miniforge3-Linux-aarch64.sh
 RUN mamba --version
 
 # Setup mamba environment.
@@ -88,9 +88,11 @@ WORKDIR /OpenMS
 RUN mkdir /thirdparty && \
     git submodule update --init THIRDPARTY && \
     cp -r THIRDPARTY/All/* /thirdparty && \
-    cp -r THIRDPARTY/Linux/x86_64/* /thirdparty && \
+    if [ -d "THIRDPARTY/Linux/aarch64" ]; then \
+        cp -r THIRDPARTY/Linux/aarch64/* /thirdparty; \
+    fi && \
     chmod -R +x /thirdparty
-ENV PATH="/thirdparty/LuciPHOr2:/thirdparty/MSGFPlus:/thirdparty/Sirius:/thirdparty/ThermoRawFileParser:/thirdparty/Comet:/thirdparty/Fido:/thirdparty/MaRaCluster:/thirdparty/MyriMatch:/thirdparty/OMSSA:/thirdparty/Percolator:/thirdparty/SpectraST:/thirdparty/XTandem:/thirdparty/crux:${PATH}"
+ENV PATH="/thirdparty/LuciPHOr2:/thirdparty/MSGFPlus:/thirdparty/ThermoRawFileParser:/thirdparty/Comet:/thirdparty/Percolator:/thirdparty/Sage:${PATH}"
 
 # Build OpenMS and pyOpenMS.
 FROM setup-build-system AS compile-openms

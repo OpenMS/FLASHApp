@@ -11,8 +11,21 @@ jobs:
   build-full-app:
 
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v3
       - name: Build the full Docker image
-        run: docker build --file Dockerfile --tag streamlitapp:latest --output type=tar,dest=/dev/null . 
+        run: docker build --file Dockerfile --tag streamlitapp:latest --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} --output type=tar,dest=/dev/null .
+
+  build-full-app-arm64:
+
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build the ARM64 Docker image
+        run: docker build --file Dockerfile.arm --tag streamlitapp:latest-arm64 --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} --output type=tar,dest=/dev/null .
