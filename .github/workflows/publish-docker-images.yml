@@ -46,6 +46,9 @@ jobs:
             VERSION="${TAG#v}"
           fi
 
+          # Sanitize VERSION for valid Docker tags: replace / with -, strip invalid chars
+          VERSION=$(echo "$VERSION" | tr '/' '-' | tr -cd 'A-Za-z0-9_.-')
+
           echo "Resolved tag=${TAG} version=${VERSION} sha=${SHA}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
