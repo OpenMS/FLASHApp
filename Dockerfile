@@ -32,7 +32,6 @@ ARG OPENMS_BRANCH=FVdeploy
 ARG PORT=8501
 # GitHub token to download latest OpenMS executable for Windows from Github action artifact.
 ARG GITHUB_TOKEN
-ENV GH_TOKEN=${GITHUB_TOKEN}
 # Streamlit app Gihub user name (to download artifact from).
 ARG GITHUB_USER=OpenMS
 # Streamlit app Gihub repository name (to download artifact from).
@@ -90,7 +89,7 @@ RUN mkdir /thirdparty && \
     cp -r THIRDPARTY/All/* /thirdparty && \
     cp -r THIRDPARTY/Linux/x86_64/* /thirdparty && \
     chmod -R +x /thirdparty
-ENV PATH="/thirdparty/LuciPHOr2:/thirdparty/MSGFPlus:/thirdparty/Sirius:/thirdparty/ThermoRawFileParser:/thirdparty/Comet:/thirdparty/Fido:/thirdparty/MaRaCluster:/thirdparty/MyriMatch:/thirdparty/OMSSA:/thirdparty/Percolator:/thirdparty/SpectraST:/thirdparty/XTandem:/thirdparty/crux:${PATH}"
+ENV PATH="/thirdparty/LuciPHOr2:/thirdparty/MSGFPlus:/thirdparty/ThermoRawFileParser:/thirdparty/Comet:/thirdparty/Percolator:/thirdparty/Sage:${PATH}"
 
 # Build OpenMS and pyOpenMS.
 FROM setup-build-system AS compile-openms
@@ -250,11 +249,15 @@ RUN mamba run -n streamlit-env python hooks/hook-analytics.py
 RUN jq '.online_deployment = true' settings.json > tmp.json && mv tmp.json settings.json
 
 # Download latest OpenMS App executable as a ZIP file
-RUN if [ -n "$GH_TOKEN" ]; then \
-        echo "GH_TOKEN is set, proceeding to download the release asset..."; \
-        gh release download -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
+# Re-declare ARGs needed in this stage (ARGs don't persist across FROM)
+ARG GITHUB_TOKEN
+ARG GITHUB_USER=OpenMS
+ARG GITHUB_REPO=FLASHApp
+RUN if [ -n "$GITHUB_TOKEN" ]; then \
+        echo "Downloading release asset..."; \
+        GH_TOKEN="$GITHUB_TOKEN" gh release download -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
     else \
-        echo "GH_TOKEN is not set, skipping the release asset download."; \
+        echo "No token, skipping download."; \
     fi
 
 
