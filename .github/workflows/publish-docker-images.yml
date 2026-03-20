@@ -8,7 +8,7 @@ on:
     inputs:
       tag:
         description: 'Release tag to build (e.g., v0.9.15)'
-        required: true
+        required: false
 
 jobs:
 
@@ -31,15 +31,23 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.tag }}"
-            SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${TAG} --jq '.object.sha')
+            if [ -n "$TAG" ]; then
+              SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${TAG} --jq '.object.sha')
+              VERSION="${TAG#v}"
+            else
+              # No tag — build from branch HEAD
+              SHA="${{ github.sha }}"
+              VERSION="${{ github.ref_name }}"
+            fi
           else
             # workflow_run: get the tag from the head branch (release events set head_branch to the tag)
             TAG="${{ github.event.workflow_run.head_branch }}"
             SHA="${{ github.event.workflow_run.head_sha }}"
+            VERSION="${TAG#v}"
           fi
 
-          # Strip leading 'v' for version
-          VERSION="${TAG#v}"
+          # Sanitize VERSION for valid Docker tags: replace / with -, strip invalid chars
+          VERSION=$(echo "$VERSION" | tr '/' '-' | tr -cd 'A-Za-z0-9_.-')
 
           echo "Resolved tag=${TAG} version=${VERSION} sha=${SHA}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
@@ -82,6 +90,7 @@ jobs:
           file: Dockerfile
           push: true
           tags: ${{ env.IMAGE }}:${{ needs.resolve-tag.outputs.version }}-amd64
+          provenance: false
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-amd64
@@ -124,6 +133,7 @@ jobs:
           file: Dockerfile.arm
           push: true
           tags: ${{ env.IMAGE }}:${{ needs.resolve-tag.outputs.version }}-arm64
+          provenance: false
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache-arm64
