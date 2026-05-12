@@ -359,7 +359,6 @@ class StreamlitUI:
                 f"**Add {name} files from mounted directory** "
                 f"`{mount_root}`"
             )
-            st.divider()
 
             # Breadcrumbs: compact tertiary buttons separated by »,
             # with a right-aligned Parent button.
@@ -405,8 +404,6 @@ class StreamlitUI:
                     st.session_state[sess_cwd_key] = str(cwd.parent)
                     st.rerun(scope="fragment")
 
-            st.divider()
-
             try:
                 entries = sorted(
                     (p for p in cwd.iterdir() if not p.name.startswith(".")),
@@ -423,23 +420,14 @@ class StreamlitUI:
             bundled = [p for p in entries if p.is_dir() and _is_match(p)]
             files = [p for p in entries if p.is_file() and _is_match(p)]
 
-            if subdirs:
-                st.caption("Enter subfolder")
-                subdir_names = [d.name for d in subdirs]
-                nav_key = f"mounted_navigate_{key}"
-                choice = st.pills(
-                    "Enter subfolder",
-                    options=subdir_names,
-                    selection_mode="single",
-                    default=None,
-                    key=nav_key,
-                    label_visibility="collapsed",
-                )
-                if choice:
-                    st.session_state[sess_cwd_key] = str(cwd / choice)
-                    st.session_state.pop(nav_key, None)
+            for d in subdirs:
+                if st.button(
+                    f"📂 {d.name}/",
+                    key=f"mounted_dir_{key}_{d.name}",
+                    type="tertiary",
+                ):
+                    st.session_state[sess_cwd_key] = str(d)
                     st.rerun(scope="fragment")
-                st.divider()
 
             selectable = bundled + files
             selected_paths: List[str] = []
@@ -464,9 +452,6 @@ class StreamlitUI:
                     f"No subdirectories or files matching "
                     f"**{', '.join('.' + ft for ft in file_types)}** here."
                 )
-
-            if selectable:
-                st.divider()
 
             count = len(selected_paths)
             if st.button(
