@@ -359,32 +359,53 @@ class StreamlitUI:
                 f"**Add {name} files from mounted directory** "
                 f"`{mount_root}`"
             )
+            st.divider()
 
-            # Breadcrumbs: mount_root.name / sub / sub ...
+            # Breadcrumbs: compact tertiary buttons separated by »,
+            # with a right-aligned Parent button.
             try:
                 rel = cwd.relative_to(mount_root)
                 segments = [mount_root.name] + list(rel.parts) if rel.parts else [mount_root.name]
             except ValueError:
                 segments = [mount_root.name]
-            crumb_cols = st.columns(max(len(segments), 1))
+            n = len(segments)
+            ratios: List[float] = []
+            for i in range(n):
+                ratios.append(max(len(segments[i]), 3))
+                if i < n - 1:
+                    ratios.append(1)
+            ratios.append(20)  # flexible spacer
+            ratios.append(6)   # parent button slot
+            crumb_cols = st.columns(ratios, vertical_alignment="center")
+            col_idx = 0
             for i, seg in enumerate(segments):
                 target = mount_root.joinpath(*segments[1 : i + 1]) if i > 0 else mount_root
-                if crumb_cols[i].button(
-                    seg if i == 0 else f"/ {seg}",
+                if crumb_cols[col_idx].button(
+                    seg,
                     key=f"crumb_{key}_{i}",
-                    use_container_width=True,
+                    type="tertiary",
                 ):
                     st.session_state[sess_cwd_key] = str(target)
                     st.rerun(scope="fragment")
-
+                col_idx += 1
+                if i < n - 1:
+                    crumb_cols[col_idx].markdown(
+                        "<span style='color:#888'>»</span>",
+                        unsafe_allow_html=True,
+                    )
+                    col_idx += 1
+            # spacer column
+            col_idx += 1
             if cwd != mount_root:
-                if st.button(
+                if crumb_cols[col_idx].button(
                     "⬆ Parent",
                     key=f"mounted_parent_{key}",
-                    use_container_width=True,
+                    type="tertiary",
                 ):
                     st.session_state[sess_cwd_key] = str(cwd.parent)
                     st.rerun(scope="fragment")
+
+            st.divider()
 
             try:
                 entries = sorted(
@@ -402,14 +423,23 @@ class StreamlitUI:
             bundled = [p for p in entries if p.is_dir() and _is_match(p)]
             files = [p for p in entries if p.is_file() and _is_match(p)]
 
-            for d in subdirs:
-                if st.button(
-                    f"📂 {d.name}/",
-                    key=f"mounted_dir_{key}_{d.name}",
-                    use_container_width=True,
-                ):
-                    st.session_state[sess_cwd_key] = str(d)
+            if subdirs:
+                st.caption("Enter subfolder")
+                subdir_names = [d.name for d in subdirs]
+                nav_key = f"mounted_navigate_{key}"
+                choice = st.pills(
+                    "Enter subfolder",
+                    options=subdir_names,
+                    selection_mode="single",
+                    default=None,
+                    key=nav_key,
+                    label_visibility="collapsed",
+                )
+                if choice:
+                    st.session_state[sess_cwd_key] = str(cwd / choice)
+                    st.session_state.pop(nav_key, None)
                     st.rerun(scope="fragment")
+                st.divider()
 
             selectable = bundled + files
             selected_paths: List[str] = []
@@ -434,6 +464,9 @@ class StreamlitUI:
                     f"No subdirectories or files matching "
                     f"**{', '.join('.' + ft for ft in file_types)}** here."
                 )
+
+            if selectable:
+                st.divider()
 
             count = len(selected_paths)
             if st.button(
