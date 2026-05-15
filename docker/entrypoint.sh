@@ -44,13 +44,30 @@ if [ "$READONLY_ROOT" -eq 1 ]; then
     mkdir -p "$RUNTIME_DIR"
     REDIS_DATA_DIR="$RUNTIME_DIR/redis"
     REDIS_PID_FILE="$RUNTIME_DIR/redis.pid"
+    # Apptainer/singularity share the host's network namespace by default. If
+    # the host has anything listening on 6379 (a system redis-server, a docker
+    # container, a previous singularity instance that didn't clean up), our
+    # `redis-server --daemonize` silently fails with EADDRINUSE and the local
+    # redis-cli ping happily connects to the host's redis instead — which
+    # leaves stale `worker-1` records lying around and ultimately runs the
+    # workflow's mkdir outside our mount namespace (no bind → EROFS). A unix
+    # socket sidesteps the network stack entirely; the path is unambiguously
+    # ours.
+    REDIS_SOCKET="$RUNTIME_DIR/redis.sock"
+    REDIS_URL="unix://${REDIS_SOCKET}"
+    export REDIS_URL
     NGINX_CONF_DIR="$RUNTIME_DIR/nginx"
     NGINX_PID_FILE="$RUNTIME_DIR/nginx.pid"
     mkdir -p "$REDIS_DATA_DIR" "$NGINX_CONF_DIR"
+    # Marker for out-of-band discovery (e.g. `apptainer exec ... redis-cli`
+    # from CI). The entrypoint's exported env doesn't propagate to fresh
+    # exec invocations, so write the resolved URL to a stable path.
+    echo "$REDIS_URL" > /tmp/openms-redis-url 2>/dev/null || true
 else
     RUNTIME_DIR="/var/run"
     REDIS_DATA_DIR="/var/lib/redis"
     REDIS_PID_FILE="/var/run/redis.pid"
+    REDIS_SOCKET=""
     NGINX_CONF_DIR="/etc/nginx"
     NGINX_PID_FILE="/run/nginx.pid"
 fi
@@ -74,25 +91,43 @@ fi
 # The simple image does not install redis-server. Skip the whole queue section
 # when the binary is missing, so this entrypoint can be shared by both images.
 if command -v redis-server >/dev/null 2>&1; then
-    echo "Starting Redis server (data=$REDIS_DATA_DIR)..."
-    redis-server --daemonize yes \
-        --dir "$REDIS_DATA_DIR" \
-        --pidfile "$REDIS_PID_FILE" \
-        --appendonly no
+    if [ -n "$REDIS_SOCKET" ]; then
+        echo "Starting Redis server (data=$REDIS_DATA_DIR, socket=$REDIS_SOCKET)..."
+        # --port 0 disables the TCP listener entirely — we only accept the
+        # unix socket. This is the whole point of switching to a socket in
+        # apptainer mode: the host's network namespace (shared by default)
+        # cannot conflict with us, and there is no fall-through to a stray
+        # host redis-server.
+        redis-server --daemonize yes \
+            --dir "$REDIS_DATA_DIR" \
+            --pidfile "$REDIS_PID_FILE" \
+            --unixsocket "$REDIS_SOCKET" \
+            --unixsocketperm 700 \
+            --port 0 \
+            --appendonly no
+        REDIS_CLI_ARGS=(-s "$REDIS_SOCKET")
+    else
+        echo "Starting Redis server (data=$REDIS_DATA_DIR)..."
+        redis-server --daemonize yes \
+            --dir "$REDIS_DATA_DIR" \
+            --pidfile "$REDIS_PID_FILE" \
+            --appendonly no
+        REDIS_CLI_ARGS=()
+    fi
 
-    # Bounded wait so a broken redis-server (e.g. port already bound by the
-    # host under apptainer's shared net namespace) fails the container fast
-    # instead of hanging forever and never serving /_stcore/health.
+    # Bounded wait so a broken redis-server (e.g. socket can't be created or
+    # an unexpected fork failure) fails the container fast instead of hanging
+    # forever and never serving /_stcore/health.
     REDIS_STARTUP_RETRIES="${REDIS_STARTUP_RETRIES:-30}"
     for i in $(seq 1 "$REDIS_STARTUP_RETRIES"); do
-        if redis-cli ping >/dev/null 2>&1; then
+        if redis-cli "${REDIS_CLI_ARGS[@]}" ping >/dev/null 2>&1; then
             echo "Redis is ready"
             break
         fi
         echo "Waiting for Redis... attempt $i/$REDIS_STARTUP_RETRIES"
         sleep 1
     done
-    if ! redis-cli ping >/dev/null 2>&1; then
+    if ! redis-cli "${REDIS_CLI_ARGS[@]}" ping >/dev/null 2>&1; then
         echo "ERROR: Redis failed to become ready within ${REDIS_STARTUP_RETRIES}s" >&2
         exit 1
     fi

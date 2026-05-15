@@ -205,7 +205,23 @@ jobs:
       - name: Verify Redis is reachable inside container (full variant)
         if: matrix.variant == 'full'
         run: |
-          apptainer exec instance://openms-test redis-cli ping | grep -i pong
+          # In apptainer mode the entrypoint uses a unix socket (TCP 6379 on
+          # localhost is the host's, since net namespace is shared). The
+          # entrypoint writes the resolved URL to /tmp/openms-redis-url for
+          # out-of-band discovery, since `apptainer exec` spawns a fresh
+          # shell that doesn't inherit the daemon's exported env.
+          URL=$(apptainer exec instance://openms-test cat /tmp/openms-redis-url 2>/dev/null || true)
+          case "$URL" in
+            unix://*)
+              SOCK="${URL#unix://}"
+              echo "Redis URL is unix socket: $SOCK"
+              apptainer exec instance://openms-test redis-cli -s "$SOCK" ping | grep -i pong
+              ;;
+            *)
+              echo "Redis URL is TCP (or unset): ${URL:-default}"
+              apptainer exec instance://openms-test redis-cli ping | grep -i pong
+              ;;
+          esac
 
       - name: Verify bind mount is writable (workspaces) and readable (data)
         run: |
