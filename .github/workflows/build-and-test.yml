@@ -146,7 +146,12 @@ jobs:
         run: |
           # Default apptainer semantics: read-only root, no --writable-tmpfs.
           # This matches how users on HPC clusters run the SIF.
-          apptainer instance start /tmp/openms.sif openms-test
+          # Use `instance run` (apptainer 1.1+), not `instance start`: the SIF
+          # was built from docker-archive, which populates %runscript with the
+          # Docker ENTRYPOINT but leaves %startscript as the default no-op
+          # `exec "$@"`. `instance start` would launch an empty instance and
+          # streamlit would never bind 8501.
+          apptainer instance run /tmp/openms.sif openms-test
           apptainer instance list
           # Record where this run's logs will land so subsequent steps can tail
           # them deterministically (path depends on hostname/user).
