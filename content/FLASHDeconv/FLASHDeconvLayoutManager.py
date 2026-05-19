@@ -37,7 +37,7 @@ COMPONENT_NAMES=[
 # Setup cache access
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+    Path(st.session_state['workspace'], 'cache')
 )
 
 def get_sequence():

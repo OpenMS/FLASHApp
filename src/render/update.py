@@ -16,7 +16,7 @@ def get_sequence(selection_store):
     # Setup cache access
     file_manager = FileManager(
         st.session_state["workspace"],
-        Path(st.session_state['workspace'], 'flashdeconv', 'cache')
+        Path(st.session_state['workspace'], 'cache')
     )
 
     # Check if sequence has been set
@@ -85,18 +85,24 @@ def render_internal_fragment_data(sequence):
 def update_data(data, out_components, selection_store, additional_data, tool):
     component = out_components[0][0]['componentArgs']['title']
     if (
-        (component in ['Sequence View', 'Internal Fragment Map']) 
+        (component in ['Sequence View', 'Internal Fragment Map'])
         and (tool != 'flashtnt')
     ):
-        data['sequence_data'] = {
-            0: render_sequence_data(get_sequence(selection_store)[0])
-        }
-    if (component == 'Internal Fragment Map') and (tool != 'flashtnt'):
-        data['internal_fragment_data'] = {
-            0: render_internal_fragment_data(get_sequence(selection_store)[0])
-        }
-    
-    return data  
+        sequence = get_sequence(selection_store)
+        if sequence is None:
+            data['sequence_data'] = {}
+            if component == 'Internal Fragment Map':
+                data['internal_fragment_data'] = {}
+        else:
+            data['sequence_data'] = {
+                0: render_sequence_data(sequence[0])
+            }
+            if component == 'Internal Fragment Map':
+                data['internal_fragment_data'] = {
+                    0: render_internal_fragment_data(sequence[0])
+                }
+
+    return data
 
 
 def filter_data(data, out_components, selection_store, additional_data, tool):
