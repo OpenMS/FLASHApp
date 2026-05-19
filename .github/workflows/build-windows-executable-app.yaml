@@ -99,7 +99,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ${{ github.workspace }}/OpenMS/contrib
-        key: ${{ runner.os }}-contrib3
+        key: ${{ runner.os }}-contrib-${{ env.OPENMS_CONTRIB_VERSION || env.OPENMS_VERSION }}
 
     - name: Load contrib build
       if: steps.cache-contrib-win.outputs.cache-hit != 'true'
@@ -108,7 +108,7 @@ jobs:
       run: |
         cd OpenMS/contrib
         # Download the file using the URL fetched from GitHub
-        gh release download -R OpenMS/contrib --pattern 'contrib_build-Windows.tar.gz'
+        gh release download release/${{ env.OPENMS_CONTRIB_VERSION || env.OPENMS_VERSION }} -R OpenMS/contrib --pattern 'contrib_build-Windows.tar.gz'
         # Extract the archive
         tar -xzf contrib_build-Windows.tar.gz
         rm contrib_build-Windows.tar.gz
@@ -329,6 +329,10 @@ jobs:
         foreach ($file in $files) {
           Copy-Item "openms-bin/${file}.exe" -Destination "streamlit_exe/${file}.exe"
         }
+
+    - name: Remove server address for local Windows deployment
+      run: |
+        (Get-Content streamlit_exe/.streamlit/config.toml) -notmatch '^address' | Set-Content streamlit_exe/.streamlit/config.toml
 
     - name: Generate Readme.txt
       shell: bash
