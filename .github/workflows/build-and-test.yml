@@ -76,7 +76,7 @@ jobs:
             type=ref,event=branch,suffix=-${{ matrix.variant }}
             type=ref,event=tag,suffix=-${{ matrix.variant }}
             type=sha,prefix=,suffix=-${{ matrix.variant }}
-            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 
       - name: Build and conditionally push
         uses: docker/build-push-action@v5
@@ -303,7 +303,7 @@ jobs:
             type=ref,event=branch,suffix=-${{ matrix.variant }}
             type=ref,event=tag,suffix=-${{ matrix.variant }}
             type=sha,prefix=,suffix=-${{ matrix.variant }}
-            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 
       - name: Log in to GHCR for ORAS push
         env:

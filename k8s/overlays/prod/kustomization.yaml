@@ -5,17 +5,17 @@ resources:
   - ../../base
 
 components:
-  - ../../components/memory-tier-low
+  - ../../components/memory-tier-high
 
-namePrefix: template-app-
+namePrefix: flashapp-
 
 commonLabels:
-  app: template-app
+  app: flashapp
 
 images:
   - name: openms-streamlit
-    newName: ghcr.io/openms/streamlit-template
-    newTag: main-full
+    newName: ghcr.io/openms/flashapp
+    newTag: latest
 
 patches:
   - target:
@@ -24,21 +24,24 @@ patches:
     patch: |
       - op: replace
         path: /spec/routes/0/match
-        value: (Host(`template.webapps.openms.de`) || Host(`template.webapps.openms.org`)) && PathPrefix(`/`)
+        value: (Host(`flashapp.webapps.openms.de`) || Host(`flashapp.webapps.openms.org`)) && PathPrefix(`/`)
       - op: replace
         path: /spec/routes/0/services/0/name
-        value: template-app-streamlit
+        value: flashapp-streamlit
   - target:
       kind: Deployment
       name: streamlit
     patch: |
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
-        value: "redis://template-app-redis:6379/0"
+        value: "redis://flashapp-redis:6379/0"
   - target:
       kind: Deployment
       name: rq-worker
     patch: |
       - op: replace
+        path: /spec/replicas
+        value: 5
+      - op: replace
         path: /spec/template/spec/containers/0/env/0/value
-        value: "redis://template-app-redis:6379/0"
+        value: "redis://flashapp-redis:6379/0"
