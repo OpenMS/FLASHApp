@@ -30,8 +30,6 @@ COPY --from=js-build openms-streamlit-vue-component/dist /app/js-component/dist
 ARG OPENMS_REPO=https://github.com/t0mdavid-m/OpenMS.git
 ARG OPENMS_BRANCH=FVdeploy
 ARG PORT=8501
-# GitHub token to download latest OpenMS executable for Windows from Github action artifact.
-ARG GITHUB_TOKEN
 # Streamlit app Gihub user name (to download artifact from).
 ARG GITHUB_USER=OpenMS
 # Streamlit app Gihub repository name (to download artifact from).
