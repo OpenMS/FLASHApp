@@ -1502,7 +1502,7 @@ class StreamlitUI:
                 time.sleep(1)
                 st.rerun()
 
-        elif log_exists:
+        if log_exists:
             # Static display after completion
             st.markdown(
                 f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
