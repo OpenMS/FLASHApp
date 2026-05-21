@@ -51,6 +51,13 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
 
     # We need to collect here because scipy requires numpy arrays
     sorted_data = sorted_data.collect()
+
+    # scipy's binned_statistic_2d reduces over the inputs to derive bin edges
+    # and raises "zero-size array to reduction operation minimum" on empty
+    # input. With no peaks there is nothing to downsample, so return the input
+    # unchanged (same schema, zero rows).
+    if sorted_data.is_empty():
+        return data
     
     # Count peaks
     total_count = sorted_data.select(pl.count()).item()
