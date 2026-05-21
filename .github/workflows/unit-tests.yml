@@ -1,0 +1,37 @@
+name: Unit Tests
+
+# Runs the Python unit tests in tests/ (pytest). This is intentionally
+# separate from build-and-test.yml, whose "test" jobs are container/k8s
+# deployment smoke tests rather than pytest.
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Match the runtime built in the Dockerfile (python=3.11).
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Pinned runtime deps (pyopenms is needed so ParameterManager imports
+          # cleanly at collection time) plus test-only deps. fakeredis backs the
+          # QueueManager/WorkflowManager tests, which pytest.importorskip it.
+          pip install -r requirements.txt
+          pip install pytest fakeredis
+
+      - name: Run unit tests
+        run: pytest tests/ -v
