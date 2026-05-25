@@ -108,7 +108,16 @@ RUN cmake -DPYOPENMS=ON -DPY_MEMLEAK_DISABLE=On -DCMAKE_IGNORE_PREFIX_PATH=/root
 
 # Build TOPP tools and clean up.
 RUN make -j4 TOPP
-RUN rm -rf src doc CMakeFiles
+# NOTE: do NOT delete CMakeFiles/ here. The two-pass cmake configure used
+# above generates CMakeFiles/VerifyGlobs.cmake for the pyOpenMS targets'
+# CONFIGURE_DEPENDS globs; the next `make -j4 pyopenms` runs
+# `cmake_check_build_system` which fails fast if VerifyGlobs.cmake is gone:
+#   CMake Error: Not a file: /openms-build/CMakeFiles/VerifyGlobs.cmake
+# The x86 single-pass build seems to avoid generating that file (different
+# cmake codepath when PYOPENMS is set during the initial configure), which
+# is why it can still `rm -rf CMakeFiles` here. CMakeFiles/ adds ~a few
+# hundred MB to the intermediate layer — acceptable.
+RUN rm -rf src doc
 
 # Build pyOpenMS wheels and install via pip.
 RUN make -j4 pyopenms
