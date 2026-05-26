@@ -136,15 +136,15 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
             data = file_manager.get_results(selected_data,  ['settings'])
             data_to_send['settings'] = data['settings']
         component_arguments = SequenceView(title='Sequence View')
-    elif comp_name == 'internal_fragment_map':
-        data = file_manager.get_results(selected_data,  ['sequence_view'])
-        data_to_send['per_scan_data'] = data['sequence_view']
-        if tool == 'flashtnt':
-            data = file_manager.get_results(selected_data,  ['sequence_data'])
-            data_to_send['sequence_data'] = data['sequence_data']
-            data = file_manager.get_results(selected_data,  ['internal_fragment_data'])
-            data_to_send['internal_fragment_data'] = data['internal_fragment_data']
-        component_arguments = InternalFragmentMap(title="Internal Fragment Map")    
+    # elif comp_name == 'internal_fragment_map':
+    #     data = file_manager.get_results(selected_data,  ['sequence_view'])
+    #     data_to_send['per_scan_data'] = data['sequence_view']
+    #     if tool == 'flashtnt':
+    #         data = file_manager.get_results(selected_data,  ['sequence_data'])
+    #         data_to_send['sequence_data'] = data['sequence_data']
+    #         data = file_manager.get_results(selected_data,  ['internal_fragment_data'])
+    #         data_to_send['internal_fragment_data'] = data['internal_fragment_data']
+    #     component_arguments = InternalFragmentMap(title="Internal Fragment Map")
     elif comp_name == 'fdr_plot':
         data = file_manager.get_results(selected_data,  ['density_target'])
         data_to_send['density_target'] = data['density_target']
