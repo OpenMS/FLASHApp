@@ -50,11 +50,11 @@ results = file_manager.get_results_list(
     ['protein_dfs']
 )
 
-if file_manager.result_exists('layout', 'layout'):
-    layout = file_manager.get_results('layout', 'layout')['layout']
+if file_manager.result_exists('flashtnt_layout', 'layout'):
+    layout = file_manager.get_results('flashtnt_layout', 'layout')['layout']
     side_by_side = layout['side_by_side']
     layout = layout['layout']
-    
+
 else:
     layout = [DEFAULT_LAYOUT]
     side_by_side = False

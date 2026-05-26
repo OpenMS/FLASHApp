@@ -31,11 +31,11 @@ COMPONENT_NAMES=[
 # Setup cache access
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashtnt', 'cache')
+    Path(st.session_state['workspace'], 'cache')
 )
 
 def set_layout(layout, side_by_side=False):
-    file_manager.store_data('layout', 'layout', 
+    file_manager.store_data('flashtnt_layout', 'layout',
         {
             'layout': layout,
             'side_by_side': side_by_side
@@ -44,20 +44,20 @@ def set_layout(layout, side_by_side=False):
 
 def get_layout():
     # Check if layout has been set
-    if not file_manager.result_exists('layout', 'layout'):
+    if not file_manager.result_exists('flashtnt_layout', 'layout'):
         return None
     # fetch layout from cache
-    layout = file_manager.get_results('layout', 'layout')['layout']
+    layout = file_manager.get_results('flashtnt_layout', 'layout')['layout']
 
-    return layout['layout'], layout['side_by_side'] 
+    return layout['layout'], layout['side_by_side']
 
 def resetSettingsToDefault(num_of_exp=1):
     st.session_state["layout_setting_tagger"] = [[['']]] # 1D: experiment, 2D: row, 3D: column, element=component name
     st.session_state["num_of_experiment_to_show_tagger"] = num_of_exp
     for index in range(1, num_of_exp):
         st.session_state.layout_setting_tagger.append([['']])
-    if file_manager.result_exists('layout', 'layout'):
-        file_manager.remove_results('layout')
+    if file_manager.result_exists('flashtnt_layout', 'layout'):
+        file_manager.remove_results('flashtnt_layout')
     st.session_state["edit_mode"] = True
 
 
