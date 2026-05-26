@@ -9,7 +9,7 @@ from pathlib import Path
 COMPONENT_OPTIONS=[
     'Protein table',
     'Sequence view (Protein table needed)',
-    'Internal fragment map (Protein table needed)',
+    # 'Internal fragment map (Protein table needed)',  # Disabled - re-enable together with COMPONENT_NAMES entry below
     'Tag table (Protein table needed)',
     'Sequence tag view (Tag table needed)',
     'Score Distribution Plot',
@@ -20,7 +20,7 @@ COMPONENT_OPTIONS=[
 COMPONENT_NAMES=[
     'protein_table', 
     'sequence_view', 
-    'internal_fragment_map',
+    # 'internal_fragment_map',  # Disabled - re-enable together with COMPONENT_OPTIONS entry above
     'tag_table',
     'combined_spectrum',
     'id_fdr_plot',

@@ -80,7 +80,7 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
 
     # sequence_view & internal_fragment_map
     sequence_data = {}
-    internal_fragment_data = {}
+    # internal_fragment_data = {}  # Disabled
     # Compute coverage
     for i, row in protein_df.iterrows():
         pid = row['index']
@@ -140,14 +140,14 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
             } for s, e, m, l in zip(mod_starts, mod_ends, mod_masses, mod_labels)
         ]
 
-        internal_fragment_data[pid] = getInternalFragmentDataFromSeq(
-            str(sequence)[start_index:end_index+1], modifications
-        )  
+        # internal_fragment_data[pid] = getInternalFragmentDataFromSeq(
+        #     str(sequence)[start_index:end_index+1], modifications
+        # )  # Disabled
 
     file_manager.store_data(dataset_id, 'sequence_data', sequence_data)
-    file_manager.store_data(
-        dataset_id, 'internal_fragment_data', internal_fragment_data
-    )
+    # file_manager.store_data(
+    #     dataset_id, 'internal_fragment_data', internal_fragment_data
+    # )  # Disabled
     logger.log("70.0 %", level=2)
 
     fragments = ['b', 'y']

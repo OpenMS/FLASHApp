@@ -47,7 +47,7 @@ file_manager = FileManager(
     Path(st.session_state['workspace'], 'cache')
 )
 results = file_manager.get_results_list(
-    ['internal_fragment_data']
+    ['protein_dfs']
 )
 
 if file_manager.result_exists('layout', 'layout'):
