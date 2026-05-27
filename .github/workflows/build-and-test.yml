@@ -91,6 +91,11 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # provenance/attestations turn the pushed tag into a manifest list,
+          # which the create-manifest job's `docker manifest create` then
+          # refuses ("is a manifest list"). Keep the push as a single-platform
+          # image manifest — same as the build-arm64 job.
+          provenance: false
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}/cache:${{ matrix.variant }}-amd64
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}/cache:{2}-amd64,mode=max', env.REGISTRY, env.IMAGE_NAME_LC, matrix.variant) || '' }}
           build-args: |
