@@ -1,0 +1,22 @@
+# Replaces settings-overrides.json on the streamlit-config ConfigMap to
+# add local_data_dir. The app's _mounted_data_root() reads this setting
+# and gates the in-app file browser on os.path.ismount() — when the PVC
+# above attaches at /mounted-data, the browser renders; if the volume
+# fails to mount, the path stays as the pre-created (non-mount) dir
+# from the image and the browser silently stays hidden.
+#
+# Keep the rest of this file in sync with k8s/base/configmap.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streamlit-config
+data:
+  settings-overrides.json: |
+    {
+      "online_deployment": true,
+      "local_data_dir": "/mounted-data",
+      "demo_workspaces": {
+        "enabled": true,
+        "source_dirs": ["/workspaces-streamlit-template/.demos"]
+      }
+    }

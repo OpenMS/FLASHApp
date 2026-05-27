@@ -159,6 +159,9 @@ Traefik `IngressRoute` CRD. The default rule matches `PathPrefix('/')` (all path
 ### `kustomization.yaml`
 Lists all base resources under the `openms` namespace.
 
+### `components/mounted-data/`
+Optional Kustomize component that mounts a host MS-data drive at `/mounted-data` on the Streamlit and RQ worker pods, and sets `local_data_dir` in `settings-overrides.json` so the app's in-app file browser renders for the mounted drive. Ships a stub `mounted-data-pvc` (default `ReadOnlyMany`, empty `storageClassName` for static binding to an operator-provisioned PV). Opt in from the prod overlay's `components:` list — see [Step 4c](#step-4c--mount-a-host-data-drive-optional) for the full guide.
+
 ### `streamlit-secrets.yaml`
 Ships with an empty admin password by default and is included in `k8s/base/kustomization.yaml`, so `kubectl apply -k` always creates the `streamlit-secrets` Secret. The Streamlit Deployment mounts it at `/app/admin-secrets/`, and `.streamlit/config.toml` registers that path under `[secrets].files` so `st.secrets` picks it up. The admin password gates the "Save as Demo" feature — when empty (default), that UI is hidden entirely; set a password to enable it. The volume mount keeps `optional: true` so forks that inject the Secret out-of-band (Vault, External Secrets Operator) or rename it still boot. See "Configuring the admin password" below.
 
@@ -212,6 +215,62 @@ components:
 ```
 
 `memory-tier-low` is the right choice for most apps. Switch to `memory-tier-high` only if the workload genuinely needs tens of GB of RAM (DIA spectral-library + OpenSwath peak picking, DIA-LFQ). The tier component adds the matching `nodeSelector: openms.de/memory-tier=<tier>` plus `requests`/`limits` sized for that node, so cluster nodes must already be labelled `openms.de/memory-tier=low` / `...=high`.
+
+### Step 4c — Mount a host data drive (optional)
+
+Skip this step if users will only upload data through the browser. Enable it if you want to expose a pre-staged directory of MS data files (e.g. a shared NFS share or a pre-attached cloud volume) inside the app — when enabled, the upload widget renders an in-app file browser rooted at the mounted drive in addition to the standard uploader. This mirrors the `:ro` bind-mount in `docker-compose.yml`.
+
+Uncomment the component in `k8s/overlays/prod/kustomization.yaml`:
+
+```yaml
+components:
+  - ../../components/memory-tier-high
+  - ../../components/mounted-data
+```
+
+What the component adds:
+
+| Resource | Purpose |
+|----------|---------|
+| `mounted-data-pvc` PVC | Claim for the operator-provided PV holding the MS data drive. Defaults to `ReadOnlyMany` + empty `storageClassName` for static binding. |
+| Strategic-merge patches on `streamlit` + `rq-worker` Deployments | Add a `mounted-data` volume + `volumeMount /mounted-data` (`readOnly: true`) so both the UI and background workflows can read the files. |
+| Strategic-merge patch on the `streamlit-config` ConfigMap | Sets `"local_data_dir": "/mounted-data"` in `settings-overrides.json`, which is what gates the in-app browser via `os.path.ismount()`. |
+
+The cleanup CronJob does not receive the mount — it only walks `/workspaces-streamlit-template`.
+
+#### Provision the PersistentVolume
+
+The component ships a PVC stub; you provide the matching PV. The two common patterns:
+
+1. **Static binding to a pre-provisioned PV (typical).** Leave `storageClassName: ""` in the PVC and either set `volumeName: <pv-name>` on the claim or add a label selector that matches the PV. A minimal NFS-backed PV looks like:
+
+    ```yaml
+    apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: flashapp-ms-data
+    spec:
+      capacity:
+        storage: 100Gi
+      accessModes: [ReadOnlyMany]
+      persistentVolumeReclaimPolicy: Retain
+      storageClassName: ""
+      nfs:
+        server: nfs.example.org
+        path: /exports/ms-data
+    ```
+
+2. **Dynamic provisioning (rare for this use case).** Set `storageClassName` to a class that supports `ReadOnlyMany` (e.g. an NFS CSI driver). `cinder-csi` only supports `ReadWriteOnce`, so if you go that route also change the PVC's `accessModes` to `[ReadWriteOnce]` — Streamlit replicas and the RQ worker still co-locate via the existing `workspaces-pvc` RWO mount, so a single-writer drive works.
+
+The overlay's `namePrefix` rewrites both `mounted-data-pvc` and the deployments' `claimName` references in lockstep, so the actual claim name in the cluster will be `<your-app-name>-mounted-data-pvc`.
+
+#### Read-only by design
+
+The volume is mounted with `readOnly: true` and the app references files in place via `external_files.txt` rather than copying them into the workspace, so a read-only mount is sufficient and avoids any risk of user actions mutating the shared drive. Switch to read-write only if you have a specific workflow that needs to write back.
+
+#### Why this lives in a component (not base)
+
+Most forks don't need a host data drive — they bind to no extra storage and the in-app browser stays hidden. Putting the mount in a component keeps base `kubectl apply -k` runs identical for those forks and lets the ones that do need it opt in by uncommenting a single line. It also keeps `local_data_dir` out of the base `settings-overrides.json`, so the `os.path.ismount()` gate never has to false-positive on the pre-created `/mounted-data` directory shipped in the image.
 
 ### Step 5 — Configure the admin password (optional)
 

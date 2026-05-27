@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rq-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: rq-worker
+          volumeMounts:
+            - name: mounted-data
+              mountPath: /mounted-data
+              readOnly: true
+      volumes:
+        - name: mounted-data
+          persistentVolumeClaim:
+            claimName: mounted-data-pvc
+            readOnly: true

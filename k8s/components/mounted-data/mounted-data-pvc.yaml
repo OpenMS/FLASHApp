@@ -1,0 +1,27 @@
+# Claim for the host-side MS data drive surfaced inside the app at
+# /mounted-data. Bound to a PersistentVolume the operator pre-provisions
+# (NFS, cinder, pre-attached cloud disk, ...). Defaults to ReadOnlyMany
+# so the same drive can attach to every Streamlit replica and the RQ
+# worker simultaneously — matches the docker-compose `:ro` example.
+#
+# Operator wiring:
+#   - Static binding (typical): leave storageClassName empty and either
+#     set volumeName to the target PV, or rely on a label selector on
+#     the PV that matches this claim.
+#   - Dynamic provisioning (rare for this use case): set storageClassName
+#     to a class that supports the chosen access mode (e.g. "nfs-csi").
+#     cinder-csi only supports ReadWriteOnce, so switch accessModes to
+#     [ReadWriteOnce] if you go that route — replicas will still
+#     co-locate via the existing workspaces-pvc RWO mount.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mounted-data-pvc
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 100Gi
+  # volumeName: <pv-name>

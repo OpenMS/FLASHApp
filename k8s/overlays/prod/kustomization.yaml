@@ -1,11 +1,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Set explicitly so the namespace transformer also applies to resources
+# pulled in by components (e.g. mounted-data); the base kustomization's
+# `namespace:` only covers base resources, and a component-added PVC
+# without a namespace would break nameReference rewriting (claimName
+# would stay un-prefixed).
+namespace: openms
+
 resources:
   - ../../base
 
 components:
   - ../../components/memory-tier-high
+  # Uncomment to mount a host MS-data drive at /mounted-data and expose
+  # the in-app file browser for it. See k8s/components/mounted-data and
+  # the "Mounted data drive" section of docs/kubernetes-deployment.md.
+  # - ../../components/mounted-data
 
 namePrefix: flashapp-
 
