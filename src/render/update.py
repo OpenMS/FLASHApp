@@ -165,10 +165,13 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
         )
 
     if (
-        (component in ['Internal Fragment Map', 'Sequence View']) 
+        (component in ['Internal Fragment Map', 'Sequence View'])
         and (tool == 'flashtnt')
     ):
-        if 'proteinIndex' not in selection_store:
+        if (
+            'proteinIndex' not in selection_store
+            or selection_store['proteinIndex'] not in data.get('sequence_data', {})
+        ):
             data['sequence_data'] = {}
         else:
             data['sequence_data'] = {

@@ -131,10 +131,19 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data = file_manager.get_results(selected_data,  ['sequence_view'])
         data_to_send['per_scan_data'] = data['sequence_view']
         if tool == 'flashtnt':
-            data = file_manager.get_results(selected_data,  ['sequence_data'])
-            data_to_send['sequence_data'] = data['sequence_data']
-            data = file_manager.get_results(selected_data,  ['settings'])
-            data_to_send['settings'] = data['settings']
+            # protein_dfs is stored before sequence_data/settings in parseTnT, so
+            # legacy or partially-processed datasets may surface in the viewer
+            # without these keys. Fall back to empty defaults instead of crashing.
+            if file_manager.result_exists(selected_data, 'sequence_data'):
+                data = file_manager.get_results(selected_data,  ['sequence_data'])
+                data_to_send['sequence_data'] = data['sequence_data']
+            else:
+                data_to_send['sequence_data'] = {}
+            if file_manager.result_exists(selected_data, 'settings'):
+                data = file_manager.get_results(selected_data,  ['settings'])
+                data_to_send['settings'] = data['settings']
+            else:
+                data_to_send['settings'] = {'tolerance': 10.0, 'ion_types': ['b', 'y']}
         component_arguments = SequenceView(title='Sequence View')
     # elif comp_name == 'internal_fragment_map':
     #     data = file_manager.get_results(selected_data,  ['sequence_view'])
