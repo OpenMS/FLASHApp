@@ -14,13 +14,11 @@ def parseDeconv(
     logger.log("0.0 %", level=2)
 
     # Parse input files
-    deconv_df, anno_df, _, _, _ = parseFLASHDeconvOutput(
-        anno_annotated_mzML, out_deconv_mzML, logger=logger
+    tolerance = parseFLASHDeconvOutput(
+        anno_annotated_mzML, out_deconv_mzML,
+        file_manager, dataset_id, logger=logger,
     )
-    file_manager.store_data(dataset_id, 'anno_dfs', anno_df)
-    file_manager.store_data(dataset_id, 'deconv_dfs', deconv_df)
-    del deconv_df
-    del anno_df
+    file_manager.store_data(dataset_id, 'deconv_tolerance', float(tolerance))
     
     # Immediately reload as polars LazyFrames for efficient processing
     results = file_manager.get_results(dataset_id, ['anno_dfs', 'deconv_dfs'], use_polars=True)

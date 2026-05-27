@@ -9,6 +9,7 @@ import polars as pl
 import pickle as pkl
 import pyarrow.dataset as ds
 
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import Union, List
@@ -347,8 +348,24 @@ class FileManager:
         cache_path = self.cache_path.resolve()
         relative_data_path = data_path.relative_to(cache_path)
         self._add_entry('stored_data', dataset_id, name_tag, relative_data_path)
-        
-    def store_file(self, dataset_id: str, name_tag: str, file: Path | BytesIO, 
+
+    @contextmanager
+    def parquet_sink(self, dataset_id, name_tag):
+        """Reserve target path, write to <target>.tmp, atomically rename and register
+        SQLite index entry on clean exit; remove tmp on exception."""
+        final_path = Path(self.cache_path, 'files', dataset_id, f"{name_tag}.pq")
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = final_path.with_suffix('.pq.tmp')
+        try:
+            yield tmp_path
+            tmp_path.replace(final_path)
+            self._add_entry('stored_data', dataset_id, name_tag,
+                            final_path.relative_to(self.cache_path))
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+    def store_file(self, dataset_id: str, name_tag: str, file: Path | BytesIO,
                    remove: bool = True, file_name = None) -> None:
         """
         Stores a given file.

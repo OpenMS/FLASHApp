@@ -7,7 +7,7 @@ from io import StringIO
 from pyopenms import AASequence
 from scipy.stats import gaussian_kde
 
-from src.parse.masstable import parseFLASHDeconvOutput, parseFLASHTaggerOutput
+from src.parse.masstable import parseFLASHTaggerOutput
 from src.render.sequence import (
     remove_ambigious, getFragmentDataFromSeq, getInternalFragmentDataFromSeq
 )
@@ -17,9 +17,7 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
     logger.log("Progress of 'processing FLASHTnT results':", level=2)
     logger.log("0.0 %", level=2)
 
-    deconv_df, _, tolerance, _, _,  = parseFLASHDeconvOutput(
-        anno_mzML, deconv_mzML
-    )
+    tolerance = file_manager.get_results(dataset_id, ['deconv_tolerance'])['deconv_tolerance']
     tag_df, protein_df = parseFLASHTaggerOutput(tag_tsv, protein_tsv)
     logger.log("10.0 %", level=2)
     
