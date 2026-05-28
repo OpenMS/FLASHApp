@@ -33,6 +33,9 @@ patches:
       name: streamlit
     patch: |
       - op: replace
+        path: /spec/replicas
+        value: 10
+      - op: replace
         path: /spec/template/spec/containers/0/env/0/value
         value: "redis://flashapp-redis:6379/0"
   - target:

@@ -213,6 +213,8 @@ components:
 
 `memory-tier-low` is the right choice for most apps. Switch to `memory-tier-high` only if the workload genuinely needs tens of GB of RAM (DIA spectral-library + OpenSwath peak picking, DIA-LFQ). The tier component adds the matching `nodeSelector: openms.de/memory-tier=<tier>` plus `requests`/`limits` sized for that node, so cluster nodes must already be labelled `openms.de/memory-tier=low` / `...=high`.
 
+FLASHApp's prod overlay uses `memory-tier-high` and runs **10 streamlit** replicas (limits `10Gi` / `4` CPU) and **5 rq-worker** replicas (limits `4` CPU / `20Gi`). Streamlit/worker replica counts are set in `k8s/overlays/prod/kustomization.yaml`; the per-pod `requests`/`limits` live in `k8s/components/memory-tier-high/`.
+
 ### Step 5 — Configure the admin password (optional)
 
 Skip this step if you don't need the "Save as Demo" feature. `k8s/base/streamlit-secrets.yaml` already ships the `streamlit-secrets` Secret with an empty password, so `kubectl apply -k` always creates it. While the password is empty, the Save-as-Demo UI is hidden entirely — no error, no button. Setting a non-empty password is what enables the feature.
