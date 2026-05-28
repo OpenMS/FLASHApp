@@ -10,6 +10,7 @@ from pyopenms import AASequence
 from scipy.stats import gaussian_kde
 
 from src.parse.masstable import parseFLASHTaggerOutput
+from src.parse.tag_resolution import build_tagspace_to_proteoform_map
 from src.render.sequence import (
     remove_ambigious, getFragmentDataFromSeq, getInternalFragmentDataFromSeq
 )
@@ -68,6 +69,9 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
 
     tolerance = file_manager.get_results(dataset_id, ['deconv_tolerance'])['deconv_tolerance']
     tag_df, protein_df = parseFLASHTaggerOutput(tag_tsv, protein_tsv)
+    # Map FLASHTagger tag-space ProteoformIndex -> protein-space index from the
+    # raw frames (before protein_df is renamed and tag_df is linearized).
+    tagspace_to_proteoform = build_tagspace_to_proteoform_map(tag_df, protein_df)
     logger.log("10.0 %", level=2)
     
     # protein_table
@@ -109,10 +113,14 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
     sequence_data = {}
     # internal_fragment_data = {}  # Disabled
     # Compute coverage
-    # Group tag ranges by proteoform once (StartPos/EndPos already shifted above).
+    # tag_df['ProteinIndex'] is tag-space; map to protein-space so coverage uses
+    # each proteoform's own tags (the two enumerations diverge on large runs).
+    proteoform_of_tag = tag_df['ProteinIndex'].map(
+        lambda q: tagspace_to_proteoform.get(int(q), -1) if pd.notna(q) else -1
+    )
     tag_groups = {
         pid: (g['StartPos'].to_numpy(), g['EndPos'].to_numpy())
-        for pid, g in tag_df.groupby('ProteinIndex')[['StartPos', 'EndPos']]
+        for pid, g in tag_df.groupby(proteoform_of_tag)[['StartPos', 'EndPos']]
     }
     for i, row in protein_df.iterrows():
         pid = row['index']

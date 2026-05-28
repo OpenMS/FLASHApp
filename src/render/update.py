@@ -173,14 +173,18 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
             additional_data['dataset'], component
         )
     elif component == 'Tag Table':
-        # flashtnt-only panel: ship only the selected proteoform's scan's tags.
+        # flashtnt-only panel: tags are scan (spectrum) data. Scope to the
+        # selected proteoform's scan and stamp ProteinIndex so the frontend's
+        # tag.ProteinIndex===selectedProteinIndex filter passes all the scan's
+        # tags through to the table and the on-spectrum overlay.
         scan_map = additional_data.get('proteoform_scan_map', {})
         entry = scan_map.get(selection_store.get('proteinIndex'))
         if entry is None:
             data['tag_table'] = data['tag_table'].iloc[0:0, :]
         else:
-            tags = data['tag_table']
-            data['tag_table'] = tags[tags['Scan'] == entry['scan']]
+            sel = data['tag_table'][data['tag_table']['Scan'] == entry['scan']].copy()
+            sel['ProteinIndex'] = selection_store['proteinIndex']
+            data['tag_table'] = sel
 
     if (
         (component in ['Internal Fragment Map', 'Sequence View'])
