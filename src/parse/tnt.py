@@ -13,6 +13,53 @@ from src.render.sequence import (
 )
 
 
+def _coverage_from_ranges(starts, ends, seq_len):
+    """Per-residue coverage: number of tags whose inclusive [StartPos, EndPos]
+    range contains the position. Equivalent to the old per-position sum, but
+    walks each tag once. StartPos/EndPos arrive as float64 (the column carries
+    NaN for unplaced tags); NaN tags are skipped, matching the old comparison
+    where NaN<=i and NaN>=i are both False. Integer-valued positions cast
+    exactly; StartPos=-1 clamps to 0; numpy caps the slice stop."""
+    coverage = np.zeros(seq_len, dtype='float')
+    for s, e in zip(starts, ends):
+        if s != s or e != e:          # NaN positions contribute nothing
+            continue
+        coverage[(int(s) if s > 0 else 0):int(e) + 1] += 1
+    return coverage
+
+
+def _linearize_tag_df(tag_df):
+    """Expand ';'-packed multi-proteoform tag rows to one row per (tag, proteoform).
+
+    A tag can match N proteoforms; proteoform-specific fields are ';'-packed.
+    Only rows whose ProteoformIndex contains ';' expand; the rest pass through
+    untouched. Both groups are written to one TSV buffer and re-read, so the
+    roundtrip alone determines dtypes — matching the original code exactly
+    (the regression comparator checks dtypes strictly; a pd.concat here would
+    upcast int->float when the split frame is empty)."""
+    is_split = tag_df['ProteoformIndex'].astype(str).str.contains(';', regex=False)
+
+    non_split = tag_df[~is_split].copy()
+    non_split['ProteoformIndex'] = non_split['ProteoformIndex'].fillna(-1)
+
+    expanded = {c: [] for c in tag_df.columns}
+    for _, row in tag_df[is_split].iterrows():
+        no_items = row['ProteoformIndex'].count(';') + 1
+        for c in tag_df.columns:
+            if isinstance(row[c], str) and (';' in row[c]):
+                expanded[c] += row[c].split(';')
+            else:
+                expanded[c] += [row[c]] * no_items
+    split_expanded = pd.DataFrame(expanded, columns=tag_df.columns)
+
+    buf = StringIO()
+    non_split.to_csv(buf, sep='\t', index=False)
+    if len(split_expanded):
+        split_expanded.to_csv(buf, sep='\t', index=False, header=False)
+    buf.seek(0)
+    return pd.read_csv(buf, sep='\t')
+
+
 def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_tsv, logger=None):
     logger.log("Progress of 'processing FLASHTnT results':", level=2)
     logger.log("0.0 %", level=2)
@@ -40,27 +87,7 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
     # tag_table
 
     # Process tag df into a linear data format
-    new_tag_df = {c : [] for c in tag_df.columns}
-    for i, row in tag_df.iterrows():
-        # No splitting if it is not recognized as string
-        if pd.isna(row['ProteoformIndex']):
-            row['ProteoformIndex'] = -1
-        if isinstance(row['ProteoformIndex'], str) and (';' in row['ProteoformIndex']):
-            no_items = row['ProteoformIndex'].count(';') + 1
-            for c in new_tag_df.keys():
-                if (isinstance(row[c], str)) and (';' in row[c]):
-                    new_tag_df[c] += row[c].split(';')
-                else:
-                    new_tag_df[c] += [row[c]]*no_items
-        else:
-            for c in new_tag_df.keys():
-                new_tag_df[c].append(row[c])
-    tag_df = pd.DataFrame(new_tag_df)
-
-    tsv_buffer = StringIO()
-    tag_df.to_csv(tsv_buffer, sep='\t', index=False)
-    tsv_buffer.seek(0)
-    tag_df = pd.read_csv(tsv_buffer, sep='\t')
+    tag_df = _linearize_tag_df(tag_df)
 
     # Complete df
     tag_df['StartPosition'] = tag_df['StartPosition'] - 1
@@ -80,16 +107,20 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
     sequence_data = {}
     # internal_fragment_data = {}  # Disabled
     # Compute coverage
+    # Group tag ranges by proteoform once (StartPos/EndPos already shifted above).
+    tag_groups = {
+        pid: (g['StartPos'].to_numpy(), g['EndPos'].to_numpy())
+        for pid, g in tag_df.groupby('ProteinIndex')[['StartPos', 'EndPos']]
+    }
     for i, row in protein_df.iterrows():
         pid = row['index']
         sequence = row['sequence']
-        coverage = np.zeros(len(sequence), dtype='float')
-        for i in range(len(sequence)):
-            coverage[i] = np.sum(
-                (tag_df['ProteinIndex'] == pid) &
-                (tag_df['StartPos'] <= i) &
-                (tag_df['EndPos'] >= i)
-            )
+        L = len(sequence)
+        if pid in tag_groups:
+            starts, ends = tag_groups[pid]
+            coverage = _coverage_from_ranges(starts, ends, L)
+        else:
+            coverage = np.zeros(L, dtype='float')
         p_cov = np.zeros(len(coverage))
         if np.max(coverage) > 0:
             p_cov = coverage/np.max(coverage)
