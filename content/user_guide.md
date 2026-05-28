@@ -218,12 +218,16 @@ If you have any questions or need assistance, feel free to contact our support t
 
 ### **FLASHApp Support Contacts:**
 - **Tom Müller**: [tom.mueller@uni-tuebingen.de](mailto:tom.mueller@uni-tuebingen.de)
-- **Ayesha Feroz**: [ayesha.feroz@uni-tuebingen.de](mailto:ayesha.feroz@uni-tuebingen.de)
 
 ---
 
 ## **📚 Relevant Publications**
 For more information about the research behind FLASHDeconv & FLASHTnT, refer to the following publications:
+
+- **Müller, T. D., Kim, J., Almaguer, A., Feroz, A., Kim, J., Walter, A., Jung, W., Kohlbacher, O., & Jeong, K.** (2025).  
+  *FLASHApp: Interactive Data Analysis and Visualization for Top-Down Proteomics.*  
+  **Proteomics, 25(24), 15-21**  
+  📄 [Read the paper](https://doi.org/10.1002/pmic.70042)
 
 - **Jeong, K., Kim, J., Gaikwad, M., Hidayah, S. N., Heikaus, L., Schlüter, H., & Kohlbacher, O.** (2020).  
   *FLASHDeconv: Ultrafast, high-quality feature deconvolution for top-down proteomics.*  
@@ -234,9 +238,10 @@ For more information about the research behind FLASHDeconv & FLASHTnT, refer to 
   *OpenMS webapps: Building user-friendly solutions for MS analysis.*  
   📄 [Read the paper](https://pubs.acs.org/doi/10.1021/acs.jproteome.4c00872)
 
-- **Müller, T., Kim, J., Almaguer, A., et al.** (2025, April 17).
- *FLASHApp: Interactive Data Analysis and Visualization for Top-Down Proteomics.*
- 📄 [Read the paper](https://www.authorea.com/users/914240/articles/1287405-flashapp-interactive-data-analysis-and-visualization-for-top-down-proteomics?commit=1447908dbdd26d9a2312890c9c400d96f2b171f7)
+- **Pfeuffer, J., et al.** (2024).  
+  *OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data.*  
+  **Nature Methods, 21(3), 365-367**  
+  📄 [Read the paper](https://doi.org/10.1038/s41592-024-02197-7)
 ---
 
 🚀 **You're now ready to use FLASHDeconv & FLASHTnT!**

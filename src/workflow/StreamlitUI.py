@@ -1656,7 +1656,7 @@ Started: {status.get('started_at', 'N/A')}""")
         tools_to_citations = {
             'FLASHDeconv' : 'Jeong, Kyowon, et al. "FLASHDeconv: Ultrafast, High-Quality Feature Deconvolution for Top-Down Proteomics." (2020) [https://doi.org/10.1016/j.cels.2020.01.003](https://doi.org/10.1016/j.cels.2020.01.003).'
         }
-        citation_position = 3
+        citation_position = 4
 
         url = f"https://github.com/{st.session_state.settings['github-user']}/{st.session_state.settings['repository-name']}"
         tools = [p.stem for p in Path(self.parameter_manager.ini_dir).iterdir()]
@@ -1682,16 +1682,18 @@ Started: {status.get('started_at', 'N/A')}""")
             version = result.stderr.split("Version: ")[1].split("-")[0]
 
         markdown.append(
-            f"""Data was processed using **{st.session_state.settings['app-name']}** ([{url}]({url})), a web application based on the OpenMS WebApps framework [1].
-OpenMS ([https://www.openms.org](https://www.openms.org)) is a free and open-source software for LC-MS data analysis [2].
+            f"""Data was processed using **{st.session_state.settings['app-name']}** ([{url}]({url})) [1], a web application based on the OpenMS WebApps framework [2].
+OpenMS ([https://www.openms.org](https://www.openms.org)) is a free and open-source software for LC-MS data analysis [3].
 The workflow includes the **OpenMS {version}** TOPP tool{'s' if len(tools) > 1 else ''} {tool_text} as well as Python scripts. Non-default parameters are listed in the supplementary section below.
 
-[1] Müller, Tom David, et al. "OpenMS WebApps: Building User-Friendly Solutions for MS Analysis." (2025) [https://doi.org/10.1021/acs.jproteome.4c00872](https://doi.org/10.1021/acs.jproteome.4c00872).
+[1] Müller, Tom David, et al. "FLASHApp: Interactive Data Analysis and Visualization for Top-Down Proteomics." (2025) [https://doi.org/10.1002/pmic.70042](https://doi.org/10.1002/pmic.70042).
 \\
-[2] Pfeuffer, Julianus, et al. "OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data." (2024) [https://doi.org/10.1038/s41592-024-02197-7](https://doi.org/10.1038/s41592-024-02197-7)."""
+[2] Müller, Tom David, et al. "OpenMS WebApps: Building User-Friendly Solutions for MS Analysis." (2025) [https://doi.org/10.1021/acs.jproteome.4c00872](https://doi.org/10.1021/acs.jproteome.4c00872).
+\\
+[3] Pfeuffer, Julianus, et al. "OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data." (2024) [https://doi.org/10.1038/s41592-024-02197-7](https://doi.org/10.1038/s41592-024-02197-7)."""
         )
         for i, cited_tool in enumerate(cited_tools):
-            markdown.append(f'\\\n[{i+3}] {tools_to_citations[cited_tool]}  ')
+            markdown.append(f'\\\n[{i+4}] {tools_to_citations[cited_tool]}  ')
         markdown.append('\n')
         markdown.append(self.non_default_params_summary())
         return "\n".join(markdown)
