@@ -54,6 +54,24 @@ jobs:
           - variant: full
             dockerfile: Dockerfile
     steps:
+      - name: Free disk space
+        # `load: true` imports the built image into the docker daemon and the
+        # later `docker save` writes it out again, so the ~6-8 GB image needs
+        # roughly 3x its size on disk. ubuntu-latest's default free space isn't
+        # enough, so the build dies at "importing to docker" with
+        # "no space left on device". Mirrors the build-arm64 job below.
+        run: |
+          # /opt/hostedtoolcache/CodeQL is ~5 GB and unused here; keep the rest
+          # of hostedtoolcache to stay consistent with build-arm64.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghcup /usr/share/swift \
+                      /usr/local/share/boost \
+                      /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get clean
+          # Pre-installed docker images aren't used by this build job.
+          sudo docker image prune --all --force || true
+          df -h
+
       - uses: actions/checkout@v4
 
       - name: Compute lowercase image name (OCI refs must be lowercase)
