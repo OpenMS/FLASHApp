@@ -2,6 +2,8 @@ import json
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
+from src.render.sequence_data_store import build_table, ROW_GROUP_SIZE
 
 from io import StringIO
 from pyopenms import AASequence
@@ -173,7 +175,9 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
         #     str(sequence)[start_index:end_index+1], modifications
         # )  # Disabled
 
-    file_manager.store_data(dataset_id, 'sequence_data', sequence_data)
+    sequence_data_table = build_table(sequence_data)
+    with file_manager.parquet_sink(dataset_id, 'sequence_data') as sequence_data_path:
+        pq.write_table(sequence_data_table, sequence_data_path, row_group_size=ROW_GROUP_SIZE)
     # file_manager.store_data(
     #     dataset_id, 'internal_fragment_data', internal_fragment_data
     # )  # Disabled
