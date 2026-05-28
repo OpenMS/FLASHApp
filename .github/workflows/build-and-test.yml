@@ -38,7 +38,10 @@ jobs:
           kubectl kustomize k8s/overlays/prod/ | \
             kubeconform -summary -strict -kubernetes-version 1.28.0 -skip IngressRoute
 
-  build:
+  build-amd64:
+    # amd64 path. Produces per-arch tags `<ref>-<variant>-amd64`; the
+    # multi-arch manifest under `<ref>-<variant>` (and `latest`) is stitched
+    # together in `create-manifest` once the sibling `build-arm64` succeeds.
     needs: lint-manifests
     runs-on: ubuntu-latest
     permissions:
@@ -73,41 +76,211 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch,suffix=-${{ matrix.variant }}
-            type=ref,event=tag,suffix=-${{ matrix.variant }}
-            type=sha,prefix=,suffix=-${{ matrix.variant }}
-            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+            type=ref,event=branch,suffix=-${{ matrix.variant }}-amd64
+            type=ref,event=tag,suffix=-${{ matrix.variant }}-amd64
+            type=sha,prefix=,suffix=-${{ matrix.variant }}-amd64
+            type=raw,value=latest-amd64,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 
       - name: Build and conditionally push
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
           load: true
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}/cache:${{ matrix.variant }}
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}/cache:{2},mode=max', env.REGISTRY, env.IMAGE_NAME_LC, matrix.variant) || '' }}
+          # provenance/attestations turn the pushed tag into a manifest list,
+          # which the create-manifest job's `docker manifest create` then
+          # refuses ("is a manifest list"). Keep the push as a single-platform
+          # image manifest — same as the build-arm64 job.
+          provenance: false
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}/cache:${{ matrix.variant }}-amd64
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}/cache:{2}-amd64,mode=max', env.REGISTRY, env.IMAGE_NAME_LC, matrix.variant) || '' }}
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Retag for kind (stable local tag)
+      - name: Retag for kind (image name the kustomize overlay points at)
         run: |
-          # load:true above loaded all meta-action tags into local docker.
-          # Retag the first one to the stable name the kustomize overlay expects.
+          # The prod overlay sets `newName: ghcr.io/openms/flashapp`,
+          # `newTag: latest`. The rendered manifests reference that exact
+          # ref, so we need it loaded into kind under that name. Tag invariant
+          # across branches so the test always works.
           FIRST_TAG=$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n 1)
-          docker tag "$FIRST_TAG" openms-streamlit:test
+          docker tag "$FIRST_TAG" ghcr.io/openms/flashapp:latest
 
       - name: Save image as tar
-        run: docker save openms-streamlit:test -o /tmp/image.tar
+        run: docker save ghcr.io/openms/flashapp:latest -o /tmp/image.tar
 
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openms-streamlit-${{ matrix.variant }}-image
+          name: openms-streamlit-${{ matrix.variant }}-amd64-image
           path: /tmp/image.tar
           retention-days: 1
+
+  build-arm64:
+    # arm64 path. Runs on a native ARM64 runner (no QEMU). Produces per-arch
+    # tags `<ref>-<variant>-arm64`; gets merged into the multi-arch manifest
+    # under `<ref>-<variant>` by the `create-manifest` job below. The build
+    # uses a separate `Dockerfile.arm` that swaps the miniforge installer to
+    # aarch64 and guards the THIRDPARTY/Linux/aarch64 copy. The built image is also uploaded as
+    # an artifact so the apptainer / nginx / traefik integration jobs can
+    # exercise the ARM image on a native ARM runner (matrix arch=arm64).
+    needs: lint-manifests
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: full
+            dockerfile: Dockerfile.arm
+    steps:
+      - name: Free disk space
+        # OpenMS source build needs ~25 GB of scratch space; the ARM runner
+        # image is tighter than the AMD one out of the box. Mirrors what
+        # FLASHApp's publish-docker-images.yml does at the top of its ARM job.
+        run: |
+          # Keep /opt/hostedtoolcache: helm/kind-action and setup-kubectl
+          # cache binaries there and fail if the directory is missing.
+          # /opt/hostedtoolcache/CodeQL is ~5 GB and not used in these jobs.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghcup /usr/share/swift \
+                      /usr/local/share/boost \
+                      /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get clean
+          # Pre-installed docker images (node, php, mysql, ...) aren't used
+          # in kind-based tests; reclaim that space too.
+          sudo docker image prune --all --force || true
+          df -h
+
+      - uses: actions/checkout@v4
+
+      - name: Compute lowercase image name (OCI refs must be lowercase)
+        run: echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,suffix=-${{ matrix.variant }}-arm64
+            type=ref,event=tag,suffix=-${{ matrix.variant }}-arm64
+            type=sha,prefix=,suffix=-${{ matrix.variant }}-arm64
+            type=raw,value=latest-arm64,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+
+      - name: Build and conditionally push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64
+          load: true
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}/cache:${{ matrix.variant }}-arm64
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}/cache:{2}-arm64,mode=max', env.REGISTRY, env.IMAGE_NAME_LC, matrix.variant) || '' }}
+          provenance: false
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag for kind (image name the kustomize overlay points at)
+        run: |
+          # The prod overlay sets `newName: ghcr.io/openms/flashapp`,
+          # `newTag: latest`. The rendered manifests reference that exact
+          # ref, so we need it loaded into kind under that name. Tag invariant
+          # across branches so the test always works.
+          FIRST_TAG=$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n 1)
+          docker tag "$FIRST_TAG" ghcr.io/openms/flashapp:latest
+
+      - name: Save image as tar
+        run: docker save ghcr.io/openms/flashapp:latest -o /tmp/image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openms-streamlit-${{ matrix.variant }}-arm64-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  create-manifest:
+    # Stitch the per-arch tags into multi-arch manifest lists. The manifest
+    # tags reuse the OLD scheme (`<ref>-<variant>`, `latest`) so existing
+    # consumers (k8s overlays, docker-compose users, `docker pull` callers)
+    # keep working transparently — docker now auto-selects the right arch
+    # on pull. PRs don't push per-arch tags, so there's nothing to merge.
+    needs: [build-amd64, build-arm64]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full]
+    steps:
+      - name: Compute lowercase image name
+        run: echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute manifest tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # NB: no -amd64/-arm64 suffix here. These are the multi-arch
+          # manifest names; they must match the pre-arm64 tag scheme so
+          # `:main-full`, `:v1.0.0-full`, `:latest` continue to resolve.
+          tags: |
+            type=ref,event=branch,suffix=-${{ matrix.variant }}
+            type=ref,event=tag,suffix=-${{ matrix.variant }}
+            type=sha,prefix=,suffix=-${{ matrix.variant }}
+            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+
+      - name: Create and push multi-arch manifests
+        # Iterate over manifest tags (newline-separated from metadata-action)
+        # and merge the matching `-amd64` / `-arm64` per-arch tags into each.
+        # `--amend` makes the step idempotent across workflow_dispatch reruns.
+        # `docker manifest push` accepts only one ref per invocation, hence
+        # the loop.
+        run: |
+          set -euo pipefail
+          while IFS= read -r manifest_tag; do
+            [ -z "$manifest_tag" ] && continue
+            amd_tag="${manifest_tag}-amd64"
+            arm_tag="${manifest_tag}-arm64"
+            echo "Creating manifest ${manifest_tag} from:"
+            echo "  amd: ${amd_tag}"
+            echo "  arm: ${arm_tag}"
+            docker manifest create "$manifest_tag" \
+              --amend "$amd_tag" \
+              --amend "$arm_tag"
+            docker manifest push "$manifest_tag"
+          done <<< "${{ steps.meta.outputs.tags }}"
 
   test-apptainer:
     # Apptainer/Singularity is the dominant container runtime on HPC clusters.
@@ -115,7 +288,16 @@ jobs:
     # (not root inside the image). The entrypoint must tolerate both: this job
     # exercises that contract by running the built image under apptainer and
     # waiting for the streamlit /_stcore/health endpoint to come up.
-    needs: build
+    #
+    # amd64 only: upstream apptainer does NOT publish arm64 .deb assets
+    # (https://github.com/apptainer/apptainer/releases — every release lists
+    # only `apptainer_<ver>_amd64.deb`), so eWaterCycle/setup-apptainer fails
+    # on ubuntu-24.04-arm with "sudo exit code 100" when its
+    # `apt-get install ./apptainer_*.deb` resolves a non-existent package.
+    # Building apptainer from source on the arm runner would add ~15 min and
+    # significant maintenance surface for limited value (HPC SIF consumers
+    # remain amd64). Re-evaluate if upstream starts publishing arm64 builds.
+    needs: build-amd64
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -124,10 +306,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Free disk space
+        # ubuntu-latest has ~14 GB free; the full image (5-8 GB) plus kind
+        # node image plus loading the OCI tar into both docker and kind can
+        # exhaust it. The arm runner is even tighter. Same incantation as
+        # `build-arm64`'s "Free disk space" step.
+        run: |
+          # Keep /opt/hostedtoolcache: helm/kind-action and setup-kubectl
+          # cache binaries there and fail if the directory is missing.
+          # /opt/hostedtoolcache/CodeQL is ~5 GB and not used in these jobs.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghcup /usr/share/swift \
+                      /usr/local/share/boost \
+                      /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get clean
+          # Pre-installed docker images (node, php, mysql, ...) aren't used
+          # in kind-based tests; reclaim that space too.
+          sudo docker image prune --all --force || true
+          df -h
+
       - name: Download image artifact
         uses: actions/download-artifact@v4
         with:
-          name: openms-streamlit-${{ matrix.variant }}-image
+          name: openms-streamlit-${{ matrix.variant }}-amd64-image
           path: /tmp
 
       - name: Install apptainer
@@ -333,23 +534,45 @@ jobs:
           done <<< "${{ steps.meta.outputs.tags }}"
 
   test-nginx:
-    needs: build
-    runs-on: ubuntu-latest
+    needs: [build-amd64, build-arm64]
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        variant: [full]
+        include:
+          - variant: full
+            arch: amd64
+            runner: ubuntu-latest
+          - variant: full
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free disk space
+        # ubuntu-latest has ~14 GB free; the full image (5-8 GB) plus kind
+        # node image plus loading the OCI tar into both docker and kind can
+        # exhaust it. The arm runner is even tighter. Same incantation as
+        # `build-arm64`'s "Free disk space" step.
+        run: |
+          # Keep /opt/hostedtoolcache: helm/kind-action and setup-kubectl
+          # cache binaries there and fail if the directory is missing.
+          # /opt/hostedtoolcache/CodeQL is ~5 GB and not used in these jobs.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghcup /usr/share/swift \
+                      /usr/local/share/boost \
+                      /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get clean
+          # Pre-installed docker images (node, php, mysql, ...) aren't used
+          # in kind-based tests; reclaim that space too.
+          sudo docker image prune --all --force || true
+          df -h
 
       - name: Download image artifact
         uses: actions/download-artifact@v4
         with:
-          name: openms-streamlit-${{ matrix.variant }}-image
+          name: openms-streamlit-${{ matrix.variant }}-${{ matrix.arch }}-image
           path: /tmp
-
-      - name: Load image into local docker
-        run: docker load -i /tmp/image.tar
 
       - name: Create kind cluster
         uses: helm/kind-action@v1
@@ -358,7 +581,13 @@ jobs:
           config: .github/kind-config.yaml
 
       - name: Load image into kind cluster
-        run: kind load docker-image openms-streamlit:test --name test-cluster
+        # Use `kind load image-archive` (not docker-image) so we never store
+        # the image in host docker. Saves ~5-8 GB on /var/lib/docker. Delete
+        # the tar afterwards to free the same again on /tmp — the image is
+        # now in both kind nodes' containerd, which is enough.
+        run: |
+          kind load image-archive /tmp/image.tar --name test-cluster
+          rm -f /tmp/image.tar
 
       - name: Install nginx ingress controller
         run: |
@@ -370,7 +599,7 @@ jobs:
           # Filter out Traefik IngressRoute (kind cluster uses nginx) and force imagePullPolicy=Never
           kubectl kustomize k8s/overlays/prod/ | \
             yq 'select(.kind != "IngressRoute")' | \
-            sed 's|imagePullPolicy: IfNotPresent|imagePullPolicy: Never|g' | \
+            sed -E 's|imagePullPolicy: (IfNotPresent\|Always)|imagePullPolicy: Never|g' | \
             sed 's|storageClassName: cinder-csi|storageClassName: standard|g' > /tmp/manifests.yaml
           for i in 1 2 3 4 5; do
             if kubectl apply -f /tmp/manifests.yaml; then
@@ -419,24 +648,67 @@ jobs:
             echo "$host -> 200 OK"
           done
 
+      - name: Dump cluster state on failure
+        if: failure()
+        run: |
+          echo "=== nodes ==="
+          kubectl get nodes -o wide || true
+          echo "=== pods (all namespaces) ==="
+          kubectl get pods -A -o wide || true
+          echo "=== app pods describe ==="
+          kubectl describe pod -n openms -l app=${SLUG} || true
+          echo "=== app pod logs ==="
+          kubectl logs -n openms -l app=${SLUG} --tail=200 --all-containers --prefix || true
+          echo "=== app pod previous logs (if crashed) ==="
+          kubectl logs -n openms -l app=${SLUG} --tail=200 --all-containers --prefix --previous || true
+          echo "=== ingress ==="
+          kubectl get ingress -A -o wide || true
+          kubectl describe ingress -n openms || true
+          echo "=== services + endpoints ==="
+          kubectl get svc,endpoints -n openms || true
+          echo "=== ingress-nginx controller logs ==="
+          kubectl logs -n ingress-nginx -l app.kubernetes.io/component=controller --tail=200 || true
+
   test-traefik:
-    needs: build
-    runs-on: ubuntu-latest
+    needs: [build-amd64, build-arm64]
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        variant: [full]
+        include:
+          - variant: full
+            arch: amd64
+            runner: ubuntu-latest
+          - variant: full
+            arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free disk space
+        # ubuntu-latest has ~14 GB free; the full image (5-8 GB) plus kind
+        # node image plus loading the OCI tar into both docker and kind can
+        # exhaust it. The arm runner is even tighter. Same incantation as
+        # `build-arm64`'s "Free disk space" step.
+        run: |
+          # Keep /opt/hostedtoolcache: helm/kind-action and setup-kubectl
+          # cache binaries there and fail if the directory is missing.
+          # /opt/hostedtoolcache/CodeQL is ~5 GB and not used in these jobs.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghcup /usr/share/swift \
+                      /usr/local/share/boost \
+                      /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get clean
+          # Pre-installed docker images (node, php, mysql, ...) aren't used
+          # in kind-based tests; reclaim that space too.
+          sudo docker image prune --all --force || true
+          df -h
 
       - name: Download image artifact
         uses: actions/download-artifact@v4
         with:
-          name: openms-streamlit-${{ matrix.variant }}-image
+          name: openms-streamlit-${{ matrix.variant }}-${{ matrix.arch }}-image
           path: /tmp
-
-      - name: Load image into local docker
-        run: docker load -i /tmp/image.tar
 
       - name: Create kind cluster
         uses: helm/kind-action@v1
@@ -445,7 +717,13 @@ jobs:
           config: .github/kind-config.yaml
 
       - name: Load image into kind cluster
-        run: kind load docker-image openms-streamlit:test --name traefik-test
+        # Use `kind load image-archive` (not docker-image) so we never store
+        # the image in host docker. Saves ~5-8 GB on /var/lib/docker. Delete
+        # the tar afterwards to free the same again on /tmp — the image is
+        # now in both kind nodes' containerd, which is enough.
+        run: |
+          kind load image-archive /tmp/image.tar --name traefik-test
+          rm -f /tmp/image.tar
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
@@ -462,7 +740,7 @@ jobs:
       - name: Deploy with Kustomize (full manifests, no filter)
         run: |
           kubectl kustomize k8s/overlays/prod/ | \
-            sed 's|imagePullPolicy: IfNotPresent|imagePullPolicy: Never|g' | \
+            sed -E 's|imagePullPolicy: (IfNotPresent\|Always)|imagePullPolicy: Never|g' | \
             sed 's|storageClassName: cinder-csi|storageClassName: standard|g' > /tmp/manifests.yaml
           for i in 1 2 3 4 5; do
             if kubectl apply -f /tmp/manifests.yaml; then
@@ -510,3 +788,23 @@ jobs:
             echo ""
             echo "$host -> 200 OK"
           done
+
+      - name: Dump cluster state on failure
+        if: failure()
+        run: |
+          echo "=== nodes ==="
+          kubectl get nodes -o wide || true
+          echo "=== pods (all namespaces) ==="
+          kubectl get pods -A -o wide || true
+          echo "=== app pods describe ==="
+          kubectl describe pod -n openms -l app=${SLUG} || true
+          echo "=== app pod logs ==="
+          kubectl logs -n openms -l app=${SLUG} --tail=200 --all-containers --prefix || true
+          echo "=== app pod previous logs (if crashed) ==="
+          kubectl logs -n openms -l app=${SLUG} --tail=200 --all-containers --prefix --previous || true
+          echo "=== traefik ingressroute ==="
+          kubectl get ingressroute -A -o yaml || true
+          echo "=== services + endpoints ==="
+          kubectl get svc,endpoints -n openms || true
+          echo "=== traefik controller logs ==="
+          kubectl logs -n traefik -l app.kubernetes.io/name=traefik --tail=200 || true
