@@ -7,6 +7,7 @@ from src.render.compression import downsample_heatmap
 from src.workflow.FileManager import FileManager
 from src.render.sequence import getFragmentDataFromSeq, getInternalFragmentDataFromSeq
 from pathlib import Path
+from src.render.sequence_data_store import load_entry
 
 
 def get_sequence(selection_store):
@@ -117,7 +118,15 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
         'Augmented Deconvolved Spectrum', 
         'Mass Table', 'Sequence View', 'Internal Fragment Map'
     ]:
-        if 'scanIndex' not in selection_store:
+        if tool == 'flashtnt':
+            scan_map = additional_data.get('proteoform_scan_map', {})
+            entry = scan_map.get(selection_store.get('proteinIndex'))
+            if entry is None:
+                data['per_scan_data'] = data['per_scan_data'].iloc[0:0, :]
+            else:
+                per_scan = data['per_scan_data']
+                data['per_scan_data'] = per_scan[per_scan['index'] == entry['deconv_index']]
+        elif 'scanIndex' not in selection_store:
             data['per_scan_data'] = data['per_scan_data'].iloc[0:0,:]
         else:
             data['per_scan_data'] = data['per_scan_data'].iloc[selection_store['scanIndex']:selection_store['scanIndex']+1,:]
@@ -159,23 +168,34 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
         else:
             selected_data = selection_store[selection]
         data['raw_heatmap_df'] = render_heatmap(
-            additional_data['raw_heatmap_df'], 
+            additional_data['raw_heatmap_df'],
             selected_data,
             additional_data['dataset'], component
         )
+    elif component == 'Tag Table':
+        # flashtnt-only panel: tags are scan (spectrum) data. Scope to the
+        # selected proteoform's scan and stamp ProteinIndex so the frontend's
+        # tag.ProteinIndex===selectedProteinIndex filter passes all the scan's
+        # tags through to the table and the on-spectrum overlay.
+        scan_map = additional_data.get('proteoform_scan_map', {})
+        entry = scan_map.get(selection_store.get('proteinIndex'))
+        if entry is None:
+            data['tag_table'] = data['tag_table'].iloc[0:0, :]
+        else:
+            sel = data['tag_table'][data['tag_table']['Scan'] == entry['scan']].copy()
+            sel['ProteinIndex'] = selection_store['proteinIndex']
+            data['tag_table'] = sel
 
     if (
-        (component in ['Internal Fragment Map', 'Sequence View']) 
+        (component in ['Internal Fragment Map', 'Sequence View'])
         and (tool == 'flashtnt')
     ):
         if 'proteinIndex' not in selection_store:
             data['sequence_data'] = {}
         else:
-            data['sequence_data'] = {
-                selection_store['proteinIndex'] : data[
-                    'sequence_data'
-                ][selection_store['proteinIndex']]
-            }
+            pid = selection_store['proteinIndex']
+            entry = load_entry(additional_data['sequence_data_ds'], pid)
+            data['sequence_data'] = {pid: entry} if entry is not None else {}
 
     if (component == 'Internal Fragment Map') and (tool == 'flashtnt'):
         if 'proteinIndex' not in selection_store:

@@ -6,6 +6,29 @@ from src.render.components import (
     FDRPlotly, FLASHQuant
 )
 from src.render.compression import compute_compression_levels
+from src.render.scan_resolution import build_proteoform_scan_map
+
+
+def _attach_proteoform_scan_map(file_manager, selected_data, additional_data):
+    protein_df = file_manager.get_results(selected_data, ['protein_dfs'])['protein_dfs']
+    scan_table_df = file_manager.get_results(selected_data, ['scan_table'])['scan_table']
+    additional_data['proteoform_scan_map'] = build_proteoform_scan_map(
+        protein_df[['index', 'Scan']], scan_table_df[['index', 'Scan']]
+    )
+
+
+def _load_scan_scoped(file_manager, selected_data, cache_name, tool, additional_data):
+    """Eager-load the cache once (cached in session_state by the caller). For
+    flashtnt also attach the proteoform->scan map so filter_data can slice the
+    selected proteoform's scan in memory -- matching the FLASHDeconv path, which
+    loads once and slices with iloc. (A per-click pyarrow pushdown was tried but
+    re-read the whole file every click: the per-scan caches are written as a
+    single parquet row group, so pushdown cannot skip rows.)"""
+    result = file_manager.get_results(selected_data, [cache_name])
+    if tool == 'flashtnt':
+        _attach_proteoform_scan_map(file_manager, selected_data, additional_data)
+    return result[cache_name]
+
 
 def initialize_data(comp_name, selected_data, file_manager, tool):
 
@@ -108,31 +131,31 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data_to_send['per_scan_data'] = data['scan_table']
         component_arguments = Tabulator('ScanTable')
     elif comp_name == 'deconv_spectrum':
-        data = file_manager.get_results(selected_data, ['deconv_spectrum'])
-        data_to_send['per_scan_data'] = data['deconv_spectrum']
+        data_to_send['per_scan_data'] = _load_scan_scoped(
+            file_manager, selected_data, 'deconv_spectrum', tool, additional_data)
         component_arguments = PlotlyLineplot(title="Deconvolved Spectrum")
     elif comp_name == 'combined_spectrum':
-        data = file_manager.get_results(selected_data, ['combined_spectrum'])
-        data_to_send['per_scan_data'] = data['combined_spectrum']
+        data_to_send['per_scan_data'] = _load_scan_scoped(
+            file_manager, selected_data, 'combined_spectrum', tool, additional_data)
         component_arguments = PlotlyLineplotTagger(title="Augmented Deconvolved Spectrum")
     elif comp_name == 'anno_spectrum':
-        data = file_manager.get_results(selected_data,  ['combined_spectrum'])
-        data_to_send['per_scan_data'] = data['combined_spectrum']
+        data_to_send['per_scan_data'] = _load_scan_scoped(
+            file_manager, selected_data, 'combined_spectrum', tool, additional_data)
         component_arguments = PlotlyLineplot(title="Annotated Spectrum")
     elif comp_name == 'mass_table':
-        data = file_manager.get_results(selected_data,  ['mass_table'])
-        data_to_send['per_scan_data'] = data['mass_table']
+        data_to_send['per_scan_data'] = _load_scan_scoped(
+            file_manager, selected_data, 'mass_table', tool, additional_data)
         component_arguments = Tabulator('MassTable')
     elif comp_name == '3D_SN_plot':
         data = file_manager.get_results(selected_data,  ['threedim_SN_plot'], use_pyarrow=True)
         data_to_send['per_scan_data'] = data['threedim_SN_plot']
         component_arguments = Plotly3Dplot(title="Precursor Signals")
     elif comp_name == 'sequence_view':
-        data = file_manager.get_results(selected_data,  ['sequence_view'])
-        data_to_send['per_scan_data'] = data['sequence_view']
+        data_to_send['per_scan_data'] = _load_scan_scoped(
+            file_manager, selected_data, 'sequence_view', tool, additional_data)
         if tool == 'flashtnt':
-            data = file_manager.get_results(selected_data,  ['sequence_data'])
-            data_to_send['sequence_data'] = data['sequence_data']
+            seq = file_manager.get_results(selected_data, ['sequence_data'], use_pyarrow=True)
+            additional_data['sequence_data_ds'] = seq['sequence_data']
             data = file_manager.get_results(selected_data,  ['settings'])
             data_to_send['settings'] = data['settings']
         component_arguments = SequenceView(title='Sequence View')
@@ -165,8 +188,8 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
         data_to_send['protein_table'] = data['protein_dfs']
         component_arguments = Tabulator('ProteinTable')
     elif comp_name == 'tag_table':
-        data = file_manager.get_results(selected_data,  ['tag_dfs'])
-        data_to_send['tag_table'] = data['tag_dfs']
+        data_to_send['tag_table'] = _load_scan_scoped(
+            file_manager, selected_data, 'tag_dfs', tool, additional_data)
         component_arguments = Tabulator('TagTable')
     elif comp_name == 'quant_visualization':
         data = file_manager.get_results(selected_data,  ['quant_dfs'])
