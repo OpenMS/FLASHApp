@@ -1,6 +1,5 @@
 import json
 import time
-import multiprocessing
 
 import streamlit as st
 
@@ -12,8 +11,6 @@ from os.path import join, splitext, basename, exists, dirname
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
 from src.workflow.WorkflowManager import WorkflowManager
-
-DEFAULT_THREADS = 8
 
 EXAMPLE_DATA = [
     'example-data/deconv/example_lc_ms.mzML',
@@ -44,13 +41,6 @@ class TagWorkflow(WorkflowManager):
         # Input File Selection
         self.ui.select_input_file("mzML-files", multiple=True)
         self.ui.select_input_file("fasta-file", multiple=False)
-
-        # Number of threads cannot be selected in online mode
-        if st.session_state.location != "online":
-            self.ui.input_widget(
-                'threads', name='threads', default=multiprocessing.cpu_count(),
-                help='The number of threads that should be used to run the tools.'
-            )
 
         # Decoy database size toggle
         self.ui.input_widget(
@@ -102,12 +92,6 @@ class TagWorkflow(WorkflowManager):
         # Make sure output directory exists
         base_path = dirname(self.workflow_dir)
         
-        # Define output directory
-        if 'threads' in self.executor.parameter_manager.get_parameters_from_json():
-            threads = self.executor.parameter_manager.get_parameters_from_json()['threads']
-        else:
-            threads = DEFAULT_THREADS
-
         errors = []
         # Process files in sequence
         for in_mzml in in_mzmls:
@@ -190,9 +174,6 @@ class TagWorkflow(WorkflowManager):
                         'out_feature1' : [out_feature1],
                         'out_feature2' : [out_feature2],
                     },
-                    custom_params = {
-                        'threads' : threads
-                    }
                 )
 
                 self.logger.log(f"-> Running FLASHTnT...")
@@ -207,9 +188,6 @@ class TagWorkflow(WorkflowManager):
                         'out_pro' :  [out_protein],
                         'out_prsm' : [out_prsm]
                     },
-                    custom_params = {
-                        'threads' : threads
-                    }
                 )
 
                 self.logger.log(f"-> Processing Results...")
@@ -298,14 +276,6 @@ class DeconvWorkflow(WorkflowManager):
         # Input File Selection
         self.ui.select_input_file("mzML-files", multiple=True)
 
-        # Number of threads cannot be selected in online mode
-        if st.session_state.location != "online":
-            self.ui.input_widget(
-                'threads', name='threads', default=multiprocessing.cpu_count(),
-                help='The number of threads that should be used to run the tools.'
-            )
-
-
         # FLASHDeconv Configuration
         self.ui.input_TOPP(
             'FLASHDeconv', exclude_parameters = ['ida_log'], display_subsections=True,
@@ -322,12 +292,6 @@ class DeconvWorkflow(WorkflowManager):
         
         # Define output directory
         base_path = dirname(self.workflow_dir)
-
-        # Set number of threads
-        if 'threads' in self.executor.parameter_manager.get_parameters_from_json():
-            threads = self.executor.parameter_manager.get_parameters_from_json()['threads']
-        else:
-            threads = DEFAULT_THREADS
 
         errors = []
         # Process files in sequence
@@ -378,9 +342,6 @@ class DeconvWorkflow(WorkflowManager):
                         'out_feature1' : [out_feature1],
                         'out_feature2' : [out_feature2],
                     },
-                    custom_params = {
-                        'threads' : threads
-                    }
                 )
 
                 self.logger.log(f"-> Processing Results...")
