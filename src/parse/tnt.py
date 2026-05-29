@@ -15,6 +15,10 @@ from src.render.sequence import (
     remove_ambigious, getFragmentDataFromSeq, getInternalFragmentDataFromSeq
 )
 
+# Many thin rows (one per tag); sort by Scan so row groups carry contiguous
+# scan ranges and per-scan pushdown can skip non-matching groups.
+TAG_ROW_GROUP_SIZE = 16384
+
 
 def _coverage_from_ranges(starts, ends, seq_len):
     """Per-residue coverage: number of tags whose inclusive [StartPos, EndPos]
@@ -106,7 +110,8 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
             'StartPosition' : 'StartPos' 
         }
     )
-    file_manager.store_data(dataset_id, 'tag_dfs', tag_df)
+    tag_df = tag_df.sort_values('Scan', kind='stable', ignore_index=True)
+    file_manager.store_data(dataset_id, 'tag_dfs', tag_df, row_group_size=TAG_ROW_GROUP_SIZE)
     logger.log("50.0 %", level=2)
 
     # sequence_view & internal_fragment_map
