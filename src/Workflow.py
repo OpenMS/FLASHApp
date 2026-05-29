@@ -86,7 +86,7 @@ class TagWorkflow(WorkflowManager):
             )
 
 
-    def execution(self) -> None:
+    def execution(self) -> bool:
         # Get input files
         try:      
             in_mzmls = self.file_manager.get_files(self.params["mzML-files"])
@@ -279,6 +279,8 @@ class TagWorkflow(WorkflowManager):
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
 
+        return True
+
 
 class DeconvWorkflow(WorkflowManager):
     share_cache = True
@@ -312,7 +314,7 @@ class DeconvWorkflow(WorkflowManager):
         )
 
 
-    def execution(self) -> None:
+    def execution(self) -> bool:
         # Get input files
         try:
             in_mzmls = self.file_manager.get_files(self.params["mzML-files"])
@@ -430,6 +432,8 @@ class DeconvWorkflow(WorkflowManager):
                 errors.append(e)
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
+
+        return True
 
 
 class QuantWorkflow(WorkflowManager):
