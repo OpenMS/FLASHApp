@@ -218,9 +218,17 @@ RUN jq '.online_deployment = true' settings.json > tmp.json && mv tmp.json setti
 ARG GITHUB_TOKEN
 ARG GITHUB_USER=OpenMS
 ARG GITHUB_REPO=FLASHApp
+# RELEASE_TAG pins the download to the release being published (set by the
+# build-and-test workflow on release events). When empty we fall back to the
+# latest release, preserving the previous behavior for develop/manual builds.
+ARG RELEASE_TAG
 RUN if [ -n "$GITHUB_TOKEN" ]; then \
         echo "Downloading release asset..."; \
-        GH_TOKEN="$GITHUB_TOKEN" gh release download -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
+        if [ -n "$RELEASE_TAG" ]; then \
+            GH_TOKEN="$GITHUB_TOKEN" gh release download "$RELEASE_TAG" -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
+        else \
+            GH_TOKEN="$GITHUB_TOKEN" gh release download -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
+        fi; \
     else \
         echo "No token, skipping download."; \
     fi

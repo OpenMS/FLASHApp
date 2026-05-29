@@ -490,3 +490,18 @@ jobs:
         asset_content_type: application/zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-web-image:
+    # On a published Release, run the full Build-and-Test pipeline AFTER the
+    # Windows installer (OpenMS-App.zip) has been uploaded as a release asset,
+    # so the Docker build's `gh release download` bundles the matching
+    # installer. build-and-test.yml builds the image, runs the apptainer +
+    # nginx + traefik integration tests, and only then stitches and pushes the
+    # multi-arch `:latest` (and versioned) tags that the k8s prod overlay pulls.
+    needs: build-executable
+    if: github.event_name == 'release'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-and-test.yml
+    secrets: inherit
