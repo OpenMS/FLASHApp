@@ -6,6 +6,10 @@ from src.parse.masstable import parseFLASHDeconvOutput, getMSSignalDF, getSpectr
 from src.render.compression import downsample_heatmap, compute_compression_levels
 from scipy.stats import gaussian_kde
 
+# One row per scan with heavy array-valued cells; small row groups so per-scan
+# pushdown reads only the matching group(s) instead of the whole file.
+SPECTRA_ROW_GROUP_SIZE = 64
+
 def parseDeconv(
         file_manager, dataset_id, out_deconv_mzML, anno_annotated_mzML, 
         spec1_tsv=None, spec2_tsv=None, logger=None
@@ -105,7 +109,7 @@ def parseDeconv(
         ])
         .sort("index")
     )
-    file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum_lazy)
+    file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
     logger.log("40.0 %", level=2)
 
@@ -126,7 +130,7 @@ def parseDeconv(
         ])
         .sort("index")
     )
-    file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy)
+    file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
     logger.log("50.0 %", level=2)
 
@@ -140,7 +144,7 @@ def parseDeconv(
         ])
         .sort("index")
     )
-    file_manager.store_data(dataset_id, 'sequence_view', sequence_view_lazy)
+    file_manager.store_data(dataset_id, 'sequence_view', sequence_view_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
     logger.log("60.0 %", level=2)
 
@@ -154,7 +158,7 @@ def parseDeconv(
         ])
         .sort("index")
     )
-    file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum_lazy)
+    file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
     logger.log("70.0 %", level=2)
 
@@ -178,7 +182,7 @@ def parseDeconv(
         )
         .sort("index")
     )
-    file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum_lazy)
+    file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
     logger.log("80.0 %", level=2)
 

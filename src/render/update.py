@@ -121,11 +121,13 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
         if tool == 'flashtnt':
             scan_map = additional_data.get('proteoform_scan_map', {})
             entry = scan_map.get(selection_store.get('proteinIndex'))
+            handle = data['per_scan_data']  # pyarrow dataset (lazy)
             if entry is None:
-                data['per_scan_data'] = data['per_scan_data'].iloc[0:0, :]
+                data['per_scan_data'] = handle.to_table(
+                    filter=ds.field('index') == -1).to_pandas()
             else:
-                per_scan = data['per_scan_data']
-                data['per_scan_data'] = per_scan[per_scan['index'] == entry['deconv_index']]
+                data['per_scan_data'] = handle.to_table(
+                    filter=ds.field('index') == entry['deconv_index']).to_pandas()
         elif 'scanIndex' not in selection_store:
             data['per_scan_data'] = data['per_scan_data'].iloc[0:0,:]
         else:
@@ -173,16 +175,19 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
             additional_data['dataset'], component
         )
     elif component == 'Tag Table':
-        # flashtnt-only panel: tags are scan (spectrum) data. Scope to the
-        # selected proteoform's scan and stamp ProteinIndex so the frontend's
-        # tag.ProteinIndex===selectedProteinIndex filter passes all the scan's
-        # tags through to the table and the on-spectrum overlay.
+        # flashtnt-only panel: tags are scan (spectrum) data. Push the selected
+        # proteoform's scan down to the parquet reader and stamp ProteinIndex so
+        # the frontend's tag.ProteinIndex===selectedProteinIndex filter passes
+        # all the scan's tags to the table and the on-spectrum overlay.
         scan_map = additional_data.get('proteoform_scan_map', {})
         entry = scan_map.get(selection_store.get('proteinIndex'))
+        handle = data['tag_table']  # pyarrow dataset (lazy)
         if entry is None:
-            data['tag_table'] = data['tag_table'].iloc[0:0, :]
+            data['tag_table'] = handle.to_table(
+                filter=ds.field('Scan') == -1).to_pandas()
         else:
-            sel = data['tag_table'][data['tag_table']['Scan'] == entry['scan']].copy()
+            sel = handle.to_table(
+                filter=ds.field('Scan') == entry['scan']).to_pandas()
             sel['ProteinIndex'] = selection_store['proteinIndex']
             data['tag_table'] = sel
 

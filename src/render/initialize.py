@@ -18,16 +18,16 @@ def _attach_proteoform_scan_map(file_manager, selected_data, additional_data):
 
 
 def _load_scan_scoped(file_manager, selected_data, cache_name, tool, additional_data):
-    """Eager-load the cache once (cached in session_state by the caller). For
-    flashtnt also attach the proteoform->scan map so filter_data can slice the
-    selected proteoform's scan in memory -- matching the FLASHDeconv path, which
-    loads once and slices with iloc. (A per-click pyarrow pushdown was tried but
-    re-read the whole file every click: the per-scan caches are written as a
-    single parquet row group, so pushdown cannot skip rows.)"""
-    result = file_manager.get_results(selected_data, [cache_name])
+    """For flashtnt, return a pyarrow dataset handle (not a materialized frame)
+    plus the proteoform->scan map, so filter_data can push the selected scan
+    down to the parquet reader -- the per-scan caches are now written with
+    bounded row groups (see deconv.py / tnt.py), so pushdown skips non-matching
+    groups. Non-flashtnt keeps eager loading + in-memory iloc slicing."""
     if tool == 'flashtnt':
         _attach_proteoform_scan_map(file_manager, selected_data, additional_data)
-    return result[cache_name]
+        return file_manager.get_results(
+            selected_data, [cache_name], use_pyarrow=True)[cache_name]
+    return file_manager.get_results(selected_data, [cache_name])[cache_name]
 
 
 def initialize_data(comp_name, selected_data, file_manager, tool):

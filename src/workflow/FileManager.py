@@ -289,38 +289,45 @@ class FileManager:
             DO UPDATE SET {column_name} = excluded.{column_name};
         """)
 
-    def _store_data(self, dataset_id: str, name_tag: str, data) -> None:
+    def _store_data(self, dataset_id: str, name_tag: str, data, row_group_size=None) -> None:
         """
-        Stores data as a cached file. Pandas/Polars DataFrames are stored as 
+        Stores data as a cached file. Pandas/Polars DataFrames are stored as
         parquet files, while all other data structures are stored as
         compressed pickle.
         Args:
-            dataset_id (str): The name of the dataset the data is 
+            dataset_id (str): The name of the dataset the data is
                 attached to.
             name_tag (str): The name of the associated data structure.
             data: Any pickleable data structure.
+            row_group_size (int, optional): Row group size for parquet files.
+                If None, the library default is used.
 
         Returns:
             file_path (Path): The file path of the stored file.
         """
-        
+
         path = Path(self.cache_path, 'files', dataset_id)
         path.mkdir(parents=True, exist_ok=True)
-        
+
         # Polars DataFrames and LazyFrames are stored as parquet
         if isinstance(data, (pl.DataFrame, pl.LazyFrame)):
             path = Path(path, f"{name_tag}.pq")
-            # Convert LazyFrame to DataFrame for writing
             if isinstance(data, pl.LazyFrame):
-                data = data.sink_parquet(path)
+                # Keep the streaming sink when no bounded row groups are requested
+                # (default callers). Only materialize when row_group_size is set,
+                # since sink_parquet on this polars version rejects the kwarg.
+                if row_group_size is None:
+                    data.sink_parquet(path)
+                else:
+                    data.collect().write_parquet(path, row_group_size=row_group_size)
             else:
-                data.write_parquet(path)
+                data.write_parquet(path, row_group_size=row_group_size)
             return path
         # Pandas DataFrames are stored as parquet
         elif isinstance(data, pd.DataFrame):
             path = Path(path, f"{name_tag}.pq")
             with open(path, 'wb') as f:
-                data.to_parquet(f)
+                data.to_parquet(f, row_group_size=row_group_size)
             return path
         # Other data structures are stored as compressed pickle
         else:
@@ -329,19 +336,21 @@ class FileManager:
                 pkl.dump(data, f)
             return path
 
-    def store_data(self, dataset_id: str, name_tag: str, data) -> None:
+    def store_data(self, dataset_id: str, name_tag: str, data, row_group_size=None) -> None:
         """
         Stores a given data structure.
 
         Args:
-            dataset_id (str): The name of the dataset the data is 
+            dataset_id (str): The name of the dataset the data is
                 attached to.
             name_tag (str): The name of the associated data structure.
             data: Any pickleable data structure.
+            row_group_size (int, optional): Row group size for parquet files.
+                If None, the library default is used.
         """
 
         # Store datastructure as file
-        data_path = self._store_data(dataset_id, name_tag, data)
+        data_path = self._store_data(dataset_id, name_tag, data, row_group_size=row_group_size)
 
         # Store reference in index
         data_path = data_path.resolve()
