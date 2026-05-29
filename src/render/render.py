@@ -24,16 +24,23 @@ def render_component(
     # Get State
     state = state_tracker.getState()
 
+    # Cleared selections now arrive (and are stored) as `None` rather than being
+    # dropped, so the frontend can round-trip a deselect. update/filter logic uses
+    # the "key not in selection_store" convention, so drop None-valued keys for the
+    # data computation while still echoing the full state (incl. nulls) back so the
+    # frontend can clear those fields in every component.
+    active_state = {k: v for k, v in state.items() if v is not None}
+
     # Update data with current session state
-    data = update_data(data, out_components, state, additional_data, tool)
+    data = update_data(data, out_components, active_state, additional_data, tool)
 
     # Filter data based on selection
     data = filter_data(
-        data, out_components, state, additional_data, tool
+        data, out_components, active_state, additional_data, tool
     )
-    
+
     # Hash updated. filtered data
-    data['hash'] = hash_complex(data) 
+    data['hash'] = hash_complex(data)
 
     # Render component
     data['selection_store'] = state
