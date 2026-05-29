@@ -1,4 +1,5 @@
 import gzip
+import os
 import shutil
 import string
 import random
@@ -50,6 +51,13 @@ class FileManager:
         self._connect_to_sql()
         
     def _connect_to_sql(self):
+        # In a loaded demo workspace cache.db may be a symlink into the
+        # read-only ground truth; sqlite3 writes the database in place and would
+        # follow the link. Replace it with an independent copy (preserving the
+        # demo's existing index rows) before connecting.
+        self._materialize_if_symlink(
+            Path(self.cache_path, 'cache.db'), preserve_content=True
+        )
         self.cache_connection = sqlite3.connect(
             Path(self.cache_path, 'cache.db'), isolation_level=None
         )
@@ -78,6 +86,38 @@ class FileManager:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self._connect_to_sql()
+
+    def _materialize_if_symlink(self, path: Path, preserve_content: bool) -> None:
+        """
+        Replace a symlinked cache entry with an independent real file inside the
+        workspace, so that writes never follow the link back to the read-only
+        demo ground truth.
+
+        On Linux, loading a demo workspace materializes it by symlinking cache
+        files to the shared source under ``example-data/``. Writing through such
+        a symlink (e.g. via ``sqlite3``, ``open(..., 'wb')`` or ``shutil.copy``)
+        would modify the ground truth instead of the user's workspace. Calling
+        this just before a write makes the workspace diverge on first write
+        while leaving the ground truth untouched.
+
+        Args:
+            path (Path): The cache file that is about to be written.
+            preserve_content (bool): If True, copy the link target's bytes first
+                (used for ``cache.db``, whose existing index rows must survive).
+                If False, simply unlink the symlink (used for result files that
+                are about to be fully overwritten).
+        """
+        if not path.is_symlink():
+            return
+        if preserve_content:
+            source = path.resolve()
+            tmp = path.with_name(path.name + '.materialize.tmp')
+            shutil.copy2(source, tmp)
+            # os.replace swaps the symlink entry for the real copy atomically;
+            # it does not write through the link.
+            os.replace(tmp, path)
+        else:
+            path.unlink()
 
     def get_files(
         self,
@@ -312,6 +352,7 @@ class FileManager:
         # Polars DataFrames and LazyFrames are stored as parquet
         if isinstance(data, (pl.DataFrame, pl.LazyFrame)):
             path = Path(path, f"{name_tag}.pq")
+            self._materialize_if_symlink(path, preserve_content=False)
             if isinstance(data, pl.LazyFrame):
                 # Keep the streaming sink when no bounded row groups are requested
                 # (default callers). Only materialize when row_group_size is set,
@@ -326,12 +367,14 @@ class FileManager:
         # Pandas DataFrames are stored as parquet
         elif isinstance(data, pd.DataFrame):
             path = Path(path, f"{name_tag}.pq")
+            self._materialize_if_symlink(path, preserve_content=False)
             with open(path, 'wb') as f:
                 data.to_parquet(f, row_group_size=row_group_size)
             return path
         # Other data structures are stored as compressed pickle
         else:
             path = Path(path, f"{name_tag}.pkl.gz")
+            self._materialize_if_symlink(path, preserve_content=False)
             with gzip.open(path, 'wb') as f:
                 pkl.dump(data, f)
             return path
@@ -398,6 +441,9 @@ class FileManager:
                 self.cache_path, 'files', dataset_id, file_name
         )
         target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Never write through a symlink into the read-only demo ground truth
+        self._materialize_if_symlink(target_path, preserve_content=False)
 
         # Store file in path
         if isinstance(file, BytesIO):
