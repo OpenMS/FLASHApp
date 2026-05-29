@@ -5,7 +5,7 @@ on:
     branches: [develop]
   push:
     branches: [develop]
-    tags: ['v*']
+  workflow_call:
   workflow_dispatch:
 
 env:
@@ -97,7 +97,7 @@ jobs:
             type=ref,event=branch,suffix=-${{ matrix.variant }}-amd64
             type=ref,event=tag,suffix=-${{ matrix.variant }}-amd64
             type=sha,prefix=,suffix=-${{ matrix.variant }}-amd64
-            type=raw,value=latest-amd64,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+            type=raw,value=latest-amd64,enable=${{ matrix.variant == 'full' && (github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) }}
 
       - name: Build and conditionally push
         uses: docker/build-push-action@v5
@@ -118,6 +118,7 @@ jobs:
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}/cache:{2}-amd64,mode=max', env.REGISTRY, env.IMAGE_NAME_LC, matrix.variant) || '' }}
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            RELEASE_TAG=${{ github.event_name == 'release' && github.ref_name || '' }}
 
       - name: Retag for kind (image name the kustomize overlay points at)
         run: |
@@ -201,7 +202,7 @@ jobs:
             type=ref,event=branch,suffix=-${{ matrix.variant }}-arm64
             type=ref,event=tag,suffix=-${{ matrix.variant }}-arm64
             type=sha,prefix=,suffix=-${{ matrix.variant }}-arm64
-            type=raw,value=latest-arm64,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+            type=raw,value=latest-arm64,enable=${{ matrix.variant == 'full' && (github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) }}
 
       - name: Build and conditionally push
         uses: docker/build-push-action@v5
@@ -218,6 +219,7 @@ jobs:
           provenance: false
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            RELEASE_TAG=${{ github.event_name == 'release' && github.ref_name || '' }}
 
       - name: Retag for kind (image name the kustomize overlay points at)
         run: |
@@ -244,7 +246,10 @@ jobs:
     # consumers (k8s overlays, docker-compose users, `docker pull` callers)
     # keep working transparently — docker now auto-selects the right arch
     # on pull. PRs don't push per-arch tags, so there's nothing to merge.
-    needs: [build-amd64, build-arm64]
+    # Also gate on the integration tests (apptainer/nginx/traefik): the
+    # multi-arch `:latest` + versioned manifest that prod pulls must only be
+    # promoted after the freshly built image passes its tests.
+    needs: [build-amd64, build-arm64, test-apptainer, test-nginx, test-traefik]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -277,7 +282,7 @@ jobs:
             type=ref,event=branch,suffix=-${{ matrix.variant }}
             type=ref,event=tag,suffix=-${{ matrix.variant }}
             type=sha,prefix=,suffix=-${{ matrix.variant }}
-            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+            type=raw,value=latest,enable=${{ matrix.variant == 'full' && (github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) }}
 
       - name: Create and push multi-arch manifests
         # Iterate over manifest tags (newline-separated from metadata-action)
@@ -522,7 +527,7 @@ jobs:
             type=ref,event=branch,suffix=-${{ matrix.variant }}
             type=ref,event=tag,suffix=-${{ matrix.variant }}
             type=sha,prefix=,suffix=-${{ matrix.variant }}
-            type=raw,value=latest,enable=${{ matrix.variant == 'full' && github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+            type=raw,value=latest,enable=${{ matrix.variant == 'full' && (github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) }}
 
       - name: Log in to GHCR for ORAS push
         env:
