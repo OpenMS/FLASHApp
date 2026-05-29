@@ -78,7 +78,12 @@ class TagWorkflow(WorkflowManager):
             )
         with t[1]:
             # FLASHTnT Configuration
-            self.ui.input_TOPP('FLASHTnT', display_subsections=True, display_tool_name=False)
+            self.ui.input_TOPP(
+                'FLASHTnT',
+                display_subsections=True,
+                display_tool_name=False,
+                custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
+            )
 
 
     def execution(self) -> None:
