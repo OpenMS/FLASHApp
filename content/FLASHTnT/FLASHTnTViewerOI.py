@@ -247,37 +247,51 @@ def _build_sequence_frame(
     Columns emitted: ``proteoform_index`` (filter key), ``sequence`` (str),
     ``precursor_charge`` (=1, neutral/deconvolved peaks), ``coverage`` (list[f64]),
     ``maxCoverage`` (f64), ``fixed_modifications`` (list[str])."""
-    store = _lazy(file_manager, experiment_id, "sequence_data")
-    if store is None:
+    # ``sequence_data`` is a pickle-backed store: a dict keyed by
+    # ``proteoform_index``, each value a dict with per-residue ``sequence`` /
+    # ``coverage`` lists (full protein), ``maxCoverage``, ``proteoform_start`` /
+    # ``proteoform_end`` and ``fixed_modifications``. It is NOT a tabular frame,
+    # so it is loaded as the raw object (``_pandas`` returns the unpickled dict)
+    # and iterated — loading it as a LazyFrame raises AttributeError and leaves
+    # SequenceView blank.
+    store = _pandas(file_manager, experiment_id, "sequence_data")
+    if not isinstance(store, dict) or not store:
         return None
-    schema = store.collect_schema().names()
-    want = ["proteoform_index", "sequence", "coverage", "maxCoverage",
-            "proteoform_start", "proteoform_end", "fixed_modifications"]
-    cols = [c for c in want if c in schema]
-    df = store.select(cols).collect()
 
+    proteoform_indices: List[int] = []
     sequences: List[str] = []
-    for row in df.iter_rows(named=True):
-        full = row.get("sequence") or []
-        start = row.get("proteoform_start")
-        end = row.get("proteoform_end")
+    coverages: List[list] = []
+    max_coverages: List[float] = []
+    fixed_mods: List[list] = []
+    for pid in sorted(store.keys()):
+        entry = store[pid] or {}
+        full = list(entry.get("sequence") or [])
+        cov = list(entry.get("coverage") or [])
+        start = entry.get("proteoform_start")
+        end = entry.get("proteoform_end")
+        # Slice the displayed proteoform substring AND its coverage together so the
+        # two stay aligned (the legacy SequenceView rendered the substring). A
+        # negative/absent bound means render the full protein.
         if start is None or end is None or start < 0 or end < 0:
-            sub = full
+            sub_seq, sub_cov = full, cov
         else:
-            sub = full[start:end + 1]
-        sequences.append("".join(sub))
+            sub_seq, sub_cov = full[start:end + 1], cov[start:end + 1]
+        proteoform_indices.append(int(pid))
+        sequences.append("".join(sub_seq))
+        coverages.append([float(c) for c in sub_cov])
+        mc = entry.get("maxCoverage")
+        max_coverages.append(float(mc) if mc is not None else 0.0)
+        fm = entry.get("fixed_modifications") or []
+        fixed_mods.append([str(m) for m in fm])
 
     out = pl.DataFrame({
-        "proteoform_index": df["proteoform_index"],
+        "proteoform_index": proteoform_indices,
         "sequence": sequences,
-        "precursor_charge": [1] * df.height,
+        "precursor_charge": [1] * len(proteoform_indices),
+        "coverage": coverages,
+        "maxCoverage": max_coverages,
+        "fixed_modifications": fixed_mods,
     })
-    if "coverage" in df.columns:
-        out = out.with_columns(df["coverage"].alias("coverage"))
-    if "maxCoverage" in df.columns:
-        out = out.with_columns(df["maxCoverage"].alias("maxCoverage"))
-    if "fixed_modifications" in df.columns:
-        out = out.with_columns(df["fixed_modifications"].alias("fixed_modifications"))
     return out.lazy()
 
 

@@ -61,22 +61,29 @@ def _explode_long_by_position(indexed_lf, id_col, value_exprs):
     for _, expr in value_exprs[1:]:
         max_len = pl.max_horizontal(max_len, expr.list.len())
 
+    # Pad every value list to the per-scan ``max_len`` with nulls — gathering by
+    # the position range with ``null_on_oob`` reproduces the legacy blank-tail
+    # cell — then zip-explode the id column and all value lists together so each
+    # output row is exactly one position.
+    #
+    # This stays O(total output rows). The earlier approach exploded only the id
+    # column while every row still carried the full per-scan value lists, then
+    # gathered the scalar — i.e. O(rows × max_len), which materialises the lists
+    # `max_len` times and OOMs on real spectra (e.g. an 865k-row annotated frame
+    # with multi-thousand-length lists ≈ tens of GB). Exploding the lists in
+    # lock-step avoids the duplication entirely.
+    positions = pl.int_ranges(0, max_len)
     lf = (
         indexed_lf
         .select(
             [pl.col("index")]
-            + [expr.alias(name) for name, expr in value_exprs]
-            + [pl.int_ranges(0, max_len).alias(id_col)]
+            + [expr.list.gather(positions, null_on_oob=True).alias(name)
+               for name, expr in value_exprs]
+            + [positions.alias(id_col)]
         )
-        .explode(id_col)
+        .explode([id_col] + out_names)
         # Empty scans explode to a single null-id row; drop so they contribute 0 rows.
         .filter(pl.col(id_col).is_not_null())
-        # Gather each column's value at the row's position (null when the column is
-        # shorter than this position — the legacy `undefined` cell).
-        .with_columns(
-            [pl.col(name).list.get(pl.col(id_col), null_on_oob=True).alias(name)
-             for name in out_names]
-        )
         .sort(["index", id_col])
     )
     return lf.select(["index", id_col] + out_names)
