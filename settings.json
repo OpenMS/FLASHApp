@@ -20,6 +20,7 @@
     },
     "online_deployment": false,
     "enable_workspaces": true,
+    "use_openms_insight_viewer": true,
     "test": true,
     "workspaces_dir": "..",
     "local_data_dir": "",
