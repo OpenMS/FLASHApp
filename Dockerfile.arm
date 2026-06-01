@@ -99,9 +99,12 @@ RUN make -j4 pyopenms
 WORKDIR /openms-build/pyOpenMS
 RUN pip install dist/*.whl
 
-# Install other dependencies (excluding pyopenms)
-COPY requirements.txt ./requirements.txt 
-RUN grep -Ev '^pyopenms([=<>!~].*)?$' requirements.txt > requirements_cleaned.txt && mv requirements_cleaned.txt requirements.txt
+# Install other dependencies (excluding pyopenms and openms-insight). openms-insight
+# is installed from source in the run-app stage: the pinned PyPI release does not
+# yet carry the new FLASHApp visualization components, so we build our branch
+# (with its Vue bundle) below.
+COPY requirements.txt ./requirements.txt
+RUN grep -Ev '^(pyopenms|openms-insight)([=<>!~].*)?$' requirements.txt > requirements_cleaned.txt && mv requirements_cleaned.txt requirements.txt
 RUN pip install -r requirements.txt
 
 WORKDIR /
@@ -139,6 +142,28 @@ WORKDIR /openms-streamlit-vue-component
 RUN npm install
 RUN npm run build
 
+# Build the OpenMS-Insight Vue bundle and stage its source tree so the Python
+# package can be installed (with the bundle baked in) in the run-app stage.
+FROM node:21 AS oi-build
+
+# OpenMS-Insight repo/branch providing the new visualization components. Defaults
+# to the migration branch (its components are not yet in the PyPI release).
+# Override via --build-arg once merged/released.
+ARG OPENMS_INSIGHT_REPO=https://github.com/t0mdavid-m/OpenMS-Insight.git
+ARG OPENMS_INSIGHT_BRANCH=claude/flashapp-openms-visualizations-LVv66
+
+# Bust the build cache whenever the branch head moves.
+ADD https://api.github.com/repos/t0mdavid-m/OpenMS-Insight/git/refs/heads/$OPENMS_INSIGHT_BRANCH oi-version.json
+
+RUN git clone -b ${OPENMS_INSIGHT_BRANCH} --single-branch ${OPENMS_INSIGHT_REPO} /openms-insight
+WORKDIR /openms-insight/js-component
+RUN npm install
+RUN npm run build
+# The runtime bridge and wheel packaging expect the bundle at
+# openms_insight/js-component/dist; place it there so pip install bundles it.
+RUN mkdir -p /openms-insight/openms_insight/js-component \
+    && cp -r /openms-insight/js-component/dist /openms-insight/openms_insight/js-component/dist
+
 # Prepare and run streamlit app.
 FROM compile-openms AS run-app
 
@@ -170,6 +195,14 @@ COPY presets.json /app/presets.json
 
 # Copy the pre-built Vue/JS component (built in the js-build stage above).
 COPY --from=js-build openms-streamlit-vue-component/dist /app/js-component/dist
+
+# Install OpenMS-Insight (our branch build, with its freshly built Vue bundle)
+# into the streamlit env. requirements.txt has openms-insight stripped, so this
+# is the authoritative install providing the new visualization components. The
+# package ships its Vue bundle at openms_insight/js-component/dist (staged in the
+# oi-build stage), which the runtime bridge loads in production mode.
+COPY --from=oi-build /openms-insight /opt/openms-insight
+RUN mamba run -n streamlit-env pip install /opt/openms-insight
 
 # add cron job to the crontab
 RUN echo "0 3 * * * /root/miniforge3/envs/streamlit-env/bin/python /app/clean-up-workspaces.py >> /app/clean-up-workspaces.log 2>&1" | crontab -
