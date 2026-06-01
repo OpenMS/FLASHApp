@@ -340,8 +340,10 @@ def render_experiment_panel(
                 component = build_component(
                     file_manager, experiment_id, cache_dir, comp_name
                 )
+                # A builder returns None when its optional backing frame is
+                # absent (e.g. no sequence submitted, or *_long not yet cached);
+                # skip silently rather than warning on every rerun.
                 if component is None:
-                    st.warning(f"No data for '{comp_name}'.")
                     continue
                 key = f"deconv_oi_{panel_index}_{row_index}_{col_index}_{comp_name}"
                 component(key=key, state_manager=state_manager)

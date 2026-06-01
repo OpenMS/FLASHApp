@@ -6,9 +6,9 @@ from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 # Legacy bespoke-grid render path (kept importable until OI integration is verified).
 from src.render.render import render_grid
-# New OpenMS-Insight viewer (Stage C). Selected via the
-# `use_openms_insight_viewer` settings flag (defaults True).
-from content.FLASHTnT.FLASHTnTViewerOI import render_experiment_panel
+# The OpenMS-Insight viewer (Stage C) is imported lazily inside render_panel (see
+# below) so an import failure (e.g. a missing openms-insight install) falls back
+# to the legacy grid instead of breaking the whole page.
 
 
 def _use_oi_viewer():
@@ -22,16 +22,27 @@ def render_panel(experiment_id, layout_info_per_exp, file_manager, identifier,
     """Render one experiment panel via the configured viewer.
 
     Routes to the new OpenMS-Insight viewer when enabled, else the legacy grid.
+    The OI viewer is imported lazily and guarded so an import failure falls back
+    to the legacy grid rather than breaking the page.
     """
     if _use_oi_viewer():
-        render_experiment_panel(
-            experiment_id, layout_info_per_exp, file_manager, panel_index
-        )
-    else:
-        render_grid(
-            experiment_id, layout_info_per_exp, file_manager,
-            'flashtnt', identifier, grid_key
-        )
+        try:
+            from content.FLASHTnT.FLASHTnTViewerOI import (
+                render_experiment_panel,
+            )
+        except Exception as exc:  # noqa: BLE001 - OI viewer unavailable
+            st.warning(
+                f"OpenMS-Insight viewer unavailable ({exc}); using legacy grid."
+            )
+        else:
+            render_experiment_panel(
+                experiment_id, layout_info_per_exp, file_manager, panel_index
+            )
+            return
+    render_grid(
+        experiment_id, layout_info_per_exp, file_manager,
+        'flashtnt', identifier, grid_key
+    )
 
 
 DEFAULT_LAYOUT = [

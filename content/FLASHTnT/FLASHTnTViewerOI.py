@@ -192,16 +192,28 @@ def _build_tag_table(file_manager, experiment_id: str, cache_dir: str):
     )
 
 
-def _tag_mass_lookup(file_manager, experiment_id: str) -> dict:
-    """Map ``TagIndex`` -> list[float] of the tag's masses (parsed from the
-    comma-joined ``mzs`` string with its trailing comma). Used to resolve a tag
-    selection into the mass list the combined-spectrum tagger overlay matches."""
+def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None:
+    """Resolve the selected ``tagData`` (a ``TagIndex``) to its list of masses and
+    publish under ``tagMasses`` so the combined-spectrum LinePlot tagger overlay
+    can read it. Clears ``tagMasses`` when no tag is selected.
+
+    Only the selected tag's row is collected (filtered by ``TagIndex``) instead
+    of building a full lookup over ``tag_dfs`` on every rerun. The tag ``mzs``
+    are a comma-joined string with a trailing comma; parse and drop non-numeric
+    entries."""
+    tag_index = state_manager.get_selection(TAG_KEY)
+    if tag_index is None:
+        state_manager.clear_selection(TAG_MASSES_KEY)
+        return
+
     tags = _lazy(file_manager, experiment_id, "tag_dfs")
     if tags is None:
-        return {}
-    df = (
-        tags.select(["TagIndex", "mzs"])
-        .with_columns(
+        state_manager.clear_selection(TAG_MASSES_KEY)
+        return
+
+    selected = (
+        tags.filter(pl.col("TagIndex") == int(tag_index))
+        .select(
             pl.col("mzs")
             .str.strip_chars(",")
             .str.split(",")
@@ -210,22 +222,8 @@ def _tag_mass_lookup(file_manager, experiment_id: str) -> dict:
         )
         .collect()
     )
-    return {
-        int(ti): [m for m in masses if m is not None]
-        for ti, masses in zip(df["TagIndex"], df["tag_masses"].to_list())
-    }
-
-
-def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None:
-    """Resolve the selected ``tagData`` (a ``TagIndex``) to its list of masses and
-    publish under ``tagMasses`` so the combined-spectrum LinePlot tagger overlay
-    can read it. Clears ``tagMasses`` when no tag is selected."""
-    tag_index = state_manager.get_selection(TAG_KEY)
-    if tag_index is None:
-        state_manager.clear_selection(TAG_MASSES_KEY)
-        return
-    lookup = _tag_mass_lookup(file_manager, experiment_id)
-    masses = lookup.get(int(tag_index))
+    raw = selected["tag_masses"][0] if selected.height else None
+    masses = [m for m in raw if m is not None] if raw is not None else None
     if masses:
         state_manager.set_selection(TAG_MASSES_KEY, list(masses))
     else:
