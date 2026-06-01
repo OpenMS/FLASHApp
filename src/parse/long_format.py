@@ -205,6 +205,95 @@ def explode_signal_peaks_long(
     return pl.concat([signal_lf, noise_lf]).sort(["index", "mass_id", "kind"])
 
 
+def explode_quant_traces_long(
+    quant: pl.LazyFrame,
+    *,
+    feature_group_column: str = "FeatureGroupIndex",
+    charges_column: str = "Charges",
+    isotopes_column: str = "IsotopeIndices",
+    centroid_mz_column: str = "CentroidMzs",
+    rts_column: str = "RTs",
+    mzs_column: str = "MZs",
+    intensities_column: str = "Intensities",
+) -> pl.LazyFrame:
+    """Explode FLASHQuant per-feature-group arrays into long trace-point format.
+
+    FLASHQuant stores, per feature group, parallel per-trace lists:
+      - ``Charges`` / ``IsotopeIndices`` / ``CentroidMzs`` : one scalar per trace
+      - ``RTs`` / ``MZs`` / ``Intensities``                : one comma-joined
+        STRING per trace (the points of that trace)
+
+    OpenMS-Insight's ``FeatureView`` consumes long format — one row per trace
+    POINT. This:
+
+      1. zips the parallel per-trace lists and explodes to one row per trace
+         (carrying ``feature_group``, ``charge``, ``isotope``, ``centroid_mz``),
+      2. splits each ``RTs``/``MZs``/``Intensities`` string and explodes to one
+         row per point, yielding columns:
+
+            feature_group : int  (filter target for ``featureGroup``)
+            charge        : int  (one 3D trace per distinct charge)
+            isotope       : int  (kept for hover / isotope grouping)
+            centroid_mz   : float
+            rt            : float  (y-axis)
+            mz            : float  (x-axis)
+            intensity     : float  (z-axis)
+
+    Empty / null trace strings contribute no points.
+    """
+    # Step 1: one row per trace. Zip the parallel per-trace lists by exploding
+    # them together (they share the same length per feature group).
+    per_trace = quant.select(
+        [
+            pl.col(feature_group_column).alias("feature_group"),
+            pl.col(charges_column).alias("charge"),
+            pl.col(isotopes_column).alias("isotope"),
+            pl.col(centroid_mz_column).alias("centroid_mz"),
+            pl.col(rts_column).alias("_rts"),
+            pl.col(mzs_column).alias("_mzs"),
+            pl.col(intensities_column).alias("_ints"),
+        ]
+    ).explode(["charge", "isotope", "centroid_mz", "_rts", "_mzs", "_ints"])
+
+    # Step 2: split the comma-joined point strings into lists, then explode
+    # the three parallel point lists together → one row per point.
+    per_point = (
+        per_trace.with_columns(
+            [
+                pl.col("_rts").str.split(",").alias("rt"),
+                pl.col("_mzs").str.split(",").alias("mz"),
+                pl.col("_ints").str.split(",").alias("intensity"),
+            ]
+        )
+        .drop(["_rts", "_mzs", "_ints"])
+        .explode(["rt", "mz", "intensity"])
+        .with_columns(
+            [
+                pl.col("rt").cast(pl.Float64, strict=False),
+                pl.col("mz").cast(pl.Float64, strict=False),
+                pl.col("intensity").cast(pl.Float64, strict=False),
+            ]
+        )
+        .filter(
+            pl.col("rt").is_not_null()
+            & pl.col("mz").is_not_null()
+            & pl.col("intensity").is_not_null()
+        )
+    )
+
+    return per_point.select(
+        [
+            "feature_group",
+            "charge",
+            "isotope",
+            "centroid_mz",
+            "rt",
+            "mz",
+            "intensity",
+        ]
+    )
+
+
 def density_series_long(
     target_density: pl.DataFrame,
     decoy_density: Optional[pl.DataFrame] = None,
