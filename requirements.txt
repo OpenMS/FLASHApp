@@ -140,6 +140,13 @@ xlsxwriter
 scipy>=1.15
 polars>=1.0.0
 
+# OpenMS-Insight: reusable interactive visualization components. FLASHApp's
+# visualizations are migrating onto these library components (replacing the
+# bespoke flash_viewer_grid / src/render pipeline). Not yet on PyPI; install
+# from the repository. For local development use an editable/path install:
+#   pip install -e ../OpenMS-Insight
+openms-insight @ git+https://github.com/t0mdavid-m/OpenMS-Insight.git@claude/peaceful-mayer-YqiXZ
+
 # Redis Queue dependencies (for online mode)
 redis>=5.0.0
 rq>=1.16.0
