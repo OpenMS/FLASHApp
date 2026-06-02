@@ -64,23 +64,27 @@ def _sequence_table(file_manager, dataset_id: str) -> Optional[pl.LazyFrame]:
     ``precursor_charge``, and per-proteoform coverage arrays so OI's extended
     SequenceView can shade residues.
     """
-    res = file_manager.get_results(dataset_id, ["sequence_data"], partial=True)
+    res = file_manager.get_results(
+        dataset_id, ["sequence_data"], partial=True, use_pyarrow=True
+    )
     if "sequence_data" not in res:
         return None
     p = res["sequence_data"]
-    # Example caches store sequence_data as a pickled dict (.pkl.gz); newer ones
-    # as a parquet dataset. Handle the pickle path (what the bundled data uses).
+    # A fresh FLASHTnT run stores sequence_data as a parquet dataset; with
+    # use_pyarrow=True FileManager hands back a pyarrow Dataset (without it we'd get
+    # a pandas DataFrame that reconstruct_all can't read — the cause of the
+    # "Component unavailable: sequence_view" regression). Older/example caches store
+    # it as a pickled {pid: entry} dict (FileManager unpickles .pkl.gz for us, but a
+    # path may also be handed back). Let failures propagate so they surface as a
+    # render error rather than a silent None.
     if isinstance(p, Path) and p.suffix == ".gz":
         data = _load_pickle_gz(p)
     elif isinstance(p, dict):
         data = p
     else:
-        try:
-            from src.render.sequence_data_store import reconstruct_all
+        from src.render.sequence_data_store import reconstruct_all
 
-            data = reconstruct_all(p)
-        except Exception:
-            return None
+        data = reconstruct_all(p)
 
     rows = []
     for pid in sorted(data):
