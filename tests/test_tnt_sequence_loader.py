@@ -22,6 +22,7 @@ pytest.importorskip("openms_insight")
 
 
 def _write_sequence_data(path):
+    fb = [[[float(i)] for i in range(8)], [[float(i)] for i in range(8)]]
     table = pa.table(
         {
             "proteoform_index": pa.array([0, 1], type=pa.int64()),
@@ -33,6 +34,12 @@ def _write_sequence_data(path):
                 type=pa.list_(pa.float64()),
             ),
             "maxCoverage": pa.array([2.0, 0.0], type=pa.float64()),
+            "theoretical_mass": pa.array([1000.0, 2000.0], type=pa.float64()),
+            # proteoform 1 carries FLASHTnT's -1.0 "unmatched" sentinel.
+            "computed_mass": pa.array([1001.5, -1.0], type=pa.float64()),
+            "fragment_masses_b": pa.array(
+                fb, type=pa.list_(pa.list_(pa.float64()))
+            ),
         }
     )
     pq.write_table(table, path)
@@ -85,3 +92,11 @@ def test_sequence_table_reads_parquet_dataset(tmp_path):
     assert row0["sequence"] == "PEPTIDER"
     assert row0["coverage"][:3] == [0.0, 1.0, 2.0]
     assert row0["max_coverage"] == 2.0
+
+    # Header masses + precomputed fragments flow through; the -1.0 sentinel on
+    # proteoform 1 maps to a null observed mass so the header omits it.
+    assert row0["theoretical_mass"] == 1000.0
+    assert row0["observed_mass"] == 1001.5
+    assert row0["fragment_masses_b"][0] == [0.0]
+    row1 = df.filter(pl.col("proteoform_index") == 1).row(0, named=True)
+    assert row1["observed_mass"] is None

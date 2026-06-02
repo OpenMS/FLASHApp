@@ -154,7 +154,7 @@ RUN npm run build
 # validated commit for reproducible images (override OPENMS_INSIGHT_REF to bump).
 FROM node:21 AS openms-insight-build
 ARG OPENMS_INSIGHT_REPO=https://github.com/t0mdavid-m/OpenMS-Insight.git
-ARG OPENMS_INSIGHT_REF=d886d2bfb7865a74ca8e75e5e5017824e0170468
+ARG OPENMS_INSIGHT_REF=ec8e06142dd7b9cb01746d39f791e87d07810be2
 # Bust the clone cache when REF tracks a moving branch (no-op for a pinned SHA).
 ADD https://api.github.com/repos/t0mdavid-m/OpenMS-Insight/commits/$OPENMS_INSIGHT_REF oi-version.json
 RUN git clone ${OPENMS_INSIGHT_REPO} /OpenMS-Insight \

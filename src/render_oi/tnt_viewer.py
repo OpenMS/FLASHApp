@@ -55,6 +55,65 @@ def _build_proteoform_scan_map(file_manager, dataset_id: str) -> Dict[int, Dict[
     return build_proteoform_scan_map(prot[["index", "Scan"]], scan[["index", "Scan"]])
 
 
+# Ion types whose precomputed per-residue fragment masses are forwarded to
+# SequenceView (the proteoform entry carries a/b/c/x/y/z).
+_ION_TYPES = ("a", "b", "c", "x", "y", "z")
+
+
+def _observed_mass(value):
+    """ProteoformMass, or None when FLASHTnT's -1.0 'unmatched' sentinel is set
+    (so SequenceView omits the observed / Δ-mass header)."""
+    try:
+        mass = float(value)
+    except (TypeError, ValueError):
+        return None
+    return mass if mass > 0 else None
+
+
+def _frag_masses(value):
+    """Per-residue precomputed fragment masses as list[list[float]] (the inner list
+    holds modification-ambiguity variants); tolerates a flat list[float]."""
+    if not value:
+        return []
+    out = []
+    for residue in value:
+        if isinstance(residue, (list, tuple)):
+            out.append([float(x) for x in residue])
+        else:
+            out.append([float(residue)])
+    return out
+
+
+def _peaks_table(
+    file_manager, dataset_id: str, scan_map: Dict[int, Dict[str, int]]
+) -> Optional[pl.LazyFrame]:
+    """Observed deconvolved peaks per proteoform, for SequenceView fragment matching.
+
+    SequenceView matches the precomputed fragment masses against observed peaks. We
+    supply each proteoform's scan peaks (neutral ``MonoMass`` + ``SumIntensity`` from
+    ``deconv_spectrum``) stamped with ``proteoform_index`` so the component's
+    ``filters`` select the right peaks for the current selection.
+    """
+    pairs = [
+        {"proteoform_index": int(pid), "deconv_index": int(e["deconv_index"])}
+        for pid, e in (scan_map or {}).items()
+        if e.get("deconv_index") is not None
+    ]
+    if not pairs:
+        return None
+    spec = _load_polars(file_manager, dataset_id, "deconv_spectrum")
+    long = (
+        spec.select(["index", "MonoMass", "SumIntensity"])
+        .explode(["MonoMass", "SumIntensity"])
+        .rename({"MonoMass": "mass", "SumIntensity": "intensity"})
+        .with_columns(pl.int_range(pl.len()).over("index").alias("peak_id"))
+    )
+    mapping = pl.DataFrame(pairs).lazy()
+    return long.join(
+        mapping, left_on="index", right_on="deconv_index", how="inner"
+    ).select(["proteoform_index", "peak_id", "mass", "intensity"])
+
+
 def _sequence_table(file_manager, dataset_id: str) -> Optional[pl.LazyFrame]:
     """Build a one-row-per-proteoform sequence frame for SequenceView.
 
@@ -90,18 +149,31 @@ def _sequence_table(file_manager, dataset_id: str) -> Optional[pl.LazyFrame]:
     for pid in sorted(data):
         entry = data[pid]
         seq = entry.get("sequence") or []
-        rows.append(
-            {
-                "proteoform_index": int(pid),
-                "sequence": "".join(seq) if isinstance(seq, list) else str(seq),
-                "precursor_charge": 1,
-                "coverage": [float(c) for c in (entry.get("coverage") or [])],
-                "max_coverage": float(entry.get("maxCoverage") or 0.0),
-            }
-        )
+        row = {
+            "proteoform_index": int(pid),
+            "sequence": "".join(seq) if isinstance(seq, list) else str(seq),
+            "precursor_charge": 1,
+            "coverage": [float(c) for c in (entry.get("coverage") or [])],
+            "max_coverage": float(entry.get("maxCoverage") or 0.0),
+            # Header masses: theoretical from the sequence, observed = ProteoformMass
+            # (FLASHTnT stores -1.0 when unmatched -> None so the header omits it).
+            "theoretical_mass": float(entry.get("theoretical_mass") or 0.0),
+            "observed_mass": _observed_mass(entry.get("computed_mass")),
+        }
+        # Precomputed per-residue fragment masses (account for proteoform mods);
+        # SequenceView matches these against the scan peaks instead of recomputing.
+        for ion in _ION_TYPES:
+            row[f"fragment_masses_{ion}"] = _frag_masses(
+                entry.get(f"fragment_masses_{ion}")
+            )
+        rows.append(row)
     if not rows:
         return None
-    return pl.DataFrame(rows).lazy()
+    return (
+        pl.DataFrame(rows)
+        .with_columns(pl.col("observed_mass").cast(pl.Float64, strict=False))
+        .lazy()
+    )
 
 
 def build_component_tnt(
@@ -200,6 +272,8 @@ def build_component_tnt(
         if seq_tbl is None:
             return None
         settings = _tnt_settings(file_manager, dataset_id)
+        scan_map = _build_proteoform_scan_map(file_manager, dataset_id)
+        peaks_tbl = _peaks_table(file_manager, dataset_id, scan_map)
         sv = SequenceView(
             cache_id=cid("sequence_view"),
             sequence_data=seq_tbl,
@@ -207,6 +281,16 @@ def build_component_tnt(
             deconvolved=True,
             coverage_column="coverage",
             max_coverage_column="max_coverage",
+            # Header masses + precomputed fragment-ion masses (so b/y flags and the
+            # matching-fragments table reflect the modified proteoform), matched
+            # against the proteoform's observed scan peaks.
+            theoretical_mass_column="theoretical_mass",
+            observed_mass_column="observed_mass",
+            fragment_mass_columns={
+                ion: f"fragment_masses_{ion}" for ion in _ION_TYPES
+            },
+            peaks_data=peaks_tbl,
+            interactivity={"peak": "peak_id"},
             annotation_config={
                 "ion_types": settings.get("ion_types", ["b", "y"]),
                 "tolerance": settings.get("tolerance", 10.0),
