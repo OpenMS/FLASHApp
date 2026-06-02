@@ -129,8 +129,8 @@ def build_component(
             y_column="mass",
             intensity_column="intensity",
             title=title,
-            x_label="Retention time",
-            y_label="Monoisotopic mass" if is_deconv else "m/z",
+            x_label="Retention Time",
+            y_label="Monoisotopic Mass" if is_deconv else "m/z",
             # Click a point -> scanIndex (all heatmaps) plus massIndex (deconv only),
             # restoring the legacy heatmap cross-links into the spectra/mass/3D panels.
             interactivity=(
@@ -156,6 +156,11 @@ def build_component(
             # formatting (recovered from the built bundle's TabulatorScanTable
             # columnDefinitions). Built only from the columns actually present.
             column_definitions=_scan_table_column_definitions(data),
+            # Legacy scan-table "go to" navigation (TabulatorScanTable
+            # go-to-fields ["id","Scan"]; the new index column is "index").
+            go_to_fields=[
+                f for f in ("index", "Scan") if f in data.collect_schema().names()
+            ],
             cache_path=cache_dir,
         )
         return lambda: tbl(key=skey("scan_table"), state_manager=state_manager)
@@ -176,20 +181,20 @@ def build_component(
             # tooltips / numeric formatting (recovered from the built bundle),
             # built only from the exploded columns actually present.
             column_definitions=_mass_table_column_definitions(long),
+            # Legacy mass-table "go to" navigation (TabulatorMassTable
+            # go-to-fields ["id"]; the new per-scan index column is "mass_id").
+            go_to_fields=["mass_id"],
             cache_path=cache_dir,
         )
         return lambda: tbl(key=skey("mass_table"), state_manager=state_manager)
 
     # ---- Deconvolved spectrum (LinePlot, filtered by scanIndex) ----
     if comp_name == "deconv_spectrum":
-        # Build from combined_spectrum when available: it carries the SAME
-        # deconvolved sticks (MonoMass/SumIntensity) PLUS the per-mass SignalPeaks
-        # ([binIdx, mz, intensity, charge]), letting us derive a per-peak charge
-        # label (z=N) locally — without touching long_format.py. Fall back to the
-        # plain deconv_spectrum cache (no charge data) when combined is absent.
-        long, ann_col = _deconv_spectrum_with_charge(
-            file_manager, dataset_id, explode_spectrum_long
-        )
+        # Primary deconvolved sticks (MonoMass/SumIntensity) as long rows carrying
+        # a per-scan mass_id (matching the mass table's index), so the massIndex
+        # interactivity below highlights the same peak the mass table selects.
+        per_scan = _load_polars(file_manager, dataset_id, "deconv_spectrum")
+        long = explode_spectrum_long(per_scan)
         lp = LinePlot(
             cache_id=cid("deconv_spectrum"),
             data=long,
@@ -200,9 +205,12 @@ def build_component(
             interactivity={MASS: "mass_id"},
             x_column="mass",
             y_column="intensity",
-            # Per-peak charge label on each deconvolved stick (legacy showed the
-            # charge state next to peaks); None when no charge data is available.
-            annotation_column=ann_col,
+            # No always-on per-peak labels: the legacy deconvolved (mass-axis)
+            # spectrum draws annotation boxes ONLY for the selected mass
+            # (computeAnnotationBoxes returns [] when nothing is highlighted), and
+            # the z=N charge labels are gated to the m/z (annotated) axis. The gold
+            # selected-peak highlight above already reproduces the on-selection
+            # emphasis, so no annotation_column is supplied here.
             title="Deconvolved Spectrum",
             x_label="Monoisotopic Mass",
             y_label="Intensity",
@@ -245,22 +253,22 @@ def build_component(
             filters={SCAN: "index"},
             optional_filters={MASS: "mass_id"},
             mz_column="mass",
-            title="Precursor Signals",
+            title="Precursor signals",
             cache_path=cache_dir,
         )
 
         def _render_3d():
             # Reflect the selection state in the title: the default view shows the
-            # scan's full precursor S/N peaks ("Precursor Signals"); once a single
+            # scan's full precursor S/N peaks ("Precursor signals"); once a single
             # mass is isolated (massIndex set via the mass-table / deconv-heatmap
-            # click) it shows that mass's signal/noisy peaks ("Mass Signals").
+            # click) it shows that mass's signal/noisy peaks ("Mass signals").
             # Only the displayed title arg changes — the cached/filtered data is
             # untouched — so this does not invalidate the component cache.
             mass_selected = (
                 state_manager is not None
                 and state_manager.get_selection(MASS) is not None
             )
-            s3._title = "Mass Signals" if mass_selected else "Precursor Signals"
+            s3._title = "Mass signals" if mass_selected else "Precursor signals"
             return s3(key=skey("3D_SN_plot"), state_manager=state_manager)
 
         return _render_3d
@@ -482,67 +490,6 @@ def _mass_table_column_definitions(long: pl.LazyFrame) -> List[Dict[str, Any]]:
     return _column_definitions(fields, _MASS_TABLE_COLUMNS)
 
 
-def _deconv_spectrum_with_charge(file_manager, dataset_id, explode_spectrum_long):
-    """Deconvolved-spectrum long format + a per-peak ``charge_label`` (``z=N``).
-
-    Returns ``(long_frame, annotation_column_or_None)``.
-
-    The plain ``deconv_spectrum`` cache holds only ``MonoMass``/``SumIntensity``
-    (no charge). ``combined_spectrum`` carries the SAME deconvolved sticks PLUS
-    each mass's constituent ``SignalPeaks`` (``[binIdx, mz, intensity, charge]``),
-    so we derive a representative charge per deconvolved mass (the charge of its
-    most intense constituent peak) and format it as ``z=N``. This is built
-    locally via Polars expressions — ``long_format.py`` is untouched.
-
-    Falls back to the plain ``deconv_spectrum`` (no annotation) when
-    ``combined_spectrum`` / ``SignalPeaks`` are unavailable, in which case the
-    annotation column is ``None``.
-    """
-    try:
-        combined = _load_polars(file_manager, dataset_id, "combined_spectrum")
-        schema = combined.collect_schema().names()
-        if not {"MonoMass", "SumIntensity", "SignalPeaks"} <= set(schema):
-            raise KeyError("combined_spectrum lacks SignalPeaks")
-        long = (
-            combined.select(["index", "MonoMass", "SumIntensity", "SignalPeaks"])
-            .explode(["MonoMass", "SumIntensity", "SignalPeaks"])
-            .rename({"MonoMass": "mass", "SumIntensity": "intensity"})
-            # mass_id matches explode_spectrum_long's per-scan peak order so the
-            # scan cross-link row counts stay identical.
-            .with_columns(pl.int_range(pl.len()).over("index").alias("mass_id"))
-        )
-        # Representative charge = charge (peak field 3) of the constituent peak
-        # with the maximum intensity (peak field 2). Null when a mass has no
-        # constituent peaks; then no label is shown for that stick.
-        long = long.with_columns(
-            pl.col("SignalPeaks")
-            .list.eval(pl.element().list.get(3))
-            .list.get(
-                pl.col("SignalPeaks")
-                .list.eval(pl.element().list.get(2))
-                .list.arg_max()
-            )
-            .cast(pl.Int64, strict=False)
-            .alias("_charge")
-        ).with_columns(
-            pl.when(pl.col("_charge").is_not_null())
-            .then(pl.format("z={}", pl.col("_charge")))
-            .otherwise(pl.lit(""))
-            .alias("charge_label")
-        )
-        long = long.select(
-            ["index", "mass_id", "mass", "intensity", "charge_label"]
-        ).sort(["index", "mass_id"])
-        return long, "charge_label"
-    except Exception:  # pragma: no cover - defensive fallback to plain cache
-        logger.info(
-            "deconv_spectrum charge labels unavailable (no SignalPeaks); "
-            "rendering without charge annotation"
-        )
-        per_scan = _load_polars(file_manager, dataset_id, "deconv_spectrum")
-        return explode_spectrum_long(per_scan), None
-
-
 def _build_sequence_view(
     dataset_id, file_manager, cache_dir, cid, skey, state_manager
 ):
@@ -576,6 +523,11 @@ def _build_sequence_view(
         filters={SCAN: "index"},
         deconvolved=True,
         fixed_modifications=_fixed_mods_from_sequence(seq),
+        # Legacy FLASHDeconv SequenceViewInformation defaults to a/x/y ions
+        # selected (aIon/xIon/yIon true; b/c/z false). Without this the OI default
+        # (b/y) would show different initial ion annotations. (TnT instead drives
+        # ion_types from the FLASHTnT run settings.)
+        annotation_config={"ion_types": ["a", "x", "y"]},
         cache_path=cache_dir,
     )
     return lambda: sv(key=skey("sequence_view"), state_manager=state_manager)
@@ -620,6 +572,28 @@ def _fixed_mods_from_sequence(seq: Dict[str, Any]) -> List[str]:
     return mods
 
 
+def _reset_mass_on_scan_change(state_manager) -> None:
+    """Reset the selected mass to the new scan's first peak when the SCAN selection
+    changes via the scan table (legacy ``updateSelectedScan -> updateSelectedMass(0)``).
+
+    A heatmap click sets scan AND mass together (via the bare store action, no
+    reset), so the reset is skipped when BOTH changed in the same run -- otherwise
+    it would clobber the heatmap's mass selection. The previous scan/mass are kept
+    in private state markers to detect the change.
+    """
+    scan_index = state_manager.get_selection(SCAN)
+    mass_index = state_manager.get_selection(MASS)
+    if (
+        scan_index != state_manager.get_selection("_last_scan")
+        and mass_index == state_manager.get_selection("_last_mass")
+        and mass_index not in (None, 0)
+    ):
+        state_manager.set_selection(MASS, 0)
+        mass_index = 0
+    state_manager.set_selection("_last_scan", scan_index)
+    state_manager.set_selection("_last_mass", mass_index)
+
+
 def render_experiment(
     dataset_id: str,
     layout_rows: List[List[str]],
@@ -643,9 +617,17 @@ def render_experiment(
     import streamlit as st
     from openms_insight import StateManager
 
-    # Per-experiment StateManager — distinct session_key keeps selections from
-    # leaking across side-by-side panels (Risks/watch-items in the plan).
-    state_manager = StateManager(session_key=f"oi_state_{panel_key}")
+    # Per-experiment StateManager — a distinct session_key keeps selections from
+    # leaking across side-by-side panels, AND scoping it to dataset_id starts each
+    # newly selected experiment from a clean selection (default-row-0) instead of
+    # inheriting the previous dataset's scan/mass -- reproducing the legacy
+    # render_grid reset on dataset change (src/render/render.py:80-82).
+    state_manager = StateManager(session_key=f"oi_state_{panel_key}_{dataset_id}")
+
+    # Scan-table click resets the mass to the new scan's first peak (legacy scan
+    # table: updateSelectedScan -> updateSelectedMass(0)); a heatmap click keeps
+    # its own mass selection (see _reset_mass_on_scan_change).
+    _reset_mass_on_scan_change(state_manager)
 
     for row_index, row in enumerate(layout_rows):
         if not row:

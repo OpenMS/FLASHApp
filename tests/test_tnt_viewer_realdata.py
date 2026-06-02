@@ -177,6 +177,15 @@ def test_protein_table_column_definitions_and_sort(fake_fm, monkeypatch):
     assert args["goToFields"] == ["Scan", "accession"]
     assert args["interactivity"] == {"proteinIndex": "index"}
     assert all("_dashSentinel" not in c for c in args["columnDefinitions"])
+    # Free-text columns sort as strings (alphabetical), matching legacy; numeric
+    # columns keep the number sorter. A number sorter on text fails to order it.
+    sorters = {c["field"]: c.get("sorter") for c in args["columnDefinitions"]}
+    for f in ("accession", "description"):
+        if f in sorters:
+            assert sorters[f] == "string", f"{f} should sort as string"
+    for f in ("Scan", "length", "Score"):
+        if f in sorters:
+            assert sorters[f] == "number", f"{f} should sort as number"
 
 
 def test_protein_best_per_spectrum_reduces_rows(fake_fm, monkeypatch):

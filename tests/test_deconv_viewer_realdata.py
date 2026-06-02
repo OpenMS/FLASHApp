@@ -251,44 +251,34 @@ def test_mass_table_column_definitions(fake_fm, monkeypatch):
         assert by_field[f]["formatter"] == "money", f
 
 
-def test_deconv_spectrum_charge_annotation(fake_fm, monkeypatch, tmp_path):
-    """deconv_spectrum LinePlot carries a per-peak z=N charge annotation column,
-    and that column flows into the rendered plotData."""
+def test_deconv_spectrum_no_always_on_annotation(fake_fm, monkeypatch):
+    """The deconvolved (mass-axis) spectrum carries NO always-on per-peak label:
+    the legacy draws annotation boxes only for the SELECTED mass and gates z=N
+    charge labels to the m/z axis. It relies on the massIndex cross-link for the
+    gold selected-peak highlight, and its rows carry mass_id (the highlight key,
+    aligned with the mass table)."""
     import streamlit as st
 
     monkeypatch.setattr(st, "session_state", {}, raising=False)
     from openms_insight import StateManager
 
-    from src.render_oi.deconv_viewer import build_component
+    from src.render_oi.deconv_viewer import MASS, build_component
 
     captured = _capture_built_components(monkeypatch)
     sm = StateManager(session_key="oi_deconv_ann")
     build_component("deconv_spectrum", "example_fd", fake_fm, sm, key_prefix="p0")()
 
     lp, _ = captured["lineplot"]
-    assert lp._annotation_column == "charge_label"
+    # No always-on labels (the regression was a z=N label on every stick).
+    assert lp._annotation_column is None
+    # The mass-table <-> spectrum highlight cross-link is wired via massIndex.
+    assert lp._interactivity == {MASS: "mass_id"}
 
-    # The annotation column is present and populated with z=N labels in plotData.
+    # mass_id is present (the highlight lookup key) and rows are non-empty.
     from src.parse.long_format import explode_spectrum_long
-    from src.render_oi.deconv_viewer import _deconv_spectrum_with_charge
 
-    long, ann = _deconv_spectrum_with_charge(
-        fake_fm, "example_fd", explode_spectrum_long
-    )
-    assert ann == "charge_label"
-    df = long.collect()
-    labels = df.filter(pl.col("charge_label") != "")["charge_label"].to_list()
-    assert labels, "expected at least one z=N charge label"
-    assert all(s.startswith("z=") for s in labels[:50])
-
-    # Peak/row counts must stay identical to the plain explode so the scan
-    # cross-link row-count contract is preserved.
-    plain = explode_spectrum_long(pl.scan_parquet(_FD / "deconv_spectrum.pq")).collect()
-    assert df.height == plain.height
-    assert (
-        df.group_by("index").len().sort("index")["len"].to_list()
-        == plain.group_by("index").len().sort("index")["len"].to_list()
-    )
+    df = explode_spectrum_long(pl.scan_parquet(_FD / "deconv_spectrum.pq")).collect()
+    assert "mass_id" in df.columns and df.height > 0
 
 
 def test_anno_spectrum_has_no_charge_annotation(fake_fm, monkeypatch):
@@ -309,8 +299,8 @@ def test_anno_spectrum_has_no_charge_annotation(fake_fm, monkeypatch):
 
 
 def test_3d_plot_title_reflects_selection(fake_fm, monkeypatch):
-    """3D_SN_plot title is 'Precursor Signals' with no mass selected and
-    'Mass Signals' once a massIndex is selected."""
+    """3D_SN_plot title is 'Precursor signals' with no mass selected and
+    'Mass signals' once a massIndex is selected."""
     import streamlit as st
 
     monkeypatch.setattr(st, "session_state", {}, raising=False)
@@ -324,12 +314,41 @@ def test_3d_plot_title_reflects_selection(fake_fm, monkeypatch):
 
     sm.set_selection("scanIndex", 0)
     render()
-    assert captured["scatter3d"][0]._title == "Precursor Signals"
+    assert captured["scatter3d"][0]._title == "Precursor signals"
 
     sm.set_selection("massIndex", 0)
     render()
-    assert captured["scatter3d"][0]._title == "Mass Signals"
+    assert captured["scatter3d"][0]._title == "Mass signals"
 
     sm.set_selection("massIndex", None)
     render()
-    assert captured["scatter3d"][0]._title == "Precursor Signals"
+    assert captured["scatter3d"][0]._title == "Precursor signals"
+
+
+def test_scan_change_resets_mass(monkeypatch):
+    """A scan-table click resets massIndex to the new scan's first peak (legacy
+    updateSelectedMass(0)); a heatmap click that changes scan AND mass together
+    keeps the heatmap's mass instead of being clobbered."""
+    import streamlit as st
+
+    monkeypatch.setattr(st, "session_state", {}, raising=False)
+    from openms_insight import StateManager
+
+    from src.render_oi.deconv_viewer import MASS, SCAN, _reset_mass_on_scan_change
+
+    sm = StateManager(session_key="oi_reset_test")
+    sm.set_selection(SCAN, 1)
+    sm.set_selection(MASS, 5)
+    _reset_mass_on_scan_change(sm)  # first call only records the markers
+    assert sm.get_selection(MASS) == 5
+
+    # Scan-table click: scan changes, mass unchanged -> reset to first peak.
+    sm.set_selection(SCAN, 2)
+    _reset_mass_on_scan_change(sm)
+    assert sm.get_selection(MASS) == 0
+
+    # Heatmap click: scan AND mass change together -> keep the heatmap's mass.
+    sm.set_selection(SCAN, 3)
+    sm.set_selection(MASS, 9)
+    _reset_mass_on_scan_change(sm)
+    assert sm.get_selection(MASS) == 9

@@ -406,14 +406,23 @@ _TAG_TABLE_COLUMNS = [
 ]
 
 
+# Columns sorted as text (legacy gave these no numeric sorter, so a header click
+# sorts alphabetically). Only the protein table's free-text fields qualify; the
+# tag table's TagSequence kept a numeric sorter in the legacy, so it is excluded.
+_STRING_SORT_FIELDS = {"accession", "description"}
+
+
 def _tnt_column_definitions(present_fields, spec) -> List[Dict[str, Any]]:
     """Build Tabulator ``column_definitions`` from a (field,title,tooltip,float,
     dash) spec, emitting only fields present in the data.
 
     Numeric columns get a ``number`` sorter; float columns additionally get the
-    fixed-precision ``money`` formatter (legacy ``toFixed(4)``). ``dash`` columns
-    record ``_dashSentinel`` so the caller can null their -1.0 sentinel in the
-    data (the legacy "-1 -> '-'" formatter); the key is ignored by Tabulator.
+    fixed-precision ``money`` formatter (legacy ``toFixed(4)``). Free-text columns
+    (``_STRING_SORT_FIELDS``) get a ``string`` sorter so they sort alphabetically
+    like the legacy (a numeric sorter parses text as NaN and fails to order it).
+    ``dash`` columns record ``_dashSentinel`` so the caller can null their -1.0
+    sentinel in the data (the legacy "-1 -> '-'" formatter); the key is ignored by
+    Tabulator.
     """
     present = set(present_fields)
     defs: List[Dict[str, Any]] = []
@@ -424,7 +433,7 @@ def _tnt_column_definitions(present_fields, spec) -> List[Dict[str, Any]]:
             "title": title,
             "field": field,
             "headerTooltip": tooltip,
-            "sorter": "number",
+            "sorter": "string" if field in _STRING_SORT_FIELDS else "number",
         }
         if is_float:
             col.update(_FLOAT_FMT)
@@ -681,7 +690,9 @@ def build_component_tnt(
                 "Decoy": {"label": "Decoy", "color": "red"},
             },
             title="Score Distribution",
-            x_label="Proteoform-level q-value",
+            # Legacy FDRPlotly x-axis label (the target/decoy density is over the
+            # identification score, matching the Deconv fdr_plot's "QScore").
+            x_label="QScore",
             cache_path=cache_dir,
         )
         return lambda: dp(key=skey("id_fdr_plot"), state_manager=state_manager)
@@ -690,6 +701,7 @@ def build_component_tnt(
     if comp_name in _HEATMAP_SPEC:
         title, cache_name = _HEATMAP_SPEC[comp_name]
         data = _load_polars(file_manager, dataset_id, cache_name)
+        is_deconv = "deconv" in comp_name
         hm = Heatmap(
             cache_id=cid(comp_name),
             data=data,
@@ -697,8 +709,10 @@ def build_component_tnt(
             y_column="mass",
             intensity_column="intensity",
             title=title,
-            x_label="Retention time",
-            y_label="Monoisotopic mass",
+            x_label="Retention Time",
+            # Raw heatmaps plot m/z; only deconvolved heatmaps plot neutral mass
+            # (mirrors the Deconv heatmap labelling).
+            y_label="Monoisotopic Mass" if is_deconv else "m/z",
             zoom_identifier=f"tnt_{comp_name}_zoom",
             cache_path=cache_dir,
         )
@@ -736,7 +750,12 @@ def render_experiment_tnt(
     import streamlit as st
     from openms_insight import StateManager
 
-    state_manager = StateManager(session_key=f"oi_tnt_state_{panel_key}")
+    # Scope the session_key to dataset_id so switching the selected experiment
+    # starts from a clean selection instead of inheriting the previous dataset's
+    # protein/tag/residue selection (legacy render_grid reset on dataset change,
+    # src/render/render.py:80-82). A distinct panel_key still isolates side-by-side
+    # panels.
+    state_manager = StateManager(session_key=f"oi_tnt_state_{panel_key}_{dataset_id}")
 
     # Resolve proteinIndex → deconvIndex BEFORE rendering downstream panels so
     # the spectrum/mass/sequence filters see the right scan on this run.
