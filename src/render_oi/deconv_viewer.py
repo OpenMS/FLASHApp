@@ -152,6 +152,10 @@ def build_component(
             interactivity={SCAN: "index"},
             index_field="index",
             title="Scan Table",
+            # Legacy flash_viewer_grid column titles / tooltips / numeric
+            # formatting (recovered from the built bundle's TabulatorScanTable
+            # columnDefinitions). Built only from the columns actually present.
+            column_definitions=_scan_table_column_definitions(data),
             cache_path=cache_dir,
         )
         return lambda: tbl(key=skey("scan_table"), state_manager=state_manager)
@@ -168,20 +172,33 @@ def build_component(
             interactivity={MASS: "mass_id"},
             index_field="mass_id",
             title="Mass Table",
+            # Legacy flash_viewer_grid TabulatorMassTable column titles /
+            # tooltips / numeric formatting (recovered from the built bundle),
+            # built only from the exploded columns actually present.
+            column_definitions=_mass_table_column_definitions(long),
             cache_path=cache_dir,
         )
         return lambda: tbl(key=skey("mass_table"), state_manager=state_manager)
 
     # ---- Deconvolved spectrum (LinePlot, filtered by scanIndex) ----
     if comp_name == "deconv_spectrum":
-        per_scan = _load_polars(file_manager, dataset_id, "deconv_spectrum")
-        long = explode_spectrum_long(per_scan)
+        # Build from combined_spectrum when available: it carries the SAME
+        # deconvolved sticks (MonoMass/SumIntensity) PLUS the per-mass SignalPeaks
+        # ([binIdx, mz, intensity, charge]), letting us derive a per-peak charge
+        # label (z=N) locally — without touching long_format.py. Fall back to the
+        # plain deconv_spectrum cache (no charge data) when combined is absent.
+        long, ann_col = _deconv_spectrum_with_charge(
+            file_manager, dataset_id, explode_spectrum_long
+        )
         lp = LinePlot(
             cache_id=cid("deconv_spectrum"),
             data=long,
             filters={SCAN: "index"},
             x_column="mass",
             y_column="intensity",
+            # Per-peak charge label on each deconvolved stick (legacy showed the
+            # charge state next to peaks); None when no charge data is available.
+            annotation_column=ann_col,
             title="Deconvolved Spectrum",
             x_label="Monoisotopic Mass",
             y_label="Intensity",
@@ -193,6 +210,10 @@ def build_component(
     if comp_name == "anno_spectrum":
         per_scan = _load_polars(file_manager, dataset_id, "combined_spectrum")
         _deconv_long, anno_long = explode_combined_spectrum_long(per_scan)
+        # No per-peak charge label here: the annotated series (MonoMass_Anno /
+        # SumIntensity_Anno) carries no charge information in these caches (only
+        # the deconvolved series has the SignalPeaks charge constituents), so we
+        # have no charge to annotate — left unannotated, matching the data.
         lp = LinePlot(
             cache_id=cid("anno_spectrum"),
             data=anno_long,
@@ -223,7 +244,22 @@ def build_component(
             title="Precursor Signals",
             cache_path=cache_dir,
         )
-        return lambda: s3(key=skey("3D_SN_plot"), state_manager=state_manager)
+
+        def _render_3d():
+            # Reflect the selection state in the title: the default view shows the
+            # scan's full precursor S/N peaks ("Precursor Signals"); once a single
+            # mass is isolated (massIndex set via the mass-table / deconv-heatmap
+            # click) it shows that mass's signal/noisy peaks ("Mass Signals").
+            # Only the displayed title arg changes — the cached/filtered data is
+            # untouched — so this does not invalidate the component cache.
+            mass_selected = (
+                state_manager is not None
+                and state_manager.get_selection(MASS) is not None
+            )
+            s3._title = "Mass Signals" if mass_selected else "Precursor Signals"
+            return s3(key=skey("3D_SN_plot"), state_manager=state_manager)
+
+        return _render_3d
 
     # ---- FDR / score-distribution plot (DensityPlot, precomputed curves) ----
     if comp_name == "fdr_plot":
@@ -297,6 +333,210 @@ def _explode_mass_table(per_scan: pl.LazyFrame) -> pl.LazyFrame:
     lf = per_scan.select(["index", *present]).explode(present)
     lf = lf.with_columns(pl.int_range(pl.len()).over("index").alias("mass_id"))
     return lf.sort(["index", "mass_id"])
+
+
+# --------------------------------------------------------------------------
+# Tabulator column definitions, recovered from the legacy flash_viewer_grid
+# bundle (TabulatorScanTable / TabulatorMassTable columnDefinitions). The
+# legacy numeric formatter was ``v => v.toString().length > 4 ? v.toFixed(4)
+# : v`` (a JS function that cannot be JSON-serialized into the OI cache); the
+# closest portable equivalent is Tabulator's built-in ``money`` formatter with
+# a fixed precision (no symbol), which OpenMS-Insight passes straight through.
+# --------------------------------------------------------------------------
+_FLOAT_FMT = {"formatter": "money", "formatterParams": {"precision": 4, "symbol": ""}}
+
+# field -> (title, headerTooltip, is_float) for the scan table. Order follows
+# the legacy column order; ``index`` is mapped to the displayed "Index" column.
+_SCAN_TABLE_COLUMNS = [
+    ("index", "Index", "The sequential index of the spectrum in the dataset.", False),
+    ("Scan", "Scan Number", "The identifier of the mass spectrometry scan.", False),
+    (
+        "MSLevel",
+        "MS Level",
+        "The level of mass spectrometry analysis (e.g., MS1 or MS2).",
+        False,
+    ),
+    (
+        "RT",
+        "Retention time",
+        "The time at which the spectrum was detected during the chromatographic "
+        "separation in seconds.",
+        True,
+    ),
+    (
+        "PrecursorMass",
+        "Precursor Mass",
+        "The mass of the precursor ion selected for fragmentation in Daltons.",
+        True,
+    ),
+    ("#Masses", "#Masses", "The number of detected masses in the spectrum.", False),
+]
+
+# field -> (title, headerTooltip, is_float) for the exploded mass table. The
+# ``mass_id`` index column is shown as "Index" (legacy "Index" column).
+_MASS_TABLE_COLUMNS = [
+    (
+        "mass_id",
+        "Index",
+        "The sequential index of the mass entry in the dataset.",
+        False,
+    ),
+    (
+        "MonoMass",
+        "Monoisotopic mass",
+        "The monoisotopic mass of the detected ion in Daltons.",
+        True,
+    ),
+    (
+        "SumIntensity",
+        "Sum intensity",
+        "The total intensity of the detected mass across all isotopic peaks and "
+        "charges.",
+        True,
+    ),
+    (
+        "MinCharges",
+        "Min charge",
+        "The minimum charge state detected for the mass.",
+        False,
+    ),
+    (
+        "MaxCharges",
+        "Max charge",
+        "The maximum charge state detected for the mass.",
+        False,
+    ),
+    (
+        "MinIsotopes",
+        "Min isotope",
+        "The smallest observed isotopic shift, expressed as a multiple of the "
+        "average isotopic mass difference at 55kDA.",
+        False,
+    ),
+    (
+        "MaxIsotopes",
+        "Max isotope",
+        "The largest observed isotopic shift, expressed as a multiple of the "
+        "average isotopic mass difference at 55kDA.",
+        False,
+    ),
+    (
+        "CosineScore",
+        "Cosine score",
+        "The cosine similarity score comparing the observed and theoretical "
+        "isotopic patterns.",
+        True,
+    ),
+    ("SNR", "SNR", "The signal-to-noise ratio for the detected mass.", True),
+    (
+        "QScore",
+        "QScore",
+        "The quality score indicating the confidence of the mass detection "
+        "(higher is better).",
+        True,
+    ),
+]
+
+
+def _column_definitions(
+    present_fields, spec
+) -> List[Dict[str, Any]]:
+    """Build Tabulator column_definitions from a (field,title,tooltip,float) spec.
+
+    Only fields that are actually present in the data are emitted (so no column
+    the data lacks is referenced, and — combined with always covering every real
+    column — no existing column is dropped). Numeric columns get a ``number``
+    sorter; float columns additionally get the fixed-precision ``money``
+    formatter that stands in for the legacy ``toFixed(4)`` display.
+    """
+    present = set(present_fields)
+    defs: List[Dict[str, Any]] = []
+    for field, title, tooltip, is_float in spec:
+        if field not in present:
+            continue
+        col: Dict[str, Any] = {
+            "title": title,
+            "field": field,
+            "headerTooltip": tooltip,
+            "sorter": "number",
+        }
+        if is_float:
+            col.update(_FLOAT_FMT)
+        defs.append(col)
+    return defs
+
+
+def _scan_table_column_definitions(data: pl.LazyFrame) -> List[Dict[str, Any]]:
+    """Legacy scan-table column titles/tooltips/formatters for the real fields."""
+    fields = data.collect_schema().names()
+    return _column_definitions(fields, _SCAN_TABLE_COLUMNS)
+
+
+def _mass_table_column_definitions(long: pl.LazyFrame) -> List[Dict[str, Any]]:
+    """Legacy mass-table column titles/tooltips/formatters for the exploded fields."""
+    fields = long.collect_schema().names()
+    return _column_definitions(fields, _MASS_TABLE_COLUMNS)
+
+
+def _deconv_spectrum_with_charge(file_manager, dataset_id, explode_spectrum_long):
+    """Deconvolved-spectrum long format + a per-peak ``charge_label`` (``z=N``).
+
+    Returns ``(long_frame, annotation_column_or_None)``.
+
+    The plain ``deconv_spectrum`` cache holds only ``MonoMass``/``SumIntensity``
+    (no charge). ``combined_spectrum`` carries the SAME deconvolved sticks PLUS
+    each mass's constituent ``SignalPeaks`` (``[binIdx, mz, intensity, charge]``),
+    so we derive a representative charge per deconvolved mass (the charge of its
+    most intense constituent peak) and format it as ``z=N``. This is built
+    locally via Polars expressions — ``long_format.py`` is untouched.
+
+    Falls back to the plain ``deconv_spectrum`` (no annotation) when
+    ``combined_spectrum`` / ``SignalPeaks`` are unavailable, in which case the
+    annotation column is ``None``.
+    """
+    try:
+        combined = _load_polars(file_manager, dataset_id, "combined_spectrum")
+        schema = combined.collect_schema().names()
+        if not {"MonoMass", "SumIntensity", "SignalPeaks"} <= set(schema):
+            raise KeyError("combined_spectrum lacks SignalPeaks")
+        long = (
+            combined.select(["index", "MonoMass", "SumIntensity", "SignalPeaks"])
+            .explode(["MonoMass", "SumIntensity", "SignalPeaks"])
+            .rename({"MonoMass": "mass", "SumIntensity": "intensity"})
+            # mass_id matches explode_spectrum_long's per-scan peak order so the
+            # scan cross-link row counts stay identical.
+            .with_columns(pl.int_range(pl.len()).over("index").alias("mass_id"))
+        )
+        # Representative charge = charge (peak field 3) of the constituent peak
+        # with the maximum intensity (peak field 2). Null when a mass has no
+        # constituent peaks; then no label is shown for that stick.
+        long = long.with_columns(
+            pl.col("SignalPeaks")
+            .list.eval(pl.element().list.get(3))
+            .list.get(
+                pl.col("SignalPeaks")
+                .list.eval(pl.element().list.get(2))
+                .list.arg_max()
+            )
+            .cast(pl.Int64, strict=False)
+            .alias("_charge")
+        ).with_columns(
+            pl.when(pl.col("_charge").is_not_null())
+            .then(pl.format("z={}", pl.col("_charge")))
+            .otherwise(pl.lit(""))
+            .alias("charge_label")
+        )
+        long = long.select(
+            ["index", "mass_id", "mass", "intensity", "charge_label"]
+        ).sort(["index", "mass_id"])
+        return long, "charge_label"
+    except Exception:  # pragma: no cover - defensive fallback to plain cache
+        logger.info(
+            "deconv_spectrum charge labels unavailable (no SignalPeaks); "
+            "rendering without charge annotation"
+        )
+        per_scan = _load_polars(file_manager, dataset_id, "deconv_spectrum")
+        return explode_spectrum_long(per_scan), None
 
 
 def _build_sequence_view(

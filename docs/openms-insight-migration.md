@@ -260,14 +260,16 @@ manager (fixed single view).
 | component | preserved | status |
 |---|---|---|
 | Feature-group `Table` | scalar summary columns; click sets `featureGroup` | ✅ 1437 rows |
-| `FeatureView` | per-charge 3D traces (x=`mz`, y=`rt`, z=`intensity`), isotope hover; `filters={featureGroup:feature_group}` | ✅ exact per-group point counts (0/5/100 → 1384/239/208) |
+| `FeatureView` | per-charge 3D traces (x=`mz`, y=`rt`, z=`intensity`), per-isotope-trace polyline breaks; `filters={featureGroup:feature_group}` | ✅ exact per-group point counts (0/5/100 → 1384/239/208) |
 
 ### 👁 Browser checklist (FLASHQuant)
 
 1. Feature-group table renders all groups; selecting a group updates the
    FeatureView to that group's traces.
-2. Traces colored per charge; isotope info in hover; conflict-resolution
-   highlighting if a `conflict_resolution_dfs` cache is present.
+2. Traces colored per charge, with per-isotope-trace polyline breaks (matching the
+   legacy). Note: neither engine implements isotope hover or conflict-resolution
+   highlighting — the `conflict_resolution_dfs` cache is parsed at upload but
+   unused by both renderers, so its absence is not a regression.
 
 ## After all three checklists pass
 

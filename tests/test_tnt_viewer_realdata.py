@@ -94,6 +94,149 @@ def test_every_tnt_component_builds(comp, fake_fm, monkeypatch):
     assert callable(builder), f"{comp} did not produce a render callable"
 
 
+def _captured_table(builder, monkeypatch):
+    """Run a build_component_tnt render callable and capture the Table instance it
+    constructs (the protein table builds its Table inside the render closure to
+    honour the runtime "Best per spectrum" checkbox)."""
+    from openms_insight import Table
+
+    captured = {}
+
+    def _spy(self, *a, **k):
+        captured["table"] = self
+        return None
+
+    monkeypatch.setattr(Table, "__call__", _spy, raising=False)
+    builder()
+    return captured["table"]
+
+
+def test_tag_table_column_definitions_and_sort(fake_fm, monkeypatch):
+    """Tag table: legacy titles incl. restored Nmass/Cmass, initial_sort by Score
+    desc, go_to fields, plus the proteinIndex filter / tagIndex interactivity."""
+    import streamlit as st
+
+    monkeypatch.setattr(st, "session_state", {}, raising=False)
+    from openms_insight import StateManager
+
+    from src.render_oi.tnt_viewer import build_component_tnt
+
+    sm = StateManager(session_key="oi_tnt_test_tag")
+    builder = build_component_tnt("tag_table", "ds", fake_fm, sm, key_prefix="p0")
+    tbl = _captured_table(builder, monkeypatch)
+    args = tbl._get_component_args()
+
+    titles = {c["title"]: c["field"] for c in args["columnDefinitions"]}
+    # Restored columns that the pre-parity build dropped.
+    assert titles.get("N mass") == "Nmass"
+    assert titles.get("C mass") == "Cmass"
+    # Every column definition carries a header tooltip.
+    assert all("headerTooltip" in c for c in args["columnDefinitions"])
+    assert args["initialSort"] == [{"column": "Score", "dir": "desc"}]
+    assert "Scan" in args["goToFields"] and "TagSequence" in args["goToFields"]
+    assert tbl._filters == {"proteinIndex": "ProteinIndex"}
+    assert args["interactivity"] == {"tagIndex": "TagIndex"}
+    # The private dash-sentinel marker never reaches the frontend.
+    assert all("_dashSentinel" not in c for c in args["columnDefinitions"])
+
+
+def test_protein_table_column_definitions_and_sort(fake_fm, monkeypatch):
+    """Protein table: legacy + parity columns, initial_sort by Score desc, go_to
+    fields, and the proteinIndex interactivity preserved."""
+    import streamlit as st
+
+    monkeypatch.setattr(st, "session_state", {}, raising=False)
+    monkeypatch.setattr(st, "checkbox", lambda *a, **k: True, raising=False)
+    from openms_insight import StateManager
+
+    from src.render_oi.tnt_viewer import build_component_tnt
+
+    sm = StateManager(session_key="oi_tnt_test_prot")
+    builder = build_component_tnt("protein_table", "ds", fake_fm, sm, key_prefix="p0")
+    tbl = _captured_table(builder, monkeypatch)
+    args = tbl._get_component_args()
+
+    fields = {c["field"] for c in args["columnDefinitions"]}
+    # Legacy columns the pre-parity build had dropped, plus the requested Coverage.
+    for restored in (
+        "Scan",
+        "accession",
+        "description",
+        "length",
+        "ProteoformMass",
+        "Coverage(%)",
+        "MatchingFragments",
+        "ModCount",
+        "TagCount",
+        "Score",
+        "ProteoformLevelQvalue",
+    ):
+        assert restored in fields, f"protein column {restored} missing"
+    assert all("headerTooltip" in c for c in args["columnDefinitions"])
+    assert args["initialSort"] == [{"column": "Score", "dir": "desc"}]
+    assert args["goToFields"] == ["Scan", "accession"]
+    assert args["interactivity"] == {"proteinIndex": "index"}
+    assert all("_dashSentinel" not in c for c in args["columnDefinitions"])
+
+
+def test_protein_best_per_spectrum_reduces_rows(fake_fm, monkeypatch):
+    """The "Best per spectrum" toggle collapses the protein table to one (top
+    Score) row per Scan; default-on shows fewer rows than the unfiltered table,
+    and the reduced count equals the number of distinct scans."""
+    import streamlit as st
+
+    monkeypatch.setattr(st, "session_state", {}, raising=False)
+    from openms_insight import StateManager
+
+    from src.render_oi.tnt_viewer import build_component_tnt
+
+    def _rows(best_only):
+        monkeypatch.setattr(st, "checkbox", lambda *a, **k: best_only, raising=False)
+        sm = StateManager(session_key=f"oi_tnt_test_bps_{best_only}")
+        builder = build_component_tnt(
+            "protein_table", "ds", fake_fm, sm, key_prefix="p0"
+        )
+        tbl = _captured_table(builder, monkeypatch)
+        return tbl._prepare_vue_data({})["_pagination"]["total_rows"]
+
+    all_rows = _rows(False)
+    best_rows = _rows(True)
+
+    n_scans = (
+        pl.scan_parquet(_DS / "protein_dfs.pq").select("Scan").collect()["Scan"].n_unique()
+    )
+    assert best_rows == n_scans
+    assert best_rows < all_rows, "Best per spectrum should reduce the row count"
+
+
+def test_protein_dash_sentinel_nulled(fake_fm, monkeypatch):
+    """The -1.0 'unmatched' sentinel for the dash columns (ProteoformMass /
+    ProteoformLevelQvalue) is nulled at the data layer so the cell renders blank
+    instead of -1, while the column stays numeric."""
+    import streamlit as st
+
+    monkeypatch.setattr(st, "session_state", {}, raising=False)
+    monkeypatch.setattr(st, "checkbox", lambda *a, **k: False, raising=False)
+    from openms_insight import StateManager
+
+    from src.render_oi.tnt_viewer import build_component_tnt
+
+    raw = pl.scan_parquet(_DS / "protein_dfs.pq").collect()
+    if "ProteoformMass" not in raw.columns:
+        pytest.skip("ProteoformMass not present in this dataset")
+    neg1 = int((raw["ProteoformMass"] == -1).sum())
+    if neg1 == 0:
+        pytest.skip("no -1 sentinel present to null in this dataset")
+
+    sm = StateManager(session_key="oi_tnt_test_dash")
+    builder = build_component_tnt("protein_table", "ds", fake_fm, sm, key_prefix="p0")
+    tbl = _captured_table(builder, monkeypatch)
+    df = tbl._prepare_vue_data({})["tableData"]
+    # No -1 sentinel survives; the rows that had it are now null.
+    assert (df["ProteoformMass"] == -1).sum() == 0
+    assert df["ProteoformMass"].isna().sum() >= neg1
+
+
 def test_proteoform_scan_resolution(fake_fm, monkeypatch):
     import streamlit as st
 

@@ -229,6 +229,258 @@ def _deconv_signal_peaks_long(per_scan: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
+# Tabulator float formatter: fixed-precision display standing in for the legacy
+# ``toFixed(4)`` (matches the Deconv viewer's _FLOAT_FMT convention).
+_FLOAT_FMT = {"formatter": "money", "formatterParams": {"precision": 4, "symbol": ""}}
+
+# Protein-table column spec mirroring the legacy ``TabulatorProteinTable``
+# (title / headerTooltip / sorter) for the REAL ``protein_dfs`` fields. Each entry
+# is (field, title, tooltip, is_float, dash_sentinel). ``dash_sentinel`` flags the
+# columns the legacy rendered with a "-1 -> '-'" formatter (ProteoformMass,
+# ProteoformLevelQvalue) -- the FLASHTnT "unmatched" sentinel; we null those -1.0s
+# in the data (see _apply_dash_sentinels) so the cell renders blank instead of a
+# misleading -1, keeping the column numeric/sortable. ``Coverage(%)`` is added per
+# the parity request (it was not in the legacy protein table).
+_PROTEIN_TABLE_COLUMNS = [
+    (
+        "Scan",
+        "Scan No.",
+        "The identifier of the mass spectrometry scan associated with the "
+        "identified proteoform.",
+        False,
+        False,
+    ),
+    (
+        "accession",
+        "Accession",
+        "The unique identifier for the protein in the reference database.",
+        False,
+        False,
+    ),
+    (
+        "description",
+        "Description",
+        "A human-readable description of the matched protein.",
+        False,
+        False,
+    ),
+    (
+        "length",
+        "Length",
+        "The total number of amino acids in the matched protein.",
+        False,
+        False,
+    ),
+    (
+        "ProteoformMass",
+        "Mass",
+        "The calculated mass of the proteoform in Daltons.",
+        True,
+        True,
+    ),
+    (
+        "Coverage(%)",
+        "Coverage (%)",
+        "The percentage of the protein sequence covered by matched fragments.",
+        True,
+        False,
+    ),
+    (
+        "MatchingFragments",
+        "No. of Matched Fragments",
+        "The number of fragment ions that match the protein sequence.",
+        False,
+        False,
+    ),
+    (
+        "ModCount",
+        "No. of Modifications",
+        "The number of modifications identified in the protein.",
+        False,
+        False,
+    ),
+    (
+        "TagCount",
+        "No. of Tags",
+        "The number of sequence tags associated with the proteoform match.",
+        False,
+        False,
+    ),
+    (
+        "Score",
+        "Score",
+        "A score indicating the confidence of the protein match (higher is "
+        "better).",
+        False,
+        False,
+    ),
+    (
+        "ProteoformLevelQvalue",
+        "Q-Value (Proteoform Level)",
+        "The confidence value of the protein match at the proteoform level.",
+        True,
+        True,
+    ),
+]
+
+# Tag-table column spec mirroring the legacy ``TabulatorTagTable``. ``Nmass`` and
+# ``Cmass`` carry the legacy "-1 -> '-'" sentinel (N-/C-terminal offset absent).
+_TAG_TABLE_COLUMNS = [
+    (
+        "Scan",
+        "Scan Number",
+        "The identifier of the mass spectrometry scan containing the sequence "
+        "tag.",
+        False,
+        False,
+    ),
+    (
+        "StartPos",
+        "Start Position",
+        "The position in the protein sequence where the sequence tag begins.",
+        False,
+        False,
+    ),
+    (
+        "EndPos",
+        "End Position",
+        "The position in the protein sequence where the sequence tag ends.",
+        False,
+        False,
+    ),
+    (
+        "TagSequence",
+        "Sequence",
+        "The amino acid sequence of the identified tag.",
+        False,
+        False,
+    ),
+    (
+        "Length",
+        "Length",
+        "The number of amino acids in the sequence tag.",
+        False,
+        False,
+    ),
+    (
+        "Score",
+        "Tag Score",
+        "A score indicating the confidence of the sequence tag identification "
+        "(higher is better).",
+        False,
+        False,
+    ),
+    (
+        "Nmass",
+        "N mass",
+        "The N-terminal mass offset from the start of the sequence tag in "
+        "Daltons.",
+        True,
+        True,
+    ),
+    (
+        "Cmass",
+        "C mass",
+        "The C-terminal mass offset from the end of the sequence tag in Daltons.",
+        True,
+        True,
+    ),
+    (
+        "DeltaMass",
+        "Δ mass",
+        "Delta mass is the difference between the tag flanking mass and the "
+        "(partial) proteoform mass, from its terminal to the tag boundary.",
+        True,
+        False,
+    ),
+]
+
+
+def _tnt_column_definitions(present_fields, spec) -> List[Dict[str, Any]]:
+    """Build Tabulator ``column_definitions`` from a (field,title,tooltip,float,
+    dash) spec, emitting only fields present in the data.
+
+    Numeric columns get a ``number`` sorter; float columns additionally get the
+    fixed-precision ``money`` formatter (legacy ``toFixed(4)``). ``dash`` columns
+    record ``_dashSentinel`` so the caller can null their -1.0 sentinel in the
+    data (the legacy "-1 -> '-'" formatter); the key is ignored by Tabulator.
+    """
+    present = set(present_fields)
+    defs: List[Dict[str, Any]] = []
+    for field, title, tooltip, is_float, dash in spec:
+        if field not in present:
+            continue
+        col: Dict[str, Any] = {
+            "title": title,
+            "field": field,
+            "headerTooltip": tooltip,
+            "sorter": "number",
+        }
+        if is_float:
+            col.update(_FLOAT_FMT)
+        if dash:
+            col["_dashSentinel"] = True
+        defs.append(col)
+    return defs
+
+
+def _apply_dash_sentinels(
+    data: "pl.LazyFrame", column_defs: List[Dict[str, Any]]
+) -> "pl.LazyFrame":
+    """Null out the FLASHTnT -1.0 "unmatched" sentinel for the dash columns.
+
+    The legacy tables rendered these cells with a ``-1 -> '-'`` formatter. The
+    OpenMS-Insight Vue table only resolves named custom formatters (it cannot
+    receive an inline JS function through the JSON-serialized column definitions),
+    so we map the sentinel to null at the data layer: the cell renders blank
+    instead of a misleading ``-1`` while the column stays numeric and sortable.
+    """
+    dash_fields = [c["field"] for c in column_defs if c.get("_dashSentinel")]
+    # Strip the private marker so only valid Tabulator keys reach the frontend.
+    for c in column_defs:
+        c.pop("_dashSentinel", None)
+    if not dash_fields:
+        return data
+    return data.with_columns(
+        [
+            pl.when(pl.col(f) == -1).then(None).otherwise(pl.col(f)).alias(f)
+            for f in dash_fields
+        ]
+    )
+
+
+def _max_score_per_scan(data: "pl.LazyFrame") -> "pl.LazyFrame":
+    """Collapse the protein table to the single top-``Score`` row per ``Scan``.
+
+    Reproduces the legacy "Best per spectrum" checkbox (default on): keep, for
+    each scan, the row with the highest Score (ties resolved by first occurrence,
+    matching the legacy Map insertion order); rows without a numeric Scan are kept
+    as-is. Operates on the already-column-selected frame so the row identity (and
+    ``index`` used for ``proteinIndex``) is preserved.
+    """
+    schema = data.collect_schema().names()
+    if "Scan" not in schema or "Score" not in schema:
+        return data
+    # Window-based selection (no group_by/concat, so it survives the projection
+    # pushdown the Table applies before collecting): for each Scan, keep the row
+    # whose Score is the max for that Scan; ties resolved by first occurrence
+    # (smallest row index, matching the legacy Map insertion order). Rows without a
+    # Scan are kept verbatim (legacy pushes non-numeric Scan through). Column order
+    # is preserved (with_columns/filter never reorder), so no realignment needed.
+    return (
+        data.with_row_index("_oi_row")
+        .with_columns(
+            pl.col("_oi_row")
+            .filter(pl.col("Score") == pl.col("Score").max())
+            .min()
+            .over("Scan")
+            .alias("_oi_best")
+        )
+        .filter(pl.col("Scan").is_null() | (pl.col("_oi_row") == pl.col("_oi_best")))
+        .drop("_oi_row", "_oi_best")
+    )
+
+
 def build_component_tnt(
     comp_name: str,
     dataset_id: str,
@@ -251,49 +503,69 @@ def build_component_tnt(
     # ---- Protein table (master; click sets proteinIndex) ----
     if comp_name == "protein_table":
         data = _load_polars(file_manager, dataset_id, "protein_dfs")
-        # Keep the informative columns the original Protein Table showed.
-        keep = [
-            "index",
-            "accession",
-            "description",
-            "ProteoformMass",
-            "Coverage(%)",
-            "TagCount",
-            "ProteoformLevelQvalue",
-        ]
         schema = data.collect_schema().names()
-        cols = [c for c in keep if c in schema]
-        tbl = Table(
-            cache_id=cid("protein_table"),
-            data=data.select(cols) if cols else data,
-            interactivity={PROTEIN: "index"},
-            index_field="index",
-            title="Protein Table",
-            cache_path=cache_dir,
-        )
-        return lambda: tbl(key=skey("protein_table"), state_manager=state_manager)
+        col_defs = _tnt_column_definitions(schema, _PROTEIN_TABLE_COLUMNS)
+        # index (proteinIndex) must travel through even though it has no column def;
+        # plus Scan so "Best per spectrum" can collapse on it.
+        keep = [c["field"] for c in col_defs] + [
+            c for c in ("index", "Scan") if c in schema
+        ]
+        cols = list(dict.fromkeys(keep))  # de-dupe, preserve order
+        data = _apply_dash_sentinels(data.select(cols), col_defs)
+
+        def _render_protein_table():
+            import streamlit as st
+
+            # Legacy default: "Best per spectrum" is ON (bestPerSpectrumOnly: true).
+            best_only = st.checkbox(
+                "Best per spectrum",
+                value=True,
+                key=skey("protein_best_per_spectrum"),
+                help="Show only the highest-scoring proteoform per spectrum (scan).",
+            )
+            shown = _max_score_per_scan(data) if best_only else data
+            # Distinct cache_id per toggle state so the two row sets cache cleanly.
+            suffix = "best" if best_only else "all"
+            tbl = Table(
+                cache_id=cid(f"protein_table_{suffix}"),
+                data=shown,
+                interactivity={PROTEIN: "index"},
+                index_field="index",
+                column_definitions=col_defs,
+                go_to_fields=[f for f in ("Scan", "accession") if f in schema],
+                initial_sort=[{"column": "Score", "dir": "desc"}],
+                title="Protein Table",
+                cache_path=cache_dir,
+            )
+            return tbl(key=skey("protein_table"), state_manager=state_manager)
+
+        return _render_protein_table
 
     # ---- Tag table (filtered by proteinIndex) ----
     if comp_name == "tag_table":
         data = _load_polars(file_manager, dataset_id, "tag_dfs")
-        keep = [
-            "TagIndex",
-            "TagSequence",
-            "StartPos",
-            "EndPos",
-            "Length",
-            "Score",
-            "DeltaMass",
-            "ProteinIndex",
-        ]
         schema = data.collect_schema().names()
-        cols = [c for c in keep if c in schema]
+        col_defs = _tnt_column_definitions(schema, _TAG_TABLE_COLUMNS)
+        # TagIndex (index/interactivity) and ProteinIndex (filter) must travel
+        # through even though they carry no column definition.
+        keep = [c["field"] for c in col_defs] + [
+            c for c in ("TagIndex", "ProteinIndex") if c in schema
+        ]
+        cols = list(dict.fromkeys(keep))  # de-dupe, preserve order
+        data = _apply_dash_sentinels(data.select(cols), col_defs)
         tbl = Table(
             cache_id=cid("tag_table"),
-            data=data.select(cols) if cols else data,
+            data=data,
             filters={PROTEIN: "ProteinIndex"},
             interactivity={TAG: "TagIndex"},
             index_field="TagIndex",
+            column_definitions=col_defs,
+            go_to_fields=[
+                f
+                for f in ("Scan", "StartPos", "EndPos", "TagSequence")
+                if f in schema
+            ],
+            initial_sort=[{"column": "Score", "dir": "desc"}],
             title="Tag Table",
             cache_path=cache_dir,
         )
