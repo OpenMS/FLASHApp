@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # State identifiers
 PROTEIN = "proteinIndex"
 DECONV = "deconvIndex"
+TAG = "tagIndex"
 
 
 def _load_pickle_gz(path: Path):
@@ -176,6 +177,58 @@ def _sequence_table(file_manager, dataset_id: str) -> Optional[pl.LazyFrame]:
     )
 
 
+def _tag_data(file_manager, dataset_id: str, tag_index) -> Optional[dict]:
+    """Build the tagger-overlay ``tagData`` for the selected tag row.
+
+    Mirrors the legacy tag-table click: parse the comma-joined fragment ``mzs``,
+    carry the tag sequence + span, and flag N-terminal tags (``Nmass == -1``).
+    ``selectedAA`` is left unset (-1000) until the sequence-view ``AApos``
+    cross-link lands.
+    """
+    tags = (
+        _load_polars(file_manager, dataset_id, "tag_dfs")
+        .filter(pl.col("TagIndex") == int(tag_index))
+        .collect()
+    )
+    if tags.height == 0:
+        return None
+    r = tags.row(0, named=True)
+    masses = [
+        float(m)
+        for m in str(r.get("mzs") or "").split(",")
+        if m.strip() and float(m) != 0.0
+    ]
+    return {
+        "masses": masses,
+        "sequence": str(r.get("TagSequence") or ""),
+        "nTerminal": float(r.get("Nmass", -1) or -1) == -1,
+        "startPos": int(r.get("StartPos") or 0),
+        "endPos": int(r.get("EndPos") or 0),
+        "selectedAA": -1000,
+    }
+
+
+def _deconv_signal_peaks_long(per_scan: pl.LazyFrame) -> pl.LazyFrame:
+    """Primary deconvolved spectrum with a per-peak ``signal_peaks`` column.
+
+    Each row (one deconvolved mass) carries its constituent peaks as
+    ``[mz, intensity, charge]`` triplets (``combined_spectrum.SignalPeaks`` stores
+    ``[binIdx, mz, intensity, charge]``; we drop the bin index), aligned 1:1 with
+    the primary sticks so LinePlot's tagger overlay can draw the per-charge buttons.
+    """
+    return (
+        per_scan.select(["index", "MonoMass", "SumIntensity", "SignalPeaks"])
+        .explode(["MonoMass", "SumIntensity", "SignalPeaks"])
+        .with_columns(
+            pl.col("SignalPeaks")
+            .list.eval(pl.element().list.slice(1, 3))
+            .alias("signal_peaks")
+        )
+        .rename({"MonoMass": "mass", "SumIntensity": "intensity"})
+        .select(["index", "mass", "intensity", "signal_peaks"])
+    )
+
+
 def build_component_tnt(
     comp_name: str,
     dataset_id: str,
@@ -239,6 +292,7 @@ def build_component_tnt(
             cache_id=cid("tag_table"),
             data=data.select(cols) if cols else data,
             filters={PROTEIN: "ProteinIndex"},
+            interactivity={TAG: "TagIndex"},
             index_field="TagIndex",
             title="Tag Table",
             cache_path=cache_dir,
@@ -248,7 +302,8 @@ def build_component_tnt(
     # ---- Combined / augmented spectrum (deconv primary + annotated overlay) ----
     if comp_name == "combined_spectrum":
         per_scan = _load_polars(file_manager, dataset_id, "combined_spectrum")
-        deconv_long, anno_long = explode_combined_spectrum_long(per_scan)
+        _, anno_long = explode_combined_spectrum_long(per_scan)
+        deconv_long = _deconv_signal_peaks_long(per_scan)
         lp = LinePlot(
             cache_id=cid("combined_spectrum"),
             data=deconv_long,
@@ -259,6 +314,11 @@ def build_component_tnt(
             overlay_x_column="mass",
             overlay_y_column="intensity",
             overlay_name="Annotated",
+            # Tagger overlay: when a tag is selected (tagData pushed into state by
+            # render_experiment_tnt), highlight matched sticks + draw per-charge
+            # buttons and inter-residue amino-acid arrows over the spectrum.
+            tag_overlay=True,
+            signal_peaks_column="signal_peaks",
             title="Augmented Deconvolved Spectrum",
             x_label="Monoisotopic Mass",
             y_label="Intensity",
@@ -382,6 +442,17 @@ def render_experiment_tnt(
         deconv_index = entry["deconv_index"] if entry else None
         if state_manager.get_selection(DECONV) != deconv_index:
             state_manager.set_selection(DECONV, deconv_index)
+
+    # Resolve the selected tag -> tagData so the augmented spectrum's tagger
+    # overlay can highlight tag-matched sticks and draw the charge buttons /
+    # inter-residue amino-acid arrows. set_selection no-ops when unchanged.
+    tag_index = state_manager.get_selection(TAG)
+    tag_data = (
+        _tag_data(file_manager, dataset_id, tag_index)
+        if tag_index is not None
+        else None
+    )
+    state_manager.set_selection("tagData", tag_data)
 
     for row_index, row in enumerate(layout_rows):
         if not row:

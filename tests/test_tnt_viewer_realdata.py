@@ -183,3 +183,30 @@ def test_combined_spectrum_overlay(fake_fm, monkeypatch, tmp_path):
     assert len(vd["plotData"]) == dl.filter(pl.col("index") == 0).height
     assert len(vd.get("plotDataOverlay", [])) == al.filter(pl.col("index") == 0).height
     assert lp._get_component_args().get("has_overlay") is True
+
+
+def test_tagger_overlay_data(fake_fm):
+    """Tagger plumbing: per-peak signal_peaks triplets + tagData from a tag row."""
+    from src.render_oi.tnt_viewer import (
+        _deconv_signal_peaks_long,
+        _load_polars,
+        _tag_data,
+    )
+
+    per_scan = _load_polars(fake_fm, "ds", "combined_spectrum")
+    dl = _deconv_signal_peaks_long(per_scan).collect()
+    assert {"index", "mass", "intensity", "signal_peaks"} <= set(dl.columns)
+    sp = dl.row(0, named=True)["signal_peaks"]
+    assert sp and len(sp[0]) == 3  # [mz, intensity, charge] (binIdx dropped)
+
+    tid = pl.scan_parquet(_DS / "tag_dfs.pq").collect().row(0, named=True)["TagIndex"]
+    td = _tag_data(fake_fm, "ds", tid)
+    assert set(td) == {
+        "masses",
+        "sequence",
+        "nTerminal",
+        "startPos",
+        "endPos",
+        "selectedAA",
+    }
+    assert isinstance(td["masses"], list) and isinstance(td["sequence"], str)
