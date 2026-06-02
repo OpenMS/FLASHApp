@@ -45,6 +45,11 @@ from openms_insight import (
     Table,
 )
 
+from content.FLASHDeconv.deconv_sequence import (
+    bake_fixed_modifications,
+    theoretical_mass,
+)
+
 # Map the layout COMPONENT_NAMES (FLASHDeconvLayoutManager) to a builder. Every
 # builder returns a *callable* OpenMS-Insight component already wired with the
 # shared filters/interactivity identifiers. The identifiers below are the FLASHApp
@@ -53,6 +58,10 @@ from openms_insight import (
 
 SCAN_KEY = "scanIndex"
 MASS_KEY = "massIndex"
+# Receives the user-entered sequence from the SequenceView "Change sequence"
+# dialog (Vue `sequence_out` interactivity sentinel). Mirrors the legacy
+# `sequenceOut` selection consumed by src/render/update.py:get_sequence.
+SEQ_OUT_KEY = "sequenceOut"
 
 # Curated column definitions mirroring the LEGACY Vue tables (titles / order /
 # field selection). The OI Table's ``_get_columns_to_select`` projects to ONLY the
@@ -66,9 +75,9 @@ _SCAN_COLUMN_DEFINITIONS = [
     {"title": "Scan Number", "field": "Scan", "sorter": "number"},
     {"title": "MS Level", "field": "MSLevel", "sorter": "number"},
     {"title": "Retention time", "field": "RT", "sorter": "number",
-     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+     "formatter": "fixed", "formatterParams": {"precision": 4}},
     {"title": "Precursor Mass", "field": "PrecursorMass", "sorter": "number",
-     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+     "formatter": "fixed", "formatterParams": {"precision": 4}},
     {"title": "#Masses", "field": "#Masses", "sorter": "number"},
 ]
 
@@ -77,19 +86,19 @@ _SCAN_COLUMN_DEFINITIONS = [
 _MASS_COLUMN_DEFINITIONS = [
     {"title": "Index", "field": "mass_id", "sorter": "number"},
     {"title": "Monoisotopic mass", "field": "MonoMass", "sorter": "number",
-     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+     "formatter": "fixed", "formatterParams": {"precision": 4}},
     {"title": "Sum intensity", "field": "SumIntensity", "sorter": "number",
-     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+     "formatter": "fixed", "formatterParams": {"precision": 4}},
     {"title": "Min charge", "field": "MinCharges", "sorter": "number"},
     {"title": "Max charge", "field": "MaxCharges", "sorter": "number"},
     {"title": "Min isotope", "field": "MinIsotopes", "sorter": "number"},
     {"title": "Max isotope", "field": "MaxIsotopes", "sorter": "number"},
     {"title": "Cosine score", "field": "CosineScore", "sorter": "number",
-     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+     "formatter": "fixed", "formatterParams": {"precision": 4}},
     {"title": "SNR", "field": "SNR", "sorter": "number",
-     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+     "formatter": "fixed", "formatterParams": {"precision": 4}},
     {"title": "QScore", "field": "QScore", "sorter": "number",
-     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+     "formatter": "fixed", "formatterParams": {"precision": 4}},
 ]
 
 
@@ -187,6 +196,8 @@ def _build_deconv_spectrum(file_manager, experiment_id: str, cache_dir: str):
     if data is None:
         return None
     # Deconvolved spectrum: filtered by scan; clicking a peak sets massIndex.
+    # The per-row signal_* list columns (emitted on deconv_spectrum_long by
+    # src/parse/deconv.py) drive the per-mass charge-state drill-down sub-view.
     return LinePlot(
         cache_id=f"deconv_spectrum_{experiment_id}",
         data=data,
@@ -194,6 +205,9 @@ def _build_deconv_spectrum(file_manager, experiment_id: str, cache_dir: str):
         interactivity={MASS_KEY: "peak_id"},
         x_column="MonoMass",
         y_column="SumIntensity",
+        signal_mz_column="signal_mzs",
+        signal_charge_column="signal_charges",
+        signal_intensity_column="signal_intensities",
         title="Deconvolved Spectrum",
         x_label="Monoisotopic Mass",
         y_label="Intensity",
@@ -220,6 +234,14 @@ def _build_anno_spectrum(file_manager, experiment_id: str, cache_dir: str):
 
 
 def _build_combined_spectrum(file_manager, experiment_id: str, cache_dir: str):
+    # DEAD CODE in the OI Deconv viewer: the FLASHDeconv layout (see
+    # FLASHDeconvLayoutManager.COMPONENT_NAMES) exposes no "combined_spectrum" /
+    # augmented panel, and this builder is not registered in COMPONENT_BUILDERS,
+    # so it is never invoked. The "Augmented Deconvolved Spectrum" only exists in
+    # the LEGACY grid path (src/render/initialize.py). The real Deconv spectrum the
+    # OI layout renders is `deconv_spectrum` (_build_deconv_spectrum), which now
+    # carries the signal_* charge drill-down columns. Kept here for reference until
+    # an augmented panel is (if ever) added to the Deconv layout.
     primary = _lazy(file_manager, experiment_id, "combined_spectrum_long")
     if primary is None:
         return None
@@ -267,6 +289,14 @@ def _build_scatter3d(file_manager, experiment_id: str, cache_dir: str):
         scan_filter="index",
         signal_column="SignalPeaks",
         noisy_column="NoisyPeaks",
+        # MS2 precursor-signal lookup: locate the precursor scan's row
+        # (Scan == PrecursorScan) and the index into its MonoMass array whose
+        # value matches PrecursorMass. All four columns are emitted on
+        # threedim_SN_plot by src/parse/deconv.py.
+        scan_column="Scan",
+        precursor_scan_column="PrecursorScan",
+        precursor_mass_column="PrecursorMass",
+        mono_mass_column="MonoMass",
         title="Precursor Signals",
         cache_path=cache_dir,
     )
@@ -300,15 +330,40 @@ def _get_sequence(file_manager):
     )
 
 
-def _build_sequence_view(file_manager, experiment_id: str, cache_dir: str):
+def _build_sequence_view(
+    file_manager, experiment_id: str, cache_dir: str, state_manager=None
+):
     seq = _get_sequence(file_manager)
     if seq is None:
         return None
-    sequence_string, _fix_c, _fix_m = seq
+    submitted_sequence, fix_c, fix_m = seq
+
+    # Prefer a sequence the user entered via the SequenceView "Change sequence"
+    # dialog (Vue emits it into the `sequenceOut` selection through the
+    # `sequence_out` interactivity sentinel). Mirrors legacy
+    # src/render/update.py:get_sequence which prefers `sequenceOut`. The
+    # user-entered sequence is taken verbatim (no fixed-mod baking, matching the
+    # legacy path which returns it with no C/M mods).
+    user_sequence = None
+    if state_manager is not None:
+        candidate = state_manager.get_selection(SEQ_OUT_KEY)
+        if isinstance(candidate, str) and len(candidate) > 0:
+            user_sequence = candidate
+
+    if user_sequence is not None:
+        sequence_string = user_sequence
+    else:
+        # Bake the selected C/M fixed modifications into the sequence string so
+        # the theoretical fragment masses (computed by SequenceView via pyOpenMS
+        # from the literal string) reflect them -- parity with the legacy
+        # setFixedModification, which applied the mods BEFORE fragment-mass
+        # calculation. (compute_fixed_mods only marks residue types; it does NOT
+        # shift masses, so baking is required.)
+        sequence_string = bake_fixed_modifications(submitted_sequence, fix_c, fix_m)
+
     # Deconv peaks are neutral masses (deconvolved=True). Wire the deconv long
     # spectrum as the peaks_data (renamed to the SequenceView schema: peak_id,
-    # mass, intensity), filtered by the selected scan. C/M fixed mods are computed
-    # from the sequence (compute_fixed_mods=True) for Deconv parity.
+    # mass, intensity), filtered by the selected scan.
     peaks = _lazy(file_manager, experiment_id, "deconv_spectrum_long")
     if peaks is None:
         return None
@@ -318,14 +373,36 @@ def _build_sequence_view(file_manager, experiment_id: str, cache_dir: str):
         pl.col("MonoMass").alias("mass"),
         pl.col("SumIntensity").alias("intensity"),
     )
+
+    # Pass the sequence as a single-row frame so we can attach the optional
+    # `computed_mass` column (the baked sequence's monoisotopic mass) for the
+    # SequenceView mass header. Falls back to a plain string when pyOpenMS is
+    # unavailable (theoretical_mass returns None) so the column is simply omitted.
+    seq_mass = theoretical_mass(sequence_string)
+    if seq_mass is not None:
+        sequence_data = pl.LazyFrame(
+            {
+                "sequence": [sequence_string],
+                "precursor_charge": [1],
+                "computed_mass": [seq_mass],
+            }
+        )
+    else:
+        sequence_data = sequence_string
+
     return SequenceView(
         cache_id=f"sequence_view_{experiment_id}",
-        sequence_data=sequence_string,
+        sequence_data=sequence_data,
         peaks_data=peaks,
         filters={SCAN_KEY: "index"},
-        interactivity={MASS_KEY: "peak_id"},
+        # Click a fragment-table row -> set massIndex to the matched peak_id.
+        # The "Change sequence" dialog -> set sequenceOut to the entered sequence.
+        interactivity={MASS_KEY: "peak_id", SEQ_OUT_KEY: "sequence_out"},
         deconvolved=True,
         compute_fixed_mods=True,
+        # Enable the variable / custom modification context menu on this
+        # submitted-sequence path (TnT path keeps it disabled).
+        disable_variable_modifications=False,
         title="Sequence View",
         cache_path=cache_dir,
     )
@@ -347,13 +424,23 @@ COMPONENT_BUILDERS = {
     "mass_table": _build_mass_table,
     "3D_SN_plot": _build_scatter3d,
     "fdr_plot": _build_fdr_plot,
-    "sequence_view": _build_sequence_view,
+    # sequence_view is built separately (needs the panel StateManager to consume
+    # the `sequenceOut` selection); see build_component.
     # internal_fragment_map: deferred (component disabled in the legacy path too).
 }
 
 
-def build_component(file_manager, experiment_id: str, cache_dir: str, comp_name: str):
+def build_component(
+    file_manager, experiment_id: str, cache_dir: str, comp_name: str,
+    state_manager=None,
+):
     """Instantiate the OpenMS-Insight component for a layout cell, or None."""
+    if comp_name == "sequence_view":
+        # The SequenceView builder consumes the user-entered sequence from the
+        # panel StateManager (`sequenceOut`); the other builders are stateless.
+        return _build_sequence_view(
+            file_manager, experiment_id, cache_dir, state_manager=state_manager
+        )
     builder = COMPONENT_BUILDERS.get(comp_name)
     if builder is None:
         return None
@@ -375,12 +462,25 @@ def render_experiment_panel(
     state_manager = StateManager(session_key=session_key)
     cache_dir = _component_cache_dir(file_manager, experiment_id)
 
+    # When the selected scan changes, clear the mass selection so the mass table /
+    # 3D plot / spectrum highlight do not keep a stale mass from the prior scan
+    # (parity with TabulatorScanTable.vue:85-95, which clears the mass selection on
+    # a fresh scan-row click). We track the last-seen scanIndex per panel via a
+    # dedicated session_state key so the reset triggers once per change.
+    scan_seen_key = f"{session_key}__last_scan_index"
+    current_scan = state_manager.get_selection(SCAN_KEY)
+    last_scan = st.session_state.get(scan_seen_key)
+    if current_scan != last_scan:
+        state_manager.clear_selection(MASS_KEY)
+        st.session_state[scan_seen_key] = current_scan
+
     for row_index, row in enumerate(layout_info_per_exp):
         columns = st.columns(len(row))
         for col, (col_index, comp_name) in zip(columns, enumerate(row)):
             with col:
                 component = build_component(
-                    file_manager, experiment_id, cache_dir, comp_name
+                    file_manager, experiment_id, cache_dir, comp_name,
+                    state_manager=state_manager,
                 )
                 # A builder returns None when its optional backing frame is
                 # absent (e.g. no sequence submitted, or *_long not yet cached);

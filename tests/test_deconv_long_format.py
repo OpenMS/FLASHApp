@@ -42,6 +42,7 @@ from src.parse.deconv import (
     combined_spectrum_long,
     deconv_spectrum_long,
     mass_table_long,
+    threedim_SN_plot,
 )
 
 
@@ -86,7 +87,10 @@ def _max_len_expansion(row, cols):
 
 def test_deconv_spectrum_long_schema_and_rowcount():
     df = deconv_spectrum_long(_deconv().lazy()).collect()
-    assert df.columns == ["index", "peak_id", "MonoMass", "SumIntensity"]
+    assert df.columns == [
+        "index", "peak_id", "MonoMass", "SumIntensity",
+        "signal_mzs", "signal_charges", "signal_intensities",
+    ]
     # 4 + 0 + 2 + 1 = 7
     assert df.height == 7
 
@@ -135,7 +139,10 @@ def test_mass_table_long_rowcount_and_empty_scan():
 def test_combined_spectrum_long_is_signal():
     deconv = _deconv()
     df = combined_spectrum_long(deconv.lazy()).collect()
-    assert df.columns == ["index", "peak_id", "MonoMass", "SumIntensity", "is_signal"]
+    assert df.columns == [
+        "index", "peak_id", "MonoMass", "SumIntensity", "is_signal",
+        "signal_mzs", "signal_charges", "signal_intensities",
+    ]
     dpd = deconv.to_pandas()
     for r in df.iter_rows(named=True):
         sp = dpd[dpd["index"] == r["index"]].iloc[0]["SignalPeaks"]
@@ -145,6 +152,124 @@ def test_combined_spectrum_long_is_signal():
     # Ragged past-end position (scan 0, peak_id 3) must be is_signal False.
     row3 = df.filter((pl.col("index") == 0) & (pl.col("peak_id") == 3)).row(0, named=True)
     assert row3["is_signal"] is False
+
+
+# Signal-peak quadruple layout in the nested SignalPeaks column:
+# [peak_index, mz, intensity, charge]. (Verified against the example caches:
+# SignalPeaks has dtype List(List(List(Float64))) — scan -> mass -> peak -> tuple.)
+_SP_MZ, _SP_INT, _SP_CH = 1, 2, 3
+
+
+def _check_signal_arrays(df):
+    """Shared assertions for the per-mass signal_* list columns on a long frame."""
+    # Column dtypes: lists of f64 / i64 / f64.
+    assert df.schema["signal_mzs"] == pl.List(pl.Float64)
+    assert df.schema["signal_intensities"] == pl.List(pl.Float64)
+    assert df.schema["signal_charges"] == pl.List(pl.Int64)
+
+    deconv = _deconv()
+    dpd = deconv.to_pandas()
+    for r in df.iter_rows(named=True):
+        sp = dpd[dpd["index"] == r["index"]].iloc[0]["SignalPeaks"]
+        pid = r["peak_id"]
+        peaks = list(sp[pid]) if pid < len(sp) else []
+
+        mzs = r["signal_mzs"]
+        chs = r["signal_charges"]
+        ints = r["signal_intensities"]
+
+        # Never null — past-end / no-signal positions are empty lists.
+        assert mzs is not None and chs is not None and ints is not None
+        # The three arrays are mutually aligned (one entry per signal peak).
+        assert len(mzs) == len(chs) == len(ints) == len(peaks)
+        # Contents match the per-mass signal peaks at this position.
+        assert mzs == [p[_SP_MZ] for p in peaks]
+        assert ints == [p[_SP_INT] for p in peaks]
+        assert chs == [int(p[_SP_CH]) for p in peaks]
+
+        # Alignment with is_signal (combined frame only) / non-emptiness.
+        if "is_signal" in r:
+            assert bool(r["is_signal"]) == (len(mzs) > 0)
+
+
+def test_deconv_spectrum_long_signal_arrays():
+    df = deconv_spectrum_long(_deconv().lazy()).collect()
+    _check_signal_arrays(df)
+    # Concrete spot check: scan 0, peak 0 has one signal peak (mz 1000.1, ch 1).
+    r0 = df.filter((pl.col("index") == 0) & (pl.col("peak_id") == 0)).row(0, named=True)
+    assert r0["signal_mzs"] == [1000.1]
+    assert r0["signal_charges"] == [1]
+    assert r0["signal_intensities"] == [10.0]
+    # Non-signal peak (scan 0, peak 1) and ragged past-end peak (scan 0, peak 3)
+    # both carry empty lists.
+    for pid in (1, 3):
+        rr = df.filter((pl.col("index") == 0) & (pl.col("peak_id") == pid)).row(0, named=True)
+        assert rr["signal_mzs"] == []
+        assert rr["signal_charges"] == []
+        assert rr["signal_intensities"] == []
+
+
+def test_combined_spectrum_long_signal_arrays():
+    df = combined_spectrum_long(_deconv().lazy()).collect()
+    _check_signal_arrays(df)
+    # Signal-flagged peaks have non-empty, equal-length signal_* lists; non-signal
+    # peaks have empty lists across all three.
+    for r in df.iter_rows(named=True):
+        if r["is_signal"]:
+            assert len(r["signal_mzs"]) > 0
+            assert len(r["signal_mzs"]) == len(r["signal_charges"]) == len(r["signal_intensities"])
+        else:
+            assert r["signal_mzs"] == []
+            assert r["signal_charges"] == []
+            assert r["signal_intensities"] == []
+
+
+def _deconv_3d():
+    # MS1 precursor scan (scan 100) with two masses; MS2 fragment scan (scan 101)
+    # isolated from precursor mass 2000.2 in scan 100.
+    return pl.DataFrame(
+        {
+            "Scan": [100, 101],
+            "PrecursorScan": [0.0, 100.0],
+            "PrecursorMass": [0.0, 2000.2],
+            "mz_array": [[1000.1, 2000.2], [3000.3]],
+            "intensity_array": [[10.0, 20.0], [30.0]],
+            "SignalPeaks": [
+                [[[0.0, 1000.1, 10.0, 1.0]], [[1.0, 2000.2, 20.0, 2.0]]],
+                [[[0.0, 3000.3, 30.0, 1.0]]],
+            ],
+            "NoisyPeaks": [
+                [[], []],
+                [[]],
+            ],
+        }
+    ).with_row_index("index")
+
+
+def test_threedim_SN_plot_precursor_lookup_columns():
+    df = threedim_SN_plot(_deconv_3d().lazy()).collect()
+    assert df.columns == [
+        "index", "Scan", "PrecursorScan", "PrecursorMass",
+        "MonoMass", "SignalPeaks", "NoisyPeaks",
+    ]
+    # Precursor-lookup key dtypes.
+    assert df.schema["Scan"] == pl.Int64
+    assert df.schema["PrecursorScan"] == pl.Float64
+    assert df.schema["PrecursorMass"] == pl.Float64
+    # MonoMass is the per-mass array (== mz_array).
+    assert df.schema["MonoMass"] == pl.List(pl.Float64)
+
+    # The MS2 fragment scan's precursor resolves to a mass in its precursor scan:
+    # find the precursor-scan row (Scan == PrecursorScan) and the MonoMass index
+    # matching PrecursorMass — the position the Scatter3D uses for SignalPeaks.
+    ms2 = df.filter(pl.col("Scan") == 101).row(0, named=True)
+    assert ms2["PrecursorScan"] == 100.0
+    assert ms2["PrecursorMass"] == 2000.2
+    prec = df.filter(pl.col("Scan") == int(ms2["PrecursorScan"])).row(0, named=True)
+    mass_index = prec["MonoMass"].index(ms2["PrecursorMass"])
+    assert mass_index == 1
+    # That per-mass position carries the matching signal peaks in the precursor scan.
+    assert len(prec["SignalPeaks"][mass_index]) > 0
 
 
 def test_peak_id_and_mass_id_share_mass_axis():

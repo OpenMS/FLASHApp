@@ -78,11 +78,16 @@ MASS_KEY = "massIndex"
 # Clicking a covered residue in the SequenceView sets this to the residue's
 # PROTEIN-ABSOLUTE 0-based position; the Tag Table range-filters its rows to tags
 # whose [StartPos, EndPos] span contains that position (StartPos <= pos <= EndPos),
-# clearing on re-click (toggle). The SequenceView publishes protein-absolute
-# coordinates via the per-proteoform `sequence_offset` carried in the sequence
-# frame, so this matches StartPos/EndPos for ALL proteoforms (not just the
-# bundled full-protein example).
+# clearing on re-click (toggle). The SequenceView now renders the FULL protein
+# sequence, so the residue grid index IS the protein-absolute position
+# (`sequence_offset` == 0) and the emitted coordinate matches tag StartPos/EndPos
+# for ALL proteoforms directly.
 AA_KEY = "selectedAApos"
+# Tag-span highlight on the SequenceView (legacy `selectedTag.{startPos,endPos}`).
+# Published as {"start": StartPos, "end": EndPos, "nTerminal": bool} (protein-
+# absolute indices) and consumed by the SequenceView `"tag_span"` interactivity
+# sentinel, which reads this selection value to bracket-highlight the tag span.
+TAG_SPAN_KEY = "tagSpan"
 
 
 def _component_cache_dir(file_manager, experiment_id: str) -> str:
@@ -165,12 +170,20 @@ _PROTEIN_COLUMN_DEFINITIONS = [
     {"title": "Accession", "field": "accession", "sorter": "string"},
     {"title": "Description", "field": "description", "sorter": "string"},
     {"title": "Length", "field": "length", "sorter": "number"},
-    {"title": "Mass", "field": "ProteoformMass", "sorter": "number"},
+    # Legacy TabulatorProteinTable.vue renders the `-1` sentinel as "-" (the raw
+    # value otherwise). The OI `dashNegativeOne` formatter reproduces the sentinel
+    # rule; precision 4 matches the app-wide `toFixedFormatter()` default (4 dp,
+    # used for every other numeric mass column, e.g. MonoMass in the mass table).
+    {"title": "Mass", "field": "ProteoformMass", "sorter": "number",
+     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
     {"title": "No. of Matched Fragments", "field": "MatchingFragments", "sorter": "number"},
     {"title": "No. of Modifications", "field": "ModCount", "sorter": "number"},
     {"title": "No. of Tags", "field": "TagCount", "sorter": "number"},
     {"title": "Score", "field": "Score", "sorter": "number"},
-    {"title": "Q-Value (Proteoform Level)", "field": "ProteoformLevelQvalue", "sorter": "number"},
+    # Q-Value also uses the `-1 -> "-"` sentinel rule (legacy formatter); 4 dp
+    # matches the app-wide default decimal precision.
+    {"title": "Q-Value (Proteoform Level)", "field": "ProteoformLevelQvalue", "sorter": "number",
+     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
 ]
 
 # TabulatorTagTable.vue columns -> tag_dfs fields.
@@ -181,21 +194,62 @@ _TAG_COLUMN_DEFINITIONS = [
     {"title": "Sequence", "field": "TagSequence", "sorter": "string"},
     {"title": "Length", "field": "Length", "sorter": "number"},
     {"title": "Tag Score", "field": "Score", "sorter": "number"},
-    {"title": "N mass", "field": "Nmass", "sorter": "number"},
-    {"title": "C mass", "field": "Cmass", "sorter": "number"},
+    # N/C mass use the legacy `-1 -> "-"` sentinel rule (TabulatorTagTable.vue
+    # ~72-83); precision 4 matches the app-wide mass decimal default.
+    {"title": "N mass", "field": "Nmass", "sorter": "number",
+     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
+    {"title": "C mass", "field": "Cmass", "sorter": "number",
+     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
     {"title": "Δ mass", "field": "DeltaMass", "sorter": "number"},
 ]
 
 
-def _build_protein_table(file_manager, experiment_id: str, cache_dir: str):
+def _filter_best_per_spectrum(protein_lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Collapse the protein frame to the highest-``Score`` proteoform per ``Scan``.
+
+    Reproduces the legacy default-ON "Best per spectrum" toggle
+    (TabulatorProteinTable.vue ~57-58, 116-198): keep, per ``Scan``, only the row
+    with the maximum ``Score``; ties keep the first-seen row (lowest ``index``).
+    Rows without a numeric ``Scan`` pass through unchanged (legacy passthrough).
+    """
+    # Rank within each Scan by descending Score, tie-broken by ascending index so a
+    # deterministic single survivor is kept (mirrors the legacy first-seen tie rule
+    # once the frame is read in index order).
+    ranked = protein_lf.with_columns(
+        pl.col("Score")
+        .rank(method="ordinal", descending=True)
+        .over("Scan")
+        .alias("_score_rank")
+    )
+    # Keep the best row per Scan; rows with a null Scan are passed through (their
+    # rank within the null group is irrelevant — keep them all, matching legacy).
+    kept = ranked.filter(
+        (pl.col("_score_rank") == 1) | pl.col("Scan").is_null()
+    ).drop("_score_rank")
+    return kept
+
+
+def _build_protein_table(
+    file_manager, experiment_id: str, cache_dir: str,
+    best_per_spectrum: bool = True,
+):
     data = _lazy(file_manager, experiment_id, "protein_dfs")
     if data is None:
         return None
+    # Best-per-spectrum (default ON): pre-filter to the max-Score proteoform per
+    # Scan BEFORE building the Table so the displayed rows / default-selected best
+    # hit / pagination all operate on the collapsed set (legacy parity). The
+    # checkbox in render_experiment_panel toggles this off to show every hit.
+    if best_per_spectrum:
+        data = _filter_best_per_spectrum(data)
+    # The cache_id encodes the toggle so the ON / OFF frames get distinct caches
+    # (the Table caches its preprocessed parquet by cache_id).
+    suffix = "best" if best_per_spectrum else "all"
     # Protein table: clicking a row sets proteinIndex to the row's `index`.
     # Curated columns/titles match TabulatorProteinTable.vue (the `index`
     # interactivity column is auto-included by the Table but stays hidden).
     return Table(
-        cache_id=f"protein_table_{experiment_id}",
+        cache_id=f"protein_table_{experiment_id}_{suffix}",
         data=data,
         interactivity={PROTEIN_KEY: "index"},
         index_field="index",
@@ -265,14 +319,18 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
     (N-term) tags. The published value is a dict
     ``{"masses": [...], "residues": [...]}`` consumed by the OI LinePlot tag walk;
     when no residues are available it carries only masses (highlight-only)."""
+    def _clear_all() -> None:
+        state_manager.clear_selection(TAG_MASSES_KEY)
+        state_manager.clear_selection(TAG_SPAN_KEY)
+
     tag_index = state_manager.get_selection(TAG_KEY)
     if tag_index is None:
-        state_manager.clear_selection(TAG_MASSES_KEY)
+        _clear_all()
         return
 
     tags = _lazy(file_manager, experiment_id, "tag_dfs")
     if tags is None:
-        state_manager.clear_selection(TAG_MASSES_KEY)
+        _clear_all()
         return
 
     selected = (
@@ -284,11 +342,15 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
             .list.eval(pl.element().cast(pl.Float64, strict=False))
             .alias("tag_masses"),
             pl.col("TagSequence").alias("tag_sequence"),
+            # Anchoring + span (legacy TabulatorTagTable.vue:142-173).
+            pl.col("StartPos").alias("start_pos"),
+            pl.col("EndPos").alias("end_pos"),
+            pl.col("Nmass").alias("n_mass"),
         )
         .collect()
     )
     if not selected.height:
-        state_manager.clear_selection(TAG_MASSES_KEY)
+        _clear_all()
         return
 
     raw = selected["tag_masses"][0]
@@ -296,7 +358,7 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
     # both ascending (C-term) and descending (N-term) tags.
     masses = [m for m in raw if m is not None] if raw is not None else []
     if not masses:
-        state_manager.clear_selection(TAG_MASSES_KEY)
+        _clear_all()
         return
 
     # Residue letter per consecutive-mass gap (len(masses) - 1 gaps): the legacy
@@ -305,9 +367,75 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
     seq = selected["tag_sequence"][0] or ""
     residues = list(reversed(str(seq)))[: max(len(masses) - 1, 0)]
 
+    # Terminal anchoring (legacy `nTerminal = (Nmass == -1)`): an N-terminal tag is
+    # one whose N-mass is the `-1` sentinel. Forwarded into the tag-walk so the
+    # LinePlot honors the requested direction.
+    n_mass = selected["n_mass"][0]
+    n_terminal = (n_mass is not None) and (float(n_mass) == -1.0)
+
     state_manager.set_selection(
-        TAG_MASSES_KEY, {"masses": list(masses), "residues": residues}
+        TAG_MASSES_KEY,
+        {"masses": list(masses), "residues": residues, "nTerminal": n_terminal},
     )
+
+    # Tag-span highlight on the SequenceView. StartPos/EndPos are protein-absolute
+    # (matching the full-protein residue grid), so they bracket the tag directly.
+    start_pos = selected["start_pos"][0]
+    end_pos = selected["end_pos"][0]
+    if start_pos is not None and end_pos is not None:
+        state_manager.set_selection(
+            TAG_SPAN_KEY,
+            {"start": int(start_pos), "end": int(end_pos), "nTerminal": n_terminal},
+        )
+    else:
+        state_manager.clear_selection(TAG_SPAN_KEY)
+
+
+def _normalize_mod_ranges(raw) -> list:
+    """Normalize the cache ``modifications`` field into the SequenceView
+    ``mod_ranges`` shape: a list of ``{start, end, mass_diff, labels}`` dicts.
+
+    The ``modifications`` field is a ``list[struct{start,end,mass_diff,labels}]``
+    (sequence_data_store.SCHEMA) carrying ambiguous/spanning modification ranges
+    (DISTINCT from per-residue fixed mods). Entries missing start/end are skipped;
+    indices are protein-absolute (the SequenceView renders the full protein)."""
+    if raw is None:
+        return []
+    out = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        if item.get("start") is None or item.get("end") is None:
+            continue
+        md = item.get("mass_diff")
+        labels = item.get("labels")
+        out.append({
+            "start": int(item["start"]),
+            "end": int(item["end"]),
+            "mass_diff": float(md) if md is not None else 0.0,
+            "labels": "" if labels is None else str(labels),
+        })
+    return out
+
+
+def _precursor_mass_lookup(file_manager, experiment_id: str) -> dict:
+    """``proteoform_index -> PrecursorMass`` from ``protein_dfs`` (or ``{}``).
+
+    The observed precursor mass is not stored in ``sequence_data``; the protein
+    frame carries it per proteoform (``index`` == proteoform_index). Used for the
+    SequenceView mass header ``precursor_mass`` column."""
+    protein = _lazy(file_manager, experiment_id, "protein_dfs")
+    if protein is None:
+        return {}
+    schema = protein.collect_schema().names()
+    if "PrecursorMass" not in schema or "index" not in schema:
+        return {}
+    df = protein.select(["index", "PrecursorMass"]).collect()
+    return {
+        int(i): float(m)
+        for i, m in zip(df["index"].to_list(), df["PrecursorMass"].to_list())
+        if i is not None and m is not None
+    }
 
 
 def _build_sequence_frame(
@@ -316,35 +444,35 @@ def _build_sequence_frame(
     """Build the SequenceView-ready per-proteoform sequence frame.
 
     Source: the per-proteoform ``sequence_data`` store (keyed by
-    ``proteoform_index``, carrying the per-residue ``coverage`` / ``maxCoverage``
-    of the DISPLAYED proteoform substring and the full-protein ``sequence`` list +
-    ``proteoform_start``/``proteoform_end``). We reconstruct the displayed
-    proteoform sequence STRING (the substring the legacy SequenceView rendered)
-    and attach coverage so OpenMS-Insight SequenceView can shade residues.
+    ``proteoform_index``). It carries the FULL protein ``sequence`` list, the
+    matching full-length per-residue ``coverage`` / ``maxCoverage``, the
+    determined-region bounds ``proteoform_start`` / ``proteoform_end`` (with the
+    ``-2`` sentinel = that terminus undetermined / open), the observed
+    ``computed_mass`` and the ambiguous ``modifications`` ranges.
 
-    Columns emitted: ``proteoform_index`` (filter key), ``sequence`` (str),
-    ``precursor_charge`` (=1, neutral/deconvolved peaks), ``coverage`` (list[f64]),
-    ``maxCoverage`` (f64), ``fixed_modifications`` (list[str]).
+    We emit the FULL protein sequence (NOT pre-sliced) so the OpenMS-Insight
+    SequenceView Vue renders the truncated N-/C-flanks and undetermined termini
+    itself from ``proteoform_start`` / ``proteoform_end``; the full-length
+    ``coverage`` stays aligned to the full sequence. Because the full protein is
+    rendered, the residue grid index IS the protein-absolute 0-based position, so
+    ``sequence_offset`` is always 0 (the residue-click cross-link then emits
+    positions that already match tag ``StartPos`` / ``EndPos`` directly).
+
+    Columns emitted: ``proteoform_index`` (filter key), ``sequence`` (str, FULL
+    protein), ``precursor_charge`` (=1, neutral/deconvolved peaks), ``coverage``
+    (full-length list[f64]), ``maxCoverage`` (f64), ``fixed_modifications``
+    (list[str]), ``sequence_offset`` (=0), ``proteoform_start`` / ``proteoform_end``
+    (int, sentinel ``-2`` carried through unchanged), ``computed_mass`` (f64),
+    ``precursor_mass`` (f64, from protein_dfs), and ``mod_ranges``
+    (list[struct{start,end,mass_diff,labels}]).
 
     ``sequence_data`` is loaded with ``use_polars=True`` and arrives in EITHER of
-    two formats which are handled identically here:
+    two formats handled identically here:
 
-    * **parquet (current ``parseTnT``):** ``build_table(sequence_data)`` ->
-      ``parquet_sink`` writes one row per proteoform (schema in
-      ``src/render/sequence_data_store.py``). With ``use_polars=True`` the loader
-      returns a polars ``LazyFrame`` (the proteoform-index column is
-      ``proteoform_index``; ``sequence`` is the FULL protein ``list[str]`` and
-      ``coverage`` is the matching full-length ``list[f64]``).
+    * **parquet (current ``parseTnT``):** one row per proteoform (schema in
+      ``src/render/sequence_data_store.py``) returned as a polars ``LazyFrame``.
     * **pickle dict (legacy ``.pkl.gz`` example caches):** a dict keyed by the
-      proteoform index, each value a dict carrying the same ``sequence`` /
-      ``coverage`` / ``maxCoverage`` / ``proteoform_start`` / ``proteoform_end`` /
-      ``fixed_modifications`` keys. ``use_polars=True`` leaves the unpickled dict
-      untouched.
-
-    In both formats ``sequence`` and ``coverage`` are full-length protein lists; we
-    slice the displayed proteoform substring AND its coverage together with the
-    0-based ``proteoform_start`` / ``proteoform_end`` bounds (a negative/absent
-    bound means render the full protein)."""
+      proteoform index; each value a dict with the same keys."""
     if not file_manager.result_exists(experiment_id, "sequence_data"):
         return None
     store = file_manager.get_results(
@@ -366,45 +494,51 @@ def _build_sequence_frame(
     else:
         return None
 
+    precursor_masses = _precursor_mass_lookup(file_manager, experiment_id)
+
     proteoform_indices: List[int] = []
     sequences: List[str] = []
     coverages: List[list] = []
     max_coverages: List[float] = []
     fixed_mods: List[list] = []
     sequence_offsets: List[int] = []
+    proteoform_starts: List[int] = []
+    proteoform_ends: List[int] = []
+    computed_masses: List[float] = []
+    precursor_mass_col: List[float] = []
+    mod_ranges_col: List[list] = []
     for entry in rows:
         pid = entry.get("proteoform_index")
         if pid is None:
             continue
+        # Emit the FULL protein sequence + full-length coverage (no slicing): the
+        # Vue side derives truncation / undetermined termini from
+        # proteoform_start/end, so the residue grid index already equals the
+        # protein-absolute position (sequence_offset = 0).
         full = list(entry.get("sequence") or [])
         cov = list(entry.get("coverage") or [])
         start = entry.get("proteoform_start")
         end = entry.get("proteoform_end")
-        # Slice the displayed proteoform substring AND its coverage together so the
-        # two stay aligned (the legacy SequenceView rendered the substring). A
-        # negative/absent bound means render the full protein.
-        if start is None or end is None or start < 0 or end < 0:
-            sub_seq, sub_cov = full, cov
-            offset = 0
-        else:
-            sub_seq, sub_cov = full[start:end + 1], cov[start:end + 1]
-            offset = int(start)
-        # Coordinate decision (a): the displayed sequence is the proteoform
-        # substring starting at protein position `start`, so grid index i maps to
-        # protein-absolute position `start + i`. We carry `offset` (clamped to >= 0,
-        # mirroring the legacy AminoAcidCell.start getter) so the residue-click
-        # cross-link emits protein-absolute positions matching tag StartPos/EndPos.
-        # For the bundled example (start=0, end=-2 => full protein) offset is 0, so
-        # the emitted position equals the grid index exactly as before — the example
-        # render and coordinates are unchanged.
         proteoform_indices.append(int(pid))
-        sequences.append("".join(str(a) for a in sub_seq))
-        coverages.append([float(c) for c in sub_cov])
+        sequences.append("".join(str(a) for a in full))
+        coverages.append([float(c) for c in cov])
         mc = entry.get("maxCoverage")
         max_coverages.append(float(mc) if mc is not None else 0.0)
         fm = entry.get("fixed_modifications") or []
         fixed_mods.append([str(m) for m in fm])
-        sequence_offsets.append(max(offset, 0))
+        # Full protein rendered => residue grid index IS protein-absolute position.
+        sequence_offsets.append(0)
+        # Carry the determined-region bounds through UNCHANGED, including the
+        # `-2` (UNDETERMINED_TERMINUS) sentinel. Absent bound => 0 / last residue
+        # default on the Vue side (no truncation); we default to 0 / len-1 here.
+        proteoform_starts.append(int(start) if start is not None else 0)
+        proteoform_ends.append(
+            int(end) if end is not None else (len(full) - 1 if full else 0)
+        )
+        cm = entry.get("computed_mass")
+        computed_masses.append(float(cm) if cm is not None else -1.0)
+        precursor_mass_col.append(float(precursor_masses.get(int(pid), 0.0)))
+        mod_ranges_col.append(_normalize_mod_ranges(entry.get("modifications")))
 
     if not proteoform_indices:
         return None
@@ -417,6 +551,11 @@ def _build_sequence_frame(
         "maxCoverage": max_coverages,
         "fixed_modifications": fixed_mods,
         "sequence_offset": sequence_offsets,
+        "proteoform_start": proteoform_starts,
+        "proteoform_end": proteoform_ends,
+        "computed_mass": computed_masses,
+        "precursor_mass": precursor_mass_col,
+        "mod_ranges": mod_ranges_col,
     })
     return out.lazy()
 
@@ -451,13 +590,26 @@ def _build_sequence_view(file_manager, experiment_id: str, cache_dir: str):
         sequence_data=seq_frame,
         peaks_data=peaks,
         filters={PROTEIN_KEY: "proteoform_index"},
-        # Two click sources: a fragment-table row click sets MASS_KEY to the
-        # matched peak's peak_id (combined-spectrum cross-link), and a SequenceView
-        # RESIDUE click sets AA_KEY to the clicked residue's protein-absolute
-        # position via the "residue_position" sentinel (Tag-Table range filter).
-        interactivity={MASS_KEY: "peak_id", AA_KEY: "residue_position"},
+        # Click / span sources (all routed through the interactivity mapping):
+        #  - MASS_KEY: a fragment-table row click sets it to the matched peak's
+        #    peak_id (combined-spectrum cross-link).
+        #  - AA_KEY: a RESIDUE click sets it to the clicked residue's protein-
+        #    absolute position via the "residue_position" sentinel (Tag-Table
+        #    range filter). Now that the full protein is rendered, the grid index
+        #    already IS the protein-absolute position (sequence_offset == 0).
+        #  - TAG_SPAN_KEY: the "tag_span" sentinel does NOT set state on click;
+        #    Vue READS this selection value ({start,end,nTerminal}, protein-
+        #    absolute) to bracket-highlight the selected tag's span on the
+        #    sequence. Published by _resolve_tag_masses.
+        interactivity={
+            MASS_KEY: "peak_id",
+            AA_KEY: "residue_position",
+            TAG_SPAN_KEY: "tag_span",
+        },
         deconvolved=True,
         compute_fixed_mods=True,
+        # TnT path: keep the variable/custom-mod context menu disabled (default).
+        disable_variable_modifications=True,
         settings=settings,
         title="Sequence View",
         cache_path=cache_dir,
@@ -495,6 +647,12 @@ def _build_combined_spectrum(file_manager, experiment_id: str, cache_dir: str):
         x_column="MonoMass",
         y_column="SumIntensity",
         signal_peak_column="is_signal",
+        # Charge-state drill-down: per deconv-peak row, the list of constituent
+        # signal-peak m/z / charge / intensity (present on combined_spectrum_long
+        # from a fresh parse; empty lists for non-signal peaks).
+        signal_mz_column="signal_mzs",
+        signal_charge_column="signal_charges",
+        signal_intensity_column="signal_intensities",
         x2_column=x2,
         y2_column=y2,
         tag_filters={TAG_MASSES_KEY: "MonoMass"},
@@ -561,12 +719,29 @@ COMPONENT_BUILDERS = {
 }
 
 
-def build_component(file_manager, experiment_id: str, cache_dir: str, comp_name: str):
+def build_component(
+    file_manager, experiment_id: str, cache_dir: str, comp_name: str,
+    best_per_spectrum: bool = True,
+):
     """Instantiate the OpenMS-Insight component for a layout cell, or None."""
     builder = COMPONENT_BUILDERS.get(comp_name)
     if builder is None:
         return None
+    if comp_name == "protein_table":
+        return _build_protein_table(
+            file_manager, experiment_id, cache_dir,
+            best_per_spectrum=best_per_spectrum,
+        )
     return builder(file_manager, experiment_id, cache_dir)
+
+
+def _clear_proteoform_dependent_selections(state_manager) -> None:
+    """Clear the per-proteoform downstream selections (mirrors legacy
+    TabulatorProteinTable.vue:235-237, which resets the selected tag / tag data /
+    selected AA on a proteoform change). We also clear the resolved tag masses,
+    tag span and selected mass so no stale tag/peak highlight survives the switch."""
+    for ident in (TAG_KEY, TAG_MASSES_KEY, AA_KEY, TAG_SPAN_KEY, MASS_KEY):
+        state_manager.clear_selection(ident)
 
 
 def render_experiment_panel(
@@ -584,6 +759,32 @@ def render_experiment_panel(
     state_manager = StateManager(session_key=session_key)
     cache_dir = _component_cache_dir(file_manager, experiment_id)
 
+    # Selection clearing on proteoform change (legacy
+    # TabulatorProteinTable.vue:235-237): when the selected proteinIndex differs
+    # from the last-seen one for THIS panel, clear the downstream per-proteoform
+    # selections (tag / tag masses / selected AA / tag span / selected mass) BEFORE
+    # building components so no stale selection leaks across proteoforms.
+    last_seen_key = f"{session_key}__last_protein_index"
+    current_protein = state_manager.get_selection(PROTEIN_KEY)
+    if st.session_state.get(last_seen_key, "__unset__") != current_protein:
+        _clear_proteoform_dependent_selections(state_manager)
+        st.session_state[last_seen_key] = current_protein
+
+    # Best-per-spectrum toggle (legacy default ON). Per-panel widget key so
+    # side-by-side panels toggle independently. Shown only when a protein table is
+    # in the layout.
+    has_protein_table = any(
+        "protein_table" in row for row in layout_info_per_exp
+    )
+    best_per_spectrum = True
+    if has_protein_table:
+        best_per_spectrum = st.checkbox(
+            "Best per spectrum",
+            value=True,
+            key=f"tnt_oi_best_per_spectrum_{panel_index}",
+            help="Show only the highest-scoring proteoform per spectrum (scan).",
+        )
+
     # Resolve the selected tag (scalar TagIndex set by the Tag Table) into its
     # list of masses BEFORE rendering so the combined-spectrum tagger overlay
     # sees the up-to-date `tagMasses` selection this rerun.
@@ -594,7 +795,8 @@ def render_experiment_panel(
         for col, (col_index, comp_name) in zip(columns, enumerate(row)):
             with col:
                 component = build_component(
-                    file_manager, experiment_id, cache_dir, comp_name
+                    file_manager, experiment_id, cache_dir, comp_name,
+                    best_per_spectrum=best_per_spectrum,
                 )
                 if component is None:
                     st.warning(f"No data for '{comp_name}'.")
