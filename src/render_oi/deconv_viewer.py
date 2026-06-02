@@ -121,6 +121,7 @@ def build_component(
     if comp_name in _HEATMAP_SPEC:
         title, cache_name = _HEATMAP_SPEC[comp_name]
         data = _load_polars(file_manager, dataset_id, cache_name)
+        is_deconv = "deconv" in comp_name
         hm = Heatmap(
             cache_id=cid(comp_name),
             data=data,
@@ -129,7 +130,14 @@ def build_component(
             intensity_column="intensity",
             title=title,
             x_label="Retention time",
-            y_label="Monoisotopic mass",
+            y_label="Monoisotopic mass" if is_deconv else "m/z",
+            # Click a point -> scanIndex (all heatmaps) plus massIndex (deconv only),
+            # restoring the legacy heatmap cross-links into the spectra/mass/3D panels.
+            interactivity=(
+                {SCAN: "scan_idx", MASS: "mass_idx"}
+                if is_deconv
+                else {SCAN: "scan_idx"}
+            ),
             zoom_identifier=f"{comp_name}_zoom",
             cache_path=cache_dir,
         )
@@ -201,12 +209,17 @@ def build_component(
     # ---- 3D S/N plot (Scatter3D; scanIndex required, massIndex optional) ----
     if comp_name == "3D_SN_plot":
         per_scan = _load_polars(file_manager, dataset_id, "threedim_SN_plot")
-        long = explode_signal_peaks_long(per_scan)
+        # x-axis is the deconvoluted mass (mz * charge), matching the legacy 3D plot
+        # (it plotted peak[1]*peak[3]); the long format keeps mz and charge separate.
+        long = explode_signal_peaks_long(per_scan).with_columns(
+            (pl.col("mz") * pl.col("charge")).alias("mass")
+        )
         s3 = Scatter3D(
             cache_id=cid("3D_SN_plot"),
             data=long,
             filters={SCAN: "index"},
             optional_filters={MASS: "mass_id"},
+            mz_column="mass",
             title="Precursor Signals",
             cache_path=cache_dir,
         )
