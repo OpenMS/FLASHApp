@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 PROTEIN = "proteinIndex"
 DECONV = "deconvIndex"
 TAG = "tagIndex"
+AAPOS = "AApos"
 
 
 def _load_pickle_gz(path: Path):
@@ -177,13 +178,14 @@ def _sequence_table(file_manager, dataset_id: str) -> Optional[pl.LazyFrame]:
     )
 
 
-def _tag_data(file_manager, dataset_id: str, tag_index) -> Optional[dict]:
+def _tag_data(file_manager, dataset_id: str, tag_index, aa_pos=None) -> Optional[dict]:
     """Build the tagger-overlay ``tagData`` for the selected tag row.
 
     Mirrors the legacy tag-table click: parse the comma-joined fragment ``mzs``,
     carry the tag sequence + span, and flag N-terminal tags (``Nmass == -1``).
-    ``selectedAA`` is left unset (-1000) until the sequence-view ``AApos``
-    cross-link lands.
+    When a sequence-view residue is selected (``aa_pos``) and it falls within the
+    tag span, ``selectedAA`` is its tag-relative offset (drives the gold
+    selected-residue highlight); otherwise it stays unset (-1000).
     """
     tags = (
         _load_polars(file_manager, dataset_id, "tag_dfs")
@@ -198,13 +200,21 @@ def _tag_data(file_manager, dataset_id: str, tag_index) -> Optional[dict]:
         for m in str(r.get("mzs") or "").split(",")
         if m.strip() and float(m) != 0.0
     ]
+    start = int(r.get("StartPos") or 0)
+    end = int(r.get("EndPos") or 0)
+    # Gold selected-residue highlight: when a sequence-view residue (aa_pos) is
+    # selected and lies within this tag's span, selectedAA is its tag-relative
+    # offset (legacy: selectedAApos - StartPos); otherwise unset (-1000).
+    selected_aa = -1000
+    if aa_pos is not None and start <= int(aa_pos) <= end:
+        selected_aa = int(aa_pos) - start
     return {
         "masses": masses,
         "sequence": str(r.get("TagSequence") or ""),
         "nTerminal": float(r.get("Nmass", -1) or -1) == -1,
-        "startPos": int(r.get("StartPos") or 0),
-        "endPos": int(r.get("EndPos") or 0),
-        "selectedAA": -1000,
+        "startPos": start,
+        "endPos": end,
+        "selectedAA": selected_aa,
     }
 
 
@@ -553,23 +563,43 @@ def build_component_tnt(
         ]
         cols = list(dict.fromkeys(keep))  # de-dupe, preserve order
         data = _apply_dash_sentinels(data.select(cols), col_defs)
-        tbl = Table(
-            cache_id=cid("tag_table"),
-            data=data,
-            filters={PROTEIN: "ProteinIndex"},
-            interactivity={TAG: "TagIndex"},
-            index_field="TagIndex",
-            column_definitions=col_defs,
-            go_to_fields=[
-                f
-                for f in ("Scan", "StartPos", "EndPos", "TagSequence")
-                if f in schema
-            ],
-            initial_sort=[{"column": "Score", "dir": "desc"}],
-            title="Tag Table",
-            cache_path=cache_dir,
-        )
-        return lambda: tbl(key=skey("tag_table"), state_manager=state_manager)
+        has_span = {"StartPos", "EndPos"} <= set(schema)
+
+        def _render_tag_table():
+            # Residue-driven tag filter: when a sequence-view residue is selected
+            # (AApos), restrict the tag table to tags spanning that residue
+            # (StartPos <= AApos <= EndPos) -- the legacy residue-click tag filter.
+            # It's a range predicate the identifier->column `filters` map can't
+            # express, so apply it server-side at render time (AApos is read from
+            # state, like the protein table's "best per spectrum" toggle) with a
+            # cache_id that varies per residue (each filtered view caches cleanly).
+            aa_pos = state_manager.get_selection(AAPOS)
+            shown, tag_cid = data, cid("tag_table")
+            if aa_pos is not None and has_span:
+                shown = data.filter(
+                    (pl.col("StartPos") <= int(aa_pos))
+                    & (pl.col("EndPos") >= int(aa_pos))
+                )
+                tag_cid = f"{cid('tag_table')}_aa{int(aa_pos)}"
+            tbl = Table(
+                cache_id=tag_cid,
+                data=shown,
+                filters={PROTEIN: "ProteinIndex"},
+                interactivity={TAG: "TagIndex"},
+                index_field="TagIndex",
+                column_definitions=col_defs,
+                go_to_fields=[
+                    f
+                    for f in ("Scan", "StartPos", "EndPos", "TagSequence")
+                    if f in schema
+                ],
+                initial_sort=[{"column": "Score", "dir": "desc"}],
+                title="Tag Table",
+                cache_path=cache_dir,
+            )
+            return tbl(key=skey("tag_table"), state_manager=state_manager)
+
+        return _render_tag_table
 
     # ---- Combined / augmented spectrum (deconv primary + annotated overlay) ----
     if comp_name == "combined_spectrum":
@@ -622,7 +652,10 @@ def build_component_tnt(
                 ion: f"fragment_masses_{ion}" for ion in _ION_TYPES
             },
             peaks_data=peaks_tbl,
-            interactivity={"peak": "peak_id"},
+            # Residue click emits the peak (unused downstream) AND the residue's
+            # 0-based index under AApos (POSITION_SENTINEL), driving the tag-table
+            # residue filter + the gold selected-residue highlight in the overlay.
+            interactivity={"peak": "peak_id", AAPOS: "<position>"},
             annotation_config={
                 "ion_types": settings.get("ion_types", ["b", "y"]),
                 "tolerance": settings.get("tolerance", 10.0),
@@ -715,12 +748,26 @@ def render_experiment_tnt(
         if state_manager.get_selection(DECONV) != deconv_index:
             state_manager.set_selection(DECONV, deconv_index)
 
+    # When the selected protein changes, clear the tag + residue sub-selections so
+    # a stale tag overlay / residue highlight from the previous proteoform doesn't
+    # persist (the legacy reset these on protein-table click). A private state
+    # marker tracks which protein the current tag/residue selection belongs to.
+    if state_manager.get_selection("_tag_protein") != protein_index:
+        state_manager.set_selection("_tag_protein", protein_index)
+        if state_manager.get_selection(TAG) is not None:
+            state_manager.set_selection(TAG, None)
+        if state_manager.get_selection(AAPOS) is not None:
+            state_manager.set_selection(AAPOS, None)
+
     # Resolve the selected tag -> tagData so the augmented spectrum's tagger
     # overlay can highlight tag-matched sticks and draw the charge buttons /
-    # inter-residue amino-acid arrows. set_selection no-ops when unchanged.
+    # inter-residue amino-acid arrows. When a sequence-view residue (AApos) is
+    # also selected, _tag_data marks the within-tag offset (gold highlight).
+    # set_selection no-ops when unchanged.
     tag_index = state_manager.get_selection(TAG)
+    aa_pos = state_manager.get_selection(AAPOS)
     tag_data = (
-        _tag_data(file_manager, dataset_id, tag_index)
+        _tag_data(file_manager, dataset_id, tag_index, aa_pos)
         if tag_index is not None
         else None
     )

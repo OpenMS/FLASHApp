@@ -353,3 +353,83 @@ def test_tagger_overlay_data(fake_fm):
         "selectedAA",
     }
     assert isinstance(td["masses"], list) and isinstance(td["sequence"], str)
+
+
+def _captured_seqview(builder, monkeypatch):
+    """Run a sequence_view render callable and capture the SequenceView it builds."""
+    from openms_insight import SequenceView
+
+    captured = {}
+
+    def _spy(self, *a, **k):
+        captured["sv"] = self
+        return None
+
+    monkeypatch.setattr(SequenceView, "__call__", _spy, raising=False)
+    builder()
+    return captured["sv"]
+
+
+def test_residue_aapos_cross_link(fake_fm, monkeypatch):
+    """Sequence-view residue (AApos) cross-link: _tag_data marks the within-tag
+    offset, the tag table restricts to tags spanning the residue (cache_id varies
+    per residue), and the SequenceView emits the residue-position sentinel."""
+    import streamlit as st
+
+    monkeypatch.setattr(st, "session_state", {}, raising=False)
+    from openms_insight import StateManager
+
+    from src.render_oi.tnt_viewer import (
+        AAPOS,
+        PROTEIN,
+        _tag_data,
+        build_component_tnt,
+    )
+
+    tags = pl.scan_parquet(_DS / "tag_dfs.pq").collect()
+    r = tags.row(0, named=True)
+    tid, start, end = r["TagIndex"], int(r["StartPos"]), int(r["EndPos"])
+
+    # selectedAA = aa_pos - StartPos within the span (legacy), else -1000.
+    assert _tag_data(fake_fm, "ds", tid, start)["selectedAA"] == 0
+    mid = (start + end) // 2
+    assert _tag_data(fake_fm, "ds", tid, mid)["selectedAA"] == mid - start
+    assert _tag_data(fake_fm, "ds", tid, end + 1)["selectedAA"] == -1000
+    assert _tag_data(fake_fm, "ds", tid)["selectedAA"] == -1000  # no residue
+
+    # Tag table server-side residue filter: StartPos <= AApos <= EndPos, scoped to
+    # the protein, with a cache_id that varies per residue.
+    pid = int(r["ProteinIndex"])
+    prot_tags = tags.filter(pl.col("ProteinIndex") == pid)
+    aa = int(prot_tags.row(0, named=True)["StartPos"])
+    expected = prot_tags.filter(
+        (pl.col("StartPos") <= aa) & (pl.col("EndPos") >= aa)
+    ).height
+
+    sm = StateManager(session_key="oi_tnt_test_aapos")
+    sm.set_selection(AAPOS, aa)
+    tbl = _captured_table(
+        build_component_tnt("tag_table", "ds", fake_fm, sm, key_prefix="p0"),
+        monkeypatch,
+    )
+    assert tbl._cache_id.endswith(f"_aa{aa}")
+    got = tbl._prepare_vue_data({PROTEIN: pid})["_pagination"]["total_rows"]
+    assert got == expected
+
+    # Without a residue selection the table is unfiltered and keeps the plain id.
+    sm2 = StateManager(session_key="oi_tnt_test_aapos2")
+    tbl2 = _captured_table(
+        build_component_tnt("tag_table", "ds", fake_fm, sm2, key_prefix="p1"),
+        monkeypatch,
+    )
+    assert not tbl2._cache_id.endswith(f"_aa{aa}")
+    got_all = tbl2._prepare_vue_data({PROTEIN: pid})["_pagination"]["total_rows"]
+    assert expected <= got_all
+
+    # SequenceView emits the residue-position sentinel under AApos (the source of
+    # the AApos selection that drives the two filters above).
+    seq_builder = build_component_tnt("sequence_view", "ds", fake_fm, sm, key_prefix="p0")
+    if seq_builder is not None:
+        sv = _captured_seqview(seq_builder, monkeypatch)
+        assert sv._interactivity.get(AAPOS) == "<position>"
+        assert sv._interactivity.get("peak") == "peak_id"

@@ -89,6 +89,9 @@ def build_quant_components(
         rt_column="rt",
         intensity_column="intensity",
         isotope_column="isotope",
+        # Break the polyline between isotope traces within a charge (matching the
+        # legacy per-isotope-trace breaks) instead of one connected line per charge.
+        trace_key_column="isotope",
         title="Feature Group Visualization",
         cache_path=cache_dir,
     )

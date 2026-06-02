@@ -194,6 +194,10 @@ def build_component(
             cache_id=cid("deconv_spectrum"),
             data=long,
             filters={SCAN: "index"},
+            # Click sets massIndex AND the peak matching the current massIndex (set
+            # from the mass table) is highlighted — restoring the legacy mass-table
+            # -> deconv-spectrum highlight cross-link.
+            interactivity={MASS: "mass_id"},
             x_column="mass",
             y_column="intensity",
             # Per-peak charge label on each deconvolved stick (legacy showed the
