@@ -101,7 +101,9 @@ RUN pip install dist/*.whl
 
 # Install other dependencies (excluding pyopenms)
 COPY requirements.txt ./requirements.txt 
-RUN grep -Ev '^pyopenms([=<>!~].*)?$' requirements.txt > requirements_cleaned.txt && mv requirements_cleaned.txt requirements.txt
+RUN grep -Ev '^pyopenms([=<>!~].*)?$' requirements.txt \
+    | grep -Ev '^openms-insight[[:space:]]*[@=<>!~]' > requirements_cleaned.txt \
+    && mv requirements_cleaned.txt requirements.txt
 RUN pip install -r requirements.txt
 
 WORKDIR /
@@ -139,6 +141,28 @@ WORKDIR /openms-streamlit-vue-component
 RUN npm install
 RUN npm run build
 
+# Build the OpenMS-Insight Vue bundle and stage a pip-installable checkout.
+# OpenMS-Insight's wheel (hatchling) force-includes openms_insight/js-component/dist
+# only if it exists on disk, but that bundle is gitignored — so installing the
+# package straight from its git URL ships no frontend. Build the bundle here with
+# node and hand the populated checkout to the python stage. Pinned to the
+# validated commit for reproducible images (override OPENMS_INSIGHT_REF to bump).
+FROM node:21 AS openms-insight-build
+ARG OPENMS_INSIGHT_REPO=https://github.com/t0mdavid-m/OpenMS-Insight.git
+ARG OPENMS_INSIGHT_REF=9b4c57a60e63a4319c392afd6000aa205cdcbe36
+# Bust the clone cache when REF tracks a moving branch (no-op for a pinned SHA).
+ADD https://api.github.com/repos/t0mdavid-m/OpenMS-Insight/commits/$OPENMS_INSIGHT_REF oi-version.json
+RUN git clone ${OPENMS_INSIGHT_REPO} /OpenMS-Insight \
+    && git -C /OpenMS-Insight checkout ${OPENMS_INSIGHT_REF}
+WORKDIR /OpenMS-Insight/js-component
+RUN npm install --no-audit --no-fund && npm run build
+# Vite emits to js-component/dist; mirror it into the package path the wheel
+# force-includes and rendering/bridge.py loads at runtime.
+RUN mkdir -p /OpenMS-Insight/openms_insight/js-component \
+    && cp -r dist /OpenMS-Insight/openms_insight/js-component/dist
+# Slim the checkout to what the wheel build needs (drop node_modules, .git, tests).
+RUN rm -rf /OpenMS-Insight/js-component /OpenMS-Insight/.git /OpenMS-Insight/tests
+
 # Prepare and run streamlit app.
 FROM compile-openms AS run-app
 
@@ -170,6 +194,13 @@ COPY presets.json /app/presets.json
 
 # Copy the pre-built Vue/JS component (built in the js-build stage above).
 COPY --from=js-build openms-streamlit-vue-component/dist /app/js-component/dist
+
+# Install OpenMS-Insight — the reusable visualization components that back the
+# default viewer engine (FLASHAPP_USE_OPENMS_INSIGHT, on by default). Installed
+# from the bundle-built checkout staged in the openms-insight-build stage, because
+# the package's git tree omits the (gitignored) pre-built Vue bundle.
+COPY --from=openms-insight-build /OpenMS-Insight /tmp/openms-insight
+RUN mamba run -n streamlit-env pip install /tmp/openms-insight && rm -rf /tmp/openms-insight
 
 # add cron job to the crontab
 RUN echo "0 3 * * * /root/miniforge3/envs/streamlit-env/bin/python /app/clean-up-workspaces.py >> /app/clean-up-workspaces.log 2>&1" | crontab -

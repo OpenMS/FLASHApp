@@ -8,11 +8,11 @@ from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src.render.render import render_grid
 
-# Migration flag: when truthy, render each experiment panel with the
-# OpenMS-Insight engine (src.render_oi) instead of the legacy flash_viewer_grid.
-# Default OFF so the rollout is opt-in and reversible (Phase 1).
-USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "").lower() in (
-    "1", "true", "yes",
+# Migration flag: render each experiment panel with the OpenMS-Insight engine
+# (src.render_oi) instead of the legacy flash_viewer_grid. Default ON; set
+# FLASHAPP_USE_OPENMS_INSIGHT=0 (or false/no/off) to fall back to the old grid.
+USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "1").strip().lower() not in (
+    "0", "false", "no", "off", "",
 )
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],

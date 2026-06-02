@@ -8,10 +8,11 @@ from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src.render.render import render_grid
 
-# Migration flag (shared with FLASHDeconv): when truthy, render each experiment
-# panel with the OpenMS-Insight engine instead of the legacy flash_viewer_grid.
-USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "").lower() in (
-    "1", "true", "yes",
+# Migration flag (shared with FLASHDeconv): render each experiment panel with the
+# OpenMS-Insight engine instead of the legacy flash_viewer_grid. Default ON; set
+# FLASHAPP_USE_OPENMS_INSIGHT=0 (or false/no/off) to fall back to the old grid.
+USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "1").strip().lower() not in (
+    "0", "false", "no", "off", "",
 )
 
 

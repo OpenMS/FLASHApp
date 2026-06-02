@@ -68,17 +68,18 @@ new paths coexist during the phased rollout.
 
 ## Phased rollout (status)
 
-Each phase swaps one workflow's viewer to OpenMS-Insight behind the
-`FLASHAPP_USE_OPENMS_INSIGHT` env flag (default **off** → legacy
-`flash_viewer_grid`), then — **only after a browser-driven no-feature-loss audit
-passes** — retires the corresponding `src/render/*` usage. The new engine lives
-in `src/render_oi/`; the layout managers are unchanged (they only emit
-component-name strings).
+All three workflows render through the OpenMS-Insight engine (`src/render_oi/`)
+**by default**. The `FLASHAPP_USE_OPENMS_INSIGHT` env flag is now an **opt-out**:
+set it to `0`/`false`/`no`/`off` to fall back to the legacy `flash_viewer_grid`.
+The layout managers are unchanged (they only emit component-name strings). Docker
+images install OpenMS-Insight with its Vue bundle built from the pinned commit
+(`openms-insight-build` stage in both Dockerfiles); see "Docker / packaging" below.
 
-> **Do not delete `src/render/*` or default the flag on until the
-> browser checklist below passes for that workflow.** Everything up to the Vue
-> render + click round-trip is verified on the bundled real data; the in-browser
-> interaction is not (no headless browser in CI).
+> **The default is on, but `src/render/*` is not yet deletable.** Everything up
+> to the Vue render + click round-trip is verified on the bundled real data; the
+> in-browser interaction is not (no headless browser in CI). The browser checklist
+> below remains the gate for **removing** the legacy engine and the opt-out path —
+> not for flipping the default, which the maintainer has chosen to enable now.
 
 1. **FLASHDeconv** ✅ built (`src/render_oi/deconv_viewer.py`): heatmaps,
    scan/mass `Table`s, deconv/annotated `LinePlot`s, `Scatter3D` (optional
@@ -113,12 +114,29 @@ panels; preserve save/load of layouts
 - **Browser audit (the deletion gate):** see the no-feature-loss audit and
   click-by-click checklist below. This is the one layer CI cannot cover.
 
-## Dependency
+## Docker / packaging
 
-`openms-insight` is declared in `requirements.txt` (git dependency). For local
-development use an editable/path install: `pip install -e ../OpenMS-Insight`,
-and either rebuild `js-component/dist` after Vue changes or run the bundle in dev
-mode with `SVC_DEV_MODE=true`.
+OpenMS-Insight's wheel is built by **hatchling**, which `force-include`s the
+pre-built Vue bundle at `openms_insight/js-component/dist` **only if it exists on
+disk** — and that bundle is gitignored. So a plain `pip install
+git+https://…/OpenMS-Insight` (what the `requirements.txt` line would do) yields a
+package with **no frontend**. Three install paths handle this correctly:
+
+- **Docker** (`Dockerfile`, `Dockerfile.arm`): a dedicated `openms-insight-build`
+  node stage clones the repo at the pinned commit (`ARG OPENMS_INSIGHT_REF`,
+  default = the validated SHA), runs `npm run build`, mirrors `js-component/dist`
+  → `openms_insight/js-component/dist`, and hands the populated checkout to the
+  python stage, which `pip install`s it. The `requirements.txt` `openms-insight`
+  line is stripped before `pip install -r` (alongside `pyopenms`) so it installs
+  exactly once, with a working bundle. Bump the image by overriding
+  `OPENMS_INSIGHT_REF` (or rely on the branch cache-bust `ADD`).
+- **Local dev / CI / web sessions**: the SessionStart hook
+  (`.claude/hooks/session-start.sh`) does the same (strip line → `npm run build` →
+  mirror dist → `pip install -e ../OpenMS-Insight`). Or run the Vue bundle in dev
+  mode with `SVC_DEV_MODE=true`.
+- **`requirements.txt`**: keeps the `git+…@<branch>` ref as a declarative pointer
+  for the migration branch; both install paths above strip and replace it, so it
+  is never the thing that actually provides the frontend.
 
 ---
 
@@ -132,7 +150,9 @@ accounted for, and (C) a click-by-click browser checklist confirms the
 interaction round-trips. Run the app with the new engine:
 
 ```bash
+# The OpenMS-Insight engine is the default; this just makes it explicit.
 FLASHAPP_USE_OPENMS_INSIGHT=1 streamlit run app.py local
+# To audit the legacy engine instead: FLASHAPP_USE_OPENMS_INSIGHT=0 streamlit run app.py local
 ```
 
 Legend: ✅ data-path verified on real data (test name in parentheses) · 👁 needs
@@ -240,8 +260,8 @@ manager (fixed single view).
 
 ## After all three checklists pass
 
-1. Default `FLASHAPP_USE_OPENMS_INSIGHT` on (or remove the flag, making the new
-   engine unconditional) in the three viewers.
+1. Remove the `FLASHAPP_USE_OPENMS_INSIGHT` opt-out (it already defaults on),
+   making the new engine unconditional in the three viewers.
 2. Delete `src/render/{components,render,update,StateTracker,initialize,
    compression}.py` and the `js-component/` bundle + `openms-streamlit-vue-component`
    submodule. Keep `src/render/{sequence,sequence_data_store,scan_resolution}.py`

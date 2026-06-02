@@ -9,9 +9,11 @@ from src.common.common import page_setup, save_params
 # from src.render.components import flash_viewer_grid_component, FlashViewerComponent, FLASHQuant
 from src.render.render import render_grid
 
-# Migration flag (shared across workflows): render with OpenMS-Insight engine.
-USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "").lower() in (
-    "1", "true", "yes",
+# Migration flag (shared across workflows): render with the OpenMS-Insight engine.
+# Default ON; set FLASHAPP_USE_OPENMS_INSIGHT=0 (or false/no/off) to fall back to
+# the legacy view.
+USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "1").strip().lower() not in (
+    "0", "false", "no", "off", "",
 )
 
 # page initialization
