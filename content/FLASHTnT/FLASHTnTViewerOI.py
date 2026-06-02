@@ -74,6 +74,15 @@ PROTEIN_KEY = "proteinIndex"
 TAG_KEY = "tagData"
 TAG_MASSES_KEY = "tagMasses"
 MASS_KEY = "massIndex"
+# Residue -> Tag-Table cross-link (legacy `selectionStore.selectedAApos`).
+# Clicking a covered residue in the SequenceView sets this to the residue's
+# PROTEIN-ABSOLUTE 0-based position; the Tag Table range-filters its rows to tags
+# whose [StartPos, EndPos] span contains that position (StartPos <= pos <= EndPos),
+# clearing on re-click (toggle). The SequenceView publishes protein-absolute
+# coordinates via the per-proteoform `sequence_offset` carried in the sequence
+# frame, so this matches StartPos/EndPos for ALL proteoforms (not just the
+# bundled full-protein example).
+AA_KEY = "selectedAApos"
 
 
 def _component_cache_dir(file_manager, experiment_id: str) -> str:
@@ -223,6 +232,11 @@ def _build_tag_table(file_manager, experiment_id: str, cache_dir: str):
         cache_id=f"tag_table_{experiment_id}",
         data=tag_lf,
         filters={PROTEIN_KEY: "proteoform_index"},
+        # Residue -> Tag-Table cross-link (legacy StartPos<=selectedAApos<=EndPos):
+        # when a covered residue is clicked in the SequenceView, AA_KEY holds its
+        # protein-absolute position and the tags are narrowed to those whose span
+        # contains it; cleared (no-op) when no residue is selected.
+        range_filters={AA_KEY: ("StartPos", "EndPos")},
         interactivity={TAG_KEY: "TagIndex"},
         index_field="TagIndex",
         column_definitions=_TAG_COLUMN_DEFINITIONS,
@@ -357,6 +371,7 @@ def _build_sequence_frame(
     coverages: List[list] = []
     max_coverages: List[float] = []
     fixed_mods: List[list] = []
+    sequence_offsets: List[int] = []
     for entry in rows:
         pid = entry.get("proteoform_index")
         if pid is None:
@@ -370,8 +385,18 @@ def _build_sequence_frame(
         # negative/absent bound means render the full protein.
         if start is None or end is None or start < 0 or end < 0:
             sub_seq, sub_cov = full, cov
+            offset = 0
         else:
             sub_seq, sub_cov = full[start:end + 1], cov[start:end + 1]
+            offset = int(start)
+        # Coordinate decision (a): the displayed sequence is the proteoform
+        # substring starting at protein position `start`, so grid index i maps to
+        # protein-absolute position `start + i`. We carry `offset` (clamped to >= 0,
+        # mirroring the legacy AminoAcidCell.start getter) so the residue-click
+        # cross-link emits protein-absolute positions matching tag StartPos/EndPos.
+        # For the bundled example (start=0, end=-2 => full protein) offset is 0, so
+        # the emitted position equals the grid index exactly as before — the example
+        # render and coordinates are unchanged.
         proteoform_indices.append(int(pid))
         sequences.append("".join(str(a) for a in sub_seq))
         coverages.append([float(c) for c in sub_cov])
@@ -379,6 +404,7 @@ def _build_sequence_frame(
         max_coverages.append(float(mc) if mc is not None else 0.0)
         fm = entry.get("fixed_modifications") or []
         fixed_mods.append([str(m) for m in fm])
+        sequence_offsets.append(max(offset, 0))
 
     if not proteoform_indices:
         return None
@@ -390,6 +416,7 @@ def _build_sequence_frame(
         "coverage": coverages,
         "maxCoverage": max_coverages,
         "fixed_modifications": fixed_mods,
+        "sequence_offset": sequence_offsets,
     })
     return out.lazy()
 
@@ -424,7 +451,11 @@ def _build_sequence_view(file_manager, experiment_id: str, cache_dir: str):
         sequence_data=seq_frame,
         peaks_data=peaks,
         filters={PROTEIN_KEY: "proteoform_index"},
-        interactivity={MASS_KEY: "peak_id"},
+        # Two click sources: a fragment-table row click sets MASS_KEY to the
+        # matched peak's peak_id (combined-spectrum cross-link), and a SequenceView
+        # RESIDUE click sets AA_KEY to the clicked residue's protein-absolute
+        # position via the "residue_position" sentinel (Tag-Table range filter).
+        interactivity={MASS_KEY: "peak_id", AA_KEY: "residue_position"},
         deconvolved=True,
         compute_fixed_mods=True,
         settings=settings,
