@@ -170,20 +170,22 @@ _PROTEIN_COLUMN_DEFINITIONS = [
     {"title": "Accession", "field": "accession", "sorter": "string"},
     {"title": "Description", "field": "description", "sorter": "string"},
     {"title": "Length", "field": "length", "sorter": "number"},
-    # Legacy TabulatorProteinTable.vue renders the `-1` sentinel as "-" (the raw
-    # value otherwise). The OI `dashNegativeOne` formatter reproduces the sentinel
-    # rule; precision 4 matches the app-wide `toFixedFormatter()` default (4 dp,
-    # used for every other numeric mass column, e.g. MonoMass in the mass table).
+    # Legacy TabulatorProteinTable.vue renders the `-1` sentinel as "-" and the
+    # RAW unrounded value otherwise (TabulatorProteinTable.vue:78-81). The OI
+    # `dashNegativeOne` formatter reproduces the sentinel rule and renders the raw
+    # value when `precision` is omitted -- so we drop `formatterParams` to avoid
+    # rounding (critical for tiny Q-values: 0.00012 must NOT become 0.0001).
     {"title": "Mass", "field": "ProteoformMass", "sorter": "number",
-     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
+     "formatter": "dashNegativeOne"},
     {"title": "No. of Matched Fragments", "field": "MatchingFragments", "sorter": "number"},
     {"title": "No. of Modifications", "field": "ModCount", "sorter": "number"},
     {"title": "No. of Tags", "field": "TagCount", "sorter": "number"},
     {"title": "Score", "field": "Score", "sorter": "number"},
-    # Q-Value also uses the `-1 -> "-"` sentinel rule (legacy formatter); 4 dp
-    # matches the app-wide default decimal precision.
+    # Q-Value also uses the `-1 -> "-"` sentinel rule with the RAW unrounded value
+    # otherwise (TabulatorProteinTable.vue:105-108). No `formatterParams` so the
+    # raw value is shown -- rounding would corrupt tiny Q-values (e.g. 0.00012).
     {"title": "Q-Value (Proteoform Level)", "field": "ProteoformLevelQvalue", "sorter": "number",
-     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
+     "formatter": "dashNegativeOne"},
 ]
 
 # TabulatorTagTable.vue columns -> tag_dfs fields.
@@ -194,12 +196,13 @@ _TAG_COLUMN_DEFINITIONS = [
     {"title": "Sequence", "field": "TagSequence", "sorter": "string"},
     {"title": "Length", "field": "Length", "sorter": "number"},
     {"title": "Tag Score", "field": "Score", "sorter": "number"},
-    # N/C mass use the legacy `-1 -> "-"` sentinel rule (TabulatorTagTable.vue
-    # ~72-83); precision 4 matches the app-wide mass decimal default.
+    # N/C mass use the legacy `-1 -> "-"` sentinel rule and render the RAW
+    # unrounded value otherwise (TabulatorTagTable.vue:72-83). No `formatterParams`
+    # so the raw value is shown (rounding would lose precision on the mass offset).
     {"title": "N mass", "field": "Nmass", "sorter": "number",
-     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
+     "formatter": "dashNegativeOne"},
     {"title": "C mass", "field": "Cmass", "sorter": "number",
-     "formatter": "dashNegativeOne", "formatterParams": {"precision": 4}},
+     "formatter": "dashNegativeOne"},
     {"title": "Δ mass", "field": "DeltaMass", "sorter": "number"},
 ]
 
@@ -310,15 +313,18 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
 
     Only the selected tag's row is collected (filtered by ``TagIndex``). The tag
     ``mzs`` are a comma-joined string (trailing comma); parse and drop non-numeric
-    entries, keeping the STORED order (ascending for C-term tags, descending for
-    N-term tags). ``TagSequence`` gives the residue letters; the legacy walks
-    consecutive stored masses labelling gap ``i`` with ``sequence[len-1-i]`` —
-    i.e. the REVERSED sequence aligns to the stored-order gaps regardless of
-    anchoring (verified against both an ascending C-term and a descending N-term
-    tag). Do NOT sort the masses: sorting breaks the alignment for descending
-    (N-term) tags. The published value is a dict
-    ``{"masses": [...], "residues": [...]}`` consumed by the OI LinePlot tag walk;
-    when no residues are available it carries only masses (highlight-only)."""
+    AND zero entries (legacy ``number !== 0``), keeping the STORED order (ascending
+    for C-term tags, descending for N-term tags). ``TagSequence`` gives the residue
+    letters; the legacy walks consecutive stored masses labelling gap ``i`` with
+    ``sequence[len-1-i]`` — i.e. the REVERSED sequence aligns to the stored-order
+    gaps regardless of anchoring (verified against both an ascending C-term and a
+    descending N-term tag). Do NOT sort the masses: sorting breaks the alignment
+    for descending (N-term) tags. The published value is a dict
+    ``{"masses": [...], "residues": [...], "nTerminal": bool}`` consumed by the OI
+    LinePlot tag walk; when no residues are available it carries only masses
+    (highlight-only). When a residue within the selected tag's span is also
+    selected (``selectedAApos``), a tag-relative ``selectedAA`` index is added so
+    the walk gold-highlights that residue (legacy ``selectedAApos - StartPos``)."""
     def _clear_all() -> None:
         state_manager.clear_selection(TAG_MASSES_KEY)
         state_manager.clear_selection(TAG_SPAN_KEY)
@@ -355,8 +361,12 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
 
     raw = selected["tag_masses"][0]
     # Keep STORED order (do not sort) so the reversed-sequence walk aligns for
-    # both ascending (C-term) and descending (N-term) tags.
-    masses = [m for m in raw if m is not None] if raw is not None else []
+    # both ascending (C-term) and descending (N-term) tags. Drop null AND zero
+    # masses (legacy `number !== 0`, TabulatorTagTable.vue:140): a literal 0 mass
+    # would misalign the reversed-residue walk.
+    masses = (
+        [m for m in raw if m is not None and m != 0] if raw is not None else []
+    )
     if not masses:
         _clear_all()
         return
@@ -373,15 +383,33 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
     n_mass = selected["n_mass"][0]
     n_terminal = (n_mass is not None) and (float(n_mass) == -1.0)
 
-    state_manager.set_selection(
-        TAG_MASSES_KEY,
-        {"masses": list(masses), "residues": residues, "nTerminal": n_terminal},
-    )
+    tag_masses = {
+        "masses": list(masses),
+        "residues": residues,
+        "nTerminal": n_terminal,
+    }
+
+    # Selected-residue gold (#F3A712) highlight (legacy
+    # `selectedTag.selectedAA = selectedAApos - StartPos`, TabulatorTagTable.vue:
+    # 151,169). When a residue is selected (AA_KEY holds its protein-absolute
+    # position) AND it falls within the selected tag's [StartPos, EndPos] span,
+    # publish the tag-relative residue index so the LinePlot tag walk highlights
+    # that residue; omit otherwise (no highlight).
+    start_pos = selected["start_pos"][0]
+    end_pos = selected["end_pos"][0]
+    selected_aa_pos = state_manager.get_selection(AA_KEY)
+    if (
+        selected_aa_pos is not None
+        and start_pos is not None
+        and end_pos is not None
+        and int(start_pos) <= int(selected_aa_pos) <= int(end_pos)
+    ):
+        tag_masses["selectedAA"] = int(int(selected_aa_pos) - int(start_pos))
+
+    state_manager.set_selection(TAG_MASSES_KEY, tag_masses)
 
     # Tag-span highlight on the SequenceView. StartPos/EndPos are protein-absolute
     # (matching the full-protein residue grid), so they bracket the tag directly.
-    start_pos = selected["start_pos"][0]
-    end_pos = selected["end_pos"][0]
     if start_pos is not None and end_pos is not None:
         state_manager.set_selection(
             TAG_SPAN_KEY,
@@ -799,7 +827,9 @@ def render_experiment_panel(
                     best_per_spectrum=best_per_spectrum,
                 )
                 if component is None:
-                    st.warning(f"No data for '{comp_name}'.")
+                    # Silently skip an absent component (data frame missing),
+                    # matching the Deconv viewer's documented intent and avoiding
+                    # noisy warnings on stale / partial caches.
                     continue
                 key = f"tnt_oi_{panel_index}_{row_index}_{col_index}_{comp_name}"
                 component(key=key, state_manager=state_manager)

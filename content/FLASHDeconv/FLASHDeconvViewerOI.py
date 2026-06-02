@@ -30,7 +30,7 @@ isolated on disk as well as in session state.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import polars as pl
 import streamlit as st
@@ -45,10 +45,7 @@ from openms_insight import (
     Table,
 )
 
-from content.FLASHDeconv.deconv_sequence import (
-    bake_fixed_modifications,
-    theoretical_mass,
-)
+from content.FLASHDeconv.deconv_sequence import bake_fixed_modifications
 
 # Map the layout COMPONENT_NAMES (FLASHDeconvLayoutManager) to a builder. Every
 # builder returns a *callable* OpenMS-Insight component already wired with the
@@ -107,15 +104,6 @@ def _component_cache_dir(file_manager, experiment_id: str) -> str:
     cache_root = Path(file_manager.cache_path, "oi_components", str(experiment_id))
     cache_root.mkdir(parents=True, exist_ok=True)
     return str(cache_root)
-
-
-def _data_path(file_manager, experiment_id: str, name_tag: str) -> Optional[str]:
-    """Resolve the on-disk parquet path for a stored frame, or None if absent."""
-    if not file_manager.result_exists(experiment_id, name_tag):
-        return None
-    res = file_manager.get_results(experiment_id, [name_tag], partial=True)
-    path = res.get(name_tag)
-    return str(path) if path is not None else None
 
 
 def _lazy(file_manager, experiment_id: str, name_tag: str) -> Optional[pl.LazyFrame]:
@@ -281,6 +269,25 @@ def _build_scatter3d(file_manager, experiment_id: str, cache_dir: str):
     data = _lazy(file_manager, experiment_id, "threedim_SN_plot")
     if data is None:
         return None
+    # MS2 precursor-signal lookup: locate the precursor scan's row
+    # (Scan == PrecursorScan) and the index into its MonoMass array whose value
+    # matches PrecursorMass. Fresh parses (src/parse/deconv.py) emit all four
+    # columns (7-col frame), but STALE/OLD ``threedim_SN_plot.pq`` caches only
+    # carry the 4 legacy columns (index, PrecursorScan, SignalPeaks, NoisyPeaks).
+    # Scatter3D._validate_mappings raises ValueError if any precursor column is
+    # configured-but-missing, and this builder runs OUTSIDE the page try/except,
+    # so we MUST schema-gate: pass the precursor params ONLY when ALL FOUR
+    # columns are present; otherwise fall back to the legacy per-scan behavior.
+    schema_names = data.collect_schema().names()
+    precursor_cols = ("Scan", "PrecursorScan", "PrecursorMass", "MonoMass")
+    precursor_kwargs = {}
+    if all(col in schema_names for col in precursor_cols):
+        precursor_kwargs = {
+            "scan_column": "Scan",
+            "precursor_scan_column": "PrecursorScan",
+            "precursor_mass_column": "PrecursorMass",
+            "mono_mass_column": "MonoMass",
+        }
     # 3D S/N plot: scanIndex value-filters on `index`; massIndex handled internally
     # as an array subscript (NOT a value filter).
     return Scatter3D(
@@ -289,16 +296,9 @@ def _build_scatter3d(file_manager, experiment_id: str, cache_dir: str):
         scan_filter="index",
         signal_column="SignalPeaks",
         noisy_column="NoisyPeaks",
-        # MS2 precursor-signal lookup: locate the precursor scan's row
-        # (Scan == PrecursorScan) and the index into its MonoMass array whose
-        # value matches PrecursorMass. All four columns are emitted on
-        # threedim_SN_plot by src/parse/deconv.py.
-        scan_column="Scan",
-        precursor_scan_column="PrecursorScan",
-        precursor_mass_column="PrecursorMass",
-        mono_mass_column="MonoMass",
         title="Precursor Signals",
         cache_path=cache_dir,
+        **precursor_kwargs,
     )
 
 
@@ -316,6 +316,49 @@ def _build_fdr_plot(file_manager, experiment_id: str, cache_dir: str):
         title="Score Distribution",
         cache_path=cache_dir,
     )
+
+
+def _selected_precursor_mass(file_manager, experiment_id: str, state_manager):
+    """Observed PrecursorMass of the currently-selected scan, or None.
+
+    Mirrors the legacy "Precursor" mass header (src/render/update.py get_sequence
+    / per-scan data), which reads ``PrecursorMass`` from the selected scan. The
+    selected scan is the ``scanIndex`` selection (== the scan_table ``index``);
+    we look its ``PrecursorMass`` up in the scan_table frame. Returns None when no
+    scan is selected, the table/column is absent, or the value is 0.0 (the legacy
+    sentinel for "scan not eligible for this view", which renders an empty header).
+    """
+    if state_manager is None:
+        return None
+    selected_index = state_manager.get_selection(SCAN_KEY)
+    if selected_index is None:
+        return None
+    scan_table = _lazy(file_manager, experiment_id, "scan_table")
+    if scan_table is None:
+        return None
+    names = scan_table.collect_schema().names()
+    if "index" not in names or "PrecursorMass" not in names:
+        return None
+    try:
+        row = (
+            scan_table.filter(pl.col("index") == selected_index)
+            .select("PrecursorMass")
+            .collect()
+        )
+    except Exception:
+        return None
+    if row.height == 0:
+        return None
+    value = row["PrecursorMass"][0]
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if value == 0.0:
+        return None
+    return value
 
 
 def _get_sequence(file_manager):
@@ -374,17 +417,29 @@ def _build_sequence_view(
         pl.col("SumIntensity").alias("intensity"),
     )
 
-    # Pass the sequence as a single-row frame so we can attach the optional
-    # `computed_mass` column (the baked sequence's monoisotopic mass) for the
-    # SequenceView mass header. Falls back to a plain string when pyOpenMS is
-    # unavailable (theoretical_mass returns None) so the column is simply omitted.
-    seq_mass = theoretical_mass(sequence_string)
-    if seq_mass is not None:
+    # Mass header parity (legacy Deconv shows the "Precursor" header:
+    # Theoretical / Observed / Δ). We MUST NOT emit `computed_mass` here: in the
+    # OI SequenceView Vue, `displayTnT = (computedMass !== undefined)`, which would
+    # (a) mislabel the header "Proteoform" instead of "Precursor", and (b) force
+    # `disableVariableModifications = true`, silently disabling the variable/custom
+    # modification context menu that this path explicitly enables via
+    # `disable_variable_modifications=False`. So `computed_mass` stays dropped.
+    #
+    # Instead emit `precursor_mass` = the OBSERVED precursor mass of the selected
+    # scan (legacy reads `PrecursorMass` from the selected scan; see
+    # src/render/update.py get_sequence). When a scan is selected and its
+    # PrecursorMass is reachable in the scan_table, wire it so the "Precursor"
+    # header renders; otherwise omit it (header observed/Δ rows render empty) --
+    # either way the variable-mod menu stays enabled.
+    precursor_mass = _selected_precursor_mass(
+        file_manager, experiment_id, state_manager
+    )
+    if precursor_mass is not None:
         sequence_data = pl.LazyFrame(
             {
                 "sequence": [sequence_string],
                 "precursor_charge": [1],
-                "computed_mass": [seq_mass],
+                "precursor_mass": [precursor_mass],
             }
         )
     else:
