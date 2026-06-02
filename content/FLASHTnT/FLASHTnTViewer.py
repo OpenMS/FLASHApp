@@ -1,19 +1,15 @@
-import os
-
 import streamlit as st
 
 from pathlib import Path
 
-from src.common.common import page_setup, save_params
+from src.common.common import page_setup, save_params, use_openms_insight
 from src.workflow.FileManager import FileManager
 from src.render.render import render_grid
 
 # Migration flag (shared with FLASHDeconv): render each experiment panel with the
-# OpenMS-Insight engine instead of the legacy flash_viewer_grid. Default ON; set
-# FLASHAPP_USE_OPENMS_INSIGHT=0 (or false/no/off) to fall back to the old grid.
-USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "1").strip().lower() not in (
-    "0", "false", "no", "off", "",
-)
+# OpenMS-Insight engine instead of the legacy flash_viewer_grid. Default ON; opt
+# out with FLASHAPP_USE_OPENMS_INSIGHT=0 (see common.use_openms_insight).
+USE_OPENMS_INSIGHT = use_openms_insight()
 
 
 DEFAULT_LAYOUT = [

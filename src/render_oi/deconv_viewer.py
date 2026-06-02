@@ -309,7 +309,6 @@ def _build_sequence_view(
     per_scan = _load_polars(file_manager, dataset_id, "deconv_spectrum")
     peaks_long = (
         explode_spectrum_long(per_scan)
-        .rename({"mass": "mass", "index": "index"})
         .with_columns(pl.int_range(pl.len()).over("index").alias("peak_id"))
     )
 

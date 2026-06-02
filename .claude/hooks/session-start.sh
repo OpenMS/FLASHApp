@@ -29,7 +29,7 @@ echo "[session-start] FLASHApp setup starting"
 # clone) AND aborts the whole install. So strip that line here and install the
 # local sibling separately in step 2.
 REQ_TMP="$(mktemp)"
-grep -ivE '^openms-insight[[:space:]]*@' "$PROJECT_DIR/requirements.txt" > "$REQ_TMP" || cp "$PROJECT_DIR/requirements.txt" "$REQ_TMP"
+grep -ivE '^openms-insight[[:space:]]*[@=<>!~]' "$PROJECT_DIR/requirements.txt" > "$REQ_TMP" || cp "$PROJECT_DIR/requirements.txt" "$REQ_TMP"
 python3 -m pip install --user --quiet -r "$REQ_TMP" || {
   echo "[session-start] WARNING: requirements.txt install hit an error; continuing"
 }

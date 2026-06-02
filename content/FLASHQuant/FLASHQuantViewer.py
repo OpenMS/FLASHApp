@@ -1,20 +1,16 @@
-import os
-
 import streamlit as st
 
 from pathlib import Path
 
 from src.workflow.FileManager import FileManager
-from src.common.common import page_setup, save_params
+from src.common.common import page_setup, save_params, use_openms_insight
 # from src.render.components import flash_viewer_grid_component, FlashViewerComponent, FLASHQuant
 from src.render.render import render_grid
 
 # Migration flag (shared across workflows): render with the OpenMS-Insight engine.
-# Default ON; set FLASHAPP_USE_OPENMS_INSIGHT=0 (or false/no/off) to fall back to
-# the legacy view.
-USE_OPENMS_INSIGHT = os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "1").strip().lower() not in (
-    "0", "false", "no", "off", "",
-)
+# Default ON; opt out with FLASHAPP_USE_OPENMS_INSIGHT=0 (see
+# common.use_openms_insight).
+USE_OPENMS_INSIGHT = use_openms_insight()
 
 # page initialization
 params = page_setup()

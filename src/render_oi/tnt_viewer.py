@@ -26,7 +26,13 @@ from typing import Any, Callable, Dict, List, Optional
 
 import polars as pl
 
-from .deconv_viewer import _HEATMAP_SPEC, _load_pandas_pl, _load_polars, _oi_cache_dir
+from .deconv_viewer import (
+    _HEATMAP_SPEC,
+    _load_pandas,
+    _load_pandas_pl,
+    _load_polars,
+    _oi_cache_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +50,8 @@ def _build_proteoform_scan_map(file_manager, dataset_id: str) -> Dict[int, Dict[
     """proteinIndex → {scan, deconv_index} using the existing resolver."""
     from src.render.scan_resolution import build_proteoform_scan_map
 
-    prot = _load_pandas_pl(file_manager, dataset_id, "protein_dfs").to_pandas()
-    scan = _load_pandas_pl(file_manager, dataset_id, "scan_table").to_pandas()
+    prot = _load_pandas(file_manager, dataset_id, "protein_dfs")
+    scan = _load_pandas(file_manager, dataset_id, "scan_table")
     return build_proteoform_scan_map(prot[["index", "Scan"]], scan[["index", "Scan"]])
 
 
@@ -281,9 +287,9 @@ def render_experiment_tnt(
 
     # Resolve proteinIndex → deconvIndex BEFORE rendering downstream panels so
     # the spectrum/mass/sequence filters see the right scan on this run.
-    scan_map = _build_proteoform_scan_map(file_manager, dataset_id)
     protein_index = state_manager.get_selection(PROTEIN)
     if protein_index is not None:
+        scan_map = _build_proteoform_scan_map(file_manager, dataset_id)
         entry = scan_map.get(int(protein_index))
         deconv_index = entry["deconv_index"] if entry else None
         if state_manager.get_selection(DECONV) != deconv_index:

@@ -119,8 +119,10 @@ panels; preserve save/load of layouts
 OpenMS-Insight's wheel is built by **hatchling**, which `force-include`s the
 pre-built Vue bundle at `openms_insight/js-component/dist` **only if it exists on
 disk** — and that bundle is gitignored. So a plain `pip install
-git+https://…/OpenMS-Insight` (what the `requirements.txt` line would do) yields a
-package with **no frontend**. Three install paths handle this correctly:
+git+https://…/OpenMS-Insight` fails outright: hatchling raises `FileNotFoundError:
+Forced include not found: …/openms_insight/js-component/dist` during the wheel
+build. **Every path that runs a raw `pip install -r requirements.txt` must first
+build the bundle and strip the git line**, or it will fail. The three paths do:
 
 - **Docker** (`Dockerfile`, `Dockerfile.arm`): a dedicated `openms-insight-build`
   node stage clones the repo at the pinned commit (`ARG OPENMS_INSIGHT_REF`,
@@ -129,14 +131,23 @@ package with **no frontend**. Three install paths handle this correctly:
   python stage, which `pip install`s it. The `requirements.txt` `openms-insight`
   line is stripped before `pip install -r` (alongside `pyopenms`) so it installs
   exactly once, with a working bundle. Bump the image by overriding
-  `OPENMS_INSIGHT_REF` (or rely on the branch cache-bust `ADD`).
-- **Local dev / CI / web sessions**: the SessionStart hook
+  `OPENMS_INSIGHT_REF`.
+- **CI** (`.github/workflows/unit-tests.yml`): sets up node, clones OI on the
+  shared migration branch, `npm run build` + mirrors the dist, `pip install`s the
+  checkout, then installs the rest of `requirements.txt` **with the
+  `openms-insight` line stripped** (`grep -ivE '^openms-insight…'`). Tests
+  `pytest.importorskip("openms_insight")` and exercise data-prep only, so a
+  frontend is not strictly required, but installing the package is.
+- **Local dev / web sessions**: the SessionStart hook
   (`.claude/hooks/session-start.sh`) does the same (strip line → `npm run build` →
   mirror dist → `pip install -e ../OpenMS-Insight`). Or run the Vue bundle in dev
   mode with `SVC_DEV_MODE=true`.
-- **`requirements.txt`**: keeps the `git+…@<branch>` ref as a declarative pointer
-  for the migration branch; both install paths above strip and replace it, so it
-  is never the thing that actually provides the frontend.
+
+The `requirements.txt` `git+…@<branch>` ref is **only a declarative pointer** to
+the migration branch — it is never what actually installs a working frontend, and
+a raw `pip install -r requirements.txt` with that line present will fail (see
+above). CI tracks the branch for integration signal; Docker pins a SHA for
+reproducible images.
 
 ---
 
