@@ -348,7 +348,8 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
             .list.eval(pl.element().cast(pl.Float64, strict=False))
             .alias("tag_masses"),
             pl.col("TagSequence").alias("tag_sequence"),
-            # Anchoring + span (legacy TabulatorTagTable.vue:142-173).
+            # Tag span for the selected-residue (selectedAA) highlight (legacy
+            # TabulatorTagTable.vue:142-173).
             pl.col("StartPos").alias("start_pos"),
             pl.col("EndPos").alias("end_pos"),
             pl.col("Nmass").alias("n_mass"),
@@ -377,16 +378,19 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
     seq = selected["tag_sequence"][0] or ""
     residues = list(reversed(str(seq)))[: max(len(masses) - 1, 0)]
 
-    # Terminal anchoring (legacy `nTerminal = (Nmass == -1)`): an N-terminal tag is
-    # one whose N-mass is the `-1` sentinel. Forwarded into the tag-walk so the
-    # LinePlot honors the requested direction.
-    n_mass = selected["n_mass"][0]
-    n_terminal = (n_mass is not None) and (float(n_mass) == -1.0)
-
+    # Selected-residue highlight direction. The residue list above is already
+    # REVERSED to align with the stored mass order, so a tag-relative `selectedAA`
+    # (an N->C index) always maps to the MIRRORED walk gap (gaps-1-selectedAA).
+    # Publish `nTerminal=False` so the LinePlot mirrors it: this is geometrically
+    # correct for BOTH N- and C-terminal-anchored tags AND matches the legacy
+    # behavior, whose `nTerminal` was effectively always false (it read a
+    # non-existent `row["N mass"]` key, so the legacy walk always mirrored). Driving
+    # the direction off `Nmass == -1` here instead would misplace the gold highlight
+    # for C-anchored tags relative to the (already reversed) residue letters.
     tag_masses = {
         "masses": list(masses),
         "residues": residues,
-        "nTerminal": n_terminal,
+        "nTerminal": False,
     }
 
     # Selected-residue gold (#F3A712) highlight (legacy
@@ -411,6 +415,11 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
     # Tag-span highlight on the SequenceView. StartPos/EndPos are protein-absolute
     # (matching the full-protein residue grid), so they bracket the tag directly.
     if start_pos is not None and end_pos is not None:
+        # Real terminal anchoring (legacy `selectedTag.nTerminal = (N mass == -1)`)
+        # for the SequenceView tag-span orientation -- distinct from the LinePlot
+        # walk above, which always mirrors because its residues are pre-reversed.
+        n_mass = selected["n_mass"][0]
+        n_terminal = (n_mass is not None) and (float(n_mass) == -1.0)
         state_manager.set_selection(
             TAG_SPAN_KEY,
             {"start": int(start_pos), "end": int(end_pos), "nTerminal": n_terminal},
