@@ -32,6 +32,22 @@ from src.common.admin import (
 OS_PLATFORM = sys.platform
 
 
+def use_openms_insight() -> bool:
+    """Whether viewers render via the OpenMS-Insight engine (``src.render_oi``).
+
+    Default ON; opt out by setting ``FLASHAPP_USE_OPENMS_INSIGHT`` to one of
+    ``0``/``false``/``no``/``off`` (or empty) to fall back to flash_viewer_grid.
+    Centralized here so the truthy/falsy set has a single source of truth.
+    """
+    return os.environ.get("FLASHAPP_USE_OPENMS_INSIGHT", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+        "",
+    )
+
+
 def is_safe_workspace_name(name: str) -> bool:
     """
     Check if a workspace name is safe (no path traversal characters).

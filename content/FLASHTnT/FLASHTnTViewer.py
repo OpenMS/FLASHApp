@@ -2,17 +2,37 @@ import streamlit as st
 
 from pathlib import Path
 
-from src.common.common import page_setup, save_params
+from src.common.common import page_setup, save_params, use_openms_insight
 from src.workflow.FileManager import FileManager
 from src.render.render import render_grid
 
+# Migration flag (shared with FLASHDeconv): render each experiment panel with the
+# OpenMS-Insight engine instead of the legacy flash_viewer_grid. Default ON; opt
+# out with FLASHAPP_USE_OPENMS_INSIGHT=0 (see common.use_openms_insight).
+USE_OPENMS_INSIGHT = use_openms_insight()
+
 
 DEFAULT_LAYOUT = [
-    ['protein_table'], 
-    ['sequence_view'], 
+    ['protein_table'],
+    ['sequence_view'],
     ['tag_table'],
     ['combined_spectrum']
 ]
+
+
+def render_panel_tnt(dataset_id, layout_rows, file_manager, exp_key, grid_key=None):
+    """Render one FLASHTnT experiment panel with the selected engine."""
+    if USE_OPENMS_INSIGHT:
+        from src.render_oi import render_experiment_tnt
+
+        render_experiment_tnt(
+            dataset_id, layout_rows, file_manager,
+            panel_key=(grid_key or exp_key),
+        )
+    elif grid_key is not None:
+        render_grid(dataset_id, layout_rows, file_manager, 'flashtnt', exp_key, grid_key)
+    else:
+        render_grid(dataset_id, layout_rows, file_manager, 'flashtnt', exp_key)
 
 
 def select_experiment():
@@ -81,7 +101,7 @@ if len(layout) == 2 and side_by_side:
             on_change=select_experiment
         )
         if 'selected_experiment0_tagger' in st.session_state:
-            render_grid(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'flashtnt', 'selected_experiment0_tagger')
+            render_panel_tnt(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'selected_experiment0_tagger')
     with c2:
         st.selectbox(
             "choose experiment", display_names,
@@ -90,7 +110,7 @@ if len(layout) == 2 and side_by_side:
             on_change=select_experiment
         )
         if f"selected_experiment1_tagger" in st.session_state:
-            render_grid(st.session_state.selected_experiment1_tagger, layout[1], file_manager, 'flashtnt', 'selected_experiment1_tagger', 'flash_viewer_grid_1')
+            render_panel_tnt(st.session_state.selected_experiment1_tagger, layout[1], file_manager, 'selected_experiment1_tagger', 'flash_viewer_grid_1')
 
 
 else:
@@ -103,7 +123,7 @@ else:
     )
 
     if 'selected_experiment0_tagger' in st.session_state:
-        render_grid(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'flashtnt', 'selected_experiment0_tagger')
+        render_panel_tnt(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'selected_experiment0_tagger')
 
     ### for multiple experiments on one view
     if len(layout) > 1:
@@ -122,6 +142,6 @@ else:
 
             # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
             if f"selected_experiment{exp_index}_tagger" in st.session_state:
-                render_grid(st.session_state["selected_experiment%d_tagger" % exp_index], layout[exp_index], file_manager, 'flashtnt', f"selected_experiment{exp_index}_tagger", 'flash_viewer_grid_%d' % exp_index)
+                render_panel_tnt(st.session_state["selected_experiment%d_tagger" % exp_index], layout[exp_index], file_manager, f"selected_experiment{exp_index}_tagger", 'flash_viewer_grid_%d' % exp_index)
 
 save_params(params)
