@@ -54,6 +54,44 @@ from openms_insight import (
 SCAN_KEY = "scanIndex"
 MASS_KEY = "massIndex"
 
+# Curated column definitions mirroring the LEGACY Vue tables (titles / order /
+# field selection). The OI Table's ``_get_columns_to_select`` projects to ONLY the
+# fields named here (plus index / interactivity / filter columns), so any internal
+# frame column not listed is hidden -- the visual-parity goal.
+
+# TabulatorScanTable.vue columns -> scan_table fields. Legacy "Index" (id) maps to
+# the frame's `index` (row position == scan index).
+_SCAN_COLUMN_DEFINITIONS = [
+    {"title": "Index", "field": "index", "sorter": "number"},
+    {"title": "Scan Number", "field": "Scan", "sorter": "number"},
+    {"title": "MS Level", "field": "MSLevel", "sorter": "number"},
+    {"title": "Retention time", "field": "RT", "sorter": "number",
+     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+    {"title": "Precursor Mass", "field": "PrecursorMass", "sorter": "number",
+     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+    {"title": "#Masses", "field": "#Masses", "sorter": "number"},
+]
+
+# TabulatorMassTable.vue columns -> mass_table_long fields. Legacy "Index" (id) maps
+# to the long frame's `mass_id` (0-based mass position within the scan).
+_MASS_COLUMN_DEFINITIONS = [
+    {"title": "Index", "field": "mass_id", "sorter": "number"},
+    {"title": "Monoisotopic mass", "field": "MonoMass", "sorter": "number",
+     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+    {"title": "Sum intensity", "field": "SumIntensity", "sorter": "number",
+     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+    {"title": "Min charge", "field": "MinCharges", "sorter": "number"},
+    {"title": "Max charge", "field": "MaxCharges", "sorter": "number"},
+    {"title": "Min isotope", "field": "MinIsotopes", "sorter": "number"},
+    {"title": "Max isotope", "field": "MaxIsotopes", "sorter": "number"},
+    {"title": "Cosine score", "field": "CosineScore", "sorter": "number",
+     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+    {"title": "SNR", "field": "SNR", "sorter": "number",
+     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+    {"title": "QScore", "field": "QScore", "sorter": "number",
+     "formatter": "money", "formatterParams": {"precision": 2, "symbol": ""}},
+]
+
 
 def _component_cache_dir(file_manager, experiment_id: str) -> str:
     """Directory under the workspace cache where OI component caches are written."""
@@ -118,6 +156,8 @@ def _build_scan_table(file_manager, experiment_id: str, cache_dir: str):
         data=data,
         interactivity={SCAN_KEY: "index"},
         index_field="index",
+        column_definitions=_SCAN_COLUMN_DEFINITIONS,
+        go_to_fields=["index", "Scan"],
         title="Scan Table",
         cache_path=cache_dir,
     )
@@ -135,6 +175,8 @@ def _build_mass_table(file_manager, experiment_id: str, cache_dir: str):
         filters={SCAN_KEY: "index"},
         interactivity={MASS_KEY: "mass_id"},
         index_field="mass_id",
+        column_definitions=_MASS_COLUMN_DEFINITIONS,
+        go_to_fields=["mass_id"],
         title="Mass Table",
         cache_path=cache_dir,
     )

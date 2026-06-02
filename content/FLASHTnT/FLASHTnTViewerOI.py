@@ -145,16 +145,54 @@ def _stamp_proteoform_index(
 # None when the underlying data frame is missing (component is silently skipped).
 # ---------------------------------------------------------------------------
 
+# Curated column definitions mirroring the LEGACY Vue tables (titles / order /
+# field selection). The OI Table's ``_get_columns_to_select`` projects to ONLY the
+# fields named here (plus the index / interactivity / filter columns), so any
+# internal frame column not listed is hidden -- exactly the parity goal.
+
+# TabulatorProteinTable.vue columns -> protein_dfs fields.
+_PROTEIN_COLUMN_DEFINITIONS = [
+    {"title": "Scan No.", "field": "Scan", "sorter": "number"},
+    {"title": "Accession", "field": "accession", "sorter": "string"},
+    {"title": "Description", "field": "description", "sorter": "string"},
+    {"title": "Length", "field": "length", "sorter": "number"},
+    {"title": "Mass", "field": "ProteoformMass", "sorter": "number"},
+    {"title": "No. of Matched Fragments", "field": "MatchingFragments", "sorter": "number"},
+    {"title": "No. of Modifications", "field": "ModCount", "sorter": "number"},
+    {"title": "No. of Tags", "field": "TagCount", "sorter": "number"},
+    {"title": "Score", "field": "Score", "sorter": "number"},
+    {"title": "Q-Value (Proteoform Level)", "field": "ProteoformLevelQvalue", "sorter": "number"},
+]
+
+# TabulatorTagTable.vue columns -> tag_dfs fields.
+_TAG_COLUMN_DEFINITIONS = [
+    {"title": "Scan Number", "field": "Scan", "sorter": "number"},
+    {"title": "Start Position", "field": "StartPos", "sorter": "number"},
+    {"title": "End Position", "field": "EndPos", "sorter": "number"},
+    {"title": "Sequence", "field": "TagSequence", "sorter": "string"},
+    {"title": "Length", "field": "Length", "sorter": "number"},
+    {"title": "Tag Score", "field": "Score", "sorter": "number"},
+    {"title": "N mass", "field": "Nmass", "sorter": "number"},
+    {"title": "C mass", "field": "Cmass", "sorter": "number"},
+    {"title": "Δ mass", "field": "DeltaMass", "sorter": "number"},
+]
+
+
 def _build_protein_table(file_manager, experiment_id: str, cache_dir: str):
     data = _lazy(file_manager, experiment_id, "protein_dfs")
     if data is None:
         return None
     # Protein table: clicking a row sets proteinIndex to the row's `index`.
+    # Curated columns/titles match TabulatorProteinTable.vue (the `index`
+    # interactivity column is auto-included by the Table but stays hidden).
     return Table(
         cache_id=f"protein_table_{experiment_id}",
         data=data,
         interactivity={PROTEIN_KEY: "index"},
         index_field="index",
+        column_definitions=_PROTEIN_COLUMN_DEFINITIONS,
+        initial_sort=[{"column": "Score", "dir": "desc"}],
+        go_to_fields=["Scan", "accession"],
         title="Protein Table",
         cache_path=cache_dir,
     )
@@ -187,20 +225,32 @@ def _build_tag_table(file_manager, experiment_id: str, cache_dir: str):
         filters={PROTEIN_KEY: "proteoform_index"},
         interactivity={TAG_KEY: "TagIndex"},
         index_field="TagIndex",
+        column_definitions=_TAG_COLUMN_DEFINITIONS,
+        initial_sort=[{"column": "Score", "dir": "desc"}],
+        go_to_fields=["Scan", "StartPos", "EndPos", "TagSequence"],
         title="Tag Table",
         cache_path=cache_dir,
     )
 
 
 def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None:
-    """Resolve the selected ``tagData`` (a ``TagIndex``) to its list of masses and
-    publish under ``tagMasses`` so the combined-spectrum LinePlot tagger overlay
-    can read it. Clears ``tagMasses`` when no tag is selected.
+    """Resolve the selected ``tagData`` (a ``TagIndex``) to its masses + residue
+    walk and publish under ``tagMasses`` so the combined-spectrum LinePlot tagger
+    overlay renders the tag walk (residue letters between consecutive masses, with
+    the x-axis auto-zoomed to the tag span). Clears ``tagMasses`` when no tag is
+    selected.
 
-    Only the selected tag's row is collected (filtered by ``TagIndex``) instead
-    of building a full lookup over ``tag_dfs`` on every rerun. The tag ``mzs``
-    are a comma-joined string with a trailing comma; parse and drop non-numeric
-    entries."""
+    Only the selected tag's row is collected (filtered by ``TagIndex``). The tag
+    ``mzs`` are a comma-joined string (trailing comma); parse and drop non-numeric
+    entries, keeping the STORED order (ascending for C-term tags, descending for
+    N-term tags). ``TagSequence`` gives the residue letters; the legacy walks
+    consecutive stored masses labelling gap ``i`` with ``sequence[len-1-i]`` —
+    i.e. the REVERSED sequence aligns to the stored-order gaps regardless of
+    anchoring (verified against both an ascending C-term and a descending N-term
+    tag). Do NOT sort the masses: sorting breaks the alignment for descending
+    (N-term) tags. The published value is a dict
+    ``{"masses": [...], "residues": [...]}`` consumed by the OI LinePlot tag walk;
+    when no residues are available it carries only masses (highlight-only)."""
     tag_index = state_manager.get_selection(TAG_KEY)
     if tag_index is None:
         state_manager.clear_selection(TAG_MASSES_KEY)
@@ -218,16 +268,32 @@ def _resolve_tag_masses(file_manager, experiment_id: str, state_manager) -> None
             .str.strip_chars(",")
             .str.split(",")
             .list.eval(pl.element().cast(pl.Float64, strict=False))
-            .alias("tag_masses")
+            .alias("tag_masses"),
+            pl.col("TagSequence").alias("tag_sequence"),
         )
         .collect()
     )
-    raw = selected["tag_masses"][0] if selected.height else None
-    masses = [m for m in raw if m is not None] if raw is not None else None
-    if masses:
-        state_manager.set_selection(TAG_MASSES_KEY, list(masses))
-    else:
+    if not selected.height:
         state_manager.clear_selection(TAG_MASSES_KEY)
+        return
+
+    raw = selected["tag_masses"][0]
+    # Keep STORED order (do not sort) so the reversed-sequence walk aligns for
+    # both ascending (C-term) and descending (N-term) tags.
+    masses = [m for m in raw if m is not None] if raw is not None else []
+    if not masses:
+        state_manager.clear_selection(TAG_MASSES_KEY)
+        return
+
+    # Residue letter per consecutive-mass gap (len(masses) - 1 gaps): the legacy
+    # labels gap i with sequence[len-1-i], i.e. reversed(sequence) over the
+    # stored-order gaps. Trim to the number of gaps.
+    seq = selected["tag_sequence"][0] or ""
+    residues = list(reversed(str(seq)))[: max(len(masses) - 1, 0)]
+
+    state_manager.set_selection(
+        TAG_MASSES_KEY, {"masses": list(masses), "residues": residues}
+    )
 
 
 def _build_sequence_frame(
@@ -244,16 +310,46 @@ def _build_sequence_frame(
 
     Columns emitted: ``proteoform_index`` (filter key), ``sequence`` (str),
     ``precursor_charge`` (=1, neutral/deconvolved peaks), ``coverage`` (list[f64]),
-    ``maxCoverage`` (f64), ``fixed_modifications`` (list[str])."""
-    # ``sequence_data`` is a pickle-backed store: a dict keyed by
-    # ``proteoform_index``, each value a dict with per-residue ``sequence`` /
-    # ``coverage`` lists (full protein), ``maxCoverage``, ``proteoform_start`` /
-    # ``proteoform_end`` and ``fixed_modifications``. It is NOT a tabular frame,
-    # so it is loaded as the raw object (``_pandas`` returns the unpickled dict)
-    # and iterated — loading it as a LazyFrame raises AttributeError and leaves
-    # SequenceView blank.
-    store = _pandas(file_manager, experiment_id, "sequence_data")
-    if not isinstance(store, dict) or not store:
+    ``maxCoverage`` (f64), ``fixed_modifications`` (list[str]).
+
+    ``sequence_data`` is loaded with ``use_polars=True`` and arrives in EITHER of
+    two formats which are handled identically here:
+
+    * **parquet (current ``parseTnT``):** ``build_table(sequence_data)`` ->
+      ``parquet_sink`` writes one row per proteoform (schema in
+      ``src/render/sequence_data_store.py``). With ``use_polars=True`` the loader
+      returns a polars ``LazyFrame`` (the proteoform-index column is
+      ``proteoform_index``; ``sequence`` is the FULL protein ``list[str]`` and
+      ``coverage`` is the matching full-length ``list[f64]``).
+    * **pickle dict (legacy ``.pkl.gz`` example caches):** a dict keyed by the
+      proteoform index, each value a dict carrying the same ``sequence`` /
+      ``coverage`` / ``maxCoverage`` / ``proteoform_start`` / ``proteoform_end`` /
+      ``fixed_modifications`` keys. ``use_polars=True`` leaves the unpickled dict
+      untouched.
+
+    In both formats ``sequence`` and ``coverage`` are full-length protein lists; we
+    slice the displayed proteoform substring AND its coverage together with the
+    0-based ``proteoform_start`` / ``proteoform_end`` bounds (a negative/absent
+    bound means render the full protein)."""
+    if not file_manager.result_exists(experiment_id, "sequence_data"):
+        return None
+    store = file_manager.get_results(
+        experiment_id, ["sequence_data"], use_polars=True
+    )["sequence_data"]
+
+    # Normalise either format into an iterable of per-proteoform row dicts.
+    if isinstance(store, pl.LazyFrame):
+        rows = store.collect().iter_rows(named=True)
+    elif isinstance(store, pl.DataFrame):
+        rows = store.iter_rows(named=True)
+    elif isinstance(store, dict):
+        if not store:
+            return None
+        rows = (
+            {"proteoform_index": pid, **(store[pid] or {})}
+            for pid in sorted(store.keys())
+        )
+    else:
         return None
 
     proteoform_indices: List[int] = []
@@ -261,8 +357,10 @@ def _build_sequence_frame(
     coverages: List[list] = []
     max_coverages: List[float] = []
     fixed_mods: List[list] = []
-    for pid in sorted(store.keys()):
-        entry = store[pid] or {}
+    for entry in rows:
+        pid = entry.get("proteoform_index")
+        if pid is None:
+            continue
         full = list(entry.get("sequence") or [])
         cov = list(entry.get("coverage") or [])
         start = entry.get("proteoform_start")
@@ -275,12 +373,15 @@ def _build_sequence_frame(
         else:
             sub_seq, sub_cov = full[start:end + 1], cov[start:end + 1]
         proteoform_indices.append(int(pid))
-        sequences.append("".join(sub_seq))
+        sequences.append("".join(str(a) for a in sub_seq))
         coverages.append([float(c) for c in sub_cov])
         mc = entry.get("maxCoverage")
         max_coverages.append(float(mc) if mc is not None else 0.0)
         fm = entry.get("fixed_modifications") or []
         fixed_mods.append([str(m) for m in fm])
+
+    if not proteoform_indices:
+        return None
 
     out = pl.DataFrame({
         "proteoform_index": proteoform_indices,
