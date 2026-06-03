@@ -180,18 +180,30 @@ def make_tnt_caches(fm, ds="exp1"):
 
     make_deconv_caches(fm, ds)  # tnt reuses the deconv-style spectra
 
+    # Mirror the real protein.tsv columns that survive parse/tnt.py's rename
+    # (ProteoformIndex->index, ProteinAccession->accession, etc. + added length),
+    # including the curated-display fields the oracle ProteinTable shows
+    # (MatchingFragments / ModCount / TagCount / Score) so the ported
+    # column_definitions + initialSort(Score desc) exercise real columns.
     protein_df = pd.DataFrame({
         "index": [0, 1], "accession": ["P1", "DECOY_P2"],
         "description": ["d1", "d2"], "sequence": ["PEPTIDEK", "ACDEFGHK"],
         "length": [8, 8], "ProteoformMass": [900.4, 800.3],
+        "MatchingFragments": [12, 8], "Coverage(%)": [55.0, 40.0],
+        "ModCount": [0, 1], "TagCount": [2, 1], "Score": [5.0, 6.0],
         "ProteoformLevelQvalue": [0.01, 0.5], "Scan": [10, 20]})
     fm.store_data(ds, "protein_dfs", protein_df)
 
+    # Mirror the real tags.tsv columns that survive parse/tnt.py's rename
+    # (DeNovoScore->Score, Masses->mzs, StartPosition->StartPos + added EndPos),
+    # including Nmass / Cmass / DeltaMass the oracle TagTable shows (Nmass/Cmass use
+    # the -1->"-" placeholder). -1 in Nmass/Cmass exercises that formatter's data.
     tag_df = pd.DataFrame({
         "Scan": [10, 10, 20], "TagSequence": ["PEP", "TID", "ACD"],
         "StartPos": [0, 3, 0], "EndPos": [2, 5, 2], "Length": [3, 3, 3],
         "Score": [5.0, 4.0, 6.0], "mzs": ["1,2,3", "4,5,6", "7,8,9"],
-        "ProteinIndex": [0, 0, 1]})
+        "Nmass": [-1.0, 100.5, 200.5], "Cmass": [300.5, -1.0, 400.5],
+        "DeltaMass": [0.1, 0.2, 0.3], "ProteinIndex": [0, 0, 1]})
     fm.store_data(ds, "tag_dfs", tag_df, row_group_size=128)
 
     seqdata = {}

@@ -238,6 +238,12 @@ def test_quant_3d_axes_match_oracle(mock_streamlit, temp_workspace):
     assert args["xLabel"] == "m/z"
     assert args["yLabel"] == "retention time"
     assert args["stem"] is False  # connected elution lines per charge, not spikes
+    # oracle FLASHQuantView draws one trace per CHARGE but breaks the polyline
+    # between isotopes within a charge (it pushes a -1000 z sentinel before/after
+    # each isotope's points) and labels each trace `Charge: ${charge}`.
+    assert args["categoryColumn"] == "charge"
+    assert args["seriesColumn"] == "isotope"  # break line between isotopes
+    assert args["categoryNameTemplate"] == "Charge: {}"  # legend "Charge: 2"
 
 
 def test_axis_titles_match_oracle(mock_streamlit, temp_workspace):
@@ -335,3 +341,187 @@ def test_render_linked_grid_warns_on_unknown_component(mock_streamlit, temp_work
             state_key=f"flashdeconv__{ds}",
         )
     assert isinstance(sm, StateManager)
+
+
+# --------------------------------------------------------------------------- #
+# oracle Tabulator column chrome (titles + formatters + sorters + initialSort)
+# --------------------------------------------------------------------------- #
+# Ported from TabulatorScanTable / TabulatorMassTable / TabulatorProteinTable /
+# TabulatorTagTable.vue + FLASHQuantView.vue. These lock that the migrated Insight
+# Tables present the SAME curated columns (titles + number formatters + per-table
+# initial sort) and HIDE the internal carrier columns, while keeping the existing
+# value-based cross-link wiring (covered by the tests above) intact.
+def _col_defs(comp):
+    """Displayed column-definition list as it reaches Vue."""
+    return comp._get_component_args()["columnDefinitions"]
+
+
+def _by_title(defs):
+    return {c["title"]: c for c in defs}
+
+
+def _by_field(defs):
+    return {c["field"]: c for c in defs}
+
+
+def test_scan_table_column_chrome(mock_streamlit, temp_workspace):
+    """Scan Table: oracle titles/fields, guarded-toFixed on RT/PrecursorMass, no
+    initialSort; the per-scan ordinal carrier (mass_in_scan) is not displayed."""
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    build_insight_caches(fm, ds, "flashdeconv")
+    defs = _col_defs(make_builders(fm, ds, "flashdeconv")["scan_table"]())
+
+    bt = _by_title(defs)
+    # title -> field parity (oracle "Index" maps to the schema id column scan_id)
+    assert bt["Index"]["field"] == "scan_id"
+    assert bt["Scan Number"]["field"] == "Scan"
+    assert bt["MS Level"]["field"] == "MSLevel"
+    assert bt["Retention time"]["field"] == "RT"
+    assert bt["Precursor Mass"]["field"] == "PrecursorMass"
+    assert bt["#Masses"]["field"] == "#Masses"
+    # toFixedFormatter() -> the guarded "fixed" named formatter
+    assert bt["Retention time"]["formatter"] == "fixed"
+    assert bt["Retention time"]["formatterParams"] == {"precision": 4, "minLength": 4}
+    assert bt["Precursor Mass"]["formatter"] == "fixed"
+    # exactly the oracle's 6 columns, in order; no carriers (mass_in_scan) shown
+    shown = [c["field"] for c in defs]
+    assert shown == ["scan_id", "Scan", "MSLevel", "RT", "PrecursorMass", "#Masses"]
+    assert "mass_in_scan" not in shown
+
+
+def test_mass_table_column_chrome(mock_streamlit, temp_workspace):
+    """Mass Table: oracle titles, fixed formatter on the 5 score/mass columns; the
+    interactivity carrier (mass_in_scan) stays in the data but is not displayed."""
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    build_insight_caches(fm, ds, "flashdeconv")
+    defs = _col_defs(make_builders(fm, ds, "flashdeconv")["mass_table"]())
+
+    bt = _by_title(defs)
+    assert bt["Index"]["field"] == "mass_id"
+    assert bt["Monoisotopic mass"]["field"] == "MonoMass"
+    assert bt["Sum intensity"]["field"] == "SumIntensity"
+    assert bt["Min charge"]["field"] == "MinCharges"
+    assert bt["Max charge"]["field"] == "MaxCharges"
+    assert bt["Min isotope"]["field"] == "MinIsotopes"
+    assert bt["Max isotope"]["field"] == "MaxIsotopes"
+    # the five toFixed'd columns carry the "fixed" formatter
+    for title in ("Monoisotopic mass", "Sum intensity", "Cosine score", "SNR", "QScore"):
+        assert bt[title]["formatter"] == "fixed", title
+        assert bt[title]["formatterParams"] == {"precision": 4, "minLength": 4}
+    # charge/isotope columns are plain (no formatter), matching the oracle
+    assert "formatter" not in bt["Min charge"]
+    # carrier hidden
+    assert "mass_in_scan" not in {c["field"] for c in defs}
+
+
+def test_protein_table_column_chrome(mock_streamlit, temp_workspace):
+    """Protein Table: oracle titles, -1->'-' placeholder on Mass/Q-Value, initialSort
+    Score desc; Coverage(%) (commented out in the oracle) is omitted; the protein_id
+    / scan_id carriers (cross-link) are not displayed (no 'Index' column)."""
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+    build_insight_caches(fm, ds, "flashtnt")
+    comp = make_builders(fm, ds, "flashtnt")["protein_table"]()
+    defs = _col_defs(comp)
+
+    bt = _by_title(defs)
+    assert bt["Scan No."]["field"] == "Scan"
+    assert bt["Accession"]["field"] == "accession"
+    assert bt["Description"]["field"] == "description"
+    assert bt["Length"]["field"] == "length"
+    assert bt["Mass"]["field"] == "ProteoformMass"
+    assert bt["No. of Matched Fragments"]["field"] == "MatchingFragments"
+    assert bt["No. of Modifications"]["field"] == "ModCount"
+    assert bt["No. of Tags"]["field"] == "TagCount"
+    assert bt["Score"]["field"] == "Score"
+    assert bt["Q-Value (Proteoform Level)"]["field"] == "ProteoformLevelQvalue"
+    # inline -1 -> '-' becomes the "placeholder" named formatter
+    assert bt["Mass"]["formatter"] == "placeholder"
+    assert bt["Mass"]["formatterParams"] == {
+        "sentinels": [-1], "text": "-", "loose": True,
+    }
+    assert bt["Q-Value (Proteoform Level)"]["formatter"] == "placeholder"
+    # initialSort ported verbatim (Score desc)
+    assert comp._get_component_args()["initialSort"] == [{"column": "Score", "dir": "desc"}]
+    # Coverage(%) is commented out in the oracle -> not displayed; carriers hidden
+    shown = {c["field"] for c in defs}
+    assert "Coverage(%)" not in shown
+    assert "protein_id" not in shown and "scan_id" not in shown
+    # no synthetic "Index" column on the protein table (oracle leads with Scan No.)
+    assert "Index" not in {c["title"] for c in defs}
+
+
+def test_tag_table_column_chrome(mock_streamlit, temp_workspace):
+    """Tag Table: oracle titles, -1->'-' placeholder on N mass / C mass, initialSort
+    Score desc; StartPos/EndPos ARE displayed (and drive the residue interval filter)
+    while tag_id / mzs / ProteinIndex carriers are not displayed."""
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+    build_insight_caches(fm, ds, "flashtnt")
+    comp = make_builders(fm, ds, "flashtnt")["tag_table"]()
+    defs = _col_defs(comp)
+
+    bt = _by_title(defs)
+    assert bt["Scan Number"]["field"] == "Scan"
+    assert bt["Start Position"]["field"] == "StartPos"
+    assert bt["End Position"]["field"] == "EndPos"
+    assert bt["Sequence"]["field"] == "TagSequence"
+    assert bt["Length"]["field"] == "Length"
+    assert bt["Tag Score"]["field"] == "Score"
+    assert bt["N mass"]["field"] == "Nmass"
+    assert bt["C mass"]["field"] == "Cmass"
+    # the unicode Delta title is preserved verbatim
+    assert "Δ mass" in bt and bt["Δ mass"]["field"] == "DeltaMass"
+    # N mass / C mass use the -1 -> '-' placeholder; Delta mass is plain
+    assert bt["N mass"]["formatter"] == "placeholder"
+    assert bt["C mass"]["formatter"] == "placeholder"
+    assert "formatter" not in bt["Δ mass"]
+    assert comp._get_component_args()["initialSort"] == [{"column": "Score", "dir": "desc"}]
+    shown = {c["field"] for c in defs}
+    # StartPos/EndPos shown (also the interval-filter bounds); carriers hidden
+    assert {"StartPos", "EndPos"} <= shown
+    assert not ({"tag_id", "mzs", "ProteinIndex"} & shown)
+
+
+def test_tag_table_placeholder_renders_dash_data(mock_streamlit, temp_workspace):
+    """The N mass / C mass placeholder columns carry the -1 sentinel data the
+    formatter renders as '-' (fixture has Nmass=-1 on tag 0, Cmass=-1 on tag 1)."""
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+    build_insight_caches(fm, ds, "flashtnt")
+    comp = make_builders(fm, ds, "flashtnt")["tag_table"]()
+    rows = comp._prepare_vue_data({"scan": 0})["tableData"]
+    # both Nmass and Cmass are projected (displayed) and carry the -1 sentinel
+    assert "Nmass" in rows.columns and "Cmass" in rows.columns
+    assert -1.0 in rows["Nmass"].tolist()
+    assert -1.0 in rows["Cmass"].tolist()
+
+
+def test_quant_feature_table_column_chrome(mock_streamlit, temp_workspace):
+    """FLASHQuant feature table: oracle titles, FWHM RT fields mapped to the schema's
+    StartRT/EndRT, no formatters, no initialSort; the duplicate 'Feature Group
+    Quantity' from the oracle is de-duplicated to one column."""
+    fm = _fm(temp_workspace)
+    ds = make_quant_caches(fm)
+    build_insight_caches(fm, ds, "flashquant")
+    comp = make_builders(fm, ds, "flashquant")["quant_visualization"]()
+    args = comp._get_component_args()
+    defs = args["columnDefinitions"]
+
+    bt = _by_title(defs)
+    assert bt["Index"]["field"] == "feature_id"
+    assert bt["Monoisotopic Mass"]["field"] == "MonoisotopicMass"
+    assert bt["Average Mass"]["field"] == "AverageMass"
+    # oracle StartRetentionTime(FWHM)/EndRetentionTime(FWHM) -> schema StartRT/EndRT
+    assert bt["Start Retention Time (FWHM)"]["field"] == "StartRT"
+    assert bt["End Retention Time (FWHM)"]["field"] == "EndRT"
+    assert bt["Most Abundant Charge"]["field"] == "MostAbundantFeatureCharge"
+    assert bt["Isotope Cosine Score"]["field"] == "IsotopeCosineScore"
+    # no number formatters in the oracle quant table
+    assert all("formatter" not in c for c in defs)
+    # no initialSort for the quant table
+    assert "initialSort" not in args
+    # the oracle's duplicate "Feature Group Quantity" collapses to a single column
+    assert [c["title"] for c in defs].count("Feature Group Quantity") == 1

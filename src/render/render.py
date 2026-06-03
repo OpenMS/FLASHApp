@@ -47,6 +47,174 @@ def _insight_cache_dir(file_manager) -> str:
     return str(Path(file_manager.cache_path, "insight"))
 
 
+# --------------------------------------------------------------------------- #
+# Oracle Tabulator column chrome (titles + formatters + sorters + initialSort)
+# --------------------------------------------------------------------------- #
+# Ported verbatim from the oracle Tabulator{Scan,Mass,Protein,Tag}Table.vue and
+# FLASHQuantView.vue ``columnDefinitions`` arrays so the migrated Insight Tables
+# show the SAME curated subset of columns with the SAME human titles, number
+# formatting and per-table initial sort -- instead of the auto-generated raw
+# column names + internal carrier columns. The Table renders ONLY these columns
+# (carriers like scan_id / mzs / ProteinIndex stay in the data for
+# filters/interactivity/index but are not listed, hence not shown).
+#
+# Formatter mapping (see OpenMS-Insight Table.with_fixed_format / with_placeholder
+# and tabulator-formatters.ts):
+#   oracle ``toFixedFormatter()``  -> {"formatter": "fixed",
+#                                      "formatterParams": {"precision": 4,
+#                                                          "minLength": 4}}
+#     (guarded toFixed: only reformats when the value's string length exceeds
+#      minLength, matching ``value.toString().length > 4 ? value.toFixed(4) :
+#      value``).
+#   oracle inline ``value == -1 ? '-' : value`` -> {"formatter": "placeholder",
+#       "formatterParams": {"sentinels": [-1], "text": "-", "loose": True}}.
+#     None of the oracle -1->"-" columns ALSO toFixed (they return the raw value
+#     otherwise), so a plain placeholder is an exact match (no combine nuance).
+#
+# Field-name mapping (oracle field -> schema column, from src/render/schema.py):
+#   * oracle ``id`` ("Index") -> the schema id column (scan_id / mass_id /
+#     feature_id); the oracle set row.id = row.index client-side.
+#   * FLASHQuant ``StartRetentionTime(FWHM)`` / ``EndRetentionTime(FWHM)`` ->
+#     schema ``StartRT`` / ``EndRT`` (renamed by schema._QUANT_SCALAR_RENAME).
+#   * all other oracle fields keep their name in the corresponding tidy frame
+#     (verified against the real protein.tsv / tags.tsv FLASHTagger headers).
+_FIXED_FMT = {"formatter": "fixed", "formatterParams": {"precision": 4, "minLength": 4}}
+_DASH_FMT = {
+    "formatter": "placeholder",
+    "formatterParams": {"sentinels": [-1], "text": "-", "loose": True},
+}
+
+# Scan Table (TabulatorScanTable.vue) -- no initialSort.
+_SCAN_COLUMN_DEFS = [
+    {"field": "scan_id", "title": "Index", "sorter": "number",
+     "headerTooltip": "The sequential index of the spectrum in the dataset."},
+    {"field": "Scan", "title": "Scan Number", "sorter": "number",
+     "headerTooltip": "The identifier of the mass spectrometry scan."},
+    {"field": "MSLevel", "title": "MS Level", "sorter": "number",
+     "headerTooltip": "The level of mass spectrometry analysis (e.g., MS1 or MS2)."},
+    {"field": "RT", "title": "Retention time", "sorter": "number", **_FIXED_FMT,
+     "headerTooltip": "The time at which the spectrum was detected during the "
+                      "chromatographic separation in seconds."},
+    {"field": "PrecursorMass", "title": "Precursor Mass", "sorter": "number", **_FIXED_FMT,
+     "headerTooltip": "The mass of the precursor ion selected for fragmentation "
+                      "in Daltons."},
+    {"field": "#Masses", "title": "#Masses", "sorter": "number",
+     "headerTooltip": "The number of detected masses in the spectrum."},
+]
+
+# Mass Table (TabulatorMassTable.vue) -- no initialSort.
+_MASS_COLUMN_DEFS = [
+    {"field": "mass_id", "title": "Index", "sorter": "number",
+     "headerTooltip": "The sequential index of the mass entry in the dataset."},
+    {"field": "MonoMass", "title": "Monoisotopic mass", "sorter": "number", **_FIXED_FMT,
+     "headerTooltip": "The monoisotopic mass of the detected ion in Daltons."},
+    {"field": "SumIntensity", "title": "Sum intensity", "sorter": "number", **_FIXED_FMT,
+     "headerTooltip": "The total intensity of the detected mass across all "
+                      "isotopic peaks and charges."},
+    {"field": "MinCharges", "title": "Min charge", "sorter": "number",
+     "headerTooltip": "The minimum charge state detected for the mass."},
+    {"field": "MaxCharges", "title": "Max charge", "sorter": "number",
+     "headerTooltip": "The maximum charge state detected for the mass."},
+    {"field": "MinIsotopes", "title": "Min isotope", "sorter": "number",
+     "headerTooltip": "The smallest observed isotopic shift, expressed as a "
+                      "multiple of the average isotopic mass difference at 55kDA."},
+    {"field": "MaxIsotopes", "title": "Max isotope", "sorter": "number",
+     "headerTooltip": "The largest observed isotopic shift, expressed as a "
+                      "multiple of the average isotopic mass difference at 55kDA."},
+    {"field": "CosineScore", "title": "Cosine score", "sorter": "number", **_FIXED_FMT,
+     "headerTooltip": "The cosine similarity score comparing the observed and "
+                      "theoretical isotopic patterns."},
+    {"field": "SNR", "title": "SNR", "sorter": "number", **_FIXED_FMT,
+     "headerTooltip": "The signal-to-noise ratio for the detected mass."},
+    {"field": "QScore", "title": "QScore", "sorter": "number", **_FIXED_FMT,
+     "headerTooltip": "The quality score indicating the confidence of the mass "
+                      "detection (higher is better)."},
+]
+
+# Protein Table (TabulatorProteinTable.vue) -- initialSort Score desc.
+# Coverage(%) is COMMENTED OUT in the oracle, so it is intentionally omitted
+# here (all other oracle ProteinTable fields exist in the real protein.tsv).
+_PROTEIN_COLUMN_DEFS = [
+    {"field": "Scan", "title": "Scan No.", "sorter": "number",
+     "headerTooltip": "The identifier of the mass spectrometry scan associated "
+                      "with the identified proteoform."},
+    {"field": "accession", "title": "Accession",
+     "headerTooltip": "The unique identifier for the protein in the reference "
+                      "database."},
+    {"field": "description", "title": "Description", "responsive": 10},
+    {"field": "length", "title": "Length", "responsive": 6, "sorter": "number",
+     "headerTooltip": "The total number of amino acids in the matched protein."},
+    {"field": "ProteoformMass", "title": "Mass", "responsive": 8, "sorter": "number",
+     **_DASH_FMT,
+     "headerTooltip": "The calculated mass of the proteoform in Daltons."},
+    {"field": "MatchingFragments", "title": "No. of Matched Fragments", "sorter": "number",
+     "headerTooltip": "The number of fragment ions that match the protein sequence."},
+    {"field": "ModCount", "title": "No. of Modifications", "sorter": "number",
+     "headerTooltip": "The number of modifications identified in the protein."},
+    {"field": "TagCount", "title": "No. of Tags", "sorter": "number",
+     "headerTooltip": "The number of sequence tags associated with the proteoform "
+                      "match."},
+    {"field": "Score", "title": "Score", "sorter": "number",
+     "headerTooltip": "A score indicating the confidence of the protein match "
+                      "(higher is better)."},
+    {"field": "ProteoformLevelQvalue", "title": "Q-Value (Proteoform Level)",
+     "sorter": "number", **_DASH_FMT,
+     "headerTooltip": "The confidence value of the protein match at the proteoform "
+                      "level."},
+]
+_PROTEIN_INITIAL_SORT = [{"column": "Score", "dir": "desc"}]
+
+# Tag Table (TabulatorTagTable.vue) -- initialSort Score desc.
+_TAG_COLUMN_DEFS = [
+    {"field": "Scan", "title": "Scan Number", "sorter": "number",
+     "headerTooltip": "The identifier of the mass spectrometry scan containing the "
+                      "sequence tag."},
+    {"field": "StartPos", "title": "Start Position", "sorter": "number",
+     "headerTooltip": "The position in the protein sequence where the sequence tag "
+                      "begins."},
+    {"field": "EndPos", "title": "End Position", "sorter": "number",
+     "headerTooltip": "The position in the protein sequence where the sequence tag "
+                      "ends."},
+    {"field": "TagSequence", "title": "Sequence", "sorter": "number",
+     "headerTooltip": "The amino acid sequence of the identified tag."},
+    {"field": "Length", "title": "Length", "sorter": "number",
+     "headerTooltip": "The number of amino acids in the sequence tag."},
+    {"field": "Score", "title": "Tag Score", "sorter": "number",
+     "headerTooltip": "A score indicating the confidence of the sequence tag "
+                      "identification (higher is better)."},
+    {"field": "Nmass", "title": "N mass", "sorter": "number", **_DASH_FMT,
+     "headerTooltip": "The N-terminal mass offset from the start of the sequence "
+                      "tag in Daltons."},
+    {"field": "Cmass", "title": "C mass", "sorter": "number", **_DASH_FMT,
+     "headerTooltip": "The C-terminal mass offset from the end of the sequence tag "
+                      "in Daltons."},
+    {"field": "DeltaMass", "title": "Δ mass", "sorter": "number",
+     "headerTooltip": "Delta mass is the difference between the tag flanking mass "
+                      "and the (partial) proteoform mass, from its terminal to the "
+                      "tag boundary."},
+]
+_TAG_INITIAL_SORT = [{"column": "Score", "dir": "desc"}]
+
+# FLASHQuant feature table (FLASHQuantView.vue featureGroupTableColumnDefinitions)
+# -- no initialSort, no formatters. The oracle listed "Feature Group Quantity"
+# twice (a copy-paste bug); we keep a single definition. StartRetentionTime(FWHM)
+# / EndRetentionTime(FWHM) map to the schema's renamed StartRT / EndRT.
+_QUANT_COLUMN_DEFS = [
+    {"field": "feature_id", "title": "Index", "sorter": "number"},
+    {"field": "MonoisotopicMass", "title": "Monoisotopic Mass", "sorter": "number"},
+    {"field": "AverageMass", "title": "Average Mass", "sorter": "number"},
+    {"field": "StartRT", "title": "Start Retention Time (FWHM)", "sorter": "number"},
+    {"field": "EndRT", "title": "End Retention Time (FWHM)", "sorter": "number"},
+    {"field": "FeatureGroupQuantity", "title": "Feature Group Quantity",
+     "sorter": "number"},
+    {"field": "MinCharge", "title": "Min Charge", "sorter": "number"},
+    {"field": "MaxCharge", "title": "Max Charge", "sorter": "number"},
+    {"field": "MostAbundantFeatureCharge", "title": "Most Abundant Charge",
+     "sorter": "number"},
+    {"field": "IsotopeCosineScore", "title": "Isotope Cosine Score", "sorter": "number"},
+]
+
+
 def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
     """Build the SequenceView wired for the tool (deconv global vs tnt per-proteoform).
 
@@ -142,6 +310,9 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             cache_id=cid("scan_table"), data_path=p("scans"), cache_path=cache,
             interactivity={"scan": "scan_id"}, index_field="scan_id",
             default_row=0, title="Scan Table",
+            # oracle Tabulator chrome: curated titles + guarded toFixed on RT /
+            # PrecursorMass; shows ONLY these columns (no initialSort in the oracle).
+            column_definitions=_SCAN_COLUMN_DEFS,
         ),
         "mass_table": lambda: Table(
             cache_id=cid("mass_table"), data_path=p("masses"), cache_path=cache,
@@ -150,6 +321,9 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # the global mass_id for row identity / go-to navigation.
             filters={"scan": "scan_id"}, interactivity={"mass": "mass_in_scan"},
             index_field="mass_id", title="Mass Table",
+            # oracle chrome: toFixed on MonoMass/SumIntensity/CosineScore/SNR/QScore;
+            # mass_in_scan stays in the data (interactivity) but is not displayed.
+            column_definitions=_MASS_COLUMN_DEFS,
         ),
         "deconv_spectrum": lambda: LinePlot(
             cache_id=cid("deconv_spectrum"), data_path=p("deconv_spectrum_tidy"),
@@ -261,6 +435,13 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # table all follow the selected proteoform to its scan.
             interactivity={"protein": "protein_id", "scan": "scan_id"},
             index_field="protein_id", default_row=0, title="Protein Table",
+            # oracle chrome: curated titles, -1->"-" on Mass/Q-Value, initialSort
+            # by Score desc. protein_id/scan_id carriers stay for index/cross-link
+            # but are not displayed (no "Index" column in the oracle protein table).
+            # NOTE: the oracle "Best per spectrum" toggle is a functional control
+            # (out of scope here), not column chrome.
+            column_definitions=_PROTEIN_COLUMN_DEFS,
+            initial_sort=_PROTEIN_INITIAL_SORT,
         ),
         "tag_table": lambda: Table(
             cache_id=cid("tag_table"), data_path=p("tags"), cache_path=cache,
@@ -272,6 +453,12 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # is selected. The "aa" selection is published by the SequenceView.
             interval_filters={"aa": ("StartPos", "EndPos")},
             index_field="tag_id", title="Tag Table",
+            # oracle chrome: curated titles, -1->"-" on N mass / C mass, initialSort
+            # by Score desc. tag_id / mzs carriers stay for index/payload resolution
+            # but are not displayed; StartPos/EndPos ARE displayed AND drive the
+            # residue interval_filter.
+            column_definitions=_TAG_COLUMN_DEFS,
+            initial_sort=_TAG_INITIAL_SORT,
         ),
         "sequence_view": lambda: _sequence_view(
             file_manager, dataset_id, tool, cid, cache, p, settings
@@ -281,6 +468,11 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             cache_id=cid("quant_features"), data_path=p("quant_features"),
             cache_path=cache, interactivity={"feature": "feature_id"},
             index_field="feature_id", default_row=0, title="Features",
+            # oracle FLASHQuantView featureGroupTableColumnDefinitions: curated
+            # titles (Index/Monoisotopic Mass/.../Isotope Cosine Score), no
+            # formatters, no initialSort. StartRetentionTime(FWHM)/EndRetentionTime
+            # (FWHM) -> schema StartRT/EndRT.
+            column_definitions=_QUANT_COLUMN_DEFS,
         ),
         "quant_traces_3d": lambda: Plot3D(
             cache_id=cid("quant_traces"), data=scan("quant_traces"),
@@ -292,6 +484,13 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             x_column="mz", y_column="rt", z_column="intensity",
             x_label="m/z", y_label="retention time", z_label="intensity",
             category_column="charge",
+            # oracle builds one trace per charge but BREAKS the polyline between
+            # isotopes within that charge (it pushes a -1000 z sentinel before/after
+            # each isotope's points); series_column="isotope" reproduces that gap so
+            # the isotopes don't connect, while the legend/color stay per-charge.
+            series_column="isotope",
+            # oracle legend label is `Charge: ${charge}` (name: `Charge: 2`).
+            category_name_template="Charge: {}",
             # oracle FLASHQuantView draws ONE connected elution line per charge
             # (mode:lines), not per-point stems; category_column already splits the
             # charges into separate traces, so disable the precursor-style stems.
