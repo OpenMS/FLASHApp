@@ -1,112 +1,221 @@
-import streamlit as st
+"""FLASHApp's OpenMS-Insight builder factory (post Phase-3 migration).
 
-from src.render.util import hash_complex
-from src.render.StateTracker import StateTracker
-from src.render.initialize import initialize_data
-from src.render.update import update_data, filter_data
-from src.render.components import get_component_function
+This module is repurposed from the old bespoke-Vue grid-render loop
+(``render_grid`` / ``render_component`` + ``StateTracker``) to a thin **builder
+factory**. The grid itself now comes from the frozen, tool-agnostic template
+module ``src.view.grid`` (``render_linked_grid`` + ``LayoutManager``); the viewer
+pages import that and feed it the builders produced here.
 
-# @st.fragment()
-def render_component(
-    components, data, component_key='flash_viewer_grid', on_change=None, 
-    additional_data=None, tool=None, state_tracker=None
-):
-    # Map arguments
-    out_components = []
-    for row in components:
-        out_components.append(list(map(
-            lambda component: {
-                "componentArgs": component.componentArgs.__dict__
-            }, 
-            row
-        )))
-    
-    # Get State
-    state = state_tracker.getState()
+``make_builders(file_manager, dataset_id, tool, settings=None)`` returns a
+``{comp_name: () -> BaseComponent}`` map. Each zero-arg factory closes over
+``dataset_id`` + ``file_manager`` + an Insight cache dir and uses
+``file_manager.result_path(...)`` (the tidy parquet written by
+``src.render.schema.build_insight_caches``) to feed ``data_path=``. ``cache_id``
+is ``f"{tool}__{dataset_id}__{comp_name}"`` so component caches are per-dataset
+-- this is the oracle's "dataset changed -> reset" guarantee expressed through
+``cache_id`` (the StateManager is likewise scoped per ``(tool, experiment)`` via
+``state_key`` inside ``render_linked_grid``).
 
-    # Cleared selections now arrive (and are stored) as `None` rather than being
-    # dropped, so the frontend can round-trip a deselect. update/filter logic uses
-    # the "key not in selection_store" convention, so drop None-valued keys for the
-    # data computation while still echoing the full state (incl. nulls) back so the
-    # frontend can clear those fields in every component.
-    active_state = {k: v for k, v in state.items() if v is not None}
+The OLD index-based selection maps to value-based ``filters`` / ``interactivity``
+(see ``migration/specs/PHASE3_PLAN.md`` 5.3 and the deleted ``update.py``):
 
-    # Update data with current session state
-    data = update_data(data, out_components, active_state, additional_data, tool)
+==========================  ============================================
+oracle (index-based)        insight (value-based)
+==========================  ============================================
+``scanIndex`` / iloc        selection ``scan`` = ``scan_id``; ``filters={"scan":"scan_id"}``
+``massIndex`` / ``[idx]``    selection ``mass`` = ``mass_in_scan`` (3D) / ``mass_id`` (table)
+``proteinIndex`` + scan_map precomputed ``protein_id`` column; ``filters={"protein":"protein_id"}``
+heatmap ``xRange/yRange``    Heatmap internal zoom (per-instance ``zoom_identifier``)
+``StateTracker``            ``StateManager(session_key=state_key)``
+==========================  ============================================
+"""
 
-    # Filter data based on selection
-    data = filter_data(
-        data, out_components, active_state, additional_data, tool
+from __future__ import annotations
+
+from pathlib import Path
+
+import polars as pl
+from openms_insight import Heatmap, LinePlot, Plot3D, SequenceView, Table
+
+
+def _insight_cache_dir(file_manager) -> str:
+    """Keep Insight's own disk caches under the workspace cache dir."""
+    return str(Path(file_manager.cache_path, "insight"))
+
+
+def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
+    """Build the SequenceView wired for the tool (deconv global vs tnt per-proteoform).
+
+    deconv: a single global sequence (``seq_deconv``) filtered by scan; peaks are
+    the deconv-spectrum long frame (neutral masses -> ``deconvolved=True``).
+    tnt: per-proteoform (``seq_tnt``) filtered by protein, with coverage +
+    proteoform terminal columns; ``annotation_config`` (ion types / tolerance)
+    is read from the oracle ``settings`` cache when available.
+    """
+    if tool == "flashtnt":
+        anno_cfg = None
+        if settings:
+            anno_cfg = {
+                "ion_types": settings.get("ion_types", ["b", "y"]),
+                "tolerance": settings.get("tolerance", 20.0),
+            }
+        return SequenceView(
+            cache_id=cid("sequence_view"),
+            sequence_data_path=p("seq_tnt"),
+            peaks_data_path=p("deconv_spectrum_tidy"),
+            cache_path=cache,
+            filters={"protein": "protein_id"},
+            interactivity={"mass": "peak_id"},
+            deconvolved=True,
+            coverage_column="coverage",
+            proteoform_start_column="proteoform_start",
+            proteoform_end_column="proteoform_end",
+            annotation_config=anno_cfg,
+            title="Sequence View",
+        )
+    # flashdeconv: single global sequence
+    return SequenceView(
+        cache_id=cid("sequence_view"),
+        sequence_data_path=p("seq_deconv"),
+        peaks_data_path=p("deconv_spectrum_tidy"),
+        cache_path=cache,
+        filters={"scan": "scan_id"},
+        interactivity={"mass": "peak_id"},
+        deconvolved=True,
+        title="Sequence View",
     )
 
-    # Hash updated. filtered data
-    data['hash'] = hash_complex(data)
 
-    # Render component
-    data['selection_store'] = state
-    new_state = get_component_function()(
-        components=out_components,
-        key=component_key,
-        **data
-    )
+def make_builders(file_manager, dataset_id, tool, settings=None):
+    """Return ``{comp_name: () -> BaseComponent}`` for one ``(tool, dataset)``.
 
-    # Update state
-    if new_state is not None:
-        updated = state_tracker.updateState(new_state)
+    Args:
+        file_manager: FLASHApp FileManager (provides ``result_path`` + ``cache_path``).
+        dataset_id: the experiment id whose tidy caches were built by
+            ``build_insight_caches``.
+        tool: ``"flashdeconv"`` | ``"flashtnt"`` | ``"flashquant"`` (used for the
+            sequence-view wiring and cache namespacing).
+        settings: optional oracle ``settings`` dict (ion types / tolerance) for the
+            FLASHTnT SequenceView.
 
-        if updated:
-            st.rerun(scope='app')
+    Returns:
+        A dict mapping every supported ``comp_name`` to a zero-arg factory. The
+        grid lazily calls only the factories its layout references, so building
+        this full dict is cheap (no Insight component is constructed here).
+    """
+    p = lambda tag: file_manager.result_path(dataset_id, tag)  # parquet path
+    # Plot3D does not forward its x/y/z column config through the data_path=
+    # subprocess (upstream limitation), so feed it the same on-disk tidy parquet
+    # via data=scan_parquet(path) (in-process). These frames are per-scan /
+    # per-feature small, so the memory tradeoff is negligible.
+    scan = lambda tag: pl.scan_parquet(file_manager.result_path(dataset_id, tag))
+    cid = lambda name: f"{tool}__{dataset_id}__{name}"
+    cache = _insight_cache_dir(file_manager)
 
-
-def render_grid(
-    selected_data, layout_info_per_exp, file_manager, tool, identifier,
-    grid_key='flash_viewer_grid'
-):
-    default_data = {'dataset' : selected_data}
-    default_state = StateTracker()
-    
-    # Set up session state
-    for name, default in zip(
-        ['plot_data', 'state_tracker'], [default_data, default_state]
-    ):
-        if name not in st.session_state:
-            st.session_state[name] = {}
-        if tool not in st.session_state[name]:
-            st.session_state[name][tool] = {}
-        if identifier not in st.session_state[name][tool]:
-            st.session_state[name][tool][identifier] = default
-
-    # Check if dataset has changed
-    if st.session_state['plot_data'][tool][identifier]['dataset'] != selected_data:
-        st.session_state['plot_data'][tool][identifier] = default_data
-        st.session_state['state_tracker'][tool][identifier] = default
-
-    for row_index, row in enumerate(layout_info_per_exp):
-        columns = st.columns(len(row))
-        for col, (col_index, comp_name) in zip(columns, enumerate(row)):
-
-            
-            # Inititalize component data
-            if comp_name not in st.session_state.plot_data[tool][identifier]:
-                st.session_state.plot_data[tool][identifier][comp_name] = initialize_data(
-                    comp_name, selected_data, file_manager, tool
-                )
-
-            # Get State
-            state_tracker = st.session_state.state_tracker[tool][identifier]
-
-            # Get data
-            data_to_send, components, additional_data = (
-                st.session_state.plot_data[tool][identifier][comp_name]
-            )
-
-            # Create component
-            with col:
-                render_component(
-                    components=components, 
-                    data=data_to_send, 
-                    component_key=f"{grid_key}_{row_index}_{col_index}",
-                    additional_data=additional_data,
-                    tool=tool,
-                    state_tracker=state_tracker
-                )
+    B = {
+        # ---- FLASHDeconv / shared panels ----
+        "scan_table": lambda: Table(
+            cache_id=cid("scan_table"), data_path=p("scans"), cache_path=cache,
+            interactivity={"scan": "scan_id"}, index_field="scan_id",
+            default_row=0, title="Scan Table",
+        ),
+        "mass_table": lambda: Table(
+            cache_id=cid("mass_table"), data_path=p("masses"), cache_path=cache,
+            filters={"scan": "scan_id"}, interactivity={"mass": "mass_id"},
+            index_field="mass_id", title="Mass Table",
+        ),
+        "deconv_spectrum": lambda: LinePlot(
+            cache_id=cid("deconv_spectrum"), data_path=p("deconv_spectrum_tidy"),
+            cache_path=cache, filters={"scan": "scan_id"},
+            interactivity={"mass": "peak_id"},
+            x_column="MonoMass", y_column="SumIntensity",
+            title="Deconvolved Spectrum",
+        ),
+        "anno_spectrum": lambda: LinePlot(
+            cache_id=cid("anno_spectrum"), data_path=p("anno_spectrum_tidy"),
+            cache_path=cache, filters={"scan": "scan_id"},
+            interactivity={"mass": "peak_id"},
+            x_column="mz", y_column="intensity", highlight_column="is_signal",
+            title="Annotated Spectrum",
+        ),
+        "combined_spectrum": lambda: LinePlot.tagger(
+            cache_id=cid("combined_spectrum"), data_path=p("combined_tagger"),
+            cache_path=cache, filters={"spectrum": "scan_id"},
+            interactivity={"tagger_mass": "peak_id"},
+            x_column="MonoMass", y_column="SumIntensity",
+            signal_peaks_column="SignalPeaks", mz_column="Mzs",
+            mz_intensity_column="MzIntensities", tag_identifier="tag",
+            title="Augmented Deconvolved Spectrum",
+        ),
+        "3D_SN_plot": lambda: Plot3D(
+            cache_id=cid("3D_SN_plot"), data=scan("precursor_signals"),
+            cache_path=cache,
+            filters={"scan": "scan_id", "mass": "mass_in_scan"},
+            filter_defaults={"scan": -1},
+            x_column="mz", y_column="charge", z_column="intensity",
+            category_column="series",
+            category_colors={"Signal": "#3366CC", "Noise": "#DC3912"},
+            title="Precursor Signals",
+        ),
+        # ---- heatmaps: reuse the existing full-resolution oracle caches as-is ----
+        "ms1_deconv_heat_map": lambda: Heatmap(
+            cache_id=cid("ms1_deconv_heat_map"), data_path=p("ms1_deconv_heatmap"),
+            cache_path=cache, x_column="rt", y_column="mass",
+            intensity_column="intensity", title="Deconvolved MS1 Heatmap",
+        ),
+        "ms2_deconv_heat_map": lambda: Heatmap(
+            cache_id=cid("ms2_deconv_heat_map"), data_path=p("ms2_deconv_heatmap"),
+            cache_path=cache, x_column="rt", y_column="mass",
+            intensity_column="intensity", title="Deconvolved MS2 Heatmap",
+        ),
+        "ms1_raw_heatmap": lambda: Heatmap(
+            cache_id=cid("ms1_raw_heatmap"), data_path=p("ms1_raw_heatmap"),
+            cache_path=cache, x_column="rt", y_column="mass",
+            intensity_column="intensity", title="Raw MS1 Heatmap",
+        ),
+        "ms2_raw_heatmap": lambda: Heatmap(
+            cache_id=cid("ms2_raw_heatmap"), data_path=p("ms2_raw_heatmap"),
+            cache_path=cache, x_column="rt", y_column="mass",
+            intensity_column="intensity", title="Raw MS2 Heatmap",
+        ),
+        "fdr_plot": lambda: LinePlot.density(
+            cache_id=cid("fdr_plot"), data_path=p("qscore_density"),
+            cache_path=cache, x_column="x", y_column="y", category_column="group",
+            target_value="target", decoy_value="decoy",
+            title="Score Distribution",
+        ),
+        "id_fdr_plot": lambda: LinePlot.density(
+            cache_id=cid("id_fdr_plot"), data_path=p("qscore_density_id"),
+            cache_path=cache, x_column="x", y_column="y", category_column="group",
+            target_value="target", decoy_value="decoy",
+            title="Score Distribution",
+        ),
+        # ---- FLASHTnT panels ----
+        "protein_table": lambda: Table(
+            cache_id=cid("protein_table"), data_path=p("proteins"),
+            cache_path=cache, interactivity={"protein": "protein_id"},
+            index_field="protein_id", default_row=0, title="Protein Table",
+        ),
+        "tag_table": lambda: Table(
+            cache_id=cid("tag_table"), data_path=p("tags"), cache_path=cache,
+            filters={"protein": "protein_id"}, interactivity={"tag": "tag_id"},
+            index_field="tag_id", title="Tag Table",
+        ),
+        "sequence_view": lambda: _sequence_view(
+            file_manager, dataset_id, tool, cid, cache, p, settings
+        ),
+        # ---- FLASHQuant panels ----
+        "quant_visualization": lambda: Table(
+            cache_id=cid("quant_features"), data_path=p("quant_features"),
+            cache_path=cache, interactivity={"feature": "feature_id"},
+            index_field="feature_id", default_row=0, title="Features",
+        ),
+        "quant_traces_3d": lambda: Plot3D(
+            cache_id=cid("quant_traces"), data=scan("quant_traces"),
+            cache_path=cache, filters={"feature": "feature_id"},
+            filter_defaults={"feature": -1},
+            x_column="rt", y_column="mz", z_column="intensity",
+            category_column="charge", title="Feature Traces",
+        ),
+    }
+    return B

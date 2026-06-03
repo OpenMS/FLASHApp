@@ -2,144 +2,71 @@ import streamlit as st
 
 from pathlib import Path
 
-from src.common.common import page_setup, save_params
+from src.common.common import page_setup, save_params, show_linked_grid
 from src.workflow.FileManager import FileManager
-from src.render.render import render_grid
+from src.render.render import make_builders
+from src.render.schema import build_insight_caches
 
-DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
-                  ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
-
-def select_experiment():
-    # Map display name back to experiment ID
-    st.session_state.selected_experiment0 = display_name_to_id[st.session_state.selected_experiment_dropdown]
-    if len(layout) > 1:
-        for exp_index in range(1, len(layout)):
-            if st.session_state[f'selected_experiment_dropdown_{exp_index}'] is None:
-                continue
-            st.session_state[f"selected_experiment{exp_index}"] = display_name_to_id[st.session_state[f'selected_experiment_dropdown_{exp_index}']]
-
-def validate_selected_index(file_manager, selected_experiment):
-    results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
-    if selected_experiment in st.session_state:
-        if st.session_state[selected_experiment] in results:
-            # Map experiment ID to display name for the dropdown index
-            exp_id = st.session_state[selected_experiment]
-            display_name = file_manager.get_display_name(exp_id)
-            return display_name_to_index[display_name]
-        else:
-            del st.session_state[selected_experiment]
-    return None
+# Default panel layout (one experiment): heatmap on top, scan->mass tables,
+# annotated + deconvolved spectra, then the precursor-signal 3D plot. Cross-links
+# (scan -> mass -> spectrum -> 3D) are carried by the shared StateManager via each
+# component's filters/interactivity.
+DEFAULT_LAYOUT = [
+    ["ms1_deconv_heat_map"],
+    ["scan_table", "mass_table"],
+    ["anno_spectrum", "deconv_spectrum"],
+    ["3D_SN_plot"],
+]
 
 # page initialization
 params = page_setup()
 
-# Get available results
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'cache')
+    Path(st.session_state["workspace"], "cache"),
 )
 
-def get_sequence():
-    # Check if layout has been set
-    if not file_manager.result_exists('sequence', 'sequence'):
-        return None
-    # fetch layout from cache
-    sequence = file_manager.get_results('sequence', 'sequence')['sequence']
-
-    return sequence['input_sequence'], sequence['fixed_mod_cysteine'], sequence['fixed_mod_methionine'] 
-
-if get_sequence() is not None:
-    DEFAULT_LAYOUT = DEFAULT_LAYOUT + [['sequence_view']]
-
-results = file_manager.get_results_list(['threedim_SN_plot'])
-
-if file_manager.result_exists('layout', 'layout'):
-    layout = file_manager.get_results('layout', 'layout')['layout']
-    side_by_side = layout['side_by_side']
-    layout = layout['layout']
-    
-else:
-    layout = [DEFAULT_LAYOUT]
-    side_by_side = False
-
-### if no input file is given, show blank page
+# Gate: need at least one processed FLASHDeconv result.
+results = file_manager.get_results_list(["threedim_SN_plot"])
 if len(results) == 0:
-    st.error('No results to show yet. Please run a workflow first!')
+    st.error("No results to show yet. Please run a workflow first!")
     st.stop()
 
-# Create display names and mappings
-display_names = [file_manager.get_display_name(exp_id) for exp_id in results]
-display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id in results}
-display_name_to_index = {n : i for i, n in enumerate(display_names)}
-# Keep backward compatibility mapping for experiment IDs
-name_to_index = {n : i for i, n in enumerate(results)}
+# A global input sequence enables the Sequence View panel (oracle parity).
+has_sequence = file_manager.result_exists("sequence", "sequence")
+
+# Saved layout (trimmed nested list + side_by_side) or the default.
+if file_manager.result_exists("layout", "layout"):
+    saved = file_manager.get_results("layout", "layout")["layout"]
+    layout, side_by_side = saved["layout"], saved["side_by_side"]
+else:
+    default = DEFAULT_LAYOUT + [["sequence_view"]] if has_sequence else DEFAULT_LAYOUT
+    layout, side_by_side = [default], False
+
+# Display-name <-> id mappings for the experiment selectors.
+names = [file_manager.get_display_name(r) for r in results]
+to_id = {file_manager.get_display_name(r): r for r in results}
+
+
+def _render_experiment(exp_idx, exp_layout, container):
+    """One experiment selector + its linked grid (tool/data-specific, so in-page)."""
+    with container:
+        sel = st.selectbox("choose experiment", names, key=f"deconv_exp_{exp_idx}")
+        ds = to_id[sel]
+        # Lazily build the Insight tidy caches for this dataset (idempotent).
+        build_insight_caches(file_manager, ds, "flashdeconv")
+        builders = make_builders(file_manager, ds, "flashdeconv")
+        show_linked_grid([exp_layout], builders, tool=f"flashdeconv_{ds}")
+
 
 if len(layout) == 2 and side_by_side:
     c1, c2 = st.columns(2)
-    with c1:
-        st.selectbox(
-            "choose experiment", display_names,
-            key="selected_experiment_dropdown",
-            index=validate_selected_index(file_manager, 'selected_experiment0'),
-            on_change=select_experiment
-        )
-        if 'selected_experiment0' in st.session_state:
-            render_grid(
-                st.session_state.selected_experiment0, layout[0], file_manager, 
-                'flashdeconv', "selected_experiment0", 'flash_viewer_grid_0'
-            )
-    with c2:
-        st.selectbox(
-            "choose experiment", display_names,
-            key=f'selected_experiment_dropdown_1',
-            index=validate_selected_index(file_manager, 'selected_experiment1'),
-            on_change=select_experiment
-        )
-        if f"selected_experiment1" in st.session_state:
-            with st.spinner('Loading component...'):
-                render_grid(
-                     st.session_state["selected_experiment1"], layout[1], 
-                     file_manager, 'flashdeconv', 'selected_experiment1', 
-                     'flash_viewer_grid_1'
-                )
-
+    _render_experiment(0, layout[0], c1)
+    _render_experiment(1, layout[1], c2)
 else:
-    ### for only single experiment on one view
-    st.selectbox(
-        "choose experiment", display_names,
-        key="selected_experiment_dropdown",
-        index=validate_selected_index(file_manager, 'selected_experiment0'),
-        on_change=select_experiment
-    )
-
-
-    if 'selected_experiment0' in st.session_state:
-        render_grid(
-            st.session_state.selected_experiment0, layout[0], file_manager, 
-            'flashdeconv', 'selected_experiment0'
-        )
-
-    ### for multiple experiments on one view
-    if len(layout) > 1:
-
-        for exp_index, exp_layout in enumerate(layout):
-            if exp_index == 0: continue  # skip the first experiment
-
-            st.divider()  # horizontal line
-
-            st.selectbox(
-                "choose experiment", display_names,
-                key=f'selected_experiment_dropdown_{exp_index}',
-                index=validate_selected_index(file_manager, f'selected_experiment{exp_index}'),
-                on_change=select_experiment
-            )
-            # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
-            if f"selected_experiment{exp_index}" in st.session_state:
-                render_grid(
-                     st.session_state["selected_experiment%d" % exp_index], 
-                     layout[exp_index], file_manager, 'flashdeconv', 
-                     "selected_experiment%d" % exp_index, 
-                     'flash_viewer_grid_%d' % exp_index
-                )
+    for i, exp_layout in enumerate(layout):
+        if i:
+            st.divider()
+        _render_experiment(i, exp_layout, st.container())
 
 save_params(params)

@@ -962,6 +962,55 @@ def show_fig(
         )
 
 
+def show_linked_grid(
+    layout,
+    builders,
+    *,
+    tool,
+    side_by_side=False,
+    grid_key="linked_grid",
+    height=None,
+    column_heights=None,
+):
+    """Render an N-experiment OpenMS-Insight linked grid.
+
+    Thin convenience over ``src.view.grid.render_linked_grid`` (the frozen,
+    tool-agnostic grid) that handles the multi-experiment + side-by-side page
+    concern. ``layout`` is ``List[experiment]``; each experiment is the nested
+    rows list consumed by ``render_linked_grid``. One independent
+    ``StateManager`` is created per experiment (``session_key=f"{tool}__exp{i}"``)
+    so experiments never cross-link. When exactly two experiments and
+    ``side_by_side=True`` they render in two ``st.columns``; otherwise they stack
+    with ``st.divider()``.
+
+    Experiment *selection* (the per-experiment ``st.selectbox``) stays in the
+    viewer page because it is tool/data specific; this helper only owns the
+    grid + side-by-side rendering.
+    """
+    from src.view.grid import render_linked_grid
+
+    def _one(exp_idx, exp_layout, container):
+        with container:
+            render_linked_grid(
+                exp_layout,
+                builders,
+                state_key=f"{tool}__exp{exp_idx}",
+                grid_key=f"{grid_key}_{exp_idx}",
+                height=height,
+                column_heights=column_heights,
+            )
+
+    if len(layout) == 2 and side_by_side:
+        c1, c2 = st.columns(2)
+        _one(0, layout[0], c1)
+        _one(1, layout[1], c2)
+    else:
+        for i, exp_layout in enumerate(layout):
+            if i:
+                st.divider()
+            _one(i, exp_layout, st.container())
+
+
 def reset_directory(path: Path) -> None:
     """
     Remove the given directory and re-create it.

@@ -455,7 +455,23 @@ class FileManager:
 
         return [row[0] for row in self.cache_cursor.fetchall()]
     
-    def get_results(self, dataset_id, name_tags, partial=False, use_pyarrow=False, use_polars=False):
+    def get_results(self, dataset_id, name_tags, partial=False, use_pyarrow=False,
+                    use_polars=False, as_path=False):
+        """Retrieve cached data for ``(dataset_id, name_tags)``.
+
+        For parquet (``.pq``) columns the return form is selectable:
+
+        * ``as_path=True``   -> the ``str`` path to the parquet file (NOT a loaded
+          frame), so it can be passed straight to an OpenMS-Insight component's
+          ``data_path=``.
+        * ``use_pyarrow=True`` -> a ``pyarrow.dataset.Dataset`` handle.
+        * ``use_polars=True``  -> a polars ``LazyFrame`` (``scan_parquet``).
+        * otherwise            -> a pandas ``DataFrame`` (default, back-compat).
+
+        Pickle (``.pkl.gz``) columns always load + return the object (there is no
+        path contract for non-tabular data). If more than one flag is set the
+        precedence is ``as_path > use_pyarrow > use_polars > pandas``.
+        """
         results = {}
         # Retrieve files as Path objects
         file_columns = self._get_column_list('stored_files')
@@ -474,7 +490,7 @@ class FileManager:
                     else:
                         raise KeyError(f"{c} does not exist for {dataset_id}")
                 results[c] = Path(self.cache_path, r)
-        
+
         # Retrieve data as Python objects
         data_columns = self._get_column_list('stored_data')
         data_columns = [c for c in data_columns if c in name_tags]
@@ -493,7 +509,10 @@ class FileManager:
                         raise KeyError(f"{c} does not exist for {dataset_id}")
                 file_path = Path(self.cache_path, r)
                 if file_path.suffix == '.pq':
-                    if use_pyarrow:
+                    if as_path:
+                        # Return the on-disk parquet path for Insight data_path=.
+                        data = str(file_path)
+                    elif use_pyarrow:
                         data = ds.dataset(file_path, format="parquet")
                     elif use_polars:
                         # Load as polars DataFrame
@@ -506,6 +525,15 @@ class FileManager:
                         data = pkl.load(f)
                 results[c] = data
         return results
+
+    def result_path(self, dataset_id: str, name_tag: str) -> str:
+        """Return the on-disk parquet path for a single ``(dataset_id, name_tag)``.
+
+        Sugar over ``get_results(dataset_id, [name_tag], as_path=True)[name_tag]``,
+        used pervasively by the OpenMS-Insight builders (``src/render/render.py``)
+        to feed component ``data_path=``. Raises ``KeyError`` if the tag is unset.
+        """
+        return self.get_results(dataset_id, [name_tag], as_path=True)[name_tag]
     
     def get_all_files_except(self, dataset_id: str, exclude_tags: List[str]) -> dict:
         """
