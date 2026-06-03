@@ -10,7 +10,7 @@ meta:
   # Pairs checked by nondivergence.py: FLASHApp must reuse the template module verbatim.
   # Filled in once the template grid module is frozen (Phase 3 step 2).
   nondivergence_pairs:
-    # - [/home/user/FLASHApp/src/view/grid.py, /home/user/streamlit-template/src/view/grid.py]
+    - [/home/user/FLASHApp/src/view/grid.py, /home/user/streamlit-template/src/view/grid.py]
 
 phases:
 
