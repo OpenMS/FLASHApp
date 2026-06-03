@@ -139,16 +139,28 @@ def test_filters_interactivity_value_based(mock_streamlit, temp_workspace):
 
     mass_table = builders["mass_table"]()
     assert mass_table.get_filters_mapping() == {"scan": "scan_id"}
-    assert mass_table.get_interactivity_mapping() == {"mass": "mass_id"}
+    # massIndex == the per-scan ordinal the 3D S/N plot consumes (SignalPeaks[i]);
+    # the oracle mass-table click selected the row's within-scan index, NOT a
+    # global id, so the "mass" slot must carry mass_in_scan.
+    assert mass_table.get_interactivity_mapping() == {"mass": "mass_in_scan"}
 
     plot3d = builders["3D_SN_plot"]()
     # massIndex -> value filter on mass_in_scan; scanIndex -> scan
     assert plot3d.get_filters_mapping() == {"scan": "scan_id", "mass": "mass_in_scan"}
 
     tag_table = builders["tag_table"]()
-    # proteinIndex + proteoform_scan_map collapse to a precomputed protein_id filter
-    assert tag_table.get_filters_mapping() == {"protein": "protein_id"}
+    # tags are scan (spectrum) data: the oracle filtered by Scan and showed ALL of
+    # a scan's tags for ANY proteoform on that scan, so the tag table follows the
+    # protein->scan selection via scan_id (not a collapsed per-scan protein_id).
+    assert tag_table.get_filters_mapping() == {"scan": "scan_id"}
     assert tag_table.get_interactivity_mapping() == {"tag": "tag_id"}
+
+    # the protein-row click resolves to its scan (value-based proteoform_scan_map):
+    # it sets BOTH protein and scan so all scan-keyed panels follow the proteoform.
+    protein_table = builders["protein_table"]()
+    assert protein_table.get_interactivity_mapping() == {
+        "protein": "protein_id", "scan": "scan_id",
+    }
 
 
 def test_scan_to_mass_filter_applies(mock_streamlit, temp_workspace):

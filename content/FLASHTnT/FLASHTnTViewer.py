@@ -46,9 +46,13 @@ to_id = {file_manager.get_display_name(r): r for r in results}
 def _render_experiment(exp_idx, exp_layout, container):
     """One experiment selector + its linked grid (tool/data-specific, so in-page)."""
     with container:
+        # Oracle parity: blank until the user picks (no eager cache build on load).
         sel = st.selectbox(
-            "choose experiment", names, key=f"tnt_exp_{exp_idx}"
+            "choose experiment", names, index=None,
+            placeholder="Choose an experiment", key=f"tnt_exp_{exp_idx}",
         )
+        if sel is None:
+            return
         ds = to_id[sel]
         # Lazily build the Insight tidy caches for this dataset (idempotent).
         build_insight_caches(file_manager, ds, "flashtnt")

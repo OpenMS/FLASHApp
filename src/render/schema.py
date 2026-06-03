@@ -63,7 +63,17 @@ def _explode_list_cols(
     the within-scan ordinal (the oracle ``massIndex`` analogue).
     """
     keep = by + list_cols
-    exploded = df.select(keep).explode(list_cols)
+    src = df.select(keep)
+    # Drop rows whose list cell is null/empty BEFORE exploding: polars explodes an
+    # empty/null list to a single null row, which would surface a phantom null
+    # entry (e.g. a null mass in the Mass Table / a null peak in a spectrum) where
+    # the oracle showed nothing for an empty spectrum / zero-mass scan. The
+    # ``list_cols`` are element-aligned, so guarding the first is sufficient.
+    primary = list_cols[0]
+    src = src.filter(
+        pl.col(primary).is_not_null() & (pl.col(primary).list.len() > 0)
+    )
+    exploded = src.explode(list_cols)
     # per-group 0-based position (replacement for the oracle positional index)
     if by:
         exploded = exploded.with_columns(
@@ -217,7 +227,14 @@ def _build_deconv_spectrum(file_manager, dataset_id, regenerate, logger):
     tidy = _explode_list_cols(
         df.rename({"index": "scan_id"}),
         ["scan_id"], ["MonoMass", "SumIntensity"], "peak_id",
-    ).drop("peak_id_in_group")
+    ).rename({
+        # SequenceView requires a peak-mass column literally named ``mass``; the
+        # deconvolved monoisotopic mass IS that neutral mass.
+        "MonoMass": "mass",
+        # per-scan ordinal == the oracle ``massIndex`` space the 3D S/N plot and
+        # the Mass Table share (onPlotClick selects the index into ``MonoMass``).
+        "peak_id_in_group": "mass_in_scan",
+    })
     _store(file_manager, dataset_id, "deconv_spectrum_tidy", tidy, regenerate, logger,
            row_group_size=TIDY_ROW_GROUP_SIZE)
 
@@ -352,22 +369,47 @@ def _build_seq_deconv(file_manager, dataset_id, regenerate, logger):
 # FLASHTnT builders
 # --------------------------------------------------------------------------- #
 def _build_proteins(file_manager, dataset_id, regenerate, logger):
-    """(h) Protein table -> ``proteins`` (already tidy; index -> protein_id)."""
+    """(h) Protein table -> ``proteins`` (already tidy; index -> protein_id).
+
+    Also denormalize ``scan_id`` (the proteoform's representative deconv-scan row
+    index) onto each protein row. This is the value-based form of the oracle's
+    ``proteoform_scan_map[proteinIndex]['deconv_index']``: a protein-row click can
+    then set BOTH the ``protein`` selection and the ``scan`` selection, so all the
+    scan-keyed panels (augmented spectrum, sequence-view peaks, tag table) follow
+    the selected proteoform to its scan -- exactly as the oracle's render-time
+    scan resolution did. Proteoforms whose scan is absent get ``scan_id = -1``.
+    """
     if (not regenerate) and file_manager.result_exists(dataset_id, "proteins"):
         return
     df = _get(file_manager, dataset_id, "protein_dfs")  # pandas
+    scan_pd = _get(file_manager, dataset_id, "scan_table")  # pandas
+    scan_map = build_proteoform_scan_map(
+        df[["index", "Scan"]], scan_pd[["index", "Scan"]]
+    )
+    scan_to_deconv = {pid: v["deconv_index"] for pid, v in scan_map.items()}
     pdf = pl.from_pandas(df)
-    proteins = pdf.with_columns(pl.col("index").cast(pl.Int64).alias("protein_id"))
+    proteins = pdf.with_columns(
+        pl.col("index").cast(pl.Int64).alias("protein_id"),
+    ).with_columns(
+        pl.col("protein_id")
+        .map_elements(lambda p: scan_to_deconv.get(int(p), -1), return_dtype=pl.Int64)
+        .alias("scan_id"),
+    )
     _store(file_manager, dataset_id, "proteins", proteins, regenerate, logger)
 
 
 def _build_tags(file_manager, dataset_id, regenerate, logger):
-    """(i) Tag table -> ``tags`` with a precomputed ``protein_id`` column.
+    """(i) Tag table -> ``tags`` with a denormalized ``scan_id`` column.
 
-    The oracle resolved the selected proteoform -> scan via ``proteoform_scan_map``
-    at render time and filtered by ``Scan``. Here we bake the resolution in: each
-    tag row gets the ``protein_id`` (proteoform index) whose scan it belongs to,
-    so the builder is a plain ``filters={"protein": "protein_id"}`` value filter.
+    Tags are scan (spectrum) data. The oracle resolved the selected proteoform ->
+    its scan via ``proteoform_scan_map`` and filtered the tag table by ``Scan``,
+    so EVERY tag on that scan showed for ANY proteoform sharing the scan. We keep
+    that semantics value-based: each tag carries the ``scan_id`` (deconv-row index)
+    of its ``Scan``, and the builder filters ``{"scan": "scan_id"}`` -- driven by
+    the protein-row click that also sets the ``scan`` selection (see
+    ``_build_proteins``). We deliberately do NOT bake a per-tag ``protein_id``:
+    that collapsed multi-proteoform-per-scan to one proteoform (last-wins) and hid
+    the other proteoforms' tags. Tags whose scan is absent get ``scan_id = -1``.
     """
     if (not regenerate) and file_manager.result_exists(dataset_id, "tags"):
         return
@@ -375,26 +417,18 @@ def _build_tags(file_manager, dataset_id, regenerate, logger):
     protein_pd = _get(file_manager, dataset_id, "protein_dfs")  # pandas
     scan_pd = _get(file_manager, dataset_id, "scan_table")  # pandas
 
-    # scan -> proteoform(s): map each proteoform's Scan to its index, then for each
-    # tag (which carries a Scan) attach the proteoform_id sharing that scan.
+    # Scan number -> deconv-row index (scan_id), via the proteoform scan map.
     scan_map = build_proteoform_scan_map(
         protein_pd[["index", "Scan"]], scan_pd[["index", "Scan"]]
     )
-    scan_to_protein = {v["scan"]: pid for pid, v in scan_map.items()}
     scan_to_deconv = {v["scan"]: v["deconv_index"] for v in scan_map.values()}
 
     tdf = pl.from_pandas(tag_pd).with_row_index("tag_id")
     tdf = tdf.with_columns(
-        [
-            pl.col("Scan")
-            .map_elements(lambda s: scan_to_protein.get(int(s), -1)
-                          if s is not None else -1, return_dtype=pl.Int64)
-            .alias("protein_id"),
-            pl.col("Scan")
-            .map_elements(lambda s: scan_to_deconv.get(int(s), -1)
-                          if s is not None else -1, return_dtype=pl.Int64)
-            .alias("scan_id"),
-        ]
+        pl.col("Scan")
+        .map_elements(lambda s: scan_to_deconv.get(int(s), -1)
+                      if s is not None else -1, return_dtype=pl.Int64)
+        .alias("scan_id"),
     )
     _store(file_manager, dataset_id, "tags", tdf, regenerate, logger,
            row_group_size=TIDY_ROW_GROUP_SIZE)

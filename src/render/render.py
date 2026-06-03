@@ -23,8 +23,12 @@ The OLD index-based selection maps to value-based ``filters`` / ``interactivity`
 oracle (index-based)        insight (value-based)
 ==========================  ============================================
 ``scanIndex`` / iloc        selection ``scan`` = ``scan_id``; ``filters={"scan":"scan_id"}``
-``massIndex`` / ``[idx]``    selection ``mass`` = ``mass_in_scan`` (3D) / ``mass_id`` (table)
-``proteinIndex`` + scan_map precomputed ``protein_id`` column; ``filters={"protein":"protein_id"}``
+``massIndex`` / ``[idx]``    selection ``mass`` = ``mass_in_scan`` (per-scan ordinal;
+                            the table/deconv-spectrum/3D all share this slot)
+``proteinIndex`` + scan_map protein-row click sets ``protein`` = ``protein_id`` AND
+                            ``scan`` = ``scan_id`` (denormalized deconv_index); the
+                            scan-keyed panels (tag table, augmented spectrum,
+                            sequence-view peaks) follow via ``filters={"scan":...}``
 heatmap ``xRange/yRange``    Heatmap internal zoom (per-instance ``zoom_identifier``)
 ``StateTracker``            ``StateManager(session_key=state_key)``
 ==========================  ============================================
@@ -64,8 +68,12 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
             sequence_data_path=p("seq_tnt"),
             peaks_data_path=p("deconv_spectrum_tidy"),
             cache_path=cache,
-            filters={"protein": "protein_id"},
-            interactivity={"mass": "peak_id"},
+            # protein selects the proteoform's sequence (seq_tnt has protein_id);
+            # scan selects that proteoform's deconv peaks (deconv_spectrum_tidy has
+            # scan_id, not protein_id) -- each filter applies only where its column
+            # exists, reproducing the oracle's proteoform -> scan peak resolution.
+            filters={"protein": "protein_id", "scan": "scan_id"},
+            interactivity={"mass": "mass_in_scan"},
             deconvolved=True,
             coverage_column="coverage",
             proteoform_start_column="proteoform_start",
@@ -80,7 +88,7 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
         peaks_data_path=p("deconv_spectrum_tidy"),
         cache_path=cache,
         filters={"scan": "scan_id"},
-        interactivity={"mass": "peak_id"},
+        interactivity={"mass": "mass_in_scan"},
         deconvolved=True,
         title="Sequence View",
     )
@@ -121,26 +129,34 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
         ),
         "mass_table": lambda: Table(
             cache_id=cid("mass_table"), data_path=p("masses"), cache_path=cache,
-            filters={"scan": "scan_id"}, interactivity={"mass": "mass_id"},
+            # mass selection == per-scan ordinal (the oracle massIndex), which the
+            # 3D S/N plot consumes as SignalPeaks[mass_in_scan]; index_field stays
+            # the global mass_id for row identity / go-to navigation.
+            filters={"scan": "scan_id"}, interactivity={"mass": "mass_in_scan"},
             index_field="mass_id", title="Mass Table",
         ),
         "deconv_spectrum": lambda: LinePlot(
             cache_id=cid("deconv_spectrum"), data_path=p("deconv_spectrum_tidy"),
             cache_path=cache, filters={"scan": "scan_id"},
-            interactivity={"mass": "peak_id"},
-            x_column="MonoMass", y_column="SumIntensity",
+            # clicking a deconvolved peak selects its mass (oracle onPlotClick
+            # matched x against MonoMass and emitted the per-scan index).
+            interactivity={"mass": "mass_in_scan"},
+            x_column="mass", y_column="SumIntensity",
             title="Deconvolved Spectrum",
         ),
         "anno_spectrum": lambda: LinePlot(
             cache_id=cid("anno_spectrum"), data_path=p("anno_spectrum_tidy"),
             cache_path=cache, filters={"scan": "scan_id"},
-            interactivity={"mass": "peak_id"},
+            # NO mass interactivity: the annotated (raw m/z) spectrum's x is m/z,
+            # but the oracle onPlotClick matched the click against the deconvolved
+            # MonoMass array -- a raw m/z never matches, so clicking it selected
+            # nothing. (Driving the shared mass slot from here was a parity bug.)
             x_column="mz", y_column="intensity", highlight_column="is_signal",
             title="Annotated Spectrum",
         ),
         "combined_spectrum": lambda: LinePlot.tagger(
             cache_id=cid("combined_spectrum"), data_path=p("combined_tagger"),
-            cache_path=cache, filters={"spectrum": "scan_id"},
+            cache_path=cache, filters={"scan": "scan_id"},
             interactivity={"tagger_mass": "peak_id"},
             x_column="MonoMass", y_column="SumIntensity",
             signal_peaks_column="SignalPeaks", mz_column="Mzs",
@@ -193,12 +209,19 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
         # ---- FLASHTnT panels ----
         "protein_table": lambda: Table(
             cache_id=cid("protein_table"), data_path=p("proteins"),
-            cache_path=cache, interactivity={"protein": "protein_id"},
+            cache_path=cache,
+            # a protein-row click resolves to its scan (value-based
+            # proteoform_scan_map): it sets BOTH the protein and the scan
+            # selection, so the augmented spectrum / sequence-view peaks / tag
+            # table all follow the selected proteoform to its scan.
+            interactivity={"protein": "protein_id", "scan": "scan_id"},
             index_field="protein_id", default_row=0, title="Protein Table",
         ),
         "tag_table": lambda: Table(
             cache_id=cid("tag_table"), data_path=p("tags"), cache_path=cache,
-            filters={"protein": "protein_id"}, interactivity={"tag": "tag_id"},
+            # tags are scan data: show every tag on the selected proteoform's scan
+            # (oracle filtered by Scan), driven by the protein->scan selection.
+            filters={"scan": "scan_id"}, interactivity={"tag": "tag_id"},
             index_field="tag_id", title="Tag Table",
         ),
         "sequence_view": lambda: _sequence_view(

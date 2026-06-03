@@ -29,12 +29,16 @@ if len(results) == 0:
 names = [file_manager.get_display_name(r) for r in results]
 to_id = {file_manager.get_display_name(r): r for r in results}
 
-sel = st.selectbox("choose experiment", names, key="flashquant_exp_0")
-ds = to_id[sel]
-
-# Lazily build the Insight tidy caches for this dataset (idempotent).
-build_insight_caches(file_manager, ds, "flashquant")
-builders = make_builders(file_manager, ds, "flashquant")
-show_linked_grid([DEFAULT_LAYOUT], builders, tool=f"flashquant_{ds}")
+# Oracle parity: blank until the user picks (no eager cache build on load).
+sel = st.selectbox(
+    "choose experiment", names, index=None,
+    placeholder="Choose an experiment", key="flashquant_exp_0",
+)
+if sel is not None:
+    ds = to_id[sel]
+    # Lazily build the Insight tidy caches for this dataset (idempotent).
+    build_insight_caches(file_manager, ds, "flashquant")
+    builders = make_builders(file_manager, ds, "flashquant")
+    show_linked_grid([DEFAULT_LAYOUT], builders, tool=f"flashquant_{ds}")
 
 save_params(params)

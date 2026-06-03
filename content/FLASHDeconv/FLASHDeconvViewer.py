@@ -51,7 +51,15 @@ to_id = {file_manager.get_display_name(r): r for r in results}
 def _render_experiment(exp_idx, exp_layout, container):
     """One experiment selector + its linked grid (tool/data-specific, so in-page)."""
     with container:
-        sel = st.selectbox("choose experiment", names, key=f"deconv_exp_{exp_idx}")
+        # Oracle parity: start blank (nothing selected) and render nothing until the
+        # user picks an experiment -- the old viewer used validate_selected_index
+        # (initially None), which also avoided eagerly building caches on page load.
+        sel = st.selectbox(
+            "choose experiment", names, index=None,
+            placeholder="Choose an experiment", key=f"deconv_exp_{exp_idx}",
+        )
+        if sel is None:
+            return
         ds = to_id[sel]
         # Lazily build the Insight tidy caches for this dataset (idempotent).
         build_insight_caches(file_manager, ds, "flashdeconv")

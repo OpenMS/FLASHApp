@@ -39,6 +39,20 @@ def test_explode_list_cols_mints_global_and_group_ids():
     assert out["peak_id_in_group"].to_list() == [0, 1, 0]  # per-scan ordinal
 
 
+def test_explode_list_cols_drops_empty_and_null_cells():
+    # a scan with an empty mass list (zero-mass scan) and one with null must NOT
+    # surface a phantom null row (the oracle showed nothing for an empty spectrum).
+    df = pl.DataFrame(
+        {"scan_id": [0, 1, 2], "MonoMass": [[100.0, 200.0], [], None],
+         "SumIntensity": [[1.0, 2.0], [], None]},
+        schema={"scan_id": pl.Int64, "MonoMass": pl.List(pl.Float64),
+                "SumIntensity": pl.List(pl.Float64)})
+    out = _explode_list_cols(df, ["scan_id"], ["MonoMass", "SumIntensity"], "peak_id")
+    assert out.height == 2  # only scan 0's two real masses
+    assert out["scan_id"].to_list() == [0, 0]
+    assert out["MonoMass"].null_count() == 0
+
+
 def test_explode_nested_signal_peaks_two_levels():
     sp = pl.DataFrame(
         {"scan_id": [0, 1],
@@ -103,6 +117,12 @@ def test_build_insight_caches_flashdeconv(temp_workspace):
     assert masses["mass_id"].n_unique() == masses.height  # stable unique id
     assert masses.height == 3  # 2 + 1 masses exploded
 
+    # deconv spectrum: SequenceView needs a 'mass' column; the per-scan ordinal is
+    # exposed as 'mass_in_scan' (the oracle massIndex space shared with the 3D).
+    deconv = pl.read_parquet(fm.result_path(ds, "deconv_spectrum_tidy"))
+    assert {"scan_id", "peak_id", "mass", "mass_in_scan"}.issubset(deconv.columns)
+    assert deconv.filter(pl.col("scan_id") == 0)["mass_in_scan"].to_list() == [0, 1]
+
     ps = pl.read_parquet(fm.result_path(ds, "precursor_signals"))
     assert {"scan_id", "mass_in_scan", "peak_id", "mz", "charge", "intensity",
             "series"}.issubset(ps.columns)
@@ -143,13 +163,19 @@ def test_build_insight_caches_flashtnt(temp_workspace):
         assert fm.result_exists(ds, tag), f"missing tidy cache: {tag}"
 
     proteins = pl.read_parquet(fm.result_path(ds, "proteins"))
-    assert "protein_id" in proteins.columns
+    assert {"protein_id", "scan_id"}.issubset(proteins.columns)
     assert proteins["protein_id"].to_list() == [0, 1]
+    # protein row carries its scan (deconv-row index): Scan 10 -> 0, Scan 20 -> 1,
+    # so a protein-row click can resolve protein -> scan (value-based scan map).
+    assert proteins["scan_id"].to_list() == [0, 1]
 
     tags = pl.read_parquet(fm.result_path(ds, "tags"))
-    assert {"tag_id", "protein_id", "scan_id"}.issubset(tags.columns)
-    # scan-map resolution baked in: Scan 10 -> proteoform 0, Scan 20 -> proteoform 1
-    m = {r["Scan"]: r["protein_id"] for r in tags.select(["Scan", "protein_id"]).to_dicts()}
+    # tags are scan-keyed (NOT collapsed to a per-scan protein_id): each tag carries
+    # the deconv-row index of its Scan, and the tag table follows protein->scan.
+    assert {"tag_id", "scan_id"}.issubset(tags.columns)
+    assert "protein_id" not in tags.columns
+    # Scan 10 -> scan_id 0, Scan 20 -> scan_id 1 (from scan_table index)
+    m = {r["Scan"]: r["scan_id"] for r in tags.select(["Scan", "scan_id"]).to_dicts()}
     assert m == {10: 0, 20: 1}
 
     seqt = pl.read_parquet(fm.result_path(ds, "seq_tnt"))
