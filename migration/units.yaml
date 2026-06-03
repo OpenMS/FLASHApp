@@ -29,6 +29,25 @@ phases:
       - name: viewer-parse
         cmd: "python -c \"import ast;[ast.parse(open(p).read()) for p in ['content/FLASHDeconv/FLASHDeconvViewer.py','content/FLASHTnT/FLASHTnTViewer.py','content/FLASHQuant/FLASHQuantViewer.py']];print('viewers parse OK')\""
         cwd: /home/user/FLASHApp
+      # Phase 3 re-opened OpenMS-Insight (tagger frame-resolve + SequenceView
+      # cross-component emits), so the Insight gate runs too: no Phase-1/2
+      # regression. NOTE: test_internal_terminal_collision_z_vs_x_changes_drop is
+      # deselected -- it is a PRE-EXISTING, environment-sensitive failure (pyOpenMS
+      # monoisotopic-mass precision at 10ppm) that also fails on the pre-migration
+      # commit c0adae9; it exercises internal-fragment math that this work never
+      # touched and that is OFF in FLASHTnT.
+      - name: insight-tests
+        cmd: "python -m pytest -q --deselect tests/test_sequenceview_internal.py::test_internal_terminal_collision_z_vs_x_changes_drop"
+        cwd: /home/user/OpenMS-Insight
+      - name: insight-build
+        cmd: "npm run build"
+        cwd: /home/user/OpenMS-Insight/js-component
+      - name: insight-vitest
+        cmd: "npx vitest run"
+        cwd: /home/user/OpenMS-Insight/js-component
+      - name: insight-parity
+        cmd: "python migration/parity_diff.py"
+        cwd: /home/user/OpenMS-Insight
     critics: [template, original-parity, final]   # three critics per unit
     units:
       # --- streamlit-template (built & frozen first) ---
@@ -89,3 +108,12 @@ phases:
         concern: "FLASHApp grid code IS the frozen template module (byte-identical, normalized)"
         oracle:
           - /home/user/streamlit-template/src/view/grid.py
+
+      # --- OpenMS-Insight changes re-opened by Phase 3 (tracked for no-regression) ---
+      - id: insight:tagger-seqview
+        target: /home/user/OpenMS-Insight/openms_insight/components/lineplot.py
+        concern: "tagger value-based tag resolution (scalar id -> TagData side frame) + SequenceView residue/peak cross-component emits; no Phase-1/2 regression"
+        oracle:
+          - /home/user/openms-streamlit-vue-component/src/components/plotly/lineplot/PlotlyLineplotTagger.vue
+          - /home/user/openms-streamlit-vue-component/src/components/tabulator/TabulatorTagTable.vue
+          - /home/user/openms-streamlit-vue-component/src/components/sequence/SequenceView.vue

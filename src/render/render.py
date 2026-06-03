@@ -190,6 +190,11 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             cache_path=cache,
             filters={"scan": "scan_id", "mass": "mass_in_scan"},
             filter_defaults={"scan": -1},
+            # mass is an OPTIONAL (drill-down) filter: with a scan selected but no
+            # mass, show ALL of the scan's signal/noisy peaks; narrow to one mass's
+            # peaks only when a mass is selected (oracle: SignalPeaks[mass_index]
+            # only when mass_index is set, else the full per-scan table).
+            optional_filters=["mass"],
             x_column="mz", y_column="charge", z_column="intensity",
             category_column="series",
             category_colors={"Signal": "#3366CC", "Noise": "#DC3912"},
@@ -244,6 +249,10 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # tags are scan data: show every tag on the selected proteoform's scan
             # (oracle filtered by Scan), driven by the protein->scan selection.
             filters={"scan": "scan_id"}, interactivity={"tag": "tag_id"},
+            # oracle secondary filter: when a sequence residue is clicked, narrow to
+            # tags spanning it (StartPos <= aa <= EndPos); shows all when no residue
+            # is selected. The "aa" selection is published by the SequenceView.
+            interval_filters={"aa": ("StartPos", "EndPos")},
             index_field="tag_id", title="Tag Table",
         ),
         "sequence_view": lambda: _sequence_view(
@@ -259,8 +268,12 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             cache_id=cid("quant_traces"), data=scan("quant_traces"),
             cache_path=cache, filters={"feature": "feature_id"},
             filter_defaults={"feature": -1},
-            x_column="rt", y_column="mz", z_column="intensity",
-            category_column="charge", title="Feature Traces",
+            # oracle FLASHQuantView: x = m/z, y = retention time, z = intensity
+            # (Plot3D's defaults are precursor-flavored "Mass"/"Charge", so pass
+            # explicit labels for the quant recipe).
+            x_column="mz", y_column="rt", z_column="intensity",
+            x_label="m/z", y_label="retention time", z_label="intensity",
+            category_column="charge", title="Feature group signals",
         ),
     }
     return B

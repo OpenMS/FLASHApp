@@ -202,6 +202,36 @@ def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
     assert deconv_tagger._tag_data is None
 
 
+def test_tnt_residue_narrows_tag_table(mock_streamlit, temp_workspace):
+    """Clicking a sequence residue ('aa') narrows the tag table to tags spanning it
+    (StartPos <= aa <= EndPos), on top of the scan filter; shows all when unset.
+    """
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+    build_insight_caches(fm, ds, "flashtnt")
+    tag_table = make_builders(fm, ds, "flashtnt")["tag_table"]()
+    # fixture: scan 0 has tag 0 (StartPos 0,EndPos 2) and tag 1 (StartPos 3,EndPos 5).
+    assert "aa" in tag_table.get_state_dependencies()
+    both = tag_table._prepare_vue_data({"scan": 0})["tableData"]
+    assert sorted(both["tag_id"].tolist()) == [0, 1]
+    only0 = tag_table._prepare_vue_data({"scan": 0, "aa": 1})["tableData"]
+    assert only0["tag_id"].tolist() == [0]
+    only1 = tag_table._prepare_vue_data({"scan": 0, "aa": 4})["tableData"]
+    assert only1["tag_id"].tolist() == [1]
+
+
+def test_quant_3d_axes_match_oracle(mock_streamlit, temp_workspace):
+    """Quant feature-trace 3D uses oracle axes: x=m/z, y=RT, z=intensity (labeled)."""
+    fm = _fm(temp_workspace)
+    ds = make_quant_caches(fm)
+    build_insight_caches(fm, ds, "flashquant")
+    p3d = make_builders(fm, ds, "flashquant")["quant_traces_3d"]()
+    args = p3d._get_component_args()
+    assert (args["xColumn"], args["yColumn"], args["zColumn"]) == ("mz", "rt", "intensity")
+    assert args["xLabel"] == "m/z"
+    assert args["yLabel"] == "retention time"
+
+
 def test_scan_to_mass_filter_applies(mock_streamlit, temp_workspace):
     """Selecting a scan filters the mass table to that scan's masses (value-based)."""
     fm = _fm(temp_workspace)
