@@ -74,6 +74,9 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
             # exists, reproducing the oracle's proteoform -> scan peak resolution.
             filters={"protein": "protein_id", "scan": "scan_id"},
             interactivity={"mass": "mass_in_scan"},
+            # residue clicks publish the 0-based residue index as "aa" so the
+            # augmented (tagger) spectrum can derive the tag-relative selectedAA.
+            residue_identifier="aa",
             deconvolved=True,
             coverage_column="coverage",
             proteoform_start_column="proteoform_start",
@@ -120,6 +123,19 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
     cid = lambda name: f"{tool}__{dataset_id}__{name}"
     cache = _insight_cache_dir(file_manager)
 
+    # Tagger tag-payload resolution is only meaningful when a tags frame exists
+    # (FLASHTnT). In FLASHDeconv the augmented spectrum has no tag overlay, so the
+    # resolve kwargs are omitted (the tag selection simply never fires).
+    tagger_tag_kwargs = (
+        dict(
+            tag_data_path=p("tags"), tag_id_column="tag_id",
+            tag_sequence_column="TagSequence", tag_masses_column="mzs",
+            tag_start_column="StartPos", selected_aa_identifier="aa",
+        )
+        if file_manager.result_exists(dataset_id, "tags")
+        else {}
+    )
+
     B = {
         # ---- FLASHDeconv / shared panels ----
         "scan_table": lambda: Table(
@@ -161,6 +177,12 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             x_column="MonoMass", y_column="SumIntensity",
             signal_peaks_column="SignalPeaks", mz_column="Mzs",
             mz_intensity_column="MzIntensities", tag_identifier="tag",
+            # The tag table emits a scalar tag_id; resolve it to the tag's fragment
+            # masses + sequence via the tags frame (mzs is a comma-string). A residue
+            # click in the SequenceView sets "aa" -> tag-relative selectedAA (gold),
+            # the value-based form of the oracle selectedAApos - startPos. Only wired
+            # for FLASHTnT (where a tags frame exists); see tagger_tag_kwargs above.
+            **tagger_tag_kwargs,
             title="Augmented Deconvolved Spectrum",
         ),
         "3D_SN_plot": lambda: Plot3D(

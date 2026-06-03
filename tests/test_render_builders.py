@@ -163,6 +163,45 @@ def test_filters_interactivity_value_based(mock_streamlit, temp_workspace):
     }
 
 
+def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
+    """The augmented (tagger) spectrum resolves a scalar tag_id (from the tag-table
+    click) to the tag's masses/sequence/selectedAA via the tags frame -- the
+    value-based replacement for the oracle's opaque TagData payload.
+    """
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+    build_insight_caches(fm, ds, "flashtnt")
+    builders = make_builders(fm, ds, "flashtnt")
+
+    tagger = builders["combined_spectrum"]()
+    # tag_id 0: Scan 10, TagSequence "PEP", mzs "1,2,3", StartPos 0.
+    payload = tagger._resolve_tag_payload(0, {"aa": 2})
+    assert payload is not None
+    assert payload["sequence"] == "PEP"
+    assert payload["masses"] == [1.0, 2.0, 3.0]
+    # selectedAA = residue position (aa) - tag StartPos = 2 - 0.
+    assert payload["selectedAA"] == 2
+    # tag_id 1: StartPos 3 -> selectedAA = 5 - 3 = 2.
+    assert tagger._resolve_tag_payload(1, {"aa": 5})["selectedAA"] == 2
+    # cleared / unknown selection -> no payload (no crash).
+    assert tagger._resolve_tag_payload(None, {}) is None
+    assert tagger._resolve_tag_payload(999, {}) is None
+    # tag + residue selections drive a re-render.
+    deps = tagger.get_state_dependencies()
+    assert "tag" in deps and "aa" in deps
+
+    # The SequenceView publishes residue clicks as the "aa" selection the tagger
+    # consumes (closing the residue -> selectedAA cross-link).
+    assert builders["sequence_view"]()._residue_identifier == "aa"
+
+    # In FLASHDeconv (no tags frame) the tagger has no tag resolution wired.
+    dds = make_deconv_caches(_fm(temp_workspace), ds="deconv1")
+    fm2 = _fm(temp_workspace)
+    build_insight_caches(fm2, "deconv1", "flashdeconv")
+    deconv_tagger = make_builders(fm2, "deconv1", "flashdeconv")["combined_spectrum"]()
+    assert deconv_tagger._tag_data is None
+
+
 def test_scan_to_mass_filter_applies(mock_streamlit, temp_workspace):
     """Selecting a scan filters the mass table to that scan's masses (value-based)."""
     fm = _fm(temp_workspace)
