@@ -158,6 +158,9 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # matched x against MonoMass and emitted the per-scan index).
             interactivity={"mass": "mass_in_scan"},
             x_column="mass", y_column="SumIntensity",
+            # oracle axis titles (PlotlyLineplot.vue): deconvolved x="Monoisotopic
+            # Mass", y="Intensity". Without these the axes show the raw column names.
+            x_label="Monoisotopic Mass", y_label="Intensity",
             title="Deconvolved Spectrum",
         ),
         "anno_spectrum": lambda: LinePlot(
@@ -168,6 +171,8 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # MonoMass array -- a raw m/z never matches, so clicking it selected
             # nothing. (Driving the shared mass slot from here was a parity bug.)
             x_column="mz", y_column="intensity", highlight_column="is_signal",
+            # oracle annotated-spectrum axis titles: x="m/z", y="Intensity".
+            x_label="m/z", y_label="Intensity",
             title="Annotated Spectrum",
         ),
         "combined_spectrum": lambda: LinePlot.tagger(
@@ -188,13 +193,15 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
         "3D_SN_plot": lambda: Plot3D(
             cache_id=cid("3D_SN_plot"), data=scan("precursor_signals"),
             cache_path=cache,
+            # Both scan AND mass are REQUIRED filters (no default for mass): the 3D
+            # is empty until a mass is selected, matching the oracle. update.py
+            # filters per_scan_data to the one selected scan, so the oracle frontend
+            # getPrecursorSignal's precursor-scan lookup always fails when no mass is
+            # set -> empty; only SignalPeaks[mass_index] is drawn once a mass is
+            # chosen. (Do NOT make mass optional -- that would show all the scan's
+            # peaks, which the oracle never did.)
             filters={"scan": "scan_id", "mass": "mass_in_scan"},
             filter_defaults={"scan": -1},
-            # mass is an OPTIONAL (drill-down) filter: with a scan selected but no
-            # mass, show ALL of the scan's signal/noisy peaks; narrow to one mass's
-            # peaks only when a mass is selected (oracle: SignalPeaks[mass_index]
-            # only when mass_index is set, else the full per-scan table).
-            optional_filters=["mass"],
             # x-axis is the oracle "Mass" = mz*charge (precomputed in schema), NOT
             # raw m/z; Plot3D's default x_label "Mass" matches the oracle axis title.
             x_column="mass", y_column="charge", z_column="intensity",
@@ -203,25 +210,34 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             title="Precursor Signals",
         ),
         # ---- heatmaps: reuse the existing full-resolution oracle caches as-is ----
+        # oracle PlotlyHeatmap axis titles: x="Retention Time", y="Monoisotopic Mass".
         "ms1_deconv_heat_map": lambda: Heatmap(
             cache_id=cid("ms1_deconv_heat_map"), data_path=p("ms1_deconv_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
-            intensity_column="intensity", title="Deconvolved MS1 Heatmap",
+            intensity_column="intensity",
+            x_label="Retention Time", y_label="Monoisotopic Mass",
+            title="Deconvolved MS1 Heatmap",
         ),
         "ms2_deconv_heat_map": lambda: Heatmap(
             cache_id=cid("ms2_deconv_heat_map"), data_path=p("ms2_deconv_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
-            intensity_column="intensity", title="Deconvolved MS2 Heatmap",
+            intensity_column="intensity",
+            x_label="Retention Time", y_label="Monoisotopic Mass",
+            title="Deconvolved MS2 Heatmap",
         ),
         "ms1_raw_heatmap": lambda: Heatmap(
             cache_id=cid("ms1_raw_heatmap"), data_path=p("ms1_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
-            intensity_column="intensity", title="Raw MS1 Heatmap",
+            intensity_column="intensity",
+            x_label="Retention Time", y_label="Monoisotopic Mass",
+            title="Raw MS1 Heatmap",
         ),
         "ms2_raw_heatmap": lambda: Heatmap(
             cache_id=cid("ms2_raw_heatmap"), data_path=p("ms2_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
-            intensity_column="intensity", title="Raw MS2 Heatmap",
+            intensity_column="intensity",
+            x_label="Retention Time", y_label="Monoisotopic Mass",
+            title="Raw MS2 Heatmap",
         ),
         "fdr_plot": lambda: LinePlot.density(
             cache_id=cid("fdr_plot"), data_path=p("qscore_density"),
@@ -275,7 +291,12 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # explicit labels for the quant recipe).
             x_column="mz", y_column="rt", z_column="intensity",
             x_label="m/z", y_label="retention time", z_label="intensity",
-            category_column="charge", title="Feature group signals",
+            category_column="charge",
+            # oracle FLASHQuantView draws ONE connected elution line per charge
+            # (mode:lines), not per-point stems; category_column already splits the
+            # charges into separate traces, so disable the precursor-style stems.
+            stem=False,
+            title="Feature group signals",
         ),
     }
     return B

@@ -227,7 +227,8 @@ def test_tnt_residue_narrows_tag_table(mock_streamlit, temp_workspace):
 
 
 def test_quant_3d_axes_match_oracle(mock_streamlit, temp_workspace):
-    """Quant feature-trace 3D uses oracle axes: x=m/z, y=RT, z=intensity (labeled)."""
+    """Quant feature-trace 3D uses oracle axes: x=m/z, y=RT, z=intensity (labeled),
+    drawn as connected per-charge elution lines (stem off), not per-point spikes."""
     fm = _fm(temp_workspace)
     ds = make_quant_caches(fm)
     build_insight_caches(fm, ds, "flashquant")
@@ -236,6 +237,26 @@ def test_quant_3d_axes_match_oracle(mock_streamlit, temp_workspace):
     assert (args["xColumn"], args["yColumn"], args["zColumn"]) == ("mz", "rt", "intensity")
     assert args["xLabel"] == "m/z"
     assert args["yLabel"] == "retention time"
+    assert args["stem"] is False  # connected elution lines per charge, not spikes
+
+
+def test_axis_titles_match_oracle(mock_streamlit, temp_workspace):
+    """Spectra + heatmaps carry the oracle's human-readable axis titles (not raw
+    column names)."""
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    build_insight_caches(fm, ds, "flashdeconv")
+    b = make_builders(fm, ds, "flashdeconv")
+
+    dec = b["deconv_spectrum"]()._get_component_args()
+    assert dec["xLabel"] == "Monoisotopic Mass" and dec["yLabel"] == "Intensity"
+    ann = b["anno_spectrum"]()._get_component_args()
+    assert ann["xLabel"] == "m/z" and ann["yLabel"] == "Intensity"
+    for h in ("ms1_deconv_heat_map", "ms2_deconv_heat_map",
+              "ms1_raw_heatmap", "ms2_raw_heatmap"):
+        a = b[h]()._get_component_args()
+        assert a["xLabel"] == "Retention Time", h
+        assert a["yLabel"] == "Monoisotopic Mass", h
 
 
 def test_scan_to_mass_filter_applies(mock_streamlit, temp_workspace):

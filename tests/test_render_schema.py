@@ -138,7 +138,8 @@ def test_build_insight_caches_flashdeconv(temp_workspace):
 
     anno = pl.read_parquet(fm.result_path(ds, "anno_spectrum_tidy"))
     assert {"scan_id", "peak_id", "mz", "intensity", "is_signal"}.issubset(anno.columns)
-    # scan 0: peaks at indices 0,1,2 are signal; index 3 (mz=99) is not
+    # is_signal = membership in SignalPeaks.peak_index. scan 0 SignalPeaks cover
+    # peak_index {0,1,3} (3 signal); scan 1 covers {0} (1 signal) -> 4 total.
     assert int(anno["is_signal"].sum()) == 4
 
     seq = pl.read_parquet(fm.result_path(ds, "seq_deconv"))
