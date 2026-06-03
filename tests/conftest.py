@@ -137,8 +137,17 @@ def make_deconv_caches(fm, ds="exp1"):
         "index": [0, 1],
         "MonoMass": [[100.0, 200.0], [300.0]],
         "SumIntensity": [[1.0, 2.0], [3.0]],
+        # SignalPeaks: list[mass_in_scan] -> list[peak] -> [anno_peak_index, mz,
+        # intensity, charge]. Scan 0: mass0 owns anno peaks 0,1 (charge 12); mass1
+        # owns anno peak 3 (charge 5) AND ALSO anno peak 0 (charge 5) -- the SAME
+        # raw peak (index 0) is a signal peak for TWO masses, the 1:many case the
+        # real _compute_peak_cells produces (one m/z explained by different charge
+        # states of different masses). Scan 1: mass0 owns anno peak 0 (charge 2).
         "SignalPeaks": [
-            [[[0.0, 75.0, 3.0, 12.0], [1.0, 75.1, 1.0, 12.0]], [[3.0, 125.0, 4.0, 5.0]]],
+            [
+                [[0.0, 75.0, 3.0, 12.0], [1.0, 75.1, 1.0, 12.0]],
+                [[3.0, 125.0, 4.0, 5.0], [0.0, 75.0, 3.0, 5.0]],
+            ],
             [[[0.0, 150.0, 2.0, 2.0]]],
         ],
         "MonoMass_Anno": [[75.0, 75.1, 125.0, 99.0], [150.0]],
@@ -228,20 +237,33 @@ def make_tnt_caches(fm, ds="exp1"):
 
 
 def make_quant_caches(fm, ds="exp1"):
-    """Write a FLASHQuant-style oracle quant_dfs cache."""
+    """Write a FLASHQuant-style oracle quant_dfs cache.
+
+    Feature 12 reproduces round-8 finding 3-quant-005's duplicate case: two of its
+    traces share ``(charge 13, isotope 11)``, so ``series_column="isotope"`` would
+    merge them; the schema's ``trace_in_feature`` must give them DISTINCT ids.
+    """
     quant = pd.DataFrame({
-        "FeatureGroupIndex": [0, 1],
-        "MonoisotopicMass": [1000.0, 2000.0], "AverageMass": [1000.5, 2000.5],
-        "StartRetentionTime(FWHM)": [1.0, 3.0], "EndRetentionTime(FWHM)": [2.0, 4.0],
-        "HighestApexRetentionTime": [1.5, 3.5], "FeatureGroupQuantity": [100.0, 200.0],
-        "AllAreaUnderTheCurve": [150.0, 250.0], "MinCharge": [1, 2], "MaxCharge": [3, 4],
-        "MostAbundantFeatureCharge": [2, 3], "IsotopeCosineScore": [0.99, 0.98],
-        "Charges": [np.array([2, 3]), np.array([4])],
-        "IsotopeIndices": [np.array([0, 1]), np.array([0])],
-        "CentroidMzs": [np.array([500.1, 500.2]), np.array([501.0])],
-        "RTs": [["1.0,1.5,2.0", "1.1,1.6"], ["3.0,3.5"]],
-        "MZs": [["500.10,500.12,500.14", "500.20,500.22"], ["501.00,501.05"]],
-        "Intensities": [["10,20,15", "5,8"], ["30,25"]],
+        "FeatureGroupIndex": [0, 1, 12],
+        "MonoisotopicMass": [1000.0, 2000.0, 3000.0],
+        "AverageMass": [1000.5, 2000.5, 3000.5],
+        "StartRetentionTime(FWHM)": [1.0, 3.0, 5.0],
+        "EndRetentionTime(FWHM)": [2.0, 4.0, 6.0],
+        "HighestApexRetentionTime": [1.5, 3.5, 5.5],
+        "FeatureGroupQuantity": [100.0, 200.0, 300.0],
+        "AllAreaUnderTheCurve": [150.0, 250.0, 350.0],
+        "MinCharge": [1, 2, 13], "MaxCharge": [3, 4, 13],
+        "MostAbundantFeatureCharge": [2, 3, 13],
+        "IsotopeCosineScore": [0.99, 0.98, 0.97],
+        # feature 12: two traces, both (charge 13, isotope 11)
+        "Charges": [np.array([2, 3]), np.array([4]), np.array([13, 13])],
+        "IsotopeIndices": [np.array([0, 1]), np.array([0]), np.array([11, 11])],
+        "CentroidMzs": [np.array([500.1, 500.2]), np.array([501.0]),
+                        np.array([700.1, 700.2])],
+        "RTs": [["1.0,1.5,2.0", "1.1,1.6"], ["3.0,3.5"], ["5.0,5.5", "5.1,5.6,5.9"]],
+        "MZs": [["500.10,500.12,500.14", "500.20,500.22"], ["501.00,501.05"],
+                ["700.10,700.12", "700.20,700.22,700.24"]],
+        "Intensities": [["10,20,15", "5,8"], ["30,25"], ["40,45", "12,18,22"]],
     })
     fm.store_data(ds, "quant_dfs", quant)
     return ds

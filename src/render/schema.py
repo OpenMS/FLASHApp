@@ -279,6 +279,78 @@ def _build_anno_spectrum(file_manager, dataset_id, regenerate, logger):
            row_group_size=TIDY_ROW_GROUP_SIZE)
 
 
+def _build_anno_highlight_link(file_manager, dataset_id, regenerate, logger):
+    """(d.3) Annotated-spectrum highlight linkage -> ``anno_highlight_link``.
+
+    Selection-driven highlighting: when a deconvolved *mass* is selected, the
+    annotated spectrum should highlight that mass's SIGNAL peaks (and expose each
+    peak's charge). This frame is the value-based map from a deconvolved mass to
+    the annotated raw peaks that are its signal peaks, keyed by the SAME
+    ``peak_id`` as ``anno_spectrum_tidy`` so a viewer can ``filter`` it by the
+    selected ``(scan, mass)`` and read off the ``peak_id`` set to highlight.
+
+    Columns EXACTLY: ``scan_id, peak_id, mass_in_scan, charge`` where
+
+    * ``peak_id``      -- the ``anno_spectrum_tidy`` peak_id of the annotated raw peak
+    * ``mass_in_scan`` -- the within-scan deconvolved-mass ordinal the peak is a
+      signal peak for (same ordinal space as ``masses`` / ``deconv_spectrum_tidy``
+      / ``precursor_signals`` -- the outer ``SignalPeaks`` index, which the oracle
+      ``combined_spectrum`` join guarantees is aligned to ``MonoMass``)
+    * ``charge``       -- that signal peak's charge (``SignalPeaks`` tuple[3])
+
+    The nested ``SignalPeaks`` cell is ``list[mass_idx] -> list[peak] ->
+    [annotated_peak_index, mz, intensity, charge]``. ``annotated_peak_index``
+    (tuple[0]) is the positional index of the peak within the (sorted) raw
+    annotated spectrum (``MonoMass_Anno``) -- the SAME positional index
+    ``_build_anno_spectrum`` matches to set ``is_signal``. We join the exploded
+    signal points on ``(scan_id, that positional index)`` against the
+    positionally-indexed ``anno_spectrum_tidy`` to attach the stable ``peak_id``.
+
+    1:many: a single annotated raw peak CAN be a signal peak for MULTIPLE
+    deconvolved masses (the same observed m/z explained by different charge states
+    of different masses), so ``(scan_id, peak_id)`` is NOT unique here -- the frame
+    is one row per ``(peak, mass)`` pair (verified against the real
+    ``masstable._compute_peak_cells`` algorithm; see tests).
+    """
+    if (not regenerate) and file_manager.result_exists(dataset_id, "anno_highlight_link"):
+        return
+    # need the anno tidy frame for the stable peak_id <-> positional index map
+    if not file_manager.result_exists(dataset_id, "anno_spectrum_tidy"):
+        return
+    df = _get(file_manager, dataset_id, "combined_spectrum", use_polars=True).collect()
+    df = df.rename({"index": "scan_id"})
+
+    # one row per signal point: scan_id, mass_in_scan, peak_index(=positional), charge
+    sig = _explode_nested_signal_peaks(df, "scan_id", "SignalPeaks", "Signal")
+    sig = sig.select(
+        [
+            "scan_id",
+            "mass_in_scan",
+            pl.col("peak_index").cast(pl.Int64),
+            pl.col("charge").cast(pl.Int64),
+        ]
+    )
+
+    # rebuild the same positional index -> peak_id map the anno tidy frame uses
+    # (peak_id is assigned by exploding MonoMass_Anno per scan in scan order, so the
+    # within-scan positional index is the join key against SignalPeaks' peak_index).
+    anno = pl.read_parquet(file_manager.result_path(dataset_id, "anno_spectrum_tidy"))
+    # peak_id is the global running explode index (monotonic in scan-then-position
+    # order); sort by it so the per-scan positional index is reconstructed
+    # deterministically regardless of parquet row-group read order.
+    pos_map = anno.select(["scan_id", "peak_id"]).sort("peak_id").with_columns(
+        pl.int_range(pl.len()).over("scan_id").cast(pl.Int64).alias("peak_index")
+    )
+
+    link = (
+        sig.join(pos_map, on=["scan_id", "peak_index"], how="inner")
+        .select(["scan_id", "peak_id", "mass_in_scan", "charge"])
+        .sort(["scan_id", "mass_in_scan", "peak_id"])
+    )
+    _store(file_manager, dataset_id, "anno_highlight_link", link, regenerate, logger,
+           row_group_size=TIDY_ROW_GROUP_SIZE)
+
+
 def _build_combined_tagger(file_manager, dataset_id, regenerate, logger):
     """(d.2) Augmented spectrum -> ``combined_tagger`` (per-scan list columns).
 
@@ -381,6 +453,11 @@ def _build_proteins(file_manager, dataset_id, regenerate, logger):
     scan-keyed panels (augmented spectrum, sequence-view peaks, tag table) follow
     the selected proteoform to its scan -- exactly as the oracle's render-time
     scan resolution did. Proteoforms whose scan is absent get ``scan_id = -1``.
+
+    Also mint ``is_best_per_scan`` (1/0): the oracle ProteinTable defaults to
+    "best per spectrum" = the single highest-``Score`` proteoform per ``Scan``
+    (ties -> first occurrence). Exactly one row per ``Scan`` gets 1. A later step
+    adds the viewer toggle + filter on this flag.
     """
     if (not regenerate) and file_manager.result_exists(dataset_id, "proteins"):
         return
@@ -397,6 +474,17 @@ def _build_proteins(file_manager, dataset_id, regenerate, logger):
         pl.col("protein_id")
         .map_elements(lambda p: scan_to_deconv.get(int(p), -1), return_dtype=pl.Int64)
         .alias("scan_id"),
+    ).with_columns(
+        # round-8 finding 3-tables-002: the oracle ProteinTable defaults to "best
+        # per spectrum" = the single highest-Score proteoform per Scan (ties ->
+        # first-seen, matching the oracle's keep-first ``>`` semantics). Flag that
+        # representative row 1, else 0. ``rank("ordinal", descending=True)`` gives a
+        # strict 1..N ranking with NO ties, so EXACTLY one row per Scan == 1; the
+        # ordinal tiebreak follows row order (first occurrence wins on equal Score).
+        # A later step adds the viewer toggle + filter; we only mint the flag.
+        (pl.col("Score").rank("ordinal", descending=True).over("Scan") == 1)
+        .cast(pl.Int64)
+        .alias("is_best_per_scan"),
     )
     _store(file_manager, dataset_id, "proteins", proteins, regenerate, logger)
 
@@ -504,7 +592,10 @@ def _build_quant(file_manager, dataset_id, regenerate, logger):
     per-trace strings (``RTs/MZs/Intensities``). We split into:
 
     * ``quant_features`` -- one row per feature (scalars), ``feature_id`` minted.
-    * ``quant_traces``   -- one row per trace *point* (comma-split + explode).
+    * ``quant_traces``   -- one row per trace *point* (comma-split + explode);
+      each point carries ``trace_in_feature``, a stable per-feature running id of
+      its parent trace so the 3D can break the polyline per-trace (the oracle's
+      -1000 z sentinel) even when two traces share ``(charge, isotope)``.
     """
     need_feat = regenerate or not file_manager.result_exists(dataset_id, "quant_features")
     need_traces = regenerate or not file_manager.result_exists(dataset_id, "quant_traces")
@@ -535,6 +626,14 @@ def _build_quant(file_manager, dataset_id, regenerate, logger):
                 + [pl.col(c) for c in trace_lists]
             )
             .explode(trace_lists)
+            # Stable per-feature running trace id (round-8 finding 3-quant-005): the
+            # 3D wraps EVERY trace in a -1000 z sentinel, so the polyline must break
+            # per-trace. (charge, isotope) is NOT unique -- two traces of one feature
+            # can share it -- so mint a distinct id per exploded trace row and carry
+            # it through to every point so a trace can be drawn as one isolated line.
+            .with_columns(
+                pl.int_range(pl.len()).over("feature_id").alias("trace_in_feature")
+            )
             .rename(
                 {
                     "Charges": "charge",
@@ -552,7 +651,7 @@ def _build_quant(file_manager, dataset_id, regenerate, logger):
         )
         traces = _comma_split_long(
             per_trace,
-            ["feature_id", "charge", "isotope", "centroid_mz"],
+            ["feature_id", "charge", "isotope", "centroid_mz", "trace_in_feature"],
             {"RTs": "rt", "MZs": "mz", "Intensities": "intensity"},
         )
         _store(file_manager, dataset_id, "quant_traces", traces, regenerate, logger,
@@ -569,9 +668,10 @@ def build_insight_caches(file_manager, dataset_id, tool, logger=None,
     Idempotent + cache-guarded: a target is skipped when its ``name_tag`` already
     exists unless ``regenerate=True``. ``tool`` selects the panel set:
 
-    * ``"flashdeconv"`` -- scans, masses, deconv/anno/tagger spectra, 3D S/N,
-      qscore density, (optional) global sequence view. Heatmaps reuse the
-      existing full-resolution ``ms*_{deconv,raw}_heatmap`` caches as-is.
+    * ``"flashdeconv"`` -- scans, masses, deconv/anno/tagger spectra, the
+      annotated-spectrum highlight linkage, 3D S/N, qscore density, (optional)
+      global sequence view. Heatmaps reuse the existing full-resolution
+      ``ms*_{deconv,raw}_heatmap`` caches as-is.
     * ``"flashtnt"`` -- everything deconv has, plus proteins, tags, per-proteoform
       sequence view, and the id-FDR density.
     * ``"flashquant"`` -- quant feature scalars + exploded trace points.
@@ -587,6 +687,7 @@ def build_insight_caches(file_manager, dataset_id, tool, logger=None,
     _build_masses(file_manager, dataset_id, regenerate, logger)
     _build_deconv_spectrum(file_manager, dataset_id, regenerate, logger)
     _build_anno_spectrum(file_manager, dataset_id, regenerate, logger)
+    _build_anno_highlight_link(file_manager, dataset_id, regenerate, logger)
     _build_combined_tagger(file_manager, dataset_id, regenerate, logger)
     _build_precursor_signals(file_manager, dataset_id, regenerate, logger)
 

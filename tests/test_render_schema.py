@@ -11,6 +11,8 @@ from pathlib import Path
 
 import polars as pl
 
+import pandas as pd
+
 from src.workflow.FileManager import FileManager
 from src.render.schema import (
     build_insight_caches,
@@ -18,6 +20,7 @@ from src.render.schema import (
     _explode_nested_signal_peaks,
     _comma_split_long,
     _kde_to_long,
+    _build_proteins,
 )
 from tests.conftest import make_deconv_caches, make_tnt_caches, make_quant_caches, \
     make_sequence_cache
@@ -147,6 +150,55 @@ def test_build_insight_caches_flashdeconv(temp_workspace):
     assert seq["sequence"].unique().to_list() == ["PEPTIDEK"]
 
 
+def test_anno_highlight_link(temp_workspace):
+    """Annotated-spectrum highlight linkage: maps each annotated SIGNAL peak to the
+    deconvolved mass (mass_in_scan) + charge it is a signal peak for, keyed by the
+    SAME peak_id as anno_spectrum_tidy. Verifies columns, peak_id consistency,
+    a known peak's (mass_in_scan, charge), and the 1:many relationship."""
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    build_insight_caches(fm, ds, "flashdeconv")
+
+    assert fm.result_exists(ds, "anno_highlight_link")
+    link = pl.read_parquet(fm.result_path(ds, "anno_highlight_link"))
+    anno = pl.read_parquet(fm.result_path(ds, "anno_spectrum_tidy"))
+
+    # EXACT columns.
+    assert link.columns == ["scan_id", "peak_id", "mass_in_scan", "charge"]
+
+    # anno_spectrum_tidy peak_id is a stable per-row id (unique within the frame).
+    assert anno["peak_id"].n_unique() == anno.height
+
+    # every link peak_id exists in anno_spectrum_tidy with the same scan_id (the
+    # linkage is keyed by the anno peak_id), and only SIGNAL peaks are linked.
+    joined = link.join(anno, on=["scan_id", "peak_id"], how="left")
+    assert joined["mz"].null_count() == 0           # all link peak_ids resolve
+    assert int(joined["is_signal"].min()) == 1      # linked peaks are all signal
+
+    # Known signal peak. Synthetic combined_spectrum scan 0:
+    #   anno peaks (sorted): idx0 m/z 75.0, idx1 75.1, idx2 125.0, idx3 99.0
+    #   SignalPeaks mass0 -> anno idx0(z12), idx1(z12); mass1 -> idx3(z5), idx0(z5)
+    # so anno idx0 (peak_id of scan0/pos0) links to mass_in_scan 0 (z12) AND 1 (z5).
+    pid0 = anno.filter(pl.col("scan_id") == 0).sort("peak_id")["peak_id"].to_list()[0]
+    rows0 = link.filter((pl.col("scan_id") == 0) & (pl.col("peak_id") == pid0)).sort(
+        "mass_in_scan"
+    )
+    assert rows0["mass_in_scan"].to_list() == [0, 1]
+    assert rows0["charge"].to_list() == [12, 5]
+
+    # CRITICAL 1:1 vs 1:many finding: a single annotated raw peak CAN belong to
+    # MULTIPLE deconvolved masses, so (scan_id, peak_id) is NOT unique -> the frame
+    # is 1:many (one row per (peak, mass) pair). Assert the dup pair is present.
+    dup = (
+        link.group_by(["scan_id", "peak_id"]).len().filter(pl.col("len") > 1)
+    )
+    assert dup.height >= 1, "expected at least one annotated peak mapping to >1 mass"
+    # and that the link allows it (the dup we constructed: scan 0, peak pos 0).
+    assert (
+        link.filter((pl.col("scan_id") == 0) & (pl.col("peak_id") == pid0)).height == 2
+    )
+
+
 def test_build_insight_caches_idempotent(temp_workspace):
     fm = _fm(temp_workspace)
     ds = make_deconv_caches(fm)
@@ -171,11 +223,16 @@ def test_build_insight_caches_flashtnt(temp_workspace):
         assert fm.result_exists(ds, tag), f"missing tidy cache: {tag}"
 
     proteins = pl.read_parquet(fm.result_path(ds, "proteins"))
-    assert {"protein_id", "scan_id"}.issubset(proteins.columns)
+    assert {"protein_id", "scan_id", "is_best_per_scan"}.issubset(proteins.columns)
     assert proteins["protein_id"].to_list() == [0, 1]
     # protein row carries its scan (deconv-row index): Scan 10 -> 0, Scan 20 -> 1,
     # so a protein-row click can resolve protein -> scan (value-based scan map).
     assert proteins["scan_id"].to_list() == [0, 1]
+    # round-8 finding 3-tables-002: exactly one is_best_per_scan==1 per Scan. Here
+    # each Scan (10, 20) has a single proteoform, so both rows are best.
+    assert proteins["is_best_per_scan"].to_list() == [1, 1]
+    best_per_scan = proteins.filter(pl.col("is_best_per_scan") == 1)
+    assert best_per_scan["Scan"].n_unique() == best_per_scan.height
 
     tags = pl.read_parquet(fm.result_path(ds, "tags"))
     # tags are scan-keyed (NOT collapsed to a per-scan protein_id): each tag carries
@@ -190,6 +247,56 @@ def test_build_insight_caches_flashtnt(temp_workspace):
     assert {"protein_id", "sequence", "coverage", "proteoform_start",
             "proteoform_end"}.issubset(seqt.columns)
     assert sorted(seqt["sequence"].to_list()) == ["ACDEFGHK", "PEPTIDEK"]
+
+
+def test_proteins_is_best_per_scan(temp_workspace):
+    """round-8 finding 3-tables-002: is_best_per_scan == 1 for the single
+    highest-Score proteoform per Scan, with ties broken by first occurrence
+    (oracle keep-first ``>``). Build a cache directly with a multi-proteoform Scan
+    AND a Score tie so exactly one row per Scan is flagged."""
+    fm = _fm(temp_workspace)
+    ds = "exp1"
+
+    # Two scans. Scan 10 has THREE proteoforms incl. a Score tie (5.0 == 5.0);
+    # Scan 20 has two. The deconv scan_table maps Scan 10 -> deconv 0, Scan 20 -> 1.
+    fm.store_data(ds, "scan_table", pd.DataFrame({
+        "index": [0, 1], "Scan": [10, 20]}))
+    fm.store_data(ds, "protein_dfs", pd.DataFrame({
+        "index":  [0,    1,    2,    3,    4],
+        "Scan":   [10,   10,   10,   20,   20],
+        # Scan 10: max is 7.0 (proteoform 1). The 5.0 tie (0 and 2) must NOT both win.
+        "Score":  [5.0,  7.0,  5.0,  3.0,  9.0],
+        "accession": ["a", "b", "c", "d", "e"]}))
+
+    _build_proteins(fm, ds, regenerate=True, logger=None)
+    proteins = pl.read_parquet(fm.result_path(ds, "proteins")).sort("protein_id")
+
+    assert "is_best_per_scan" in proteins.columns
+    # exactly one best per Scan
+    best = proteins.filter(pl.col("is_best_per_scan") == 1)
+    assert best.height == proteins["Scan"].n_unique() == 2
+    assert best["Scan"].n_unique() == best.height  # one per scan, no dup
+    # the right rows: Scan 10 -> proteoform 1 (Score 7.0), Scan 20 -> proteoform 4 (9.0)
+    assert set(best["protein_id"].to_list()) == {1, 4}
+    # the 5.0 tie on Scan 10 produced exactly ZERO winners (max was 7.0), and even a
+    # tie AT the max is broken keep-first (ordinal rank): verify per-scan sum == 1.
+    by_scan = proteins.group_by("Scan").agg(pl.col("is_best_per_scan").sum())
+    assert sorted(r["is_best_per_scan"] for r in by_scan.to_dicts()) == [1, 1]
+
+
+def test_proteins_is_best_per_scan_tie_keeps_first(temp_workspace):
+    """A Score tie AT the per-Scan maximum is broken keep-first (oracle ``>``):
+    the FIRST-occurring max-Score row wins, not the later one."""
+    fm = _fm(temp_workspace)
+    ds = "exp1"
+    fm.store_data(ds, "scan_table", pd.DataFrame({"index": [0], "Scan": [10]}))
+    # both proteoforms on Scan 10 tie at the max Score 8.0; first (index 0) wins.
+    fm.store_data(ds, "protein_dfs", pd.DataFrame({
+        "index": [0, 1], "Scan": [10, 10], "Score": [8.0, 8.0],
+        "accession": ["first", "second"]}))
+    _build_proteins(fm, ds, regenerate=True, logger=None)
+    proteins = pl.read_parquet(fm.result_path(ds, "proteins")).sort("protein_id")
+    assert proteins["is_best_per_scan"].to_list() == [1, 0]
 
 
 # --------------------------------------------------------------------------- #
@@ -207,12 +314,30 @@ def test_build_insight_caches_flashquant(temp_workspace):
     feats = pl.read_parquet(fm.result_path(ds, "quant_features"))
     assert "feature_id" in feats.columns
     assert {"StartRT", "EndRT", "ApexRT", "AllAUC"}.issubset(feats.columns)
-    assert feats["feature_id"].to_list() == [0, 1]
+    assert feats["feature_id"].to_list() == [0, 1, 12]
 
     traces = pl.read_parquet(fm.result_path(ds, "quant_traces"))
     assert {"feature_id", "charge", "isotope", "centroid_mz", "rt", "mz",
-            "intensity"}.issubset(traces.columns)
-    # feature 0: 3+2 points, feature 1: 2 points -> 7 total
+            "intensity", "trace_in_feature"}.issubset(traces.columns)
+    # feature 0: 3+2 points, feature 1: 2 points, feature 12: 2+3 points
     per = {r["feature_id"]: r["len"]
            for r in traces.group_by("feature_id").len().to_dicts()}
-    assert per == {0: 5, 1: 2}
+    assert per == {0: 5, 1: 2, 12: 5}
+
+    # round-8 finding 3-quant-005: trace_in_feature is a stable per-feature running
+    # trace id, distinct PER TRACE -- even for two traces that share (charge,
+    # isotope). Each feature's trace ids run 0..(#traces-1).
+    assert traces.filter(pl.col("feature_id") == 0)["trace_in_feature"] \
+        .unique().sort().to_list() == [0, 1]
+    assert traces.filter(pl.col("feature_id") == 1)["trace_in_feature"] \
+        .unique().to_list() == [0]
+    # feature 12 / charge 13 / isotope 11 appears as TWO distinct traces: the dup
+    # (charge, isotope) must NOT collapse -> two distinct trace_in_feature values.
+    dup = traces.filter(
+        (pl.col("feature_id") == 12) & (pl.col("charge") == 13)
+        & (pl.col("isotope") == 11)
+    )
+    assert dup["trace_in_feature"].unique().sort().to_list() == [0, 1]
+    # within one trace, every point shares the SAME trace_in_feature (one id/trace)
+    per_trace_pts = dup.group_by("trace_in_feature").len().sort("trace_in_feature")
+    assert per_trace_pts["len"].to_list() == [2, 3]
