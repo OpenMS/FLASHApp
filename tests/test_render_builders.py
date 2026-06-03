@@ -147,6 +147,12 @@ def test_filters_interactivity_value_based(mock_streamlit, temp_workspace):
     plot3d = builders["3D_SN_plot"]()
     # massIndex -> value filter on mass_in_scan; scanIndex -> scan
     assert plot3d.get_filters_mapping() == {"scan": "scan_id", "mass": "mass_in_scan"}
+    # 3D x-axis is the oracle "Mass" = mz*charge (not raw m/z); y=charge, z=intensity
+    p3d_args = plot3d._get_component_args()
+    assert (p3d_args["xColumn"], p3d_args["yColumn"], p3d_args["zColumn"]) == (
+        "mass", "charge", "intensity",
+    )
+    assert p3d_args["xLabel"] == "Mass"  # Plot3D default matches oracle axis title
 
     tag_table = builders["tag_table"]()
     # tags are scan (spectrum) data: the oracle filtered by Scan and showed ALL of

@@ -195,7 +195,9 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # peaks only when a mass is selected (oracle: SignalPeaks[mass_index]
             # only when mass_index is set, else the full per-scan table).
             optional_filters=["mass"],
-            x_column="mz", y_column="charge", z_column="intensity",
+            # x-axis is the oracle "Mass" = mz*charge (precomputed in schema), NOT
+            # raw m/z; Plot3D's default x_label "Mass" matches the oracle axis title.
+            x_column="mass", y_column="charge", z_column="intensity",
             category_column="series",
             category_colors={"Signal": "#3366CC", "Noise": "#DC3912"},
             title="Precursor Signals",

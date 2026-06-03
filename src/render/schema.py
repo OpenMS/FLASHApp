@@ -116,6 +116,9 @@ def _explode_nested_signal_peaks(
                 pl.lit(series_label).alias("series"),
             ]
         )
+        # neutral-ish mass the oracle 3D plot puts on its x-axis ("Mass"):
+        # get3DplotInputFromSNRPeaks uses x = peaks[mz] * peaks[charge].
+        .with_columns((pl.col("mz") * pl.col("charge")).alias("mass"))
         .drop(col)
     )
     return out
@@ -312,7 +315,7 @@ def _build_precursor_signals(file_manager, dataset_id, regenerate, logger):
     out = both.select(
         [
             "scan_id", "mass_in_scan", "peak_id",
-            "mz", "charge", "intensity", "series",
+            "mass", "mz", "charge", "intensity", "series",
         ]
     )
     _store(file_manager, dataset_id, "precursor_signals", out, regenerate, logger,

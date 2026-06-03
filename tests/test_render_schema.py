@@ -65,6 +65,8 @@ def test_explode_nested_signal_peaks_two_levels():
     assert out["mass_in_scan"].to_list() == [0, 0, 1, 0]
     assert out["charge"].to_list() == [12, 12, 5, 1]
     assert set(out["series"].unique().to_list()) == {"Signal"}
+    # oracle 3D x = mz * charge
+    assert out["mass"].to_list() == [75.0 * 12, 75.1 * 12, 125.0 * 5, 100.0 * 1]
 
 
 def test_explode_nested_handles_empty_cells():
@@ -124,10 +126,15 @@ def test_build_insight_caches_flashdeconv(temp_workspace):
     assert deconv.filter(pl.col("scan_id") == 0)["mass_in_scan"].to_list() == [0, 1]
 
     ps = pl.read_parquet(fm.result_path(ds, "precursor_signals"))
-    assert {"scan_id", "mass_in_scan", "peak_id", "mz", "charge", "intensity",
-            "series"}.issubset(ps.columns)
+    assert {"scan_id", "mass_in_scan", "peak_id", "mass", "mz", "charge",
+            "intensity", "series"}.issubset(ps.columns)
     assert ps["peak_id"].n_unique() == ps.height
     assert set(ps["series"].unique().to_list()) <= {"Signal", "Noise"}
+    # 3D x-axis is the oracle "Mass" = mz * charge (get3DplotInputFromSNRPeaks),
+    # not raw m/z.
+    assert ps.select(
+        (pl.col("mass") - pl.col("mz") * pl.col("charge")).abs().max()
+    ).item() < 1e-9
 
     anno = pl.read_parquet(fm.result_path(ds, "anno_spectrum_tidy"))
     assert {"scan_id", "peak_id", "mz", "intensity", "is_signal"}.issubset(anno.columns)
