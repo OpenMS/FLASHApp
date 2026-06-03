@@ -20,11 +20,14 @@ phases:
       - name: nondivergence
         cmd: "python migration/nondivergence.py"
         cwd: /home/user/FLASHApp
-      - name: template-app-smoke
-        cmd: "python -c \"import ast,sys; ast.parse(open('/home/user/streamlit-template/content/visualization_template.py').read()) if __import__('os').path.exists('/home/user/streamlit-template/content/visualization_template.py') else print('template page pending')\""
+      - name: template-tests
+        cmd: "python -m pytest -q"
         cwd: /home/user/streamlit-template
-      - name: flashapp-app-smoke
-        cmd: "python -c \"import ast; ast.parse(open('/home/user/FLASHApp/content/FLASHDeconv/FLASHDeconvViewer.py').read()); print('FLASHDeconvViewer parses')\""
+      - name: flashapp-tests
+        cmd: "python -m pytest -q"
+        cwd: /home/user/FLASHApp
+      - name: viewer-parse
+        cmd: "python -c \"import ast;[ast.parse(open(p).read()) for p in ['content/FLASHDeconv/FLASHDeconvViewer.py','content/FLASHTnT/FLASHTnTViewer.py','content/FLASHQuant/FLASHQuantViewer.py']];print('viewers parse OK')\""
         cwd: /home/user/FLASHApp
     critics: [template, original-parity, final]   # three critics per unit
     units:
