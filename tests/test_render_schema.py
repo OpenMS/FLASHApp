@@ -21,6 +21,7 @@ from src.render.schema import (
     _comma_split_long,
     _kde_to_long,
     _build_proteins,
+    _build_seq_tnt,
 )
 from tests.conftest import make_deconv_caches, make_tnt_caches, make_quant_caches, \
     make_sequence_cache
@@ -247,6 +248,114 @@ def test_build_insight_caches_flashtnt(temp_workspace):
     assert {"protein_id", "sequence", "coverage", "proteoform_start",
             "proteoform_end"}.issubset(seqt.columns)
     assert sorted(seqt["sequence"].to_list()) == ["ACDEFGHK", "PEPTIDEK"]
+
+
+def _make_truncated_proteoform_seq_cache(fm, ds="exp_pf"):
+    """Write a ``sequence_data`` cache mirroring the oracle ``parseTnT`` output for
+    a TRUNCATED proteoform (round-17 3-seqview-009).
+
+    Full protein ``MKPEPTIDEK``; the determined proteoform is ``PEPTIDEK``
+    (1-based StartPosition 3, EndPosition 10). The oracle stores the FULL protein
+    in ``sequence`` but computes the fragment grid on the SLICED sub-sequence
+    ``str(sequence)[start_index:end_index+1]`` and stores 0-based
+    ``proteoform_start``/``proteoform_end`` (StartPosition-1 / EndPosition-1).
+    """
+    import numpy as np
+    import pyarrow.parquet as pq
+    from src.render.sequence import getFragmentDataFromSeq
+    from src.render.sequence_data_store import build_table, ROW_GROUP_SIZE
+
+    full = "MKPEPTIDEK"
+    # Oracle src/parse/tnt.py slice derivation for StartPosition=3, EndPosition=10.
+    start_position, end_position = 3, 10
+    start_index = 0 if start_position <= 0 else start_position - 1
+    end_index = len(full) - 1 if end_position <= 0 else end_position - 1
+    cov = np.array([1.0] * len(full))
+    # Oracle: getFragmentDataFromSeq on the SLICED sub-sequence.
+    entry = getFragmentDataFromSeq(
+        full[start_index:end_index + 1], list(cov / cov.max()), cov.max(), []
+    )
+    entry["sequence"] = list(full)                 # FULL protein in the grid
+    entry["proteoform_start"] = start_position - 1  # 0-based -> 2
+    entry["proteoform_end"] = end_position - 1      # 0-based -> 9
+    entry["computed_mass"] = 900.0
+    entry["theoretical_mass"] = 1100.0
+    entry["modifications"] = []
+    tbl = build_table({0: entry})
+    with fm.parquet_sink(ds, "sequence_data") as p:
+        pq.write_table(tbl, p, row_group_size=ROW_GROUP_SIZE)
+    return ds, full, start_index, end_index
+
+
+def test_seq_tnt_truncated_proteoform_carries_full_seq_and_terminals(temp_workspace):
+    """``seq_tnt`` keeps the FULL protein + the 0-based proteoform terminals.
+
+    The migrated ``_build_seq_tnt`` must surface the FULL ``sequence`` (the display
+    grid) plus the reported 0-based ``proteoform_start``/``proteoform_end`` so the
+    Insight SequenceView can slice the fragment grid + offset the mapping
+    (3-seqview-009). It must NOT slice the stored ``sequence`` itself.
+    """
+    fm = _fm(temp_workspace)
+    ds, full, _, _ = _make_truncated_proteoform_seq_cache(fm)
+
+    # _build_seq_tnt only consumes the sequence_data cache; call it directly so we
+    # do not need the full deconv-style cache set for this proteoform-region check.
+    _build_seq_tnt(fm, ds, regenerate=True, logger=None)
+    seqt = pl.read_parquet(fm.result_path(ds, "seq_tnt"))
+
+    row = seqt.filter(pl.col("protein_id") == 0).to_dicts()[0]
+    assert row["sequence"] == full          # full protein, NOT the sub-region
+    assert row["proteoform_start"] == 2     # StartPosition(3) - 1
+    assert row["proteoform_end"] == 9       # EndPosition(10) - 1
+
+
+def test_seq_tnt_truncated_proteoform_sequenceview_matches_oracle(temp_workspace):
+    """End-to-end: the SequenceView wired from ``seq_tnt`` computes the fragment
+    grid on the PROTEOFORM SUB-region, numerically matching the oracle.
+
+    Reproduces the oracle FLASHApp ``getFragmentDataFromSeq`` on the SLICED
+    sub-sequence (3-seqview-009): the migrated Insight SequenceView slices
+    ``sequence[proteoform_start..proteoform_end]`` and the resulting grid +
+    offset match the oracle exactly (b1 == 97.05 for PEPTIDEK, not 131.04 for the
+    full MKPEPTIDEK).
+    """
+    from openms_insight.components.sequenceview import (
+        SequenceView,
+        calculate_fragment_masses_pyopenms,
+    )
+
+    fm = _fm(temp_workspace)
+    ds, full, start_index, end_index = _make_truncated_proteoform_seq_cache(fm)
+    _build_seq_tnt(fm, ds, regenerate=True, logger=None)
+
+    # Wire the SequenceView exactly as src/render/render.py does for flashtnt
+    # (proteoform terminal columns configured).
+    sv = SequenceView(
+        cache_id="pf_e2e",
+        sequence_data_path=fm.result_path(ds, "seq_tnt"),
+        cache_path=str(Path(temp_workspace, "insight_cache")),
+        filters={"protein": "protein_id"},
+        proteoform_start_column="proteoform_start",
+        proteoform_end_column="proteoform_end",
+        deconvolved=True,
+    )
+    seq = sv._prepare_vue_data({"protein": 0})["sequenceData"]
+
+    # Grid shows the full protein; fragments are on the sub-region with the offset.
+    assert len(seq["sequence"]) == len(full)
+    assert seq["proteoform_fragments"] is True
+    assert seq["fragment_grid_offset"] == start_index  # 2
+
+    # Numerically identical to the oracle sub-region grid.
+    sub = full[start_index:end_index + 1]
+    assert sub == "PEPTIDEK"
+    oracle_sub_grid = calculate_fragment_masses_pyopenms(sub)
+    for ion in ("a", "b", "c", "x", "y", "z"):
+        assert seq[f"fragment_masses_{ion}"] == oracle_sub_grid[f"fragment_masses_{ion}"]
+    # The finding's concrete example: b1 of the proteoform region.
+    assert seq["fragment_masses_b"][0][0] == __import__("pytest").approx(
+        97.0527642233, abs=1e-6
+    )
 
 
 def test_proteins_is_best_per_scan(temp_workspace):
