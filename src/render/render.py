@@ -259,6 +259,16 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
             coverage_column="coverage",
             proteoform_start_column="proteoform_start",
             proteoform_end_column="proteoform_end",
+            # round-13 finding 3-seqview-004: render the oracle mass-info header
+            # (Theoretical / Observed / Delta Mass) from the proteoform's observed
+            # (ProteoformMass) value.
+            observed_mass_column="observed_mass",
+            mass_header_title="Proteoform",
+            # round-13 finding 3-seqview-003: when a mass is selected elsewhere
+            # (mass table / spectrum click) highlight the matching fragment-table row
+            # (oracle updateFragmentTableFromMassSelection); resolves via the same
+            # "mass" slot the fragment/residue clicks publish to.
+            mass_selection_identifier="mass",
             annotation_config=anno_cfg,
             title="Sequence View",
         )
@@ -276,6 +286,11 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
         # deconv+anno spectra / 3D, all in the deconv default layout). PATH 2 only
         # (no coverage/tags -> no PATH-1 residue_identifier on the global sequence).
         fragment_mass_identifier="mass",
+        # round-13 finding 3-seqview-003: a mass selected elsewhere (mass table /
+        # spectrum) also highlights the matching fragment-table row here (the deconv
+        # layout is mass-driven). No mass-info header (global sequence, not a
+        # proteoform -> no observed/theoretical proteoform mass).
+        mass_selection_identifier="mass",
         deconvolved=True,
         title="Sequence View",
     )

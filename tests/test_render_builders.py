@@ -210,6 +210,10 @@ def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
     assert sv._residue_identifier == "aa"
     assert sv._coverage_column == "coverage"
     assert sv._fragment_mass_identifier == "mass"
+    # round-13 findings 3-seqview-003/004: mass-info header (observed proteoform mass)
+    # + inbound mass->fragment-table-row highlight.
+    assert sv._observed_mass_column == "observed_mass"
+    assert sv._mass_selection_identifier == "mass"
 
     # round-13 finding 3-seqview-002: the FLASHDeconv sequence view (global sequence,
     # no tags/coverage -> PATH 2 only) must ALSO publish the fragment's mass on a
@@ -221,6 +225,8 @@ def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
     dsv = make_builders(dfm, "deconv_seqmass", "flashdeconv")["sequence_view"]()
     assert dsv._fragment_mass_identifier == "mass"
     assert dsv._coverage_column is None  # no tags on the global deconv sequence
+    assert dsv._mass_selection_identifier == "mass"  # inbound mass->fragment highlight
+    assert dsv._observed_mass_column is None  # no proteoform mass header for deconv
 
     # In FLASHDeconv (no tags frame) the tagger has no tag resolution wired.
     dds = make_deconv_caches(_fm(temp_workspace), ds="deconv1")

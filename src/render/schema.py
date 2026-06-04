@@ -576,6 +576,11 @@ def _build_seq_tnt(file_manager, dataset_id, regenerate, logger):
                 "coverage": [float(c) for c in (e.get("coverage") or [])],
                 "proteoform_start": int(e.get("proteoform_start", -1)),
                 "proteoform_end": int(e.get("proteoform_end", -1)),
+                # round-13 finding 3-seqview-004: the oracle SequenceView header shows
+                # the OBSERVED proteoform mass (= ProteoformMass / computed_mass) next
+                # to the theoretical mass. Surface it so the migrated SequenceView can
+                # render the Theoretical/Observed/Delta Mass header.
+                "observed_mass": float(e.get("computed_mass", -1)),
             }
         )
     if not rows:
@@ -589,6 +594,7 @@ def _build_seq_tnt(file_manager, dataset_id, regenerate, logger):
             "coverage": pl.List(pl.Float64),
             "proteoform_start": pl.Int64,
             "proteoform_end": pl.Int64,
+            "observed_mass": pl.Float64,
         },
     )
     _store(file_manager, dataset_id, "seq_tnt", seq_df, regenerate, logger,
