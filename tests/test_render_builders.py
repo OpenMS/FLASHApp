@@ -203,7 +203,13 @@ def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
 
     # The SequenceView publishes residue clicks as the "aa" selection the tagger
     # consumes (closing the residue -> selectedAA cross-link).
-    assert builders["sequence_view"]()._residue_identifier == "aa"
+    # round-12 finding 3-seqview-001: oracle two-path residue click -- PATH 1 aa is
+    # coverage-gated + toggling (coverage_column set), PATH 2 publishes the matched
+    # fragment's mass_in_scan to "mass" (fragment_mass_identifier="mass").
+    sv = builders["sequence_view"]()
+    assert sv._residue_identifier == "aa"
+    assert sv._coverage_column == "coverage"
+    assert sv._fragment_mass_identifier == "mass"
 
     # In FLASHDeconv (no tags frame) the tagger has no tag resolution wired.
     dds = make_deconv_caches(_fm(temp_workspace), ds="deconv1")

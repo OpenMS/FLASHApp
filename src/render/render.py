@@ -242,9 +242,19 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
             # exists, reproducing the oracle's proteoform -> scan peak resolution.
             filters={"protein": "protein_id", "scan": "scan_id"},
             interactivity={"mass": "mass_in_scan"},
-            # residue clicks publish the 0-based residue index as "aa" so the
-            # augmented (tagger) spectrum can derive the tag-relative selectedAA.
+            # round-12 finding 3-seqview-001: reproduce the oracle's TWO independent
+            # residue-click paths (maintainer: "both should be supported as in the
+            # FLASHTnT Viewer"):
+            #  PATH 1 (aa / sequence-tag): residue_identifier="aa" + coverage_column
+            #    -> a click on a TAG-COVERED residue toggles the "aa" selection
+            #    (coverage-gated, not fragment-gated; re-click clears) so the augmented
+            #    (tagger) spectrum + tag table follow the residue.
+            #  PATH 2 (mass / fragment): fragment_mass_identifier="mass" -> a click on
+            #    a residue with a matching FRAGMENT publishes that fragment peak's
+            #    mass_in_scan to "mass" (oracle updateMassTableFromFragmentMass ->
+            #    updateSelectedMass), resolved via the same interactivity "mass" column.
             residue_identifier="aa",
+            fragment_mass_identifier="mass",
             deconvolved=True,
             coverage_column="coverage",
             proteoform_start_column="proteoform_start",
