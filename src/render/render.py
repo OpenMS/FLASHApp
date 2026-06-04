@@ -265,7 +265,8 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
     )
 
 
-def make_builders(file_manager, dataset_id, tool, settings=None):
+def make_builders(file_manager, dataset_id, tool, settings=None,
+                  best_per_spectrum=True):
     """Return ``{comp_name: () -> BaseComponent}`` for one ``(tool, dataset)``.
 
     Args:
@@ -276,6 +277,13 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             sequence-view wiring and cache namespacing).
         settings: optional oracle ``settings`` dict (ion types / tolerance) for the
             FLASHTnT SequenceView.
+        best_per_spectrum: round-8 finding 3-tables-002. When True (the oracle
+            ProteinTable default), the ``protein_table`` builder shows only the
+            single best-``Score`` proteoform per ``Scan`` (sourcing the
+            ``is_best_per_scan == 1`` subset under a DISTINCT cache_id so toggling
+            reliably swaps the cached row set); when False it shows all proteoforms.
+            The FLASHTnT viewer wires this to a per-experiment "Best per spectrum"
+            checkbox above its grid.
 
     Returns:
         A dict mapping every supported ``comp_name`` to a zero-arg factory. The
@@ -313,6 +321,11 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # oracle Tabulator chrome: curated titles + guarded toFixed on RT /
             # PrecursorMass; shows ONLY these columns (no initialSort in the oracle).
             column_definitions=_SCAN_COLUMN_DEFS,
+            # round-8 finding 3-tables-003: oracle TabulatorScanTable.vue
+            # go-to-fields ['id','Scan'] -> schema id column is scan_id. Passing it
+            # explicitly stops Table auto-detect from exposing the internal
+            # mass_in_scan carrier as a go-to field.
+            go_to_fields=["scan_id", "Scan"],
         ),
         "mass_table": lambda: Table(
             cache_id=cid("mass_table"), data_path=p("masses"), cache_path=cache,
@@ -324,6 +337,10 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # oracle chrome: toFixed on MonoMass/SumIntensity/CosineScore/SNR/QScore;
             # mass_in_scan stays in the data (interactivity) but is not displayed.
             column_definitions=_MASS_COLUMN_DEFS,
+            # round-8 finding 3-tables-003: oracle TabulatorMassTable.vue
+            # go-to-fields ['id'] -> schema id column is mass_id. Explicit list keeps
+            # auto-detect from exposing the mass_in_scan / scan_id carriers.
+            go_to_fields=["mass_id"],
         ),
         "deconv_spectrum": lambda: LinePlot(
             cache_id=cid("deconv_spectrum"), data_path=p("deconv_spectrum_tidy"),
@@ -332,6 +349,20 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # matched x against MonoMass and emitted the per-scan index).
             interactivity={"mass": "mass_in_scan"},
             x_column="mass", y_column="SumIntensity",
+            # round-8 finding (deconv selective highlight): when a mass is selected
+            # ("mass"), highlight the SELECTED mass's stick. The deconv base frame
+            # carries one deconvolved mass per row (mass_in_scan), so the
+            # match-column path lights up base rows where mass_in_scan == sel
+            # directly (no link frame). No z=N charge labels and no
+            # deconv_peaks_toggle for the deconvolved spectrum (oracle parity).
+            # NOTE: the match-column highlight path
+            # (lineplot._compute_selective_highlight) returns no charge/value
+            # descriptors, so it draws NO selected-mass MonoMass value label. The
+            # priority per the finding is the selected-stick highlight, which this
+            # delivers; surfacing the MonoMass value as a label would require a new
+            # match-column label producer in the LinePlot (not available today).
+            highlight_selection="mass",
+            highlight_match_column="mass_in_scan",
             # oracle axis titles (PlotlyLineplot.vue): deconvolved x="Monoisotopic
             # Mass", y="Intensity". Without these the axes show the raw column names.
             x_label="Monoisotopic Mass", y_label="Intensity",
@@ -340,11 +371,31 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
         "anno_spectrum": lambda: LinePlot(
             cache_id=cid("anno_spectrum"), data_path=p("anno_spectrum_tidy"),
             cache_path=cache, filters={"scan": "scan_id"},
-            # NO mass interactivity: the annotated (raw m/z) spectrum's x is m/z,
-            # but the oracle onPlotClick matched the click against the deconvolved
-            # MonoMass array -- a raw m/z never matches, so clicking it selected
-            # nothing. (Driving the shared mass slot from here was a parity bug.)
-            x_column="mz", y_column="intensity", highlight_column="is_signal",
+            # Clicking a raw m/z peak must NOT drive the shared "mass" slot (the
+            # oracle onPlotClick matched against the deconvolved MonoMass array -- a
+            # raw m/z never matches, so a click selected nothing; driving the shared
+            # mass slot from here was a parity bug). BUT the selective-highlight LINK
+            # path keys its highlight set off the FIRST interactivity column
+            # (lineplot._compute_link_highlight / _attach_selective_highlight read
+            # ``list(interactivity.values())[0]`` as the base ``id_column``), so the
+            # annotated peaks MUST carry ``peak_id`` as their interactivity/index key
+            # for the highlight-link key-set to map onto the drawn peaks. We publish
+            # the click to a PRIVATE "anno_peak" slot (NOT consumed by any other
+            # panel), keeping the parity-bug fix while exposing peak_id as id_column.
+            interactivity={"anno_peak": "peak_id"},
+            x_column="mz", y_column="intensity",
+            # round-8 finding 3-anno-001: SELECTION-driven highlight. Drop the static
+            # is_signal highlight; instead, when a deconvolved mass is selected
+            # ("mass"), highlight that mass's SIGNAL peaks via the highlight LINK
+            # frame (anno_highlight_link, 1:many peak->mass), with per-peak z=N charge
+            # labels and the "Show Deconvolved Peaks" modebar toggle (oracle parity).
+            highlight_selection="mass",
+            highlight_link_path=p("anno_highlight_link"),
+            highlight_link_key_column="peak_id",
+            highlight_link_match_column="mass_in_scan",
+            highlight_charge_column="charge",
+            highlight_annotation_template="z={}",
+            deconv_peaks_toggle=True,
             # oracle annotated-spectrum axis titles: x="m/z", y="Intensity".
             x_label="m/z", y_label="Intensity",
             title="Annotated Spectrum",
@@ -381,6 +432,13 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             x_column="mass", y_column="charge", z_column="intensity",
             category_column="series",
             category_colors={"Signal": "#3366CC", "Noise": "#DC3912"},
+            # round-8 finding 3-3d-001: DYNAMIC title (oracle Plotly3Dplot.vue). The
+            # keys are the fixed scan/mass roles; the values are the SAME selection
+            # identifiers this plot's ``filters`` read ("scan" / "mass"). Plot3D
+            # computes the title from the live selection: '' when no scan is set,
+            # 'Precursor signals' once a scan is selected (no mass), 'Mass signals'
+            # once a mass is selected. The static ``title`` is the no-title fallback.
+            title_selection={"scan": "scan", "mass": "mass"},
             title="Precursor Signals",
         ),
         # ---- heatmaps: reuse the existing full-resolution oracle caches as-is ----
@@ -417,17 +475,45 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             cache_id=cid("fdr_plot"), data_path=p("qscore_density"),
             cache_path=cache, x_column="x", y_column="y", category_column="group",
             target_value="target", decoy_value="decoy",
-            title="Score Distribution",
+            # round-8 findings 3-fdr-001/002: oracle title "FDR Plot" (FDR_plotly.vue
+            # args.title) and explicit trace legend names "Target QScores" /
+            # "Decoy QScores" (FDR_plotly.vue trace ``name``s). targetLabel/decoyLabel
+            # flow through ``config`` -> _plot_config -> _get_component_args_density.
+            title="FDR Plot",
+            config={"targetLabel": "Target QScores", "decoyLabel": "Decoy QScores"},
         ),
         "id_fdr_plot": lambda: LinePlot.density(
             cache_id=cid("id_fdr_plot"), data_path=p("qscore_density_id"),
             cache_path=cache, x_column="x", y_column="y", category_column="group",
             target_value="target", decoy_value="decoy",
-            title="Score Distribution",
+            # round-8 findings 3-fdr-001/002: same as fdr_plot (oracle FDR_plotly.vue).
+            title="FDR Plot",
+            config={"targetLabel": "Target QScores", "decoyLabel": "Decoy QScores"},
         ),
         # ---- FLASHTnT panels ----
+        # round-8 finding 3-tables-002: the oracle ProteinTable defaults to showing
+        # only the best-Score proteoform per Scan (``bestPerSpectrumOnly: true``),
+        # with a toggle to show all. We reproduce that server-side: when
+        # ``best_per_spectrum`` is True the builder sources the
+        # ``is_best_per_scan == 1`` subset (minted in schema._build_proteins:
+        # exactly one row per Scan, highest Score, ties -> first-seen, matching the
+        # oracle ``>`` keep-first) under a DISTINCT cache_id ("..protein_table_best")
+        # so flipping the viewer toggle reliably swaps the cached row set; when False
+        # it sources the full table under the normal cache_id. column_definitions /
+        # interactivity / index_field / initial_sort are IDENTICAL in both branches.
+        # Downstream cross-links (tag table, sequence view, augmented spectrum) key
+        # off ``scan`` -- both row sets carry scan_id, so they are unaffected.
         "protein_table": lambda: Table(
-            cache_id=cid("protein_table"), data_path=p("proteins"),
+            cache_id=cid("protein_table_best") if best_per_spectrum
+            else cid("protein_table"),
+            data=(
+                pl.scan_parquet(p("proteins")).filter(
+                    pl.col("is_best_per_scan") == 1
+                )
+                if best_per_spectrum
+                else None
+            ),
+            data_path=None if best_per_spectrum else p("proteins"),
             cache_path=cache,
             # a protein-row click resolves to its scan (value-based
             # proteoform_scan_map): it sets BOTH the protein and the scan
@@ -438,10 +524,12 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # oracle chrome: curated titles, -1->"-" on Mass/Q-Value, initialSort
             # by Score desc. protein_id/scan_id carriers stay for index/cross-link
             # but are not displayed (no "Index" column in the oracle protein table).
-            # NOTE: the oracle "Best per spectrum" toggle is a functional control
-            # (out of scope here), not column chrome.
             column_definitions=_PROTEIN_COLUMN_DEFS,
             initial_sort=_PROTEIN_INITIAL_SORT,
+            # round-8 finding 3-tables-003: oracle TabulatorProteinTable.vue
+            # go-to-fields ['Scan','accession']. Explicit list keeps auto-detect from
+            # exposing the protein_id / scan_id carriers as go-to fields.
+            go_to_fields=["Scan", "accession"],
         ),
         "tag_table": lambda: Table(
             cache_id=cid("tag_table"), data_path=p("tags"), cache_path=cache,
@@ -459,6 +547,10 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             # residue interval_filter.
             column_definitions=_TAG_COLUMN_DEFS,
             initial_sort=_TAG_INITIAL_SORT,
+            # round-8 finding 3-tables-003: oracle TabulatorTagTable.vue go-to-fields
+            # ['Scan','StartPos','EndPos','TagSequence']. Explicit list keeps
+            # auto-detect from exposing the tag_id / scan_id carriers as go-to fields.
+            go_to_fields=["Scan", "StartPos", "EndPos", "TagSequence"],
         ),
         "sequence_view": lambda: _sequence_view(
             file_manager, dataset_id, tool, cid, cache, p, settings
@@ -467,12 +559,19 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
         "quant_visualization": lambda: Table(
             cache_id=cid("quant_features"), data_path=p("quant_features"),
             cache_path=cache, interactivity={"feature": "feature_id"},
-            index_field="feature_id", default_row=0, title="Features",
+            # round-8 finding 3-feat-001: oracle FLASHQuantView TabulatorTable
+            # title="Feature groups" (was "Features").
+            index_field="feature_id", default_row=0, title="Feature groups",
             # oracle FLASHQuantView featureGroupTableColumnDefinitions: curated
             # titles (Index/Monoisotopic Mass/.../Isotope Cosine Score), no
             # formatters, no initialSort. StartRetentionTime(FWHM)/EndRetentionTime
             # (FWHM) -> schema StartRT/EndRT.
             column_definitions=_QUANT_COLUMN_DEFS,
+            # round-8 finding 3-tables-003: the oracle FLASHQuantView TabulatorTable
+            # passes NO go-to-fields, so its go-to UI never rendered. Pass [] to
+            # DISABLE go-to (vs None, which would auto-detect and expose feature_id
+            # etc. as a go-to field the oracle never had).
+            go_to_fields=[],
         ),
         "quant_traces_3d": lambda: Plot3D(
             cache_id=cid("quant_traces"), data=scan("quant_traces"),
@@ -485,10 +584,14 @@ def make_builders(file_manager, dataset_id, tool, settings=None):
             x_label="m/z", y_label="retention time", z_label="intensity",
             category_column="charge",
             # oracle builds one trace per charge but BREAKS the polyline between
-            # isotopes within that charge (it pushes a -1000 z sentinel before/after
-            # each isotope's points); series_column="isotope" reproduces that gap so
-            # the isotopes don't connect, while the legend/color stay per-charge.
-            series_column="isotope",
+            # EVERY trace within that charge (it pushes a -1000 z sentinel
+            # before/after each trace's points). round-8 finding 3-quant-005:
+            # (charge, isotope) is NOT unique -- two traces of one feature can share
+            # it -- so keying the break on "isotope" would merge those two traces
+            # into one connected polyline. series_column="trace_in_feature" (a stable
+            # per-feature running trace id minted in schema._build_quant) breaks the
+            # line per ACTUAL trace, while the legend/color stay per-charge.
+            series_column="trace_in_feature",
             # oracle legend label is `Charge: ${charge}` (name: `Charge: 2`).
             category_name_template="Charge: {}",
             # oracle FLASHQuantView draws ONE connected elution line per charge

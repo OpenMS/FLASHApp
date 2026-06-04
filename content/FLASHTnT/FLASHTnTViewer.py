@@ -56,11 +56,23 @@ def _render_experiment(exp_idx, exp_layout, container):
         ds = to_id[sel]
         # Lazily build the Insight tidy caches for this dataset (idempotent).
         build_insight_caches(file_manager, ds, "flashtnt")
+        # round-8 finding 3-tables-002: per-experiment "Best per spectrum" toggle
+        # (oracle ProteinTable ``bestPerSpectrumOnly``, default ON). Placed ABOVE the
+        # grid so it governs this experiment's protein table; its value selects the
+        # filtered vs full protein-table row set (+ cache_id) in make_builders.
+        best_per_spectrum = st.checkbox(
+            "Best per spectrum", value=True, key=f"tnt_best_{exp_idx}",
+            help="Show only the highest-scoring proteoform per spectrum (scan). "
+                 "Uncheck to show all proteoforms.",
+        )
         # SequenceView ion-types / tolerance come from the oracle settings cache.
         settings = None
         if file_manager.result_exists(ds, "settings"):
             settings = file_manager.get_results(ds, ["settings"])["settings"]
-        builders = make_builders(file_manager, ds, "flashtnt", settings=settings)
+        builders = make_builders(
+            file_manager, ds, "flashtnt", settings=settings,
+            best_per_spectrum=best_per_spectrum,
+        )
         show_linked_grid([exp_layout], builders, tool=f"flashtnt_{ds}")
 
 

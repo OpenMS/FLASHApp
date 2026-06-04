@@ -17,6 +17,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
+import polars as pl
 import pytest
 
 from openms_insight import StateManager
@@ -242,7 +244,11 @@ def test_quant_3d_axes_match_oracle(mock_streamlit, temp_workspace):
     # between isotopes within a charge (it pushes a -1000 z sentinel before/after
     # each isotope's points) and labels each trace `Charge: ${charge}`.
     assert args["categoryColumn"] == "charge"
-    assert args["seriesColumn"] == "isotope"  # break line between isotopes
+    # round-8 finding 3-quant-005: the polyline breaks per ACTUAL trace, not per
+    # (charge, isotope) -- two traces of one feature can share (charge, isotope), so
+    # keying on "isotope" would merge them. series_column="trace_in_feature" (stable
+    # per-feature running trace id) breaks each real trace into its own line.
+    assert args["seriesColumn"] == "trace_in_feature"
     assert args["categoryNameTemplate"] == "Charge: {}"  # legend "Charge: 2"
 
 
@@ -525,3 +531,273 @@ def test_quant_feature_table_column_chrome(mock_streamlit, temp_workspace):
     assert "initialSort" not in args
     # the oracle's duplicate "Feature Group Quantity" collapses to a single column
     assert [c["title"] for c in defs].count("Feature Group Quantity") == 1
+
+
+# --------------------------------------------------------------------------- #
+# round-8 wiring findings (selective highlight / dynamic title / per-trace 3D /
+# go-to fields / FDR chrome / feature-group title / best-per-spectrum toggle)
+# --------------------------------------------------------------------------- #
+def test_anno_spectrum_selective_highlight_wiring(mock_streamlit, temp_workspace):
+    """finding 3-anno-001: the annotated spectrum drops the static is_signal
+    highlight and instead highlights the SELECTED mass's signal peaks via the
+    highlight LINK frame (z=N labels + deconv-peaks toggle). It MUST expose peak_id
+    as its first interactivity column so the link key-set maps onto drawn peaks."""
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+    build_insight_caches(fm, ds, "flashtnt")
+    comp = make_builders(fm, ds, "flashtnt")["anno_spectrum"]()
+
+    # static is_signal highlight is REMOVED.
+    assert comp._highlight_column is None
+    args = comp._get_component_args()
+    assert args["highlightColumn"] is None
+    # selection-driven LINK highlight params.
+    assert comp._highlight_selection == "mass"
+    assert comp._highlight_link_path == fm.result_path(ds, "anno_highlight_link")
+    assert comp._highlight_link_key_column == "peak_id"
+    assert comp._highlight_link_match_column == "mass_in_scan"
+    assert comp._highlight_charge_column == "charge"
+    assert comp._highlight_annotation_template == "z={}"
+    assert comp._deconv_peaks_toggle is True
+    # peak_id is the FIRST (only) interactivity column == the highlight id_column
+    # (lineplot keys the highlight key-set off list(interactivity.values())[0]); the
+    # private "anno_peak" slot is NOT the shared "mass" slot (parity-bug fix kept).
+    assert args["interactivity"] == {"anno_peak": "peak_id"}
+    assert list(comp.get_interactivity_mapping().values())[0] == "peak_id"
+    assert "mass" not in comp.get_interactivity_mapping()
+    # the selective-highlight modebar wiring is enabled with the deconv-peaks toggle.
+    assert args["selectiveHighlightEnabled"] is True
+    assert args["deconvPeaksToggle"] is True
+    # the highlight is a state dependency on "mass" (selection change -> recompute).
+    assert "mass" in comp.get_state_dependencies()
+
+
+def test_anno_spectrum_highlight_maps_onto_peaks(mock_streamlit, temp_workspace):
+    """Selecting a mass highlights that mass's signal peaks on the annotated
+    spectrum (the link key-set maps onto drawn peaks via peak_id) and emits the
+    client-side toggle payload keyed on peak_id."""
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+    build_insight_caches(fm, ds, "flashtnt")
+    comp = make_builders(fm, ds, "flashtnt")["anno_spectrum"]()
+
+    link = pl.read_parquet(fm.result_path(ds, "anno_highlight_link"))
+    assert link.height > 0
+    row = link.row(0, named=True)
+    vd = comp._prepare_vue_data({"scan": row["scan_id"], "mass": row["mass_in_scan"]})
+    hl_col = vd["_plotConfig"]["highlightColumn"]
+    pdf = vd["plotData"]
+    # at least one annotated peak is highlighted for the selected mass.
+    assert hl_col in pdf.columns and int(pdf[hl_col].sum()) >= 1
+    # the client-side toggle payload keys on peak_id and exposes the all-signal set.
+    sh = vd["selectiveHighlight"]
+    assert sh["idColumn"] == "peak_id"
+    assert isinstance(sh["allSignalKeys"], list)
+    assert sh["deconvPeaksToggle"] is True
+    # with NO mass selected, nothing is highlighted (selection-driven).
+    vd0 = comp._prepare_vue_data({"scan": row["scan_id"]})
+    hl0 = vd0["_plotConfig"]["highlightColumn"]
+    pdf0 = vd0["plotData"]
+    assert hl0 not in pdf0.columns or int(pdf0[hl0].sum()) == 0
+
+
+def test_deconv_spectrum_selective_highlight_wiring(mock_streamlit, temp_workspace):
+    """deconv selective highlight: the SELECTED mass's stick highlights via the
+    match-column path (no link frame, no z=N labels, no deconv-peaks toggle)."""
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    build_insight_caches(fm, ds, "flashdeconv")
+    comp = make_builders(fm, ds, "flashdeconv")["deconv_spectrum"]()
+
+    assert comp._highlight_selection == "mass"
+    assert comp._highlight_match_column == "mass_in_scan"
+    # no link frame on the deconv spectrum (match-column path) => no z=N labels.
+    assert comp._highlight_link_path is None
+    args = comp._get_component_args()
+    assert args["selectiveHighlightEnabled"] is True
+    # NO "Show Deconvolved Peaks" toggle for the deconvolved spectrum (oracle parity).
+    assert args["deconvPeaksToggle"] is False
+    # clicking still selects the shared "mass" slot.
+    assert comp.get_interactivity_mapping() == {"mass": "mass_in_scan"}
+
+    # functional: selecting a mass highlights that mass's stick.
+    dft = pl.read_parquet(fm.result_path(ds, "deconv_spectrum_tidy"))
+    r = dft.row(0, named=True)
+    vd = comp._prepare_vue_data({"scan": r["scan_id"], "mass": r["mass_in_scan"]})
+    hl_col = vd["_plotConfig"]["highlightColumn"]
+    pdf = vd["plotData"]
+    assert hl_col in pdf.columns and bool(pdf[hl_col].any())
+
+
+def test_3d_sn_plot_dynamic_title(mock_streamlit, temp_workspace):
+    """finding 3-3d-001: the 3D S/N plot has a dynamic title driven by the SAME
+    scan/mass identifiers its filters use: '' (no scan) / 'Precursor signals'
+    (scan, no mass) / 'Mass signals' (mass selected)."""
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    build_insight_caches(fm, ds, "flashdeconv")
+    comp = make_builders(fm, ds, "flashdeconv")["3D_SN_plot"]()
+
+    # title_selection uses the filters' identifier names ("scan"/"mass").
+    assert comp._get_component_args()["titleSelection"] == {"scan": "scan", "mass": "mass"}
+    assert comp.compute_dynamic_title({}) == ""
+    assert comp.compute_dynamic_title({"scan": 0}) == "Precursor signals"
+    assert comp.compute_dynamic_title({"scan": 0, "mass": 1}) == "Mass signals"
+
+
+def test_quant_traces_3d_per_trace_break(mock_streamlit, temp_workspace):
+    """finding 3-quant-005: the quant 3D breaks its polyline per ACTUAL trace
+    (series_column="trace_in_feature"), keeping per-charge color/legend."""
+    fm = _fm(temp_workspace)
+    ds = make_quant_caches(fm)
+    build_insight_caches(fm, ds, "flashquant")
+    args = make_builders(fm, ds, "flashquant")["quant_traces_3d"]()._get_component_args()
+    assert args["seriesColumn"] == "trace_in_feature"
+    assert args["categoryColumn"] == "charge"
+    assert args["categoryNameTemplate"] == "Charge: {}"
+    # the per-trace id is present in the traces frame so the break is real.
+    traces = pl.read_parquet(fm.result_path(ds, "quant_traces"))
+    assert "trace_in_feature" in traces.columns
+
+
+def test_table_go_to_fields_match_oracle(mock_streamlit, temp_workspace):
+    """finding 3-tables-003: each Table passes the oracle's explicit goToFields so
+    auto-detect never exposes internal carrier columns (scan_id-as-mass_in_scan,
+    protein_id, tag_id, etc.). The FLASHQuant feature table disables go-to ([])."""
+    fm = _fm(temp_workspace)
+    tnt = make_tnt_caches(fm, ds="gtf_tnt")
+    build_insight_caches(fm, tnt, "flashtnt")
+    b = make_builders(fm, tnt, "flashtnt")
+
+    # scan/mass: oracle ['id','Scan'] / ['id'] -> schema id columns scan_id/mass_id.
+    assert b["scan_table"]()._get_component_args()["goToFields"] == ["scan_id", "Scan"]
+    assert b["mass_table"]()._get_component_args()["goToFields"] == ["mass_id"]
+    # protein/tag: oracle lists verbatim; carriers (protein_id/tag_id) excluded.
+    assert b["protein_table"]()._get_component_args()["goToFields"] == ["Scan", "accession"]
+    assert b["tag_table"]()._get_component_args()["goToFields"] == [
+        "Scan", "StartPos", "EndPos", "TagSequence",
+    ]
+    # carriers are not exposed as go-to fields.
+    for name, carriers in (
+        ("scan_table", {"mass_in_scan"}),
+        ("mass_table", {"mass_in_scan", "scan_id"}),
+        ("protein_table", {"protein_id", "scan_id"}),
+        ("tag_table", {"tag_id", "scan_id"}),
+    ):
+        gtf = set(b[name]()._get_component_args()["goToFields"])
+        assert not (gtf & carriers), name
+
+    # FLASHQuant feature table: oracle had no go-to-fields -> disabled with [] (so
+    # goToFields is NOT emitted to Vue, vs auto-detect exposing feature_id etc.).
+    qfm = _fm(temp_workspace)
+    qds = make_quant_caches(qfm, ds="gtf_quant")
+    build_insight_caches(qfm, qds, "flashquant")
+    qargs = make_builders(qfm, qds, "flashquant")["quant_visualization"]()._get_component_args()
+    assert "goToFields" not in qargs
+
+
+def test_fdr_plots_oracle_title_and_trace_labels(mock_streamlit, temp_workspace):
+    """findings 3-fdr-001/002: both FDR density plots use title "FDR Plot" and the
+    oracle trace legend names "Target QScores" / "Decoy QScores"."""
+    fm = _fm(temp_workspace)
+    # flashdeconv -> fdr_plot
+    dds = make_deconv_caches(fm, ds="fdr_d")
+    build_insight_caches(fm, dds, "flashdeconv")
+    fdr = make_builders(fm, dds, "flashdeconv")["fdr_plot"]()
+    fargs = fdr._get_component_args()
+    assert fargs["title"] == "FDR Plot"
+    assert fargs["targetLabel"] == "Target QScores"
+    assert fargs["decoyLabel"] == "Decoy QScores"
+
+    # flashtnt -> id_fdr_plot
+    tds = make_tnt_caches(_fm(temp_workspace), ds="fdr_t")
+    fm2 = _fm(temp_workspace)
+    build_insight_caches(fm2, "fdr_t", "flashtnt")
+    idfdr = make_builders(fm2, "fdr_t", "flashtnt")["id_fdr_plot"]()
+    iargs = idfdr._get_component_args()
+    assert iargs["title"] == "FDR Plot"
+    assert iargs["targetLabel"] == "Target QScores"
+    assert iargs["decoyLabel"] == "Decoy QScores"
+
+
+def test_quant_feature_table_title_feature_groups(mock_streamlit, temp_workspace):
+    """finding 3-feat-001: the FLASHQuant feature table title is "Feature groups"
+    (oracle FLASHQuantView), not "Features"."""
+    fm = _fm(temp_workspace)
+    ds = make_quant_caches(fm)
+    build_insight_caches(fm, ds, "flashquant")
+    args = make_builders(fm, ds, "flashquant")["quant_visualization"]()._get_component_args()
+    assert args["title"] == "Feature groups"
+
+
+def _multi_proteoform_tnt(fm, ds):
+    """Build tnt caches whose protein frame has TWO proteoforms on ONE Scan (so the
+    best-per-spectrum flag actually distinguishes them) + one on another Scan."""
+    make_tnt_caches(fm, ds=ds)
+    # Scan 10: proteoforms with Score 5 and 9 (best = 9); Scan 20: a single one.
+    protein_df = pd.DataFrame({
+        "index": [0, 1, 2], "accession": ["P1", "P1b", "P2"],
+        "description": ["d", "d", "d"],
+        "sequence": ["PEPTIDEK", "PEPTIDEK", "ACDEFGHK"],
+        "length": [8, 8, 8], "ProteoformMass": [900.4, 900.4, 800.3],
+        "MatchingFragments": [12, 3, 8], "Coverage(%)": [55.0, 10.0, 40.0],
+        "ModCount": [0, 0, 1], "TagCount": [2, 1, 1], "Score": [5.0, 9.0, 6.0],
+        "ProteoformLevelQvalue": [0.01, 0.02, 0.5], "Scan": [10, 10, 20],
+    })
+    fm.store_data(ds, "protein_dfs", protein_df)
+    build_insight_caches(fm, ds, "flashtnt", regenerate=True)
+
+
+def test_protein_best_per_spectrum_toggle(mock_streamlit, temp_workspace):
+    """finding 3-tables-002: best_per_spectrum=True sources the is_best_per_scan==1
+    subset under a DISTINCT cache_id (so the toggle reliably swaps the cached row
+    set); False sources the full table under the normal cache_id. Column chrome /
+    interactivity / index_field / initial_sort stay identical across both."""
+    fm = _fm(temp_workspace)
+    _multi_proteoform_tnt(fm, "bps")
+
+    best = make_builders(fm, "bps", "flashtnt", best_per_spectrum=True)["protein_table"]()
+    allp = make_builders(fm, "bps", "flashtnt", best_per_spectrum=False)["protein_table"]()
+
+    # DISTINCT cache_ids so the two row sets cache independently (toggle swap).
+    assert best._cache_id == "flashtnt__bps__protein_table_best"
+    assert allp._cache_id == "flashtnt__bps__protein_table"
+    assert best._cache_id != allp._cache_id
+
+    # filtered (best) shows one row per Scan (the highest Score); full shows all 3.
+    best_rows = best._prepare_vue_data({})["tableData"]
+    all_rows = allp._prepare_vue_data({})["tableData"]
+    assert len(best_rows) == 2  # Scan 10 (best proteoform) + Scan 20
+    assert len(all_rows) == 3
+    # the kept Scan-10 proteoform is the higher-Score one (protein_id 1, Score 9).
+    assert sorted(best_rows["protein_id"].tolist()) == [1, 2]
+
+    # column chrome / interactivity / index / initial_sort are IDENTICAL.
+    bargs, aargs = best._get_component_args(), allp._get_component_args()
+    assert bargs["columnDefinitions"] == aargs["columnDefinitions"]
+    assert bargs["interactivity"] == aargs["interactivity"] == {
+        "protein": "protein_id", "scan": "scan_id",
+    }
+    assert bargs["tableIndexField"] == aargs["tableIndexField"] == "protein_id"
+    assert bargs["initialSort"] == aargs["initialSort"] == [{"column": "Score", "dir": "desc"}]
+    assert bargs["goToFields"] == aargs["goToFields"] == ["Scan", "accession"]
+
+    # default wiring (no kwarg) is best-per-spectrum (oracle default ON).
+    default = make_builders(fm, "bps", "flashtnt")["protein_table"]()
+    assert default._cache_id == "flashtnt__bps__protein_table_best"
+    assert len(default._prepare_vue_data({})["tableData"]) == 2
+
+
+def test_best_per_spectrum_preserves_scan_cross_link(mock_streamlit, temp_workspace):
+    """Both protein-table row sets carry scan_id, so the downstream scan-keyed
+    panels (tag table / sequence view / augmented spectrum) cross-link unchanged
+    regardless of the toggle."""
+    fm = _fm(temp_workspace)
+    _multi_proteoform_tnt(fm, "bps2")
+    for flag in (True, False):
+        rows = make_builders(
+            fm, "bps2", "flashtnt", best_per_spectrum=flag
+        )["protein_table"]()._prepare_vue_data({})["tableData"]
+        # scan_id carrier present (drives the protein->scan cross-link) in both sets.
+        assert "scan_id" in rows.columns
+        assert rows["scan_id"].notna().all()
