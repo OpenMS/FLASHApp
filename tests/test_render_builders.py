@@ -169,6 +169,9 @@ def test_filters_interactivity_value_based(mock_streamlit, temp_workspace):
     assert protein_table.get_interactivity_mapping() == {
         "protein": "protein_id", "scan": "scan_id",
     }
+    # round-10 finding 3-cascade-001: a protein click also cascade-clears the
+    # dependent aa (residue) + tag selections (oracle updateSelectedProtein).
+    assert protein_table._get_component_args()["clearsSelections"] == ["aa", "tag"]
 
 
 def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):

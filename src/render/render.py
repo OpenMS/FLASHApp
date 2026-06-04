@@ -521,6 +521,12 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             # selection, so the augmented spectrum / sequence-view peaks / tag
             # table all follow the selected proteoform to its scan.
             interactivity={"protein": "protein_id", "scan": "scan_id"},
+            # round-10 finding 3-cascade-001: the oracle ProteinTable
+            # updateSelectedProtein clears selectedAA/selectedTag/tagData on every
+            # protein click, so switching proteoform resets the dependent residue
+            # (aa) + tag selections (consumed by the tag table interval_filters +
+            # the tagger overlay). Reproduce that cascade-clear value-side.
+            clears_selections=["aa", "tag"],
             index_field="protein_id", default_row=0, title="Protein Table",
             # oracle chrome: curated titles, -1->"-" on Mass/Q-Value, initialSort
             # by Score desc. protein_id/scan_id carriers stay for index/cross-link
