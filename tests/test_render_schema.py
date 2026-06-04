@@ -299,6 +299,27 @@ def test_proteins_is_best_per_scan_tie_keeps_first(temp_workspace):
     assert proteins["is_best_per_scan"].to_list() == [1, 0]
 
 
+def test_proteins_is_best_per_scan_passthrough_missing_scan(temp_workspace):
+    """round-10 finding 3-best-002: proteoforms with a MISSING Scan (NaN/null) are
+    PASSED THROUGH (every one flagged best), matching the oracle filterBestPerSpectrum
+    which keeps each row whose Scan is non-numeric/NaN -- NOT collapsed into one
+    .over(Scan) group (which would flag only one). A missing Scan from protein.tsv
+    arrives as float NaN, so the flag must catch NaN, not just polars null."""
+    fm = _fm(temp_workspace)
+    ds = "exp1"
+    fm.store_data(ds, "scan_table", pd.DataFrame({"index": [0], "Scan": [10]}))
+    # Scan 10 (one proteoform) + THREE missing-Scan (NaN) proteoforms.
+    fm.store_data(ds, "protein_dfs", pd.DataFrame({
+        "index": [0, 1, 2, 3],
+        "Scan": [10, None, None, None],  # -> float64 [10.0, NaN, NaN, NaN]
+        "Score": [5.0, 1.0, 9.0, 3.0],
+        "accession": ["a", "b", "c", "d"]}))
+    _build_proteins(fm, ds, regenerate=True, logger=None)
+    proteins = pl.read_parquet(fm.result_path(ds, "proteins")).sort("protein_id")
+    # Scan 10 -> best (alone); ALL three missing-Scan rows -> best (passthrough).
+    assert proteins["is_best_per_scan"].to_list() == [1, 1, 1, 1]
+
+
 # --------------------------------------------------------------------------- #
 # FLASHQuant tidy parquet
 # --------------------------------------------------------------------------- #

@@ -482,7 +482,17 @@ def _build_proteins(file_manager, dataset_id, regenerate, logger):
         # strict 1..N ranking with NO ties, so EXACTLY one row per Scan == 1; the
         # ordinal tiebreak follows row order (first occurrence wins on equal Score).
         # A later step adds the viewer toggle + filter; we only mint the flag.
-        (pl.col("Score").rank("ordinal", descending=True).over("Scan") == 1)
+        # Null/NaN/non-numeric-Scan proteoforms are PASSED THROUGH (flagged best):
+        # the oracle filterBestPerSpectrum keeps every row whose Scan is
+        # `typeof !== 'number' || isNaN(scan)` rather than collapsing them into one
+        # .over(Scan) group (round-10 finding 3-best-002). A missing Scan from
+        # protein.tsv reads as float NaN (not a polars null), so is_null() alone
+        # would miss it -- cast to f64 (non-numeric -> null) then treat null|NaN as
+        # missing (dtype-safe: is_nan errors on an int column without the cast).
+        (
+            (pl.col("Score").rank("ordinal", descending=True).over("Scan") == 1)
+            | pl.col("Scan").cast(pl.Float64, strict=False).is_nan().fill_null(True)
+        )
         .cast(pl.Int64)
         .alias("is_best_per_scan"),
     )
