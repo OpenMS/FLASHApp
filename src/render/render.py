@@ -264,6 +264,11 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
             # (ProteoformMass) value.
             observed_mass_column="observed_mass",
             mass_header_title="Proteoform",
+            # round-14 finding 3-seqview-005: the oracle preparePrecursorInfo
+            # proteoform branch labels these "Theoretical protein mass" / "Observed
+            # proteoform mass" (vs the generic precursor-branch defaults).
+            theoretical_mass_label="Theoretical protein mass",
+            observed_mass_label="Observed proteoform mass",
             # round-13 finding 3-seqview-003: when a mass is selected elsewhere
             # (mass table / spectrum click) highlight the matching fragment-table row
             # (oracle updateFragmentTableFromMassSelection); resolves via the same

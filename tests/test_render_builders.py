@@ -214,6 +214,9 @@ def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
     # + inbound mass->fragment-table-row highlight.
     assert sv._observed_mass_column == "observed_mass"
     assert sv._mass_selection_identifier == "mass"
+    # round-14 finding 3-seqview-005: oracle proteoform-branch header labels.
+    assert sv._theoretical_mass_label == "Theoretical protein mass"
+    assert sv._observed_mass_label == "Observed proteoform mass"
 
     # round-13 finding 3-seqview-002: the FLASHDeconv sequence view (global sequence,
     # no tags/coverage -> PATH 2 only) must ALSO publish the fragment's mass on a
