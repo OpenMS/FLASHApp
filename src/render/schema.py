@@ -482,15 +482,28 @@ def _build_proteins(file_manager, dataset_id, regenerate, logger):
         # strict 1..N ranking with NO ties, so EXACTLY one row per Scan == 1; the
         # ordinal tiebreak follows row order (first occurrence wins on equal Score).
         # A later step adds the viewer toggle + filter; we only mint the flag.
-        # Null/NaN/non-numeric-Scan proteoforms are PASSED THROUGH (flagged best):
-        # the oracle filterBestPerSpectrum keeps every row whose Scan is
-        # `typeof !== 'number' || isNaN(scan)` rather than collapsing them into one
-        # .over(Scan) group (round-10 finding 3-best-002). A missing Scan from
-        # protein.tsv reads as float NaN (not a polars null), so is_null() alone
-        # would miss it -- cast to f64 (non-numeric -> null) then treat null|NaN as
-        # missing (dtype-safe: is_nan errors on an int column without the cast).
+        #
+        # NaN-defensiveness mirrors the oracle's `toScore` + `filterBestPerSpectrum`:
+        #  - SCORE (round-11 finding 3-best-003): rank the highest REAL Score first.
+        #    polars rank(descending) would rank NaN as the LARGEST (flagging a
+        #    no-score proteoform best); the oracle `toScore` maps NaN/non-numeric ->
+        #    -Infinity (sorts last). Cast to f64 (non-numeric -> null) then push
+        #    null|NaN to -inf before ranking so missing Scores never win.
+        #  - SCAN (round-10 finding 3-best-002): PASS THROUGH every row whose Scan is
+        #    `typeof !== 'number' || isNaN(scan)` (flag best) instead of collapsing
+        #    them into one .over(Scan) group. A missing Scan from protein.tsv reads as
+        #    float NaN (not a polars null), so cast to f64 then treat null|NaN as
+        #    missing (dtype-safe: is_nan errors on an int column without the cast).
         (
-            (pl.col("Score").rank("ordinal", descending=True).over("Scan") == 1)
+            (
+                pl.col("Score")
+                .cast(pl.Float64, strict=False)
+                .fill_null(float("-inf"))
+                .fill_nan(float("-inf"))
+                .rank("ordinal", descending=True)
+                .over("Scan")
+                == 1
+            )
             | pl.col("Scan").cast(pl.Float64, strict=False).is_nan().fill_null(True)
         )
         .cast(pl.Int64)

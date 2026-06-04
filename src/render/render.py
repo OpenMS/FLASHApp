@@ -317,6 +317,13 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
         "scan_table": lambda: Table(
             cache_id=cid("scan_table"), data_path=p("scans"), cache_path=cache,
             interactivity={"scan": "scan_id"}, index_field="scan_id",
+            # round-11 finding 3-cascade-002: the oracle TabulatorScanTable
+            # updateSelectedScan calls updateSelectedMass(0) on a scan change,
+            # resetting the mass to the new scan's FIRST mass. Cascade-clear "mass"
+            # on a scan click; the mass_table (default_row=0) then re-defaults to
+            # mass_in_scan 0 of the new scan, so the deconv/anno spectra + 3D show
+            # the first mass instead of a stale per-scan ordinal carried over.
+            clears_selections=["mass"],
             default_row=0, title="Scan Table",
             # oracle Tabulator chrome: curated titles + guarded toFixed on RT /
             # PrecursorMass; shows ONLY these columns (no initialSort in the oracle).

@@ -657,6 +657,27 @@ def test_3d_sn_plot_dynamic_title(mock_streamlit, temp_workspace):
     assert comp.compute_dynamic_title({"scan": 0, "mass": 1}) == "Mass signals"
 
 
+def test_scan_table_resets_mass_on_scan_change(mock_streamlit, temp_workspace):
+    """finding 3-cascade-002: a scan-table click resets the mass selection to the
+    new scan's FIRST mass (oracle updateSelectedScan -> updateSelectedMass(0)). The
+    scan_table cascade-clears "mass"; the mass_table (default_row=0) then re-defaults
+    to mass_in_scan 0 of the selected scan via the bridge _auto_selection, so a stale
+    per-scan ordinal cannot carry across a scan switch."""
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    build_insight_caches(fm, ds, "flashdeconv")
+    b = make_builders(fm, ds, "flashdeconv")
+
+    # scan click cascade-clears the dependent mass selection.
+    assert b["scan_table"]()._get_component_args()["clearsSelections"] == ["mass"]
+
+    # with mass unset (the post-clear state), the mass_table auto-selects the first
+    # mass (mass_in_scan 0) of the selected scan -> equals the oracle's mass=0 reset.
+    mt = b["mass_table"]()
+    vd = mt._prepare_vue_data({"scan": 1})
+    assert vd.get("_auto_selection", {}).get("mass") == 0
+
+
 def test_quant_traces_3d_per_trace_break(mock_streamlit, temp_workspace):
     """finding 3-quant-005: the quant 3D breaks its polyline per ACTUAL trace
     (series_column="trace_in_feature"), keeping per-charge color/legend."""

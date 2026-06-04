@@ -320,6 +320,26 @@ def test_proteins_is_best_per_scan_passthrough_missing_scan(temp_workspace):
     assert proteins["is_best_per_scan"].to_list() == [1, 1, 1, 1]
 
 
+def test_proteins_is_best_per_scan_nan_score_loses(temp_workspace):
+    """round-11 finding 3-best-003: a NaN/missing Score must NOT win best-per-spectrum
+    (oracle toScore maps NaN/non-numeric -> -Infinity, sorting it last). On a Scan
+    with one real Score and one missing (NaN) Score, the REAL-Score proteoform is
+    flagged best -- NOT the NaN one (which polars rank(descending) would otherwise
+    rank largest)."""
+    fm = _fm(temp_workspace)
+    ds = "exp1"
+    fm.store_data(ds, "scan_table", pd.DataFrame({"index": [0], "Scan": [10]}))
+    fm.store_data(ds, "protein_dfs", pd.DataFrame({
+        "index": [0, 1],
+        "Scan": [10, 10],
+        "Score": [5.0, None],  # -> float64 [5.0, NaN]
+        "accession": ["real", "noscore"]}))
+    _build_proteins(fm, ds, regenerate=True, logger=None)
+    proteins = pl.read_parquet(fm.result_path(ds, "proteins")).sort("protein_id")
+    # the real-Score row (5.0) wins; the NaN-Score row does NOT.
+    assert proteins["is_best_per_scan"].to_list() == [1, 0]
+
+
 # --------------------------------------------------------------------------- #
 # FLASHQuant tidy parquet
 # --------------------------------------------------------------------------- #
