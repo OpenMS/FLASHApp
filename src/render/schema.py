@@ -434,6 +434,16 @@ def _build_seq_deconv(file_manager, dataset_id, regenerate, logger):
             pl.col("index").alias("scan_id"),
             pl.lit(sequence).alias("sequence"),
             pl.lit(1).cast(pl.Int64).alias("precursor_charge"),
+            # round-15 finding 3-seqview-006: the oracle SequenceView shows a
+            # "Precursor" mass-info header for a selected scan whose PrecursorMass != 0
+            # (the deconv/precursor branch of preparePrecursorInfo); MS1 scans
+            # (PrecursorMass == 0) show NO header. Surface the per-scan observed
+            # precursor mass, NULL for MS1 so the SequenceView hides the header there
+            # (vs the TnT proteoform branch, which shows "-" for a missing mass).
+            pl.when(pl.col("PrecursorMass") != 0)
+            .then(pl.col("PrecursorMass").cast(pl.Float64))
+            .otherwise(None)
+            .alias("observed_mass"),
         ]
     )
     _store(file_manager, dataset_id, "seq_deconv", seq_df, regenerate, logger,

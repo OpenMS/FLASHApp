@@ -293,9 +293,15 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
         fragment_mass_identifier="mass",
         # round-13 finding 3-seqview-003: a mass selected elsewhere (mass table /
         # spectrum) also highlights the matching fragment-table row here (the deconv
-        # layout is mass-driven). No mass-info header (global sequence, not a
-        # proteoform -> no observed/theoretical proteoform mass).
+        # layout is mass-driven).
         mass_selection_identifier="mass",
+        # round-15 finding 3-seqview-006: the oracle deconv SequenceView shows the
+        # PRECURSOR mass-info header (preparePrecursorInfo precursor branch) for a
+        # selected MS2 scan -- "Precursor" title + the generic "Theoretical mass" /
+        # "Observed mass" labels (the defaults). observed_mass is the per-scan
+        # PrecursorMass (NULL for MS1 -> header hidden, matching the oracle).
+        observed_mass_column="observed_mass",
+        mass_header_title="Precursor",
         deconvolved=True,
         title="Sequence View",
     )

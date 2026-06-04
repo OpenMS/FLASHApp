@@ -229,7 +229,13 @@ def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
     assert dsv._fragment_mass_identifier == "mass"
     assert dsv._coverage_column is None  # no tags on the global deconv sequence
     assert dsv._mass_selection_identifier == "mass"  # inbound mass->fragment highlight
-    assert dsv._observed_mass_column is None  # no proteoform mass header for deconv
+    # round-15 finding 3-seqview-006: deconv shows the PRECURSOR mass-info header
+    # (per-scan PrecursorMass -> observed_mass), with the generic "Precursor" title.
+    assert dsv._observed_mass_column == "observed_mass"
+    assert dsv._mass_header_title == "Precursor"
+    # seq_deconv carries per-scan observed_mass (PrecursorMass, NULL for MS1).
+    sdf = pl.read_parquet(dfm.result_path("deconv_seqmass", "seq_deconv"))
+    assert "observed_mass" in sdf.columns
 
     # In FLASHDeconv (no tags frame) the tagger has no tag resolution wired.
     dds = make_deconv_caches(_fm(temp_workspace), ds="deconv1")
