@@ -128,23 +128,9 @@ ENV OPENMS_DATA_PATH="/openms/share/"
 # Remove build directory.
 RUN rm -rf openms-build
 
-# Build JS-component (quick). Placed after the slow OpenMS build so that changes
-# to the Vue component do not invalidate the OpenMS compile cache; its output is
-# copied into the final image in the run-app stage below.
-FROM node:21 AS js-build
-
-# JS Component
-ARG VUE_REPO=https://github.com/t0mdavid-m/openms-streamlit-vue-component.git
-ARG VUE_BRANCH=FVdeploy
-
-ADD https://api.github.com/repos/t0mdavid-m/openms-streamlit-vue-component/git/refs/heads/$VUE_BRANCH version.json
-
-RUN git clone -b ${VUE_BRANCH} --single-branch ${VUE_REPO}
-WORKDIR /openms-streamlit-vue-component
-RUN npm install
-RUN npm run build
-
 # Prepare and run streamlit app.
+# (The legacy local Vue component build stage was removed in the OpenMS-Insight
+# migration -- Insight ships its own Vue bundle via the openms-insight package.)
 FROM compile-openms AS run-app
 
 # Install Redis server for job queue and nginx for load balancing.
@@ -186,9 +172,6 @@ COPY app.py /app/app.py
 COPY settings.json /app/settings.json
 COPY default-parameters.json /app/default-parameters.json
 COPY presets.json /app/presets.json
-
-# Copy the pre-built Vue/JS component (built in the js-build stage above).
-COPY --from=js-build openms-streamlit-vue-component/dist /app/js-component/dist
 
 # add cron job to the crontab
 RUN echo "0 3 * * * /root/miniforge3/envs/streamlit-env/bin/python /app/clean-up-workspaces.py >> /app/clean-up-workspaces.log 2>&1" | crontab -

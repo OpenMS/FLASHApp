@@ -59,7 +59,7 @@ numpy>=2.0
     #   pyopenms
     #   src (pyproject.toml)
     #   streamlit
-openms-insight==0.1.11
+openms-insight==0.1.15
     # via src (pyproject.toml)
     # interactive MS visualization components (Table/LinePlot/Heatmap/Plot3D/
     # SequenceView/...) backing the FLASHDeconv/FLASHTnT/FLASHQuant viewers.
