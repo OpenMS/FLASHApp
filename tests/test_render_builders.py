@@ -299,11 +299,14 @@ def test_axis_titles_match_oracle(mock_streamlit, temp_workspace):
     assert dec["xLabel"] == "Monoisotopic Mass" and dec["yLabel"] == "Intensity"
     ann = b["anno_spectrum"]()._get_component_args()
     assert ann["xLabel"] == "m/z" and ann["yLabel"] == "Intensity"
+    # round-16 finding 3-heatmap-001: deconv heatmaps -> "Monoisotopic Mass";
+    # RAW heatmaps -> "m/z" (raw m/z data), matching oracle PlotlyHeatmap yAxisLabel.
     for h in ("ms1_deconv_heat_map", "ms2_deconv_heat_map",
               "ms1_raw_heatmap", "ms2_raw_heatmap"):
         a = b[h]()._get_component_args()
         assert a["xLabel"] == "Retention Time", h
-        assert a["yLabel"] == "Monoisotopic Mass", h
+        expected_y = "m/z" if h.endswith("raw_heatmap") else "Monoisotopic Mass"
+        assert a["yLabel"] == expected_y, h
 
 
 def test_scan_to_mass_filter_applies(mock_streamlit, temp_workspace):

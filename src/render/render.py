@@ -507,18 +507,21 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             x_label="Retention Time", y_label="Monoisotopic Mass",
             title="Deconvolved MS2 Heatmap",
         ),
+        # round-16 finding 3-heatmap-001: the RAW heatmaps plot raw m/z (from the
+        # annotated spectra), so the oracle PlotlyHeatmap yAxisLabel returns "m/z" for
+        # Raw MS1/MS2 Heatmaps -- only the DECONV heatmaps are "Monoisotopic Mass".
         "ms1_raw_heatmap": lambda: Heatmap(
             cache_id=cid("ms1_raw_heatmap"), data_path=p("ms1_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
-            x_label="Retention Time", y_label="Monoisotopic Mass",
+            x_label="Retention Time", y_label="m/z",
             title="Raw MS1 Heatmap",
         ),
         "ms2_raw_heatmap": lambda: Heatmap(
             cache_id=cid("ms2_raw_heatmap"), data_path=p("ms2_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
-            x_label="Retention Time", y_label="Monoisotopic Mass",
+            x_label="Retention Time", y_label="m/z",
             title="Raw MS2 Heatmap",
         ),
         "fdr_plot": lambda: LinePlot.density(
