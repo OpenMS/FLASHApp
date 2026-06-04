@@ -303,10 +303,17 @@ def test_axis_titles_match_oracle(mock_streamlit, temp_workspace):
     # RAW heatmaps -> "m/z" (raw m/z data), matching oracle PlotlyHeatmap yAxisLabel.
     for h in ("ms1_deconv_heat_map", "ms2_deconv_heat_map",
               "ms1_raw_heatmap", "ms2_raw_heatmap"):
-        a = b[h]()._get_component_args()
+        comp = b[h]()
+        a = comp._get_component_args()
         assert a["xLabel"] == "Retention Time", h
         expected_y = "m/z" if h.endswith("raw_heatmap") else "Monoisotopic Mass"
         assert a["yLabel"] == expected_y, h
+        # round-18 finding 3-heatmap-002: click selects scan (all) + mass (deconv).
+        im = comp.get_interactivity_mapping()
+        if h.endswith("raw_heatmap"):
+            assert im == {"scan": "scan_idx"}, h
+        else:
+            assert im == {"scan": "scan_idx", "mass": "mass_idx"}, h
 
 
 def test_scan_to_mass_filter_applies(mock_streamlit, temp_workspace):

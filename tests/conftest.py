@@ -161,13 +161,17 @@ def make_deconv_caches(fm, ds="exp1"):
         ],
         "NoisyPeaks": [[[[2.0, 80.0, 0.5, 12.0]], []], [[]]],
     }, schema=_sn_schema()))
-    # full-resolution heatmaps (already tidy: rt, mass, intensity)
+    # full-resolution heatmaps (tidy: rt, mass, intensity + the click-source
+    # columns getMSSignalDF emits -- scan_idx (= scan_id) and mass_idx
+    # (= per-scan mass_in_scan ordinal) -- which the heatmap click->selection wires.
     for tag in ("ms1_deconv_heatmap", "ms2_deconv_heatmap",
                 "ms1_raw_heatmap", "ms2_raw_heatmap"):
         fm.store_data(ds, tag, pl.DataFrame({
             "rt": [1.0, 1.0, 2.0, 2.0],
             "mass": [100.0, 200.0, 300.0, 400.0],
-            "intensity": [10.0, 20.0, 30.0, 40.0]}))
+            "intensity": [10.0, 20.0, 30.0, 40.0],
+            "scan_idx": [0, 0, 1, 1],
+            "mass_idx": [0, 1, 0, 1]}))
     fm.store_data(ds, "density_target", pd.DataFrame({"x": [0.1, 0.2], "y": [1.0, 2.0]}))
     fm.store_data(ds, "density_decoy", pd.DataFrame({"x": [0.3, 0.4], "y": [0.5, 0.6]}))
     return ds

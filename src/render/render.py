@@ -493,10 +493,15 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
         ),
         # ---- heatmaps: reuse the existing full-resolution oracle caches as-is ----
         # oracle PlotlyHeatmap axis titles: x="Retention Time", y="Monoisotopic Mass".
+        # round-18 finding 3-heatmap-002: the oracle PlotlyHeatmap click selects the
+        # clicked point's scan (ALL heatmaps) + its mass (DECONV MS1/MS2 only),
+        # cascading scan->mass->spectra->3D. The reused caches carry scan_idx
+        # (= scan_id) + mass_idx (= mass_in_scan), so wire interactivity to them.
         "ms1_deconv_heat_map": lambda: Heatmap(
             cache_id=cid("ms1_deconv_heat_map"), data_path=p("ms1_deconv_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
+            interactivity={"scan": "scan_idx", "mass": "mass_idx"},
             x_label="Retention Time", y_label="Monoisotopic Mass",
             title="Deconvolved MS1 Heatmap",
         ),
@@ -504,16 +509,20 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             cache_id=cid("ms2_deconv_heat_map"), data_path=p("ms2_deconv_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
+            interactivity={"scan": "scan_idx", "mass": "mass_idx"},
             x_label="Retention Time", y_label="Monoisotopic Mass",
             title="Deconvolved MS2 Heatmap",
         ),
         # round-16 finding 3-heatmap-001: the RAW heatmaps plot raw m/z (from the
         # annotated spectra), so the oracle PlotlyHeatmap yAxisLabel returns "m/z" for
         # Raw MS1/MS2 Heatmaps -- only the DECONV heatmaps are "Monoisotopic Mass".
+        # raw heatmaps: click selects the SCAN only (oracle sets mass only for the
+        # deconvolved heatmaps).
         "ms1_raw_heatmap": lambda: Heatmap(
             cache_id=cid("ms1_raw_heatmap"), data_path=p("ms1_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
+            interactivity={"scan": "scan_idx"},
             x_label="Retention Time", y_label="m/z",
             title="Raw MS1 Heatmap",
         ),
@@ -521,6 +530,7 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             cache_id=cid("ms2_raw_heatmap"), data_path=p("ms2_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
+            interactivity={"scan": "scan_idx"},
             x_label="Retention Time", y_label="m/z",
             title="Raw MS2 Heatmap",
         ),
