@@ -211,6 +211,17 @@ def test_tnt_tagger_resolves_tag_payload(mock_streamlit, temp_workspace):
     assert sv._coverage_column == "coverage"
     assert sv._fragment_mass_identifier == "mass"
 
+    # round-13 finding 3-seqview-002: the FLASHDeconv sequence view (global sequence,
+    # no tags/coverage -> PATH 2 only) must ALSO publish the fragment's mass on a
+    # residue click (oracle aminoAcidSelected -> updateSelectedMass runs on every tool).
+    dfm = _fm(temp_workspace)
+    make_deconv_caches(dfm, ds="deconv_seqmass")
+    make_sequence_cache(dfm)  # global deconv sequence ("sequence" dataset)
+    build_insight_caches(dfm, "deconv_seqmass", "flashdeconv")
+    dsv = make_builders(dfm, "deconv_seqmass", "flashdeconv")["sequence_view"]()
+    assert dsv._fragment_mass_identifier == "mass"
+    assert dsv._coverage_column is None  # no tags on the global deconv sequence
+
     # In FLASHDeconv (no tags frame) the tagger has no tag resolution wired.
     dds = make_deconv_caches(_fm(temp_workspace), ds="deconv1")
     fm2 = _fm(temp_workspace)

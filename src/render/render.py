@@ -270,6 +270,12 @@ def _sequence_view(file_manager, dataset_id, tool, cid, cache, p, settings):
         cache_path=cache,
         filters={"scan": "scan_id"},
         interactivity={"mass": "mass_in_scan"},
+        # round-13 finding 3-seqview-002: the oracle aminoAcidSelected ->
+        # updateSelectedMass runs on EVERY tool, so a fragment-residue click in the
+        # deconv Sequence View must drive the shared mass selection (mass table /
+        # deconv+anno spectra / 3D, all in the deconv default layout). PATH 2 only
+        # (no coverage/tags -> no PATH-1 residue_identifier on the global sequence).
+        fragment_mass_identifier="mass",
         deconvolved=True,
         title="Sequence View",
     )
