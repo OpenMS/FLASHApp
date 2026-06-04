@@ -355,14 +355,15 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             # match-column path lights up base rows where mass_in_scan == sel
             # directly (no link frame). No z=N charge labels and no
             # deconv_peaks_toggle for the deconvolved spectrum (oracle parity).
-            # NOTE: the match-column highlight path
-            # (lineplot._compute_selective_highlight) returns no charge/value
-            # descriptors, so it draws NO selected-mass MonoMass value label. The
-            # priority per the finding is the selected-stick highlight, which this
-            # delivers; surfacing the MonoMass value as a label would require a new
-            # match-column label producer in the LinePlot (not available today).
+            # round-9 finding 3-deconv-001: also draw the selected mass's MonoMass
+            # VALUE LABEL above the highlighted stick (oracle Deconvolved Spectrum
+            # draws mass.toFixed(2)). The match-column path now emits a value-label
+            # descriptor for each matched row via highlight_value_column +
+            # highlight_value_template (x = the stick's "mass", text = 2-decimal mass).
             highlight_selection="mass",
             highlight_match_column="mass_in_scan",
+            highlight_value_column="mass",
+            highlight_value_template="{:.2f}",
             # oracle axis titles (PlotlyLineplot.vue): deconvolved x="Monoisotopic
             # Mass", y="Intensity". Without these the axes show the raw column names.
             x_label="Monoisotopic Mass", y_label="Intensity",

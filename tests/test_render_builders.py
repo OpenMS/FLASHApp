@@ -620,6 +620,11 @@ def test_deconv_spectrum_selective_highlight_wiring(mock_streamlit, temp_workspa
     # clicking still selects the shared "mass" slot.
     assert comp.get_interactivity_mapping() == {"mass": "mass_in_scan"}
 
+    # round-9 finding 3-deconv-001: deconv draws the selected mass's MonoMass
+    # value label (oracle mass.toFixed(2)) via the match-column value producer.
+    assert comp._highlight_value_column == "mass"
+    assert comp._highlight_value_template == "{:.2f}"
+
     # functional: selecting a mass highlights that mass's stick.
     dft = pl.read_parquet(fm.result_path(ds, "deconv_spectrum_tidy"))
     r = dft.row(0, named=True)
@@ -627,6 +632,10 @@ def test_deconv_spectrum_selective_highlight_wiring(mock_streamlit, temp_workspa
     hl_col = vd["_plotConfig"]["highlightColumn"]
     pdf = vd["plotData"]
     assert hl_col in pdf.columns and bool(pdf[hl_col].any())
+    # ... and draws exactly one MonoMass value label at that stick.
+    anns = vd["peakAnnotations"]
+    assert len(anns) == 1
+    assert anns[0]["text"] == f"{r['mass']:.2f}"
 
 
 def test_3d_sn_plot_dynamic_title(mock_streamlit, temp_workspace):
