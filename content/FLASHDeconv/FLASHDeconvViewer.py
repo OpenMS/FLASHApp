@@ -43,9 +43,8 @@ else:
     default = DEFAULT_LAYOUT + [["sequence_view"]] if has_sequence else DEFAULT_LAYOUT
     layout, side_by_side = [default], False
 
-# Display-name <-> id mappings for the experiment selectors.
-names = [file_manager.get_display_name(r) for r in results]
-to_id = {file_manager.get_display_name(r): r for r in results}
+# Experiments are selected by their stable dataset id; the display name is shown
+# via format_func so duplicate display names can't collapse distinct datasets.
 
 
 def _render_experiment(exp_idx, exp_layout, container):
@@ -55,16 +54,17 @@ def _render_experiment(exp_idx, exp_layout, container):
         # user picks an experiment -- the old viewer used validate_selected_index
         # (initially None), which also avoided eagerly building caches on page load.
         sel = st.selectbox(
-            "choose experiment", names, index=None,
+            "choose experiment", results, index=None,
+            format_func=file_manager.get_display_name,
             placeholder="Choose an experiment", key=f"deconv_exp_{exp_idx}",
         )
         if sel is None:
             return
-        ds = to_id[sel]
+        ds = sel
         # Lazily build the Insight tidy caches for this dataset (idempotent).
         build_insight_caches(file_manager, ds, "flashdeconv")
         builders = make_builders(file_manager, ds, "flashdeconv")
-        show_linked_grid([exp_layout], builders, tool=f"flashdeconv_{ds}")
+        show_linked_grid([exp_layout], builders, tool=f"flashdeconv_{exp_idx}_{ds}")
 
 
 if len(layout) == 2 and side_by_side:

@@ -38,9 +38,8 @@ if file_manager.result_exists("flashtnt_layout", "layout"):
 else:
     layout, side_by_side = [DEFAULT_LAYOUT], False
 
-# Display-name <-> id mappings for the experiment selectors.
-names = [file_manager.get_display_name(r) for r in results]
-to_id = {file_manager.get_display_name(r): r for r in results}
+# Experiments are selected by their stable dataset id; the display name is shown
+# via format_func so duplicate display names can't collapse distinct datasets.
 
 
 def _render_experiment(exp_idx, exp_layout, container):
@@ -48,12 +47,13 @@ def _render_experiment(exp_idx, exp_layout, container):
     with container:
         # Oracle parity: blank until the user picks (no eager cache build on load).
         sel = st.selectbox(
-            "choose experiment", names, index=None,
+            "choose experiment", results, index=None,
+            format_func=file_manager.get_display_name,
             placeholder="Choose an experiment", key=f"tnt_exp_{exp_idx}",
         )
         if sel is None:
             return
-        ds = to_id[sel]
+        ds = sel
         # Lazily build the Insight tidy caches for this dataset (idempotent).
         build_insight_caches(file_manager, ds, "flashtnt")
         # round-8 finding 3-tables-002: per-experiment "Best per spectrum" toggle
@@ -73,7 +73,7 @@ def _render_experiment(exp_idx, exp_layout, container):
             file_manager, ds, "flashtnt", settings=settings,
             best_per_spectrum=best_per_spectrum,
         )
-        show_linked_grid([exp_layout], builders, tool=f"flashtnt_{ds}")
+        show_linked_grid([exp_layout], builders, tool=f"flashtnt_{exp_idx}_{ds}")
 
 
 if len(layout) == 2 and side_by_side:

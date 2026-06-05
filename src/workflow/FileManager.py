@@ -483,6 +483,9 @@ class FileManager:
                 WHERE id = '{dataset_id}';
             """)
             result = self.cache_cursor.fetchone()
+            if result is None:
+                # No row for this dataset_id -> treat every column as missing.
+                result = (None,) * len(file_columns)
             for c, r in zip(file_columns, result):
                 if r is None:
                     if partial:
@@ -501,6 +504,9 @@ class FileManager:
                 WHERE id = '{dataset_id}';
             """)
             result = self.cache_cursor.fetchone()
+            if result is None:
+                # No row for this dataset_id -> treat every column as missing.
+                result = (None,) * len(data_columns)
             for c, r in zip(data_columns, result):
                 if r is None:
                     if partial:

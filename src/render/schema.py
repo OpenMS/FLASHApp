@@ -548,10 +548,16 @@ def _build_tags(file_manager, dataset_id, regenerate, logger):
     scan_to_deconv = {v["scan"]: v["deconv_index"] for v in scan_map.values()}
 
     tdf = pl.from_pandas(tag_pd).with_row_index("tag_id")
+    def _scan_id(s):
+        # Missing scans (None / NaN / pd.NA) -> -1; int() would otherwise raise.
+        try:
+            return scan_to_deconv.get(int(s), -1)
+        except (TypeError, ValueError):
+            return -1
+
     tdf = tdf.with_columns(
         pl.col("Scan")
-        .map_elements(lambda s: scan_to_deconv.get(int(s), -1)
-                      if s is not None else -1, return_dtype=pl.Int64)
+        .map_elements(_scan_id, return_dtype=pl.Int64)
         .alias("scan_id"),
     )
     _store(file_manager, dataset_id, "tags", tdf, regenerate, logger,

@@ -621,9 +621,6 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             # auto-detect from exposing the tag_id / scan_id carriers as go-to fields.
             go_to_fields=["Scan", "StartPos", "EndPos", "TagSequence"],
         ),
-        "sequence_view": lambda: _sequence_view(
-            file_manager, dataset_id, tool, cid, cache, p, settings
-        ),
         # ---- FLASHQuant panels ----
         "quant_visualization": lambda: Table(
             cache_id=cid("quant_features"), data_path=p("quant_features"),
@@ -670,4 +667,15 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             title="Feature group signals",
         ),
     }
+
+    # Only register the sequence view when its backing cache exists: the factory
+    # eagerly resolves result_path("seq_deconv"/"seq_tnt"), so registering it for a
+    # dataset without sequence data would turn a normal "no sequence" case into a
+    # cache-miss crash if the panel is added to the layout.
+    seq_tag = {"flashtnt": "seq_tnt", "flashdeconv": "seq_deconv"}.get(tool)
+    if seq_tag and file_manager.result_exists(dataset_id, seq_tag):
+        B["sequence_view"] = lambda: _sequence_view(
+            file_manager, dataset_id, tool, cid, cache, p, settings
+        )
+
     return B

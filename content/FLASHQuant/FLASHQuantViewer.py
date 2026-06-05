@@ -26,16 +26,17 @@ if len(results) == 0:
     st.error("No results to show yet. Please run a workflow first!")
     st.stop()
 
-names = [file_manager.get_display_name(r) for r in results]
-to_id = {file_manager.get_display_name(r): r for r in results}
+# Experiments are selected by their stable dataset id; the display name is shown
+# via format_func so duplicate display names can't collapse distinct datasets.
 
 # Oracle parity: blank until the user picks (no eager cache build on load).
 sel = st.selectbox(
-    "choose experiment", names, index=None,
+    "choose experiment", results, index=None,
+    format_func=file_manager.get_display_name,
     placeholder="Choose an experiment", key="flashquant_exp_0",
 )
 if sel is not None:
-    ds = to_id[sel]
+    ds = sel
     # Lazily build the Insight tidy caches for this dataset (idempotent).
     build_insight_caches(file_manager, ds, "flashquant")
     builders = make_builders(file_manager, ds, "flashquant")
