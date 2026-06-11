@@ -316,6 +316,37 @@ def test_axis_titles_match_oracle(mock_streamlit, temp_workspace):
             assert im == {"scan": "scan_idx", "mass": "mass_idx"}, h
 
 
+def test_heatmap_data_path_prefers_finest_level(mock_streamlit, temp_workspace):
+    """M6: a heatmap's data_path is the LARGEST pre-built downsample level when
+    present (finest detail / least loss), with a full-resolution fallback and a
+    skip for levels unset on THIS dataset."""
+    from src.render.render import _heatmap_data_path
+
+    fm = _fm(temp_workspace)
+    ds = "exp1"
+    base = "ms1_deconv_heatmap"
+    frame = pl.DataFrame({"rt": [1.0], "mass": [100.0], "intensity": [10.0],
+                          "scan_idx": [0], "mass_idx": [0]})
+    # Full-res + two logspaced levels, exactly as deconv.py stores them.
+    fm.store_data(ds, base, frame)
+    fm.store_data(ds, f"{base}_20000", frame)
+    fm.store_data(ds, f"{base}_200000", frame)
+
+    # Picks the finest (largest) level -- not full-res, not the smaller level.
+    assert _heatmap_data_path(fm, ds, base) == fm.result_path(ds, f"{base}_200000")
+
+    # A bigger level column can exist globally (another dataset) yet be unset for
+    # THIS dataset -> skipped, falling through to ds's largest available level.
+    fm.store_data("other_ds", f"{base}_500000", frame)
+    assert _heatmap_data_path(fm, ds, base) == fm.result_path(ds, f"{base}_200000")
+
+    # A heatmap family with no pre-built levels -> full-resolution fallback.
+    fm.store_data(ds, "ms2_raw_heatmap", frame)
+    assert _heatmap_data_path(fm, ds, "ms2_raw_heatmap") == fm.result_path(
+        ds, "ms2_raw_heatmap"
+    )
+
+
 def test_scan_to_mass_filter_applies(mock_streamlit, temp_workspace):
     """Selecting a scan filters the mass table to that scan's masses (value-based)."""
     fm = _fm(temp_workspace)

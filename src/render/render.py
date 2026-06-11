@@ -47,6 +47,44 @@ def _insight_cache_dir(file_manager) -> str:
     return str(Path(file_manager.cache_path, "insight"))
 
 
+def _heatmap_data_path(file_manager, dataset_id: str, base_tag: str) -> str:
+    """Heatmap ``data_path``: the FINEST pre-built downsample level, else full-res.
+
+    ``deconv.py`` stores, beside the full-resolution ``{base_tag}``, a set of
+    logspaced pre-downsampled levels ``{base_tag}_{N}`` (``N`` from
+    ``compute_compression_levels(20000, full_count)``, i.e. 20000..<full_count).
+    The Insight ``Heatmap`` keeps whatever frame it is handed as its FINEST
+    pyramid level and re-downsamples per zoom region, so handing it the LARGEST
+    pre-built level (closest to full-res) trims the one-time cache-build cost +
+    memory while losing the least max-zoom detail and click-target density.
+
+    Falls back to the full-resolution ``{base_tag}`` when no levels were built
+    (small datasets where ``full_count <= 20000``, or a heatmap family for which
+    none were stored) or a cache predates the levels. ``stored_data`` columns are
+    the UNION across datasets, so we try each candidate largest-first and skip the
+    ones unset for THIS dataset (``result_path`` raises ``KeyError``).
+    """
+    try:
+        cols = file_manager._get_column_list("stored_data")
+    except Exception:
+        cols = []
+    prefix = f"{base_tag}_"
+    sizes = sorted(
+        (
+            int(c[len(prefix):])
+            for c in cols
+            if c.startswith(prefix) and c[len(prefix):].isdigit()
+        ),
+        reverse=True,  # finest (largest) level first
+    )
+    for size in sizes:
+        try:
+            return file_manager.result_path(dataset_id, f"{base_tag}_{size}")
+        except KeyError:
+            continue  # column exists globally but unset for THIS dataset
+    return file_manager.result_path(dataset_id, base_tag)  # full-resolution fallback
+
+
 # --------------------------------------------------------------------------- #
 # Oracle Tabulator column chrome (titles + formatters + sorters + initialSort)
 # --------------------------------------------------------------------------- #
@@ -338,6 +376,9 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
     # via data=scan_parquet(path) (in-process). These frames are per-scan /
     # per-feature small, so the memory tradeoff is negligible.
     scan = lambda tag: pl.scan_parquet(file_manager.result_path(dataset_id, tag))
+    # Heatmap data_path: prefer the finest pre-built downsample level (M6), with a
+    # full-resolution fallback. See _heatmap_data_path for the fidelity tradeoff.
+    heat = lambda tag: _heatmap_data_path(file_manager, dataset_id, tag)
     cid = lambda name: f"{tool}__{dataset_id}__{name}"
     cache = _insight_cache_dir(file_manager)
 
@@ -491,14 +532,17 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             title_selection={"scan": "scan", "mass": "mass"},
             title="Precursor Signals",
         ),
-        # ---- heatmaps: reuse the existing full-resolution oracle caches as-is ----
+        # ---- heatmaps: reuse the oracle caches, finest pre-built level first ----
+        # M6: data_path=heat(...) feeds the LARGEST pre-built downsample level
+        # (full-res fallback) so the Insight Heatmap builds its pyramid from less
+        # data; see _heatmap_data_path for the (bounded) max-zoom fidelity tradeoff.
         # oracle PlotlyHeatmap axis titles: x="Retention Time", y="Monoisotopic Mass".
         # round-18 finding 3-heatmap-002: the oracle PlotlyHeatmap click selects the
         # clicked point's scan (ALL heatmaps) + its mass (DECONV MS1/MS2 only),
         # cascading scan->mass->spectra->3D. The reused caches carry scan_idx
         # (= scan_id) + mass_idx (= mass_in_scan), so wire interactivity to them.
         "ms1_deconv_heat_map": lambda: Heatmap(
-            cache_id=cid("ms1_deconv_heat_map"), data_path=p("ms1_deconv_heatmap"),
+            cache_id=cid("ms1_deconv_heat_map"), data_path=heat("ms1_deconv_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
             interactivity={"scan": "scan_idx", "mass": "mass_idx"},
@@ -506,7 +550,7 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             title="Deconvolved MS1 Heatmap",
         ),
         "ms2_deconv_heat_map": lambda: Heatmap(
-            cache_id=cid("ms2_deconv_heat_map"), data_path=p("ms2_deconv_heatmap"),
+            cache_id=cid("ms2_deconv_heat_map"), data_path=heat("ms2_deconv_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
             interactivity={"scan": "scan_idx", "mass": "mass_idx"},
@@ -519,7 +563,7 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
         # raw heatmaps: click selects the SCAN only (oracle sets mass only for the
         # deconvolved heatmaps).
         "ms1_raw_heatmap": lambda: Heatmap(
-            cache_id=cid("ms1_raw_heatmap"), data_path=p("ms1_raw_heatmap"),
+            cache_id=cid("ms1_raw_heatmap"), data_path=heat("ms1_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
             interactivity={"scan": "scan_idx"},
@@ -527,7 +571,7 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             title="Raw MS1 Heatmap",
         ),
         "ms2_raw_heatmap": lambda: Heatmap(
-            cache_id=cid("ms2_raw_heatmap"), data_path=p("ms2_raw_heatmap"),
+            cache_id=cid("ms2_raw_heatmap"), data_path=heat("ms2_raw_heatmap"),
             cache_path=cache, x_column="rt", y_column="mass",
             intensity_column="intensity",
             interactivity={"scan": "scan_idx"},
