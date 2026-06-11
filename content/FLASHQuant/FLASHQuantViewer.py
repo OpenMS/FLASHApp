@@ -2,46 +2,44 @@ import streamlit as st
 
 from pathlib import Path
 
+from src.common.common import page_setup, save_params, show_linked_grid
 from src.workflow.FileManager import FileManager
-from src.common.common import page_setup, save_params
-# from src.render.components import flash_viewer_grid_component, FlashViewerComponent, FLASHQuant
-from src.render.render import render_grid
+from src.render.render import make_builders
+from src.render.schema import build_insight_caches
+
+# FLASHQuant recipe: a feature Table linked to a Plot3D of that feature's traces
+# (Table click sets `feature`; Plot3D filters by `feature`).
+DEFAULT_LAYOUT = [["quant_visualization", "quant_traces_3d"]]
 
 # page initialization
 params = page_setup()
 
-
-# Get available results
+# FLASHQuant keeps its own workspace-rooted cache (oracle parity).
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'flashquant', 'cache')
-)
-results = file_manager.get_results_list(
-    ['quant_dfs']
+    Path(st.session_state["workspace"], "flashquant", "cache"),
 )
 
-### if no input file is given, show blank page
+# Gate: need at least one processed FLASHQuant result.
+results = file_manager.get_results_list(["quant_dfs"])
 if len(results) == 0:
-    st.error('No results to show yet. Please run a workflow first!')
+    st.error("No results to show yet. Please run a workflow first!")
     st.stop()
 
-# Map names to index
-name_to_index = {n : i for i, n in enumerate(results)}
+# Experiments are selected by their stable dataset id; the display name is shown
+# via format_func so duplicate display names can't collapse distinct datasets.
 
-
-# for only single experiment on one view
-st.selectbox("choose experiment", results, key="selected_experiment0_quant")
-selected_exp0 = st.session_state.selected_experiment0_quant
-
-render_grid(
-    st.session_state.selected_experiment0_quant, [['quant_visualization']],
-    file_manager, 'flashquant', 'selected_experiment0_quant'
+# Oracle parity: blank until the user picks (no eager cache build on load).
+sel = st.selectbox(
+    "choose experiment", results, index=None,
+    format_func=file_manager.get_display_name,
+    placeholder="Choose an experiment", key="flashquant_exp_0",
 )
-
-# # Get data
-# quant_df = file_manager.get_results(selected_exp0, 'quant_dfs')['quant_dfs']
-
-# component = [[FlashViewerComponent(FLASHQuant())]]
-# flash_viewer_grid_component(components=component, data={'quant_data': quant_df, 'dataset': selected_exp0}, component_key='flash_viewer_grid')
+if sel is not None:
+    ds = sel
+    # Lazily build the Insight tidy caches for this dataset (idempotent).
+    build_insight_caches(file_manager, ds, "flashquant")
+    builders = make_builders(file_manager, ds, "flashquant")
+    show_linked_grid([DEFAULT_LAYOUT], builders, tool=f"flashquant_{ds}")
 
 save_params(params)

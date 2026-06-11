@@ -1,0 +1,119 @@
+# Phase 3 review-unit registry — FLASHApp page rebuild from the frozen template.
+# Consumed by run_review.py. Oracle paths are READ-ONLY reference behavior.
+
+meta:
+  repo: OpenMS/FLASHApp
+  branch: claude/kind-heisenberg-u6dVm
+  convergence: 3
+  oracle_root: /home/user/FLASHApp/src/render
+  template_repo: /home/user/streamlit-template
+  # Pairs checked by nondivergence.py: FLASHApp must reuse the template module verbatim.
+  # Filled in once the template grid module is frozen (Phase 3 step 2).
+  nondivergence_pairs:
+    - [/home/user/FLASHApp/src/view/grid.py, /home/user/streamlit-template/src/view/grid.py]
+
+phases:
+
+  "3":
+    name: "FLASHApp migration — template-first, freeze, rebuild pages, no divergence"
+    gate:
+      - name: nondivergence
+        cmd: "python migration/nondivergence.py"
+        cwd: /home/user/FLASHApp
+      - name: template-tests
+        cmd: "python -m pytest -q"
+        cwd: /home/user/streamlit-template
+      - name: flashapp-tests
+        cmd: "python -m pytest -q"
+        cwd: /home/user/FLASHApp
+      - name: viewer-parse
+        cmd: "python -c \"import ast;[ast.parse(open(p).read()) for p in ['content/FLASHDeconv/FLASHDeconvViewer.py','content/FLASHTnT/FLASHTnTViewer.py','content/FLASHQuant/FLASHQuantViewer.py']];print('viewers parse OK')\""
+        cwd: /home/user/FLASHApp
+      # Phase 3 re-opened OpenMS-Insight (tagger frame-resolve + SequenceView
+      # cross-component emits), so the Insight gate runs too: no Phase-1/2
+      # regression. NOTE: test_internal_terminal_collision_z_vs_x_changes_drop is
+      # deselected -- it is a PRE-EXISTING, environment-sensitive failure (pyOpenMS
+      # monoisotopic-mass precision at 10ppm) that also fails on the pre-migration
+      # commit c0adae9; it exercises internal-fragment math that this work never
+      # touched and that is OFF in FLASHTnT.
+      - name: insight-tests
+        cmd: "python -m pytest -q --deselect tests/test_sequenceview_internal.py::test_internal_terminal_collision_z_vs_x_changes_drop"
+        cwd: /home/user/OpenMS-Insight
+      - name: insight-build
+        cmd: "npm run build"
+        cwd: /home/user/OpenMS-Insight/js-component
+      - name: insight-vitest
+        cmd: "npx vitest run"
+        cwd: /home/user/OpenMS-Insight/js-component
+      - name: insight-parity
+        cmd: "python migration/parity_diff.py"
+        cwd: /home/user/OpenMS-Insight
+    critics: [template, original-parity, final]   # three critics per unit
+    units:
+      # --- streamlit-template (built & frozen first) ---
+      - id: template:grid
+        target: /home/user/streamlit-template/src/view/grid.py   # NEW
+        concern: "generic render_linked_grid(layout, builders, state_key, side_by_side) + LayoutManager (<=3 cols, N rows/experiments, side-by-side, JSON save/load)"
+        oracle:
+          - /home/user/FLASHApp/src/render/render.py
+          - /home/user/FLASHApp/content/FLASHDeconv/FLASHDeconvLayoutManager.py
+          - /home/user/FLASHApp/content/FLASHTnT/FLASHTnTLayoutManager.py
+      - id: template:page
+        target: /home/user/streamlit-template/content/visualization_template.py   # NEW
+        concern: "demo: Table<->LinePlot<->Heatmap<->SequenceView linked grid + Layout Manager + side-by-side over example parquet"
+        oracle:
+          - /home/user/FLASHApp/content/FLASHDeconv/FLASHDeconvViewer.py
+      - id: template:common
+        target: /home/user/streamlit-template/src/common/common.py
+        concern: "show_linked_grid() one-liner; keep show_fig/show_table"
+        oracle:
+          - /home/user/FLASHApp/src/common/common.py
+      - id: template:filemanager
+        target: /home/user/streamlit-template/src/workflow/FileManager.py
+        concern: "results-store data layer (parquet/pickle keyed by (dataset_id,name)) returning data_path; demonstrate store -> data_path -> Insight"
+        oracle:
+          - /home/user/FLASHApp/src/workflow/FileManager.py
+
+      # --- FLASHApp rebuild (from the frozen template) ---
+      - id: flashapp:schema
+        target: /home/user/FLASHApp/src/render/schema.py   # NEW
+        concern: "FileManager caches -> Insight-ready tidy parquet: stable IDs, exploded arrays, long-format density"
+        oracle:
+          - /home/user/FLASHApp/src/render/update.py
+          - /home/user/FLASHApp/src/render/sequence_data_store.py
+      - id: flashapp:builders
+        target: /home/user/FLASHApp/src/render/render.py
+        concern: "builders factory comp_name -> BaseComponent(data_path=...); one StateManager per (tool, experiment)"
+        oracle:
+          - /home/user/FLASHApp/src/render/components.py
+          - /home/user/FLASHApp/src/render/StateTracker.py
+      - id: flashapp:deconv-viewer
+        target: /home/user/FLASHApp/content/FLASHDeconv/FLASHDeconvViewer.py
+        concern: "every FLASHDeconv panel renders + cross-links (scan->mass->spectrum->3D; protein->tag->sequence; heatmap zoom)"
+        oracle:
+          - /home/user/FLASHApp/content/FLASHDeconv/FLASHDeconvViewer.py
+          - /home/user/FLASHApp/src/render/update.py
+      - id: flashapp:tnt-viewer
+        target: /home/user/FLASHApp/content/FLASHTnT/FLASHTnTViewer.py
+        concern: "every FLASHTnT panel renders + cross-links"
+        oracle:
+          - /home/user/FLASHApp/content/FLASHTnT/FLASHTnTViewer.py
+      - id: flashapp:quant-viewer
+        target: /home/user/FLASHApp/content/FLASHQuant/FLASHQuantViewer.py
+        concern: "feature table <-> 3D linked view (quant recipe)"
+        oracle:
+          - /home/user/FLASHApp/content/FLASHQuant/FLASHQuantViewer.py
+      - id: flashapp:nondivergence
+        target: /home/user/FLASHApp/src/view/grid.py
+        concern: "FLASHApp grid code IS the frozen template module (byte-identical, normalized)"
+        oracle:
+          - /home/user/streamlit-template/src/view/grid.py
+
+      # --- OpenMS-Insight changes re-opened by Phase 3 (tracked for no-regression) ---
+      - id: insight:tagger-seqview
+        target: /home/user/OpenMS-Insight/openms_insight/components/lineplot.py
+        concern: "tagger value-based tag resolution (scalar id -> TagData side frame) + SequenceView residue/peak cross-component emits; no Phase-1/2 regression"
+        oracle:
+          - /home/user/openms-streamlit-vue-component/src/components/plotly/lineplot/PlotlyLineplotTagger.vue
+          - /home/user/openms-streamlit-vue-component/src/components/tabulator/TabulatorTagTable.vue
+          - /home/user/openms-streamlit-vue-component/src/components/sequence/SequenceView.vue
