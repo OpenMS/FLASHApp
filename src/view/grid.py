@@ -42,6 +42,18 @@ from typing import (
 import streamlit as st
 from openms_insight import BaseComponent, StateManager
 
+try:
+    # M5: collapse a linked grid's cross-panel rerun cascade into one rerun.
+    # Available in OpenMS-Insight builds that ship it; older builds fall back to
+    # the previous per-panel rerun behavior (correct, just one pass per panel).
+    from openms_insight import batch_rerun
+except ImportError:  # pragma: no cover - exercised only against older Insight
+    from contextlib import contextmanager
+
+    @contextmanager
+    def batch_rerun():
+        yield
+
 # A layout is the trimmed nested list the LayoutManager persists:
 #   List[row], row = List[comp_name:str], <=3 entries per row.   (one experiment)
 Layout = List[List[str]]
@@ -100,22 +112,28 @@ def render_linked_grid(
 
     sm = StateManager(session_key=state_key)
     heights = column_heights or {}
-    for r, row in enumerate(layout):
-        # <=3 columns per row, the oracle invariant. Any extra cells in a row are ignored.
-        cols = st.columns(min(len(row), MAX_COLUMNS))
-        for c, comp_name in enumerate(row[:MAX_COLUMNS]):
-            factory = builders.get(comp_name)
-            if factory is None:
-                if on_missing == "error":
-                    raise KeyError(
-                        f"No builder registered for component '{comp_name}'"
-                    )
-                if on_missing == "warn":
-                    cols[c].warning(f"Unknown component: {comp_name}")
-                continue
-            h = heights.get(comp_name, height)
-            with cols[c]:
-                factory()(key=f"{grid_key}_{r}_{c}", state_manager=sm, height=h)
+    # M5: render every panel in one pass and rerun ONCE at the end. Without this,
+    # each panel's cross-link selection change raises st.rerun() mid-pass, so a
+    # scan->mass->spectra->3D cascade settles one panel per pass (N passes). The
+    # shared StateManager lets a downstream panel read the upstream selection an
+    # earlier panel set in this SAME pass, so one pass applies the whole cascade.
+    with batch_rerun():
+        for r, row in enumerate(layout):
+            # <=3 columns per row, the oracle invariant. Extra cells are ignored.
+            cols = st.columns(min(len(row), MAX_COLUMNS))
+            for c, comp_name in enumerate(row[:MAX_COLUMNS]):
+                factory = builders.get(comp_name)
+                if factory is None:
+                    if on_missing == "error":
+                        raise KeyError(
+                            f"No builder registered for component '{comp_name}'"
+                        )
+                    if on_missing == "warn":
+                        cols[c].warning(f"Unknown component: {comp_name}")
+                    continue
+                h = heights.get(comp_name, height)
+                with cols[c]:
+                    factory()(key=f"{grid_key}_{r}_{c}", state_manager=sm, height=h)
     return sm
 
 
