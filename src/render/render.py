@@ -48,34 +48,38 @@ def _insight_cache_dir(file_manager) -> str:
 
 
 def _heatmap_data_path(file_manager, dataset_id: str, base_tag: str) -> str:
-    """Heatmap ``data_path``: the FINEST pre-built downsample level, else full-res.
+    """Heatmap ``data_path``: the COARSEST pre-built downsample level, else full-res.
 
-    ``deconv.py`` stores, beside the full-resolution ``{base_tag}``, a set of
-    logspaced pre-downsampled levels ``{base_tag}_{N}`` (``N`` from
-    ``compute_compression_levels(20000, full_count)``, i.e. 20000..<full_count).
-    The Insight ``Heatmap`` keeps whatever frame it is handed as its FINEST
-    pyramid level and re-downsamples per zoom region, so handing it the LARGEST
-    pre-built level (closest to full-res) trims the one-time cache-build cost +
-    memory while losing the least max-zoom detail and click-target density.
+    ``deconv.py`` stores, beside the full-resolution ``{base_tag}``, logspaced
+    pre-downsampled levels ``{base_tag}_{N}`` (``N`` from
+    ``compute_compression_levels(20000, full_count)``, so the smallest stored
+    level is 20000). The Insight ``Heatmap`` renders only ~``min_points``
+    (default 10000) at any view -- it downsamples to ``min_points`` at full zoom
+    and re-bins the visible region to ``min_points`` on zoom -- and caps its own
+    cache at ``2*min_points`` (=20000). So the SMALLEST pre-built level (20000)
+    already saturates the detail Insight keeps for the default + moderate-zoom
+    view, while giving the largest one-time pyramid-build + memory saving (a 5M-
+    point heatmap builds its pyramid from 20k rows, not 5M) -- exactly the build
+    cost these levels were precomputed to avoid. The only thing a larger input
+    would add is click-target density under very tight zoom, traded here for that
+    build-cost win.
 
     Falls back to the full-resolution ``{base_tag}`` when no levels were built
-    (small datasets where ``full_count <= 20000``, or a heatmap family for which
-    none were stored) or a cache predates the levels. ``stored_data`` columns are
-    the UNION across datasets, so we try each candidate largest-first and skip the
-    ones unset for THIS dataset (``result_path`` raises ``KeyError``).
+    (``full_count <= 20000``, or a heatmap family for which none were stored) or
+    a cache predates the levels. ``stored_data`` columns are the UNION across
+    datasets, so we try smallest-first and skip the ones unset for THIS dataset
+    (``result_path`` raises ``KeyError``).
     """
     try:
         cols = file_manager._get_column_list("stored_data")
     except Exception:
         cols = []
     prefix = f"{base_tag}_"
+    # Ascending: coarsest (smallest) level first -> maximum pyramid-build saving.
     sizes = sorted(
-        (
-            int(c[len(prefix):])
-            for c in cols
-            if c.startswith(prefix) and c[len(prefix):].isdigit()
-        ),
-        reverse=True,  # finest (largest) level first
+        int(c[len(prefix):])
+        for c in cols
+        if c.startswith(prefix) and c[len(prefix):].isdigit()
     )
     for size in sizes:
         try:
@@ -376,8 +380,9 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
     # via data=scan_parquet(path) (in-process). These frames are per-scan /
     # per-feature small, so the memory tradeoff is negligible.
     scan = lambda tag: pl.scan_parquet(file_manager.result_path(dataset_id, tag))
-    # Heatmap data_path: prefer the finest pre-built downsample level (M6), with a
-    # full-resolution fallback. See _heatmap_data_path for the fidelity tradeoff.
+    # Heatmap data_path: prefer the coarsest pre-built downsample level (M6) for
+    # the largest build-cost win, with a full-resolution fallback. See
+    # _heatmap_data_path for why the rendered view is unchanged.
     heat = lambda tag: _heatmap_data_path(file_manager, dataset_id, tag)
     cid = lambda name: f"{tool}__{dataset_id}__{name}"
     cache = _insight_cache_dir(file_manager)
@@ -532,10 +537,11 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
             title_selection={"scan": "scan", "mass": "mass"},
             title="Precursor Signals",
         ),
-        # ---- heatmaps: reuse the oracle caches, finest pre-built level first ----
-        # M6: data_path=heat(...) feeds the LARGEST pre-built downsample level
-        # (full-res fallback) so the Insight Heatmap builds its pyramid from less
-        # data; see _heatmap_data_path for the (bounded) max-zoom fidelity tradeoff.
+        # ---- heatmaps: reuse the oracle caches, coarsest pre-built level first ----
+        # M6: data_path=heat(...) feeds the SMALLEST pre-built downsample level
+        # (full-res fallback) so the Insight Heatmap builds its pyramid from far
+        # less data. Insight re-downsamples to min_points anyway, so the rendered
+        # view is unchanged; see _heatmap_data_path for the extreme-zoom tradeoff.
         # oracle PlotlyHeatmap axis titles: x="Retention Time", y="Monoisotopic Mass".
         # round-18 finding 3-heatmap-002: the oracle PlotlyHeatmap click selects the
         # clicked point's scan (ALL heatmaps) + its mass (DECONV MS1/MS2 only),

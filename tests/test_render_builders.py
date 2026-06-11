@@ -316,10 +316,11 @@ def test_axis_titles_match_oracle(mock_streamlit, temp_workspace):
             assert im == {"scan": "scan_idx", "mass": "mass_idx"}, h
 
 
-def test_heatmap_data_path_prefers_finest_level(mock_streamlit, temp_workspace):
-    """M6: a heatmap's data_path is the LARGEST pre-built downsample level when
-    present (finest detail / least loss), with a full-resolution fallback and a
-    skip for levels unset on THIS dataset."""
+def test_heatmap_data_path_prefers_coarsest_level(mock_streamlit, temp_workspace):
+    """M6: a heatmap's data_path is the SMALLEST pre-built downsample level when
+    present (largest build-cost win; Insight re-downsamples to min_points so the
+    rendered view is unchanged), with a full-resolution fallback and a skip for
+    levels unset on THIS dataset."""
     from src.render.render import _heatmap_data_path
 
     fm = _fm(temp_workspace)
@@ -332,13 +333,13 @@ def test_heatmap_data_path_prefers_finest_level(mock_streamlit, temp_workspace):
     fm.store_data(ds, f"{base}_20000", frame)
     fm.store_data(ds, f"{base}_200000", frame)
 
-    # Picks the finest (largest) level -- not full-res, not the smaller level.
-    assert _heatmap_data_path(fm, ds, base) == fm.result_path(ds, f"{base}_200000")
+    # Picks the coarsest (smallest) level -- not full-res, not the larger level.
+    assert _heatmap_data_path(fm, ds, base) == fm.result_path(ds, f"{base}_20000")
 
-    # A bigger level column can exist globally (another dataset) yet be unset for
-    # THIS dataset -> skipped, falling through to ds's largest available level.
-    fm.store_data("other_ds", f"{base}_500000", frame)
-    assert _heatmap_data_path(fm, ds, base) == fm.result_path(ds, f"{base}_200000")
+    # A smaller level column can exist globally (another dataset) yet be unset for
+    # THIS dataset -> skipped, falling through to ds's smallest available level.
+    fm.store_data("other_ds", f"{base}_5000", frame)
+    assert _heatmap_data_path(fm, ds, base) == fm.result_path(ds, f"{base}_20000")
 
     # A heatmap family with no pre-built levels -> full-resolution fallback.
     fm.store_data(ds, "ms2_raw_heatmap", frame)
