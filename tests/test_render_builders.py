@@ -876,3 +876,68 @@ def test_best_per_spectrum_preserves_scan_cross_link(mock_streamlit, temp_worksp
         # scan_id carrier present (drives the protein->scan cross-link) in both sets.
         assert "scan_id" in rows.columns
         assert rows["scan_id"].notna().all()
+
+
+# --------------------------------------------------------------------------- #
+# M2: postprocessing cache warm (warm_insight_caches)
+# --------------------------------------------------------------------------- #
+def test_warm_insight_caches_writes_flashdeconv_default_panels(
+    mock_streamlit, temp_workspace
+):
+    """warm_insight_caches builds the tidy caches AND each default-layout panel's
+    on-disk cache, so the viewer (with OpenMS-Insight M1) reconstructs from cache
+    instead of preprocessing on first open."""
+    from src.render.render import warm_insight_caches, _insight_cache_dir
+
+    fm = _fm(temp_workspace)
+    ds = make_deconv_caches(fm)
+    make_sequence_cache(fm)
+
+    cache_root = Path(_insight_cache_dir(fm))
+    before = set(cache_root.glob("*/manifest.json")) if cache_root.exists() else set()
+
+    warm_insight_caches(fm, ds, "flashdeconv")
+
+    after = set(cache_root.glob("*/manifest.json"))
+    assert len(after) > len(before)
+    # The deconv default-layout panels each have a ready on-disk cache.
+    for name in [
+        "scan_table", "mass_table", "deconv_spectrum",
+        "anno_spectrum", "ms1_deconv_heat_map", "3D_SN_plot",
+    ]:
+        manifest = cache_root / f"flashdeconv__{ds}__{name}" / "manifest.json"
+        assert manifest.exists(), f"{name} cache was not warmed"
+
+
+def test_warm_insight_caches_writes_flashtnt_default_panels(
+    mock_streamlit, temp_workspace
+):
+    """The FLASHTnT default layout (protein/tag/augmented-spectrum) is warmed;
+    protein_table defaults to best-per-spectrum (the ``_best`` cache_id)."""
+    from src.render.render import warm_insight_caches, _insight_cache_dir
+
+    fm = _fm(temp_workspace)
+    ds = make_tnt_caches(fm)
+
+    warm_insight_caches(fm, ds, "flashtnt")
+
+    cache_root = Path(_insight_cache_dir(fm))
+    for cid in [
+        f"flashtnt__{ds}__protein_table_best",
+        f"flashtnt__{ds}__tag_table",
+        f"flashtnt__{ds}__combined_spectrum",
+    ]:
+        assert (cache_root / cid / "manifest.json").exists(), f"{cid} not warmed"
+
+
+def test_warm_insight_caches_is_best_effort_on_missing_data(
+    mock_streamlit, temp_workspace
+):
+    """Warming is an optimization, not a workflow step: a dataset with no backing
+    caches must be swallowed (logged + skipped), never raised, so a warm failure
+    can never fail the workflow that produced the results."""
+    from src.render.render import warm_insight_caches
+
+    fm = _fm(temp_workspace)
+    # Must not raise despite there being no oracle caches for this dataset id.
+    warm_insight_caches(fm, "nonexistent_dataset", "flashdeconv")

@@ -679,3 +679,70 @@ def make_builders(file_manager, dataset_id, tool, settings=None,
         )
 
     return B
+
+
+# --------------------------------------------------------------------------- #
+# Postprocessing cache warm (M2)
+# --------------------------------------------------------------------------- #
+# Panels each viewer opens by default -- mirrors the ``DEFAULT_LAYOUT`` in each
+# content/FLASH*/*Viewer.py. The workflow warms exactly these after a run so the
+# first viewer open is instant, WITHOUT over-building rarely-used panels (the
+# secondary heatmaps) or the other tools' panels that ``make_builders`` also
+# returns. Keep in sync with the viewer DEFAULT_LAYOUTs.
+DEFAULT_WARM_PANELS = {
+    "flashdeconv": [
+        "ms1_deconv_heat_map", "scan_table", "mass_table",
+        "anno_spectrum", "deconv_spectrum", "3D_SN_plot", "sequence_view",
+    ],
+    "flashtnt": [
+        "protein_table", "sequence_view", "tag_table", "combined_spectrum",
+    ],
+    "flashquant": ["quant_visualization", "quant_traces_3d"],
+}
+
+
+def warm_insight_caches(file_manager, dataset_id, tool, logger=None) -> None:
+    """Best-effort: build the tidy caches and warm each default panel's on-disk
+    cache so the viewer opens warm (pairs with OpenMS-Insight's M1 cache reuse).
+
+    Called from the workflow's ``execution()`` right after the tidy parse. It
+    constructs the default-layout builders once; the OpenMS-Insight creation
+    branch writes each component's ``{cache_id}/`` cache, which the viewer then
+    reconstructs from -- no re-preprocess, no subprocess spawn -- on every
+    rerun. Construction only (no rendering), so it needs no Streamlit /
+    StateManager and is safe to run in the workflow worker.
+
+    NEVER raises. Warming is an optimization, not a workflow step: a missing
+    source parquet (a panel absent for this dataset) or any construction error
+    is logged and skipped, so it can never fail the workflow that produced the
+    results. When a warm is skipped the viewer just builds that one cache lazily
+    on first open (a one-time cost, then M1-reused).
+    """
+    from src.render.schema import build_insight_caches  # local: avoid import cycle
+
+    tool = (tool or "").lower()
+    panels = DEFAULT_WARM_PANELS.get(tool, [])
+    if not panels:
+        return
+    try:
+        if logger is not None:
+            logger.log("-> Warming viewer caches...")
+        build_insight_caches(file_manager, dataset_id, tool, logger=logger)
+
+        settings = None
+        if file_manager.result_exists(dataset_id, "settings"):
+            settings = file_manager.get_results(dataset_id, ["settings"])["settings"]
+
+        builders = make_builders(file_manager, dataset_id, tool, settings=settings)
+        for name in panels:
+            factory = builders.get(name)
+            if factory is None:
+                continue  # panel not available for this dataset (e.g. no sequence)
+            try:
+                factory()
+            except Exception as exc:  # noqa: BLE001 - warming is best-effort
+                if logger is not None:
+                    logger.log(f"   (skipped warming {name}: {exc})")
+    except Exception as exc:  # noqa: BLE001 - warming must never fail the workflow
+        if logger is not None:
+            logger.log(f"   (cache warming skipped: {exc})")

@@ -246,9 +246,20 @@ class TagWorkflow(WorkflowManager):
                 )
                 parseTnT(
                     self.file_manager, dataset_id,
-                    results['out_deconv_mzML'], results['anno_annotated_mzML'], 
+                    results['out_deconv_mzML'], results['anno_annotated_mzML'],
                     results['tags_tsv'], results['protein_tsv'], logger=self.logger
                 )
+
+                # M2: best-effort warm of the viewer's default-panel caches so
+                # the FLASHTnT viewer opens against ready caches instead of
+                # building them lazily on first selection. Never fails the run.
+                try:
+                    from src.render.render import warm_insight_caches
+                    warm_insight_caches(
+                        self.file_manager, dataset_id, "flashtnt", logger=self.logger
+                    )
+                except Exception as exc:  # warming must never fail the workflow
+                    self.logger.log(f"   (cache warming unavailable: {exc})")
 
                 # Remove temporary folder
                 rmtree(folder_path)
@@ -382,9 +393,20 @@ class DeconvWorkflow(WorkflowManager):
                 with open(json_file, 'w') as f:
                     json.dump(FDsettings, f)
                 self.file_manager.store_file(
-                    dataset_id, 'FD_parameters_json', json_file, 
+                    dataset_id, 'FD_parameters_json', json_file,
                     file_name='FD_parameters.json'
                 )
+
+                # M2: best-effort warm of the viewer's default-panel caches so
+                # the FLASHDeconv viewer opens against ready caches instead of
+                # building them lazily on first selection. Never fails the run.
+                try:
+                    from src.render.render import warm_insight_caches
+                    warm_insight_caches(
+                        self.file_manager, dataset_id, "flashdeconv", logger=self.logger
+                    )
+                except Exception as exc:  # warming must never fail the workflow
+                    self.logger.log(f"   (cache warming unavailable: {exc})")
 
                 # Remove temporary folder
                 rmtree(folder_path)
