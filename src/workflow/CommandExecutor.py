@@ -5,7 +5,7 @@ import subprocess
 import threading
 from pathlib import Path
 from .Logger import Logger
-from .ParameterManager import ParameterManager
+from .ParameterManager import ParameterManager, bool_param_paths_from_param_xml_ini
 import sys
 import importlib.util
 import json
@@ -216,7 +216,7 @@ class CommandExecutor:
         stdout_thread.join()
         stderr_thread.join()
 
-    def run_topp(self, tool: str, input_output: dict, custom_params: dict = {}) -> bool:
+    def run_topp(self, tool: str, input_output: dict, custom_params: dict = {}, tool_instance_name: str = None) -> bool:
         """
         Constructs and executes commands for the specified tool OpenMS TOPP tool based on the given
         input and output configurations. Ensures that all input/output file lists
@@ -234,6 +234,10 @@ class CommandExecutor:
             tool (str): The executable name or path of the tool.
             input_output (dict): A dictionary specifying the input/output parameter names (as key) and their corresponding file paths (as value).
             custom_params (dict): A dictionary of custom parameters to pass to the tool.
+            tool_instance_name (str, optional): Key for ``params.json`` when it differs
+                from ``tool`` (e.g. multiple instances). Defaults to ``tool``.
+            Custom parameters whose keys appear in the tool's ParamXML ``type="bool"``
+            entries are passed as valueless CLI flags (``-name`` only when enabled).
 
         Returns:
             bool: True if all commands succeeded, False if any failed.
@@ -261,8 +265,15 @@ class CommandExecutor:
 
         commands = []
 
-        # Load parameters for non-defaults
         params = self.parameter_manager.get_parameters_from_json()
+
+        topp_tool_ini_path = Path(self.parameter_manager.ini_dir, f"{tool}.ini")
+        # Keys of type="bool" in the .ini: TOPP treats these as on/off flags (omit value when off)
+        topp_bool_flag_param_keys = (
+            bool_param_paths_from_param_xml_ini(topp_tool_ini_path, tool)
+            if topp_tool_ini_path.exists()
+            else set()
+        )
         # Construct commands for each process
         for i in range(n_processes):
             command = [tool]
@@ -284,17 +295,32 @@ class CommandExecutor:
             # Add non-default TOPP tool parameters
             if tool in params.keys():
                 for k, v in params[tool].items():
-                    # Boolean flag handling: 'true' -> flag only, 'false' -> skip entirely
-                    if isinstance(v, str) and v == 'true':
-                        command += [f"-{k}"]
-                    elif isinstance(v, str) and v == 'false':
-                        pass
-                    elif v == "" or v is None:
-                        # Empty string or None: flag only (no value)
-                        command += [f"-{k}"]
-                    else:
-                        command += [f"-{k}"]
-                        # Note: 0 and 0.0 are valid values, so use explicit check above
+                    # Boolean flag handling. A parameter is emitted as a
+                    # valueless TOPP on/off flag when EITHER the tool's ParamXML
+                    # .ini marks the key type="bool" (upstream key-based
+                    # detection via topp_bool_flag_param_keys) OR the stored
+                    # value is itself boolean. The value-based branch is the
+                    # fallback FLASHApp relies on: checkbox widgets persist a
+                    # Python bool (True/False) to params.json, and pyOpenMS /
+                    # presets may surface the 'true'/'false' string form. This
+                    # keeps flags correct even when the .ini bool set is empty
+                    # (e.g. the .ini was not written).
+                    is_bool_value = isinstance(v, bool) or (
+                        isinstance(v, str) and v.lower() in ("true", "false")
+                    )
+                    if (k in topp_bool_flag_param_keys and v != "") or is_bool_value:
+                        # CLI flag: include "-k" only when enabled, never a value.
+                        if isinstance(v, str):
+                            is_enabled = v.lower() == "true"
+                        else:
+                            is_enabled = bool(v)
+                        if is_enabled:
+                            command += [f"-{k}"]
+                        continue
+                    command += [f"-{k}"]
+                    # Skip only empty strings (pass flag with no value)
+                    # Note: 0 and 0.0 are valid values, so use explicit check
+                    if v != "" and v is not None:
                         if isinstance(v, str) and "\n" in v:
                             command += v.split("\n")
                         else:
@@ -302,6 +328,7 @@ class CommandExecutor:
             # Add custom parameters
             for k, v in custom_params.items():
                 command += [f"-{k}"]
+                
                 # Skip only empty strings (pass flag with no value)
                 # Note: 0 and 0.0 are valid values, so use explicit check
                 if v != "" and v is not None:

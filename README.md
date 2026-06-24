@@ -57,3 +57,20 @@ After it has been built you can run the image with:
 `docker run -p 8501:8501 flashapp:latest`
 
 Navigate to `http://localhost:8501` in your browser.
+
+## Legal pages (Impressum, Privacy Policy, Terms of Use)
+
+Every page shows **Impressum**, **Privacy Policy** and **Terms of Use** links in the
+sidebar footer, and the GDPR consent banner links to the privacy policy. By default
+these point to the official OpenMS pages (`https://openms.de/impressum`, `/privacy`,
+`/terms`). To override them — for example when self-hosting or deploying FLASHApp
+under a different operator — set `legal_links` in `settings.json`:
+
+    "legal_links": {
+        "impressum": "https://your-domain.example/impressum",
+        "privacy": "https://your-domain.example/privacy",
+        "terms": "https://your-domain.example/terms"
+    }
+
+Any link you omit falls back to its OpenMS default. The `privacy` URL is reused for the
+consent banner's privacy-policy link, so consent and policy stay in sync.
