@@ -11,12 +11,44 @@ from os.path import join, splitext, basename, exists, dirname
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
 from src.workflow.WorkflowManager import WorkflowManager
+from src.workflow._ida_log import IDA_LOG_KEY, IDA_NONE, available_ida_logs, auto_match_log
 
 EXAMPLE_DATA = [
     'example-data/deconv/example_lc_ms.mzML',
     'example-data/tnt/example_native_aqpz.mzML',
     'example-data/tnt/example_native_antibody.mzML',
 ]
+
+def render_ida_log_mapping_editor(wf) -> None:
+    """Render an editable IDA-log -> mzML mapping (one selectbox per mzML).
+
+    Each row defaults to the log whose file-name stem matches the mzML
+    (auto-mapping) and otherwise to ``(none)``. Selections persist per mzML via
+    ``input_widget`` (key ``ida_log_map_<mzML name>``) so ``execution()`` can read
+    them back from ``params.json``.
+    """
+    try:
+        mzml_files = wf.file_manager.get_files(wf.params["mzML-files"])
+    except (ValueError, KeyError):
+        st.info("Select mzML file(s) first to map IDA logs.")
+        return
+    logs = available_ida_logs(wf.workflow_dir)
+    if not logs:
+        st.info("Upload IDA `.log` file(s) in the File Upload tab to map them.")
+        return
+
+    st.markdown("**Map IDA logs to mzML files** (defaults auto-matched by file name)")
+    options = [IDA_NONE] + logs
+    for mzml in mzml_files:
+        mzml_name = basename(mzml)
+        wf.ui.input_widget(
+            key=f"ida_log_map_{mzml_name}",
+            widget_type="selectbox",
+            options=options,
+            default=auto_match_log(mzml_name, logs),
+            name=f"IDA log for `{mzml_name}`",
+        )
+
 
 class TagWorkflow(WorkflowManager):
     share_cache = True
@@ -28,12 +60,14 @@ class TagWorkflow(WorkflowManager):
 
 
     def upload(self)-> None:
-        t = st.tabs(["MS data", "Database"])
+        t = st.tabs(["MS data", "Database", "IDA log"])
         with t[0]:
             self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML", fallback=EXAMPLE_DATA)
         with t[1]:
             self.ui.upload_widget(key="fasta-file", name="Database", file_types="fasta",
                                   fallback='example-data/tnt/example_database.fasta')
+        with t[2]:
+            self.ui.upload_widget(key=IDA_LOG_KEY, name="IDA log", file_types="log")
 
 
     @st.fragment
@@ -47,6 +81,14 @@ class TagWorkflow(WorkflowManager):
             'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
             help='If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly.'
         )
+
+        # Optional IDA log passthrough to FLASHDeconv
+        self.ui.input_widget(
+            'use_ida_logs', name='Use IDA logs', widget_type='checkbox', default=False, reactive=True,
+            help="Pass FLASHIda .log files through to FLASHDeconv's -ida_log. Logs are auto-mapped to mzML files by file name; you can adjust the mapping below."
+        )
+        if st.session_state.get(f"{self.parameter_manager.param_prefix}use_ida_logs", False):
+            render_ida_log_mapping_editor(self)
 
         # Create tabs for different analysis steps
         t = st.tabs(
@@ -157,24 +199,28 @@ class TagWorkflow(WorkflowManager):
                 self.logger.log(f"-> Running FLASHDeconv...")
 
                 # Run FLASHDeconv (1/2)
-                self.executor.run_topp(
-                    'FLASHDeconv',
-                    input_output={
-                        'in' : [in_mzml],
-                        'out' : [out_tsv],
-                        'out_spec1' : [out_spec1],
-                        'out_spec2' : [out_spec2],
-                        'out_spec3' : [out_spec3],
-                        'out_spec4' : [out_spec4],
-                        'out_mzml' : [out_deconv],
-                        'out_quant' : [out_quant],
-                        'out_annotated_mzml' : [out_anno],
-                        'out_msalign1' : [out_msalign1],
-                        'out_msalign2' : [out_msalign2],
-                        'out_feature1' : [out_feature1],
-                        'out_feature2' : [out_feature2],
-                    },
-                )
+                fd_input_output = {
+                    'in' : [in_mzml],
+                    'out' : [out_tsv],
+                    'out_spec1' : [out_spec1],
+                    'out_spec2' : [out_spec2],
+                    'out_spec3' : [out_spec3],
+                    'out_spec4' : [out_spec4],
+                    'out_mzml' : [out_deconv],
+                    'out_quant' : [out_quant],
+                    'out_annotated_mzml' : [out_anno],
+                    'out_msalign1' : [out_msalign1],
+                    'out_msalign2' : [out_msalign2],
+                    'out_feature1' : [out_feature1],
+                    'out_feature2' : [out_feature2],
+                }
+                # Optionally pass the IDA log mapped to this mzML through to FLASHDeconv
+                if self.params.get("use_ida_logs", False):
+                    ida_log = self.params.get(f"ida_log_map_{basename(in_mzml)}")
+                    if ida_log and ida_log != IDA_NONE:
+                        fd_input_output['ida_log'] = [ida_log]
+                        self.logger.log(f"-> Using IDA log: {basename(ida_log)}")
+                self.executor.run_topp('FLASHDeconv', input_output=fd_input_output)
 
                 self.logger.log(f"-> Running FLASHTnT...")
 
@@ -270,13 +316,26 @@ class DeconvWorkflow(WorkflowManager):
 
 
     def upload(self)-> None:
-        self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML",
-                              fallback=EXAMPLE_DATA)
+        t = st.tabs(["MS data", "IDA log"])
+        with t[0]:
+            self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML",
+                                  fallback=EXAMPLE_DATA)
+        with t[1]:
+            self.ui.upload_widget(key=IDA_LOG_KEY, name="IDA log", file_types="log")
 
 
+    @st.fragment
     def configure(self) -> None:
         # Input File Selection
         self.ui.select_input_file("mzML-files", multiple=True)
+
+        # Optional IDA log passthrough to FLASHDeconv
+        self.ui.input_widget(
+            'use_ida_logs', name='Use IDA logs', widget_type='checkbox', default=False, reactive=True,
+            help="Pass FLASHIda .log files through to FLASHDeconv's -ida_log. Logs are auto-mapped to mzML files by file name; you can adjust the mapping below."
+        )
+        if st.session_state.get(f"{self.parameter_manager.param_prefix}use_ida_logs", False):
+            render_ida_log_mapping_editor(self)
 
         # FLASHDeconv Configuration
         self.ui.input_TOPP(
@@ -327,24 +386,28 @@ class DeconvWorkflow(WorkflowManager):
                 self.logger.log(f"-> Running FLASHDeconv...")
 
                 # Run FLASHDeconv
-                self.executor.run_topp(
-                    'FLASHDeconv',
-                    input_output={
-                        'in' : [in_mzml],
-                        'out' : [out_tsv],
-                        'out_spec1' : [out_spec1],
-                        'out_spec2' : [out_spec2],
-                        'out_spec3' : [out_spec3],
-                        'out_spec4' : [out_spec4],
-                        'out_mzml' : [out_deconv],
-                        'out_quant' : [out_quant],
-                        'out_annotated_mzml' : [out_anno],
-                        'out_msalign1' : [out_msalign1],
-                        'out_msalign2' : [out_msalign2],
-                        'out_feature1' : [out_feature1],
-                        'out_feature2' : [out_feature2],
-                    },
-                )
+                fd_input_output = {
+                    'in' : [in_mzml],
+                    'out' : [out_tsv],
+                    'out_spec1' : [out_spec1],
+                    'out_spec2' : [out_spec2],
+                    'out_spec3' : [out_spec3],
+                    'out_spec4' : [out_spec4],
+                    'out_mzml' : [out_deconv],
+                    'out_quant' : [out_quant],
+                    'out_annotated_mzml' : [out_anno],
+                    'out_msalign1' : [out_msalign1],
+                    'out_msalign2' : [out_msalign2],
+                    'out_feature1' : [out_feature1],
+                    'out_feature2' : [out_feature2],
+                }
+                # Optionally pass the IDA log mapped to this mzML through to FLASHDeconv
+                if self.params.get("use_ida_logs", False):
+                    ida_log = self.params.get(f"ida_log_map_{basename(in_mzml)}")
+                    if ida_log and ida_log != IDA_NONE:
+                        fd_input_output['ida_log'] = [ida_log]
+                        self.logger.log(f"-> Using IDA log: {basename(ida_log)}")
+                self.executor.run_topp('FLASHDeconv', input_output=fd_input_output)
 
                 self.logger.log(f"-> Processing Results...")
 
