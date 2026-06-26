@@ -48,3 +48,16 @@ def auto_match_log(mzml_name: str, logs: list) -> str:
         if splitext(basename(log))[0] == target:
             return log
     return IDA_NONE
+
+
+def selected_mzml_files(session_state, params, param_prefix) -> list:
+    """Return the *live* mzML selection, preferring the Streamlit widget value.
+
+    ``params`` is a snapshot loaded once at workflow construction and is **not**
+    refreshed on Streamlit fragment reruns, so it lags the user's current
+    multiselect choice (e.g. right after selecting files and toggling a reactive
+    checkbox). The multiselect widget always mirrors its current value into
+    ``session_state[f"{param_prefix}mzML-files"]``, so prefer that and fall back
+    to the persisted ``params`` value only when session_state has nothing.
+    """
+    return session_state.get(f"{param_prefix}mzML-files") or params.get("mzML-files", [])

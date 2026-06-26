@@ -11,7 +11,9 @@ from os.path import join, splitext, basename, exists, dirname
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
 from src.workflow.WorkflowManager import WorkflowManager
-from src.workflow._ida_log import IDA_LOG_KEY, IDA_NONE, available_ida_logs, auto_match_log
+from src.workflow._ida_log import (
+    IDA_LOG_KEY, IDA_NONE, available_ida_logs, auto_match_log, selected_mzml_files,
+)
 
 EXAMPLE_DATA = [
     'example-data/deconv/example_lc_ms.mzML',
@@ -27,8 +29,13 @@ def render_ida_log_mapping_editor(wf) -> None:
     ``input_widget`` (key ``ida_log_map_<mzML name>``) so ``execution()`` can read
     them back from ``params.json``.
     """
+    # Read the *live* mzML selection (session_state widget value), not the stale
+    # wf.params snapshot, which is not refreshed on fragment reruns.
+    selected = selected_mzml_files(
+        st.session_state, wf.params, wf.parameter_manager.param_prefix
+    )
     try:
-        mzml_files = wf.file_manager.get_files(wf.params["mzML-files"])
+        mzml_files = wf.file_manager.get_files(selected)
     except (ValueError, KeyError):
         st.info("Select mzML file(s) first to map IDA logs.")
         return

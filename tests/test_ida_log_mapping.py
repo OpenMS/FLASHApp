@@ -16,6 +16,7 @@ from src.workflow._ida_log import (
     IDA_NONE,
     available_ida_logs,
     auto_match_log,
+    selected_mzml_files,
 )
 
 
@@ -72,3 +73,48 @@ def test_auto_match_handles_full_path_mzml():
 
 def test_auto_match_empty_logs_returns_none_sentinel():
     assert auto_match_log("anything.mzML", []) == IDA_NONE
+
+
+# selected_mzml_files: which mzML selection the mapping editor reads.
+#
+# Regression guard: the editor must read the *live* multiselect value from
+# session_state, not the wf.params snapshot. params is loaded once at workflow
+# construction and is not refreshed on Streamlit fragment reruns, so reading it
+# made the editor show "Select mzML file(s) first..." even with files selected.
+PREFIX = "flashdeconv-param-"
+
+
+def test_selected_prefers_session_state_over_params():
+    """Live widget selection wins even when the params snapshot is empty (the bug)."""
+    session_state = {f"{PREFIX}mzML-files": ["/in/a.mzML", "/in/b.mzML"]}
+    params = {}  # stale snapshot, lacks the just-made selection
+    assert selected_mzml_files(session_state, params, PREFIX) == ["/in/a.mzML", "/in/b.mzML"]
+
+
+def test_selected_falls_back_to_params_when_session_state_missing():
+    """No widget value yet -> use the persisted params value."""
+    assert selected_mzml_files({}, {"mzML-files": ["/in/a.mzML"]}, PREFIX) == ["/in/a.mzML"]
+
+
+def test_selected_empty_when_neither_present():
+    """Nothing selected anywhere -> [] (get_files then reports 'select first')."""
+    assert selected_mzml_files({}, {}, PREFIX) == []
+
+
+def test_selected_session_state_empty_list_falls_back_to_params():
+    """An empty multiselect value falls back to params rather than overriding it."""
+    session_state = {f"{PREFIX}mzML-files": []}
+    assert selected_mzml_files(session_state, {"mzML-files": ["/in/a.mzML"]}, PREFIX) == [
+        "/in/a.mzML"
+    ]
+
+
+def test_selected_uses_prefix_scoped_key():
+    """The session_state key is param-prefix scoped (FLASHDeconv vs FLASHTnT)."""
+    session_state = {"flashtnt-workflow-param-mzML-files": ["/in/t.mzML"]}
+    # Wrong prefix -> not found -> falls back to params.
+    assert selected_mzml_files(session_state, {}, PREFIX) == []
+    # Right prefix -> found.
+    assert selected_mzml_files(
+        session_state, {}, "flashtnt-workflow-param-"
+    ) == ["/in/t.mzML"]
