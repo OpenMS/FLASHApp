@@ -1,5 +1,5 @@
 """
-Tests for the manual result upload of FLASHDeconv results.
+Tests for the manual result upload of FLASHDeconv and FLASHTnT results.
 
 Uploading result files through the "Manual Result Upload" tab used to fail
 with "AttributeError: 'UploadedFile' object has no attribute 'suffix'":
@@ -11,8 +11,8 @@ The dataset id the page derives from the file name is covered as well.
 FLASHDeconv names its output files `out_deconv.mzML` and
 `anno_annotated.mzML`, so taking the part in front of the suffix filed the two
 halves of one run under the datasets "out" and "anno", where neither could be
-parsed. The mapping is a literal in the page (which cannot be imported without
-a Streamlit runtime), so it is reproduced here.
+parsed. The mappings are literals in the pages (which cannot be imported without a
+Streamlit runtime), so they are reproduced here.
 """
 
 import os
@@ -36,6 +36,15 @@ UPLOAD_FILE_TYPES = (
     ('spec2.tsv', 'spec2_tsv', ''),
 )
 
+# content/FLASHTnT/FLASHTnTWorkflow.py :: UPLOAD_FILE_TYPES
+TNT_UPLOAD_FILE_TYPES = (
+    ('deconv.mzML', 'out_deconv_mzML', 'out'),
+    ('annotated.mzML', 'anno_annotated_mzML', 'anno'),
+    ('tags.tsv', 'tags_tsv', ''),
+    ('tagged.tsv', 'tags_tsv', ''),
+    ('protein.tsv', 'protein_tsv', ''),
+)
+
 
 class FakeUploadedFile(BytesIO):
     """Stand-in for Streamlit's UploadedFile: a BytesIO with a file name."""
@@ -50,10 +59,11 @@ def file_manager(tmp_path):
     return FileManager(tmp_path, Path(tmp_path, 'cache'))
 
 
-def store_upload(file_manager, file_names, default_dataset='uploaded'):
-    """The storing loop of the manual result upload tab."""
+def store_upload(file_manager, file_names, file_types=UPLOAD_FILE_TYPES,
+                 default_dataset='uploaded'):
+    """The storing loop of the manual result upload tabs."""
     for file_name in file_names:
-        for suffix, name_tag, tool_prefix in UPLOAD_FILE_TYPES:
+        for suffix, name_tag, tool_prefix in file_types:
             if not file_name.endswith(suffix):
                 continue
             experiment = file_name[:-len(suffix)].rstrip('_')
@@ -103,3 +113,21 @@ def test_renamed_experiments_stay_separate(file_manager):
     assert sorted(file_manager.get_results_list(
         ['out_deconv_mzML', 'anno_annotated_mzML']
     )) == ['a', 'b']
+
+
+def test_unchanged_tnt_output_names_land_in_one_dataset(file_manager):
+    store_upload(
+        file_manager,
+        ['out_deconv.mzML', 'anno_annotated.mzML', 'tags.tsv', 'protein.tsv'],
+        TNT_UPLOAD_FILE_TYPES
+    )
+
+    assert file_manager.get_results_list(
+        ['out_deconv_mzML', 'anno_annotated_mzML', 'tags_tsv', 'protein_tsv']
+    ) == ['uploaded']
+
+
+def test_tnt_accepts_legacy_tag_file_name(file_manager):
+    store_upload(file_manager, ['sample_tagged.tsv'], TNT_UPLOAD_FILE_TYPES)
+
+    assert file_manager.get_results_list(['tags_tsv']) == ['sample']

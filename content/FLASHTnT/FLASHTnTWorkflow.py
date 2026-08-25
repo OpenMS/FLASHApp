@@ -1,9 +1,12 @@
+import time
+
 import pandas as pd
 import streamlit as st
 
 from pathlib import Path
 
 from src.parse.tnt import parseTnT
+from src.parse.deconv import parseDeconv
 from src.Workflow import TagWorkflow
 from src.common.common import page_setup, save_params
 
@@ -25,35 +28,43 @@ with t[2]:
     wf.show_execution_section()
 with t[3]:
 
+    # (file name suffix, name tag, prefix the tools use in their own output)
+    UPLOAD_FILE_TYPES = (
+        ('deconv.mzML', 'out_deconv_mzML', 'out'),
+        ('annotated.mzML', 'anno_annotated_mzML', 'anno'),
+        ('tags.tsv', 'tags_tsv', ''),
+        ('tagged.tsv', 'tags_tsv', ''),
+        ('protein.tsv', 'protein_tsv', ''),
+    )
+
+    REQUIRED_FILES = (
+        ('deconvolved mzML', 'out_deconv_mzML'),
+        ('annotated mzML', 'anno_annotated_mzML'),
+        ('tags.tsv', 'tags_tsv'),
+        ('protein.tsv', 'protein_tsv'),
+    )
+
     def process_uploaded_files(uploaded_files):
-        
+
+        # FLASHDeconv and FLASHTnT name their output files 'out_deconv.mzML',
+        # 'anno_annotated.mzML', 'tags.tsv' and 'protein.tsv', so the part in
+        # front of the suffix is not an experiment name: file those under a
+        # common dataset, otherwise the files of a run never meet.
+        default_dataset = time.strftime('uploaded_%Y%m%d-%H%M%S')
+
         # Store all uploaded files
         for file in uploaded_files:
-            if file.name.endswith("mzML"):
-                if file.name.endswith('_deconv.mzML'):
-                    wf.file_manager.store_file(
-                        file.name.split('_deconv.mzML')[0], 'out_deconv_mzML', file
-                    )
-                elif file.name.endswith('_annotated.mzML'):
-                    wf.file_manager.store_file(
-                        file.name.split('_annotated.mzML')[0], 'anno_annotated_mzML', file
-                    )
-                else:
-                    st.warning(f'Invalid file : {file.name}')
-            elif file.name.endswith("tsv"):
-                if file.name.endswith('_tagged.tsv'):
-                    wf.file_manager.store_file(
-                        file.name.split('_tagged.tsv')[0], 'tags_tsv', file
-                    )
-                elif file.name.endswith('_protein.tsv'):
-                    wf.file_manager.store_file(
-                        file.name.split('_protein.tsv')[0], 'protein_tsv', file
-                    )
-                else:
-                    st.warning(f'Invalid file : {file.name}')
+            for suffix, name_tag, tool_prefix in UPLOAD_FILE_TYPES:
+                if not file.name.endswith(suffix):
+                    continue
+                experiment = file.name[:-len(suffix)].rstrip('_')
+                if experiment in ('', tool_prefix):
+                    experiment = default_dataset
+                wf.file_manager.store_file(experiment, name_tag, file)
+                break
             else:
                 st.warning(f'Invalid file : {file.name}')
-        
+
         # Get the unparsed files
         input_files = set(wf.file_manager.get_results_list(
             ['out_deconv_mzML', 'anno_annotated_mzML', 'tags_tsv', 'protein_tsv']
@@ -64,22 +75,40 @@ with t[3]:
         unparsed_files = input_files - parsed_files
 
         # Process unparsed datasets
-        for unparsed_dataset in (unparsed_files):
+        for unparsed_dataset in unparsed_files:
             results = wf.file_manager.get_results(
                 unparsed_dataset, 
-                ['out_deconv_mzML', 'anno_annotated_mzML', 'tags_tsv', 'protein_tsv']
+                ['out_deconv_mzML', 'anno_annotated_mzML', 'tags_tsv', 'protein_tsv'],
+                partial=True
             )
-            
-            parsed_data = parseTnT(
-                results['out_deconv_mzML'], results['anno_annotated_mzML'], 
-                results['tags_tsv'], results['protein_tsv']
-            )
+            missing = [n for n, tag in REQUIRED_FILES if tag not in results]
+            if missing:
+                st.warning(
+                    f"Experiment '{unparsed_dataset}' is missing the "
+                    f"{', '.join(missing)} file(s)."
+                )
+                continue
 
-            for k, v in parsed_data.items():
-                wf.file_manager.store_data(unparsed_dataset, k, v)
+            with st.spinner(f"Processing '{unparsed_dataset}'..."):
+                # The tags are matched against the deconvolved masses, so the
+                # mzML files have to be parsed first
+                if not wf.file_manager.result_exists(
+                    unparsed_dataset, 'deconv_tolerance'
+                ):
+                    parseDeconv(
+                        wf.file_manager, unparsed_dataset,
+                        results['out_deconv_mzML'], results['anno_annotated_mzML'],
+                        logger=wf.logger
+                    )
+                parseTnT(
+                    wf.file_manager, unparsed_dataset,
+                    results['out_deconv_mzML'], results['anno_annotated_mzML'],
+                    results['tags_tsv'], results['protein_tsv'],
+                    logger=wf.logger
+                )
 
     # Upload files via upload widget
-    st.subheader("**Upload FLASHDeconv & FLASHTagger output files (\*_annotated.mzML, \*_deconv.mzML, \*_tagged.tsv & \*_protein.tsv)**")
+    st.subheader("**Upload FLASHDeconv & FLASHTnT output files (anno_annotated.mzML, out_deconv.mzML, tags.tsv & protein.tsv)**")
     # Display info how to upload files
     st.info(
         """
