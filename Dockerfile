@@ -66,7 +66,10 @@ RUN echo "mamba activate streamlit-env" >> ~/.bashrc
 SHELL ["/bin/bash", "--rcfile", "~/.bashrc"]
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
 
-RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython>=3.1' 'autowrap==0.24' pandas 'numpy>=2.0' pytest
+# Cython is capped below 3.3: autowrap 0.24 reflects on
+# Nodes.CConstTypeNode / Nodes.CConstOrVolatileTypeNode, which Cython 3.3
+# removed, breaking the pyOpenMS code generation in 'make pyopenms'.
+RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython>=3.1,<3.3' 'autowrap==0.24' pandas 'numpy>=2.0' pytest
 
 # Clone OpenMS branch and the associcated contrib+thirdparties+pyOpenMS-doc submodules.
 RUN git clone --recursive --depth=1 -b ${OPENMS_BRANCH} --single-branch ${OPENMS_REPO} && cd /OpenMS
