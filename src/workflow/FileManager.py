@@ -386,13 +386,19 @@ class FileManager:
             file (Path of File-Like): The file that should be stored.
             remove (bool): Wether or not the file should be removed
                 after copying it.
-            filetype (str): The file extension of the file. Only 
-                neccessary if a file-like object is used as input.
+            file_name (str): The name to store the file under. Only
+                neccessary if the input has no file extension to derive
+                it from.
         """
 
         # Define storage path
         if file_name is None:
-            file_name = f"{name_tag}{file.suffix}"
+            # File-like objects have no `suffix`; Streamlit's UploadedFile
+            # carries the original file name in `name` instead.
+            suffix = getattr(file, 'suffix', None)
+            if suffix is None:
+                suffix = Path(getattr(file, 'name', '')).suffix
+            file_name = f"{name_tag}{suffix}"
         
         target_path = Path(
                 self.cache_path, 'files', dataset_id, file_name

@@ -1,3 +1,5 @@
+import time
+
 import pandas as pd
 import streamlit as st
 
@@ -25,65 +27,62 @@ with t[2]:
     wf.show_execution_section()
 with t[3]:
 
+    # (file name suffix, name tag, prefix FLASHDeconv uses in its own output)
+    UPLOAD_FILE_TYPES = (
+        ('deconv.mzML', 'out_deconv_mzML', 'out'),
+        ('annotated.mzML', 'anno_annotated_mzML', 'anno'),
+        ('spec1.tsv', 'spec1_tsv', ''),
+        ('spec2.tsv', 'spec2_tsv', ''),
+    )
+
     def process_uploaded_files(uploaded_files):
-        
+
+        # FLASHDeconv names its output files 'out_deconv.mzML' and
+        # 'anno_annotated.mzML', so the part in front of the suffix ('out'
+        # and 'anno') is not an experiment name: file those under a common
+        # dataset, otherwise the two halves of a run never meet.
+        default_dataset = time.strftime('uploaded_%Y%m%d-%H%M%S')
+
         # Store all uploaded files
         for file in uploaded_files:
-            if file.name.endswith("mzML"):
-                if file.name.endswith('_deconv.mzML'):
-                    wf.file_manager.store_file(
-                        file.name.split('_deconv.mzML')[0], 'out_deconv_mzML', file
-                    )
-                elif file.name.endswith('_annotated.mzML'):
-                    wf.file_manager.store_file(
-                        file.name.split('_annotated.mzML')[0], 'anno_annotated_mzML', file
-                    )
-                else:
-                    st.warning(f'Invalid file : {file.name}')
-            elif file.name.endswith("tsv"):
-                if file.name.endswith('_spec1.tsv'):
-                    wf.file_manager.store_file(
-                        file.name.split('_spec1.tsv')[0], 'spec1_tsv', file
-                    )
-                elif file.name.endswith('_spec2.tsv'):
-                    wf.file_manager.store_file(
-                        file.name.split('_spec2.tsv')[0], 'spec2_tsv', file
-                    )
-                else:
-                    st.warning(f'Invalid file : {file.name}')
+            for suffix, name_tag, tool_prefix in UPLOAD_FILE_TYPES:
+                if not file.name.endswith(suffix):
+                    continue
+                experiment = file.name[:-len(suffix)].rstrip('_')
+                if experiment in ('', tool_prefix):
+                    experiment = default_dataset
+                wf.file_manager.store_file(experiment, name_tag, file)
+                break
             else:
                 st.warning(f'Invalid file : {file.name}')
-        
+
         # Get the unparsed files
         input_files = set(wf.file_manager.get_results_list(['out_deconv_mzML', 'anno_annotated_mzML']))
         parsed_files = set(wf.file_manager.get_results_list(['deconv_dfs', 'anno_dfs']))
         unparsed_files = input_files - parsed_files
 
-        # Get the unpared tsv files
-        ms1_tsv_files = set(wf.file_manager.get_results_list(['spec1_tsv']))
-        parsed_ms1_tsv_files = set(wf.file_manager.get_results_list(['parsed_tsv_file_ms1']))
-        ms2_tsv_files = set(wf.file_manager.get_results_list(['spec2_tsv']))
-        parsed_ms2_tsv_files = set(wf.file_manager.get_results_list(['parsed_tsv_file_ms2']))
-        unparsed_tsv_files = (
-            (
-                (ms1_tsv_files - parsed_ms1_tsv_files) 
-                | (ms2_tsv_files - parsed_ms2_tsv_files)
-            ) & input_files
-        )
-
         # Process unparsed datasets
-        for unparsed_dataset in (unparsed_files | unparsed_tsv_files):
+        for unparsed_dataset in unparsed_files:
             results = wf.file_manager.get_results(
                 unparsed_dataset, 
                 ['out_deconv_mzML', 'anno_annotated_mzML', 
                  'spec1_tsv', 'spec2_tsv'],
                  partial=True
             )
+            if not ('out_deconv_mzML' in results and 'anno_annotated_mzML' in results):
+                st.warning(
+                    f"Experiment '{unparsed_dataset}' needs both the "
+                    "deconvolved and the annotated mzML file."
+                )
+                continue
 
-            parsed_data = parseDeconv(**results)
-
-            for k, v in parsed_data.items():
-                wf.file_manager.store_data(unparsed_dataset, k, v)
+            with st.spinner(f"Processing '{unparsed_dataset}'..."):
+                parseDeconv(
+                    wf.file_manager, unparsed_dataset,
+                    results['out_deconv_mzML'], results['anno_annotated_mzML'],
+                    results.get('spec1_tsv'), results.get('spec2_tsv'),
+                    logger=wf.logger
+                )
 
     st.subheader("**Upload FLASHDeconv output files (\*_annotated.mzML & \*_deconv.mzML) or spec1/2 TSV files (Qscore Density Plot only)**")
     st.info(
