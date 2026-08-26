@@ -219,11 +219,13 @@ def handleSettingButtons():
 
 def setSequenceView():
     if get_sequence() is not None:
+        # Parity with the TnT layout: `internal_fragment_map` was dropped because
+        # neither the legacy grid nor the OI viewer renders it (it produces
+        # nothing). Only the sequence view is added on sequence submission.
         global COMPONENT_OPTIONS
-        COMPONENT_OPTIONS = COMPONENT_OPTIONS + ['Sequence view (Mass table needed)',
-                                                 'Internal fragment map (Mass table needed)']
+        COMPONENT_OPTIONS = COMPONENT_OPTIONS + ['Sequence view (Mass table needed)']
         global COMPONENT_NAMES
-        COMPONENT_NAMES = COMPONENT_NAMES + ['sequence_view', 'internal_fragment_map']
+        COMPONENT_NAMES = COMPONENT_NAMES + ['sequence_view']
 
 
 # page initialization

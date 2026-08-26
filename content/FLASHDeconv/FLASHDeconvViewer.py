@@ -4,7 +4,45 @@ from pathlib import Path
 
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
+# Legacy bespoke-grid render path (kept importable until OI integration is verified).
 from src.render.render import render_grid
+# The OpenMS-Insight viewer (Stage B) is imported lazily inside render_panel (see
+# below) so an import failure (e.g. a missing openms-insight install) falls back
+# to the legacy grid instead of breaking the whole page.
+
+
+def _use_oi_viewer():
+    return st.session_state.get("settings", {}).get(
+        "use_openms_insight_viewer", True
+    )
+
+
+def render_panel(experiment_id, layout_info_per_exp, file_manager, identifier,
+                 grid_key, panel_index):
+    """Render one experiment panel via the configured viewer.
+
+    Routes to the new OpenMS-Insight viewer when enabled, else the legacy grid.
+    The OI viewer is imported lazily and guarded so an import failure falls back
+    to the legacy grid rather than breaking the page.
+    """
+    if _use_oi_viewer():
+        try:
+            from content.FLASHDeconv.FLASHDeconvViewerOI import (
+                render_experiment_panel,
+            )
+        except Exception as exc:  # noqa: BLE001 - OI viewer unavailable
+            st.warning(
+                f"OpenMS-Insight viewer unavailable ({exc}); using legacy grid."
+            )
+        else:
+            render_experiment_panel(
+                experiment_id, layout_info_per_exp, file_manager, panel_index
+            )
+            return
+    render_grid(
+        experiment_id, layout_info_per_exp, file_manager,
+        'flashdeconv', identifier, grid_key
+    )
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                   ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
@@ -84,9 +122,9 @@ if len(layout) == 2 and side_by_side:
             on_change=select_experiment
         )
         if 'selected_experiment0' in st.session_state:
-            render_grid(
-                st.session_state.selected_experiment0, layout[0], file_manager, 
-                'flashdeconv', "selected_experiment0", 'flash_viewer_grid_0'
+            render_panel(
+                st.session_state.selected_experiment0, layout[0], file_manager,
+                "selected_experiment0", 'flash_viewer_grid_0', panel_index=0
             )
     with c2:
         st.selectbox(
@@ -97,10 +135,10 @@ if len(layout) == 2 and side_by_side:
         )
         if f"selected_experiment1" in st.session_state:
             with st.spinner('Loading component...'):
-                render_grid(
-                     st.session_state["selected_experiment1"], layout[1], 
-                     file_manager, 'flashdeconv', 'selected_experiment1', 
-                     'flash_viewer_grid_1'
+                render_panel(
+                     st.session_state["selected_experiment1"], layout[1],
+                     file_manager, 'selected_experiment1',
+                     'flash_viewer_grid_1', panel_index=1
                 )
 
 else:
@@ -114,9 +152,9 @@ else:
 
 
     if 'selected_experiment0' in st.session_state:
-        render_grid(
-            st.session_state.selected_experiment0, layout[0], file_manager, 
-            'flashdeconv', 'selected_experiment0'
+        render_panel(
+            st.session_state.selected_experiment0, layout[0], file_manager,
+            'selected_experiment0', 'flash_viewer_grid', panel_index=0
         )
 
     ### for multiple experiments on one view
@@ -135,11 +173,11 @@ else:
             )
             # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
             if f"selected_experiment{exp_index}" in st.session_state:
-                render_grid(
-                     st.session_state["selected_experiment%d" % exp_index], 
-                     layout[exp_index], file_manager, 'flashdeconv', 
-                     "selected_experiment%d" % exp_index, 
-                     'flash_viewer_grid_%d' % exp_index
+                render_panel(
+                     st.session_state["selected_experiment%d" % exp_index],
+                     layout[exp_index], file_manager,
+                     "selected_experiment%d" % exp_index,
+                     'flash_viewer_grid_%d' % exp_index, panel_index=exp_index
                 )
 
 save_params(params)

@@ -10,6 +10,297 @@ from scipy.stats import gaussian_kde
 # pushdown reads only the matching group(s) instead of the whole file.
 SPECTRA_ROW_GROUP_SIZE = 64
 
+# Long-format (one-row-per-peak / one-row-per-mass) frames are consumed by the
+# OpenMS-Insight components (LinePlot / Table / Scatter3D), which filter by COLUMN
+# VALUE (filters={'scanIndex':'index'}) rather than by the old `iloc[scanIndex]`
+# ROW-INDEX path in src/render/update.py. These producers are ADDITIVE: the legacy
+# array-per-scan frames (deconv_spectrum, anno_spectrum, combined_spectrum,
+# mass_table) are still stored unchanged for the old render path; the long frames
+# are stored under separate `*_long` tags so both can coexist during Stage B.
+#
+# Exploded rows are sorted/grouped by `index` so a value-filter `index == k`
+# reads exactly the rows the old `iloc[k]` array slice produced (the legacy frames
+# are built with with_row_index + sort('index'), so row position == index value).
+# Long peak frames use a slightly larger row group (predicate pushdown is by
+# value, and per-scan peak counts are modest) than the array frames.
+LONG_ROW_GROUP_SIZE = 10_000
+
+
+def _explode_long_by_position(indexed_lf, id_col, value_exprs):
+    """Explode parallel per-scan list columns into one row per position.
+
+    This reproduces, exactly, the legacy FLASHApp Vue per-column expansion
+    (``TabulatorMassTable.vue`` ``tableData`` and the lineplot/3D consumers):
+    each per-scan list column is laid out by POSITION ``0..L-1`` independently;
+    the number of rows for a scan is the MAXIMUM list length across the supplied
+    columns, and any column shorter than that maximum yields ``null`` for the
+    missing trailing positions (the JS ``undefined``). Columns are therefore
+    ALIGNED BY POSITION, never lock-stepped — important because in real
+    FLASHDeconv output ``mz_array``/``intensity_array`` (the full spectrum) can be
+    LONGER than the per-mass ``MinCharges``/``SignalPeaks`` axis, and the legacy
+    UI pads the short columns with blanks rather than truncating.
+
+    Args:
+        indexed_lf: a polars LazyFrame carrying an integer ``index`` column.
+        id_col: name of the per-scan position id column to emit (``peak_id`` or
+            ``mass_id``) — the 0-based row position within the scan.
+        value_exprs: list of ``(out_name, list_expr)``. ``list_expr`` is a polars
+            expression evaluating to a per-scan list; its element at position
+            ``id_col`` becomes the scalar ``out_name`` (null when out of range).
+
+    Returns:
+        LazyFrame with columns ``index``, ``id_col``, then each ``out_name``,
+        sorted by ``index`` then ``id_col``. Scans whose columns are all empty
+        contribute 0 rows (matching the old ``iloc[k]`` empty-array slice).
+    """
+    out_names = [name for name, _ in value_exprs]
+
+    # Per-scan max length across all contributing list columns → number of
+    # positions to emit. (max of list.len() over the columns.)
+    max_len = value_exprs[0][1].list.len()
+    for _, expr in value_exprs[1:]:
+        max_len = pl.max_horizontal(max_len, expr.list.len())
+
+    # Pad every value list to the per-scan ``max_len`` with nulls — gathering by
+    # the position range with ``null_on_oob`` reproduces the legacy blank-tail
+    # cell — then zip-explode the id column and all value lists together so each
+    # output row is exactly one position.
+    #
+    # This stays O(total output rows). The earlier approach exploded only the id
+    # column while every row still carried the full per-scan value lists, then
+    # gathered the scalar — i.e. O(rows × max_len), which materialises the lists
+    # `max_len` times and OOMs on real spectra (e.g. an 865k-row annotated frame
+    # with multi-thousand-length lists ≈ tens of GB). Exploding the lists in
+    # lock-step avoids the duplication entirely.
+    positions = pl.int_ranges(0, max_len)
+    lf = (
+        indexed_lf
+        .select(
+            [pl.col("index")]
+            + [expr.list.gather(positions, null_on_oob=True).alias(name)
+               for name, expr in value_exprs]
+            + [positions.alias(id_col)]
+        )
+        .explode([id_col] + out_names)
+        # Empty scans explode to a single null-id row; drop so they contribute 0 rows.
+        .filter(pl.col(id_col).is_not_null())
+        .sort(["index", id_col])
+    )
+    return lf.select(["index", id_col] + out_names)
+
+
+# Each per-mass entry of the nested ``SignalPeaks`` column is a list of matched
+# signal peaks, and each signal peak is a 4-tuple ``[peak_index, mz, intensity,
+# charge]`` (verified against the example caches under example-data/workspaces/**:
+# ``SignalPeaks`` has dtype ``List(List(List(Float64)))`` — scan → mass → peak →
+# quadruple). The charge drill-down ("Augmented Annotated Spectrum") needs, for
+# each deconvolved mass, the per-mass mz / charge / intensity of its signal peaks
+# (not just the ``is_signal`` boolean). These expressions pull those three axes
+# out of the nested column WITHOUT flattening across masses: each evaluates to a
+# per-scan ``List(List(...))`` whose outer position is the mass axis (aligned to
+# ``MonoMass`` / ``peak_id``) and whose inner list is that one mass's small signal
+# arrays. _explode_long_by_position then gathers the inner list by mass position,
+# so each output row carries exactly the signal peaks belonging to that peak.
+def _signal_mzs_expr():
+    # mz is element index 1 of each [idx, mz, intensity, charge] signal peak.
+    return pl.col("SignalPeaks").list.eval(
+        pl.element().list.eval(pl.element().list.get(1))
+    )
+
+
+def _signal_intensities_expr():
+    # intensity is element index 2 of each signal-peak quadruple.
+    return pl.col("SignalPeaks").list.eval(
+        pl.element().list.eval(pl.element().list.get(2))
+    )
+
+
+def _signal_charges_expr():
+    # charge is element index 3; stored as float in the nested array, cast to i64.
+    return pl.col("SignalPeaks").list.eval(
+        pl.element().list.eval(pl.element().list.get(3).cast(pl.Int64))
+    )
+
+
+def _signal_is_signal_expr():
+    # Per-mass boolean: True where that mass has >=1 matched signal peak.
+    return pl.col("SignalPeaks").list.eval(pl.element().list.len() > 0)
+
+
+def _fill_empty_signal_lists(lf):
+    """Replace ``null`` signal/charge/intensity cells with empty lists.
+
+    Positions past the per-mass ``SignalPeaks`` axis (e.g. a ragged scan whose
+    full-spectrum ``mz_array`` is longer than ``SignalPeaks``) explode to ``null``
+    list cells. Coerce them to empty lists so consumers always read a list (parity
+    with ``is_signal`` being filled to ``False``), and every signal-flagged peak
+    has equal-length ``signal_mzs`` / ``signal_charges`` / ``signal_intensities``.
+    """
+    return lf.with_columns([
+        pl.col("signal_mzs").fill_null([]).alias("signal_mzs"),
+        pl.col("signal_charges").fill_null([]).alias("signal_charges"),
+        pl.col("signal_intensities").fill_null([]).alias("signal_intensities"),
+    ])
+
+
+def deconv_spectrum_long(pl_deconv_indexed):
+    """One row per deconvolved peak with the per-mass signal-peak arrays.
+
+    Columns: index, peak_id, MonoMass, SumIntensity, signal_mzs (list[f64]),
+    signal_charges (list[i64]), signal_intensities (list[f64]).
+
+    Long-format replacement for the array-valued ``deconv_spectrum`` frame,
+    consumed by ``LinePlot(filters={'scanIndex':'index'}, x_column='MonoMass',
+    y_column='SumIntensity')``.
+
+    The three ``signal_*`` list columns carry, for the deconvolved mass at this
+    ``peak_id`` position, the mz / charge / intensity of each of its matched
+    signal peaks (the per-mass ``SignalPeaks[peak_id]`` axis). They are aligned to
+    each other (same length, one entry per signal peak of this mass) and to the
+    ``peak_id``/``MonoMass`` row, and back the "Augmented Annotated Spectrum"
+    charge drill-down. A peak with no matched signal (or a ragged past-end
+    position) carries empty lists.
+    """
+    lf = _explode_long_by_position(
+        pl_deconv_indexed,
+        "peak_id",
+        [("MonoMass", pl.col("mz_array")),
+         ("SumIntensity", pl.col("intensity_array")),
+         ("signal_mzs", _signal_mzs_expr()),
+         ("signal_charges", _signal_charges_expr()),
+         ("signal_intensities", _signal_intensities_expr())],
+    )
+    return _fill_empty_signal_lists(lf)
+
+
+def anno_spectrum_long(pl_anno_indexed):
+    """One row per annotated/raw peak: index, peak_id, MonoMass_Anno,
+    SumIntensity_Anno.
+
+    Long-format replacement for the array-valued ``anno_spectrum`` frame,
+    consumed by ``LinePlot(filters={'scanIndex':'index'},
+    x_column='MonoMass_Anno', y_column='SumIntensity_Anno')``.
+    """
+    return _explode_long_by_position(
+        pl_anno_indexed,
+        "peak_id",
+        [("MonoMass_Anno", pl.col("mz_array")),
+         ("SumIntensity_Anno", pl.col("intensity_array"))],
+    )
+
+
+def combined_spectrum_long(pl_deconv_indexed):
+    """One row per deconvolved peak with a signal-membership flag and the
+    per-mass signal-peak arrays.
+
+    Columns: index, peak_id, MonoMass, SumIntensity, is_signal (bool),
+    signal_mzs (list[f64]), signal_charges (list[i64]),
+    signal_intensities (list[f64]).
+
+    ``is_signal`` is True when the corresponding per-mass entry of the nested
+    ``SignalPeaks`` column is non-empty, i.e. the deconvolved mass at that
+    position has at least one matched signal peak (mirrors the per-mass alignment
+    the 3D plot uses: ``Plotly3Dplot.vue`` indexes ``SignalPeaks[massIndex]`` by
+    the same position). ``SignalPeaks`` is the per-mass axis and in real output
+    can be SHORTER than ``mz_array``; positions beyond its length therefore have
+    no signal entry and are flagged ``False`` (parity with the JS ``undefined``
+    → no-signal).
+
+    ``signal_mzs`` / ``signal_charges`` / ``signal_intensities`` carry, for the
+    mass at this ``peak_id`` position, the mz / charge / intensity of each matched
+    signal peak (the contents of ``SignalPeaks[peak_id]``). The three lists are
+    mutually aligned (one entry per signal peak of this mass, equal length) and
+    aligned to the ``peak_id``/``MonoMass`` row; they back the legacy "Augmented
+    Annotated Spectrum" charge drill-down. When ``is_signal`` is False (no matched
+    signal, or a ragged past-end position) all three lists are empty.
+
+    This is the long-format counterpart of the array-valued ``combined_spectrum``
+    deconv side; the annotated overlay is provided separately by
+    ``anno_spectrum_long`` (the OpenMS-Insight LinePlot reads the 2nd series from
+    its own ``x2_column``/``y2_column`` frame).
+    """
+    # Per-mass list columns, all aligned to the SignalPeaks (per-mass) axis.
+    # _explode_long_by_position gathers each by the same position id as MonoMass
+    # and yields null past its end (coerced below to False / empty lists).
+    lf = _explode_long_by_position(
+        pl_deconv_indexed,
+        "peak_id",
+        [("MonoMass", pl.col("mz_array")),
+         ("SumIntensity", pl.col("intensity_array")),
+         ("is_signal", _signal_is_signal_expr()),
+         ("signal_mzs", _signal_mzs_expr()),
+         ("signal_charges", _signal_charges_expr()),
+         ("signal_intensities", _signal_intensities_expr())],
+    )
+    lf = lf.with_columns(pl.col("is_signal").fill_null(False))
+    return _fill_empty_signal_lists(lf)
+
+
+def mass_table_long(pl_deconv_indexed):
+    """One row per mass: index, mass_id, plus scalar mass-table fields.
+
+    Long-format replacement for the array-valued ``mass_table`` frame. Each row is
+    one deconvolved mass within a scan; ``MonoMass``/``SumIntensity`` and the
+    per-mass charge/isotope/score columns become scalars.
+
+    Consumed by ``Table(interactivity={'massIndex':'mass_id'},
+    filters={'scanIndex':'index'})``: clicking a row sets ``massIndex`` to the
+    row's ``mass_id``, and the table is filtered to the selected scan via
+    ``index``. ``mass_id`` is the 0-based position of the mass within its scan,
+    matching the array-subscript semantics the 3D plot uses for ``massIndex``.
+
+    Columns are aligned BY POSITION (not lock-stepped): the legacy
+    ``TabulatorMassTable.vue`` builds one row per position up to the MAX array
+    length across the required columns, leaving blanks where a column is shorter.
+    In real FLASHDeconv output ``MonoMass``/``SumIntensity`` (the full spectrum
+    ``mz_array``/``intensity_array``) may be LONGER than the per-mass charge/
+    isotope/score arrays; those trailing rows therefore carry the mass/intensity
+    with ``null`` charge/isotope/score cells, exactly as the old UI rendered them.
+    """
+    value_exprs = [
+        ("MonoMass", pl.col("mz_array")),
+        ("SumIntensity", pl.col("intensity_array")),
+        ("MinCharges", pl.col("MinCharges")),
+        ("MaxCharges", pl.col("MaxCharges")),
+        ("MinIsotopes", pl.col("MinIsotopes")),
+        ("MaxIsotopes", pl.col("MaxIsotopes")),
+        ("CosineScore", pl.col("cos")),
+        ("SNR", pl.col("snr")),
+        ("QScore", pl.col("qscore")),
+    ]
+    return _explode_long_by_position(pl_deconv_indexed, "mass_id", value_exprs)
+
+def threedim_SN_plot(pl_deconv_indexed):
+    """3D signal/noise scatter frame with precursor-lookup keys.
+
+    Columns: index, Scan (i64), PrecursorScan (f64), PrecursorMass (f64),
+    MonoMass (list[f64], == ``mz_array``), SignalPeaks, NoisyPeaks.
+
+    Carries the precursor-lookup keys the OpenMS-Insight Scatter3D needs to match
+    a fragment scan's precursor back to the mass that generated it: each (MS2) scan
+    row has its own ``Scan`` id, the ``PrecursorScan`` it was isolated from, the
+    scalar ``PrecursorMass``, and the per-mass ``MonoMass`` array of that scan. The
+    viewer locates the precursor scan's row (``Scan == PrecursorScan``) and finds
+    the index into that scan's ``MonoMass`` array whose value matches
+    ``PrecursorMass``, using the same per-mass position (``SignalPeaks[massIndex]``)
+    as the rest of the 3D plot. ``Scan`` / ``PrecursorScan`` are the join keys,
+    ``PrecursorMass`` is the scalar to match, ``MonoMass`` is the per-mass axis to
+    search.
+    """
+    return (
+        pl_deconv_indexed
+        .select([
+            pl.col('index'),
+            pl.col('Scan'),
+            pl.col('PrecursorScan'),
+            pl.col('PrecursorMass'),
+            pl.col('mz_array').alias('MonoMass'),
+            pl.col('SignalPeaks'),
+            pl.col('NoisyPeaks')
+        ])
+    )
+
+
 def parseDeconv(
         file_manager, dataset_id, out_deconv_mzML, anno_annotated_mzML, 
         spec1_tsv=None, spec2_tsv=None, logger=None
@@ -111,6 +402,13 @@ def parseDeconv(
     )
     file_manager.store_data(dataset_id, 'anno_spectrum', anno_spectrum_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
+    # anno_spectrum_long - long-format (one row per peak) for OpenMS-Insight LinePlot
+    file_manager.store_data(
+        dataset_id, 'anno_spectrum_long',
+        anno_spectrum_long(pl_anno_indexed),
+        row_group_size=LONG_ROW_GROUP_SIZE,
+    )
+
     logger.log("40.0 %", level=2)
 
     # mass_table - using native polars LazyFrame operations
@@ -131,6 +429,13 @@ def parseDeconv(
         .sort("index")
     )
     file_manager.store_data(dataset_id, 'mass_table', mass_table_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
+
+    # mass_table_long - long-format (one row per mass) for OpenMS-Insight Table
+    file_manager.store_data(
+        dataset_id, 'mass_table_long',
+        mass_table_long(pl_deconv_indexed),
+        row_group_size=LONG_ROW_GROUP_SIZE,
+    )
 
     logger.log("50.0 %", level=2)
 
@@ -160,6 +465,13 @@ def parseDeconv(
     )
     file_manager.store_data(dataset_id, 'deconv_spectrum', deconv_spectrum_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
+    # deconv_spectrum_long - long-format (one row per peak) for OpenMS-Insight LinePlot
+    file_manager.store_data(
+        dataset_id, 'deconv_spectrum_long',
+        deconv_spectrum_long(pl_deconv_indexed),
+        row_group_size=LONG_ROW_GROUP_SIZE,
+    )
+
     logger.log("70.0 %", level=2)
 
     # anno & deconv spectrum (combined_spectrum) - using native polars LazyFrame join
@@ -184,18 +496,19 @@ def parseDeconv(
     )
     file_manager.store_data(dataset_id, 'combined_spectrum', combined_spectrum_lazy, row_group_size=SPECTRA_ROW_GROUP_SIZE)
 
+    # combined_spectrum_long - long-format deconv peaks + is_signal flag for
+    # OpenMS-Insight LinePlot (primary series). The annotated overlay (2nd series)
+    # is the separate anno_spectrum_long frame wired via x2_column/y2_column.
+    file_manager.store_data(
+        dataset_id, 'combined_spectrum_long',
+        combined_spectrum_long(pl_deconv_indexed),
+        row_group_size=LONG_ROW_GROUP_SIZE,
+    )
+
     logger.log("80.0 %", level=2)
 
-    # 3D_SN_plot - using native polars LazyFrame operations
-    threedim_SN_plot_lazy = (
-        pl_deconv_indexed
-        .select([
-            pl.col('index'),
-            pl.col('PrecursorScan'),
-            pl.col('SignalPeaks'),
-            pl.col('NoisyPeaks')
-        ])
-    )
+    # 3D_SN_plot - precursor-lookup keys + signal/noise peaks (see threedim_SN_plot).
+    threedim_SN_plot_lazy = threedim_SN_plot(pl_deconv_indexed)
     file_manager.store_data(dataset_id, 'threedim_SN_plot', threedim_SN_plot_lazy)
 
     logger.log("90.0 %", level=2)
