@@ -24,13 +24,32 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
+      - name: Set up Node
+        # Needed to build the OpenMS-Insight Vue bundle (see install step).
+        uses: actions/setup-node@v4
+        with:
+          node-version: "21"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Pinned runtime deps (pyopenms is needed so ParameterManager imports
-          # cleanly at collection time) plus test-only deps. fakeredis backs the
-          # QueueManager/WorkflowManager tests, which pytest.importorskip it.
-          pip install -r requirements.txt
+          # OpenMS-Insight is declared in requirements.txt as a git dependency,
+          # but its wheel force-includes a Vue bundle that is gitignored, so a
+          # raw `pip install git+…` fails at metadata generation. Build the
+          # bundle and install from the checkout, mirroring the Dockerfiles and
+          # .claude/hooks/session-start.sh.
+          git clone --depth 1 --branch claude/peaceful-mayer-YqiXZ \
+            https://github.com/t0mdavid-m/OpenMS-Insight.git /tmp/openms-insight
+          (cd /tmp/openms-insight/js-component && npm install --no-audit --no-fund && npm run build)
+          mkdir -p /tmp/openms-insight/openms_insight/js-component
+          cp -r /tmp/openms-insight/js-component/dist \
+            /tmp/openms-insight/openms_insight/js-component/dist
+          pip install /tmp/openms-insight
+          # Remaining deps minus the openms-insight git line (installed above);
+          # pyopenms is needed so ParameterManager imports cleanly at collection
+          # time. fakeredis backs the QueueManager/WorkflowManager tests.
+          grep -ivE '^openms-insight[[:space:]]*[@=<>!~]' requirements.txt > /tmp/req.txt
+          pip install -r /tmp/req.txt
           pip install pytest fakeredis
 
       - name: Run unit tests
