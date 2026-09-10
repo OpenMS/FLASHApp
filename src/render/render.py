@@ -1,4 +1,7 @@
+import threading
+
 import streamlit as st
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 from src.render.util import hash_complex
 from src.render.StateTracker import StateTracker
@@ -58,7 +61,36 @@ def render_component(
             st.rerun(scope='app')
 
 
+# One lock per Streamlit session. With runner.fastReruns (the default) Streamlit
+# starts a new script thread while the previous one is still executing; two threads
+# rendering the grid at the same time share the session's polars/pyarrow objects and
+# crashed the server (see docs/white-screen-root-cause.md). Serialising render_grid
+# per session removes that overlap: a runner that has been stopped releases the lock
+# as soon as its next Streamlit call raises. Keyed by session id (not stored in
+# st.session_state) so two concurrent first calls cannot create two different locks.
+_GRID_LOCKS: dict[str, threading.Lock] = {}
+_GRID_LOCKS_GUARD = threading.Lock()
+
+
+def _grid_lock() -> threading.Lock:
+    ctx = get_script_run_ctx()
+    key = ctx.session_id if ctx is not None else '__no_session__'
+    with _GRID_LOCKS_GUARD:
+        return _GRID_LOCKS.setdefault(key, threading.Lock())
+
+
 def render_grid(
+    selected_data, layout_info_per_exp, file_manager, tool, identifier,
+    grid_key='flash_viewer_grid'
+):
+    with _grid_lock():
+        _render_grid_unlocked(
+            selected_data, layout_info_per_exp, file_manager, tool, identifier,
+            grid_key
+        )
+
+
+def _render_grid_unlocked(
     selected_data, layout_info_per_exp, file_manager, tool, identifier,
     grid_key='flash_viewer_grid'
 ):
