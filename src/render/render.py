@@ -3,7 +3,7 @@ import threading
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
-from src.render.util import hash_complex
+from src.render.util import payload_hash
 from src.render.StateTracker import StateTracker
 from src.render.initialize import initialize_data
 from src.render.update import update_data, filter_data
@@ -42,8 +42,10 @@ def render_component(
         data, out_components, active_state, additional_data, tool
     )
 
-    # Hash updated. filtered data
-    data['hash'] = hash_complex(data)
+    # Hash the filtered data together with the tracker id: the frontend skips renders
+    # whose hash is unchanged, and a new experiment must rebuild every cell even when
+    # its data is byte-identical to the previous experiment's (re-run of the same file).
+    data['hash'] = payload_hash(data, state['id'])
 
     # Render component
     data['selection_store'] = state
