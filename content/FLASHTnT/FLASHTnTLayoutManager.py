@@ -28,6 +28,10 @@ COMPONENT_NAMES=[
     'ms1_deconv_heat_map'
 ]
 
+# page_setup() first: it initialises st.session_state['workspace'], which the
+# cache access below needs when this page is opened by direct link.
+params = page_setup()
+
 # Setup cache access
 file_manager = FileManager(
     st.session_state["workspace"],
@@ -201,8 +205,6 @@ def handleSettingButtons():
                                                for exp in uploaded_layout]
             st.session_state.num_of_experiment_to_show = len(uploaded_layout)
 
-# page initialization
-params = page_setup()
 
 # handles "onclick" of buttons
 if st.session_state.get("edit_mode") is None:
