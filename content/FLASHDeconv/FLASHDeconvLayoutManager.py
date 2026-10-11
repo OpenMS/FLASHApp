@@ -34,6 +34,10 @@ COMPONENT_NAMES=[
     # "sequence view" and "internal fragment map" added when "input_sequence" is submitted
 ]
 
+# page_setup() first: it initialises st.session_state['workspace'], which the
+# cache access below needs when this page is opened by direct link.
+params = page_setup()
+
 # Setup cache access
 file_manager = FileManager(
     st.session_state["workspace"],
@@ -226,8 +230,6 @@ def setSequenceView():
         COMPONENT_NAMES = COMPONENT_NAMES + ['sequence_view', 'internal_fragment_map']
 
 
-# page initialization
-params = page_setup()
 
 # when sequence is submitted, add "Sequence View" as a component option
 setSequenceView()

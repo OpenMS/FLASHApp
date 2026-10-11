@@ -12,10 +12,11 @@ from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
 from src.workflow.WorkflowManager import WorkflowManager
 
+# Example inputs shipped with the default demo workspace.
 EXAMPLE_DATA = [
-    'example-data/deconv/example_lc_ms.mzML',
-    'example-data/tnt/example_native_aqpz.mzML',
-    'example-data/tnt/example_native_antibody.mzML',
+    'example-data/workspaces/default/flashdeconv/input-files/mzML-files/example_fd.mzML',
+    'example-data/workspaces/default/flashtnt/input-files/mzML-files/example_spectrum_aqpz.mzML',
+    'example-data/workspaces/default/flashtnt/input-files/mzML-files/example_spectrum_antibody.mzML',
 ]
 
 class TagWorkflow(WorkflowManager):
@@ -33,7 +34,7 @@ class TagWorkflow(WorkflowManager):
             self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML", fallback=EXAMPLE_DATA)
         with t[1]:
             self.ui.upload_widget(key="fasta-file", name="Database", file_types="fasta",
-                                  fallback='example-data/tnt/example_database.fasta')
+                                  fallback='example-data/workspaces/default/flashtnt/input-files/fasta-file/example_database.fasta')
 
 
     @st.fragment

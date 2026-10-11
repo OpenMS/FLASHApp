@@ -1672,7 +1672,8 @@ Started: {status.get('started_at', 'N/A')}""")
         if len(tool_text) > 1:
             tool_text = ", ".join(tool_text[:-1]) + " and " + tool_text[-1]
         else:
-            tool_text = tool_text[0]
+            # No .ini files yet when the TOPP tools are not installed.
+            tool_text = tool_text[0] if tool_text else ""
 
         result = subprocess.run(
             "FileFilter --help", shell=True, text=True, capture_output=True
