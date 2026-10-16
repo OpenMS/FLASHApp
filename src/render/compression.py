@@ -60,7 +60,7 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
         return data
     
     # Count peaks
-    total_count = sorted_data.select(pl.count()).item()
+    total_count = sorted_data.select(pl.len()).item()
     
     # Extract arrays for scipy
     mass_array = sorted_data['mass'].to_numpy()
