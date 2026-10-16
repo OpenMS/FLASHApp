@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 from .Logger import Logger
 from .ParameterManager import ParameterManager, bool_param_paths_from_param_xml_ini
+from .settings_io import load_settings, detect_cpu_quota
 import sys
 import importlib.util
 import json
@@ -25,28 +26,73 @@ class CommandExecutor:
         self.pid_dir = Path(workflow_dir, "pids")
         self.logger = logger
         self.parameter_manager = parameter_manager
+        # Memoised thread budget, resolved lazily by _get_max_threads().
+        self._max_threads = None
 
     def _get_max_threads(self) -> int:
         """
         Get max threads for current deployment mode.
 
-        In local mode, reads from parameter manager (persisted params.json).
-        In online mode, uses the configured value directly from settings.
+        Settings are read from settings.json on disk, not from
+        st.session_state: inside the RQ work horse there is no
+        ScriptRunContext, so st.session_state is an empty mock, the online
+        branch was unreachable and the hardcoded local default silently won
+        instead of max_threads.online.
+
+        In local mode the workspace params.json may override the configured
+        value - that is what the "Threads" widget writes, and it is only
+        rendered in local mode. Online the worker is shared and sized by its
+        pod spec, so user supplied params.json is ignored.
+
+        Online the container's own cgroup CPU quota wins over
+        max_threads.online where one exists. The rq-worker runs at
+        requests.cpu == limits.cpu, so its pod spec IS its allocation, and the
+        memory-tier components size that per deployment - a 4 cpu worker and a
+        20 cpu worker cannot both be described by one number in settings.json,
+        and the number that was there described neither. max_threads.online
+        remains the fallback for every deployment where no quota is readable:
+        bare metal, docker-compose without a cpu limit, a dev box.
+
+        The trade-off, deliberately taken: an operator can no longer
+        under-subscribe a container that declares more CPU than it wants used.
+        For a Guaranteed pod that is the right call, because the declaration
+        and the allocation are the same thing.
+
+        The result is memoised for the lifetime of this executor: run_topp()
+        consults it twice, once for its own thread split and once more inside
+        run_multiple_commands(), and the two must agree.
 
         Returns:
             int: Maximum number of threads to use for parallel processing (minimum 1).
         """
-        settings = st.session_state.get("settings", {})
+        if self._max_threads is not None:
+            return self._max_threads
+
+        settings = load_settings()
         max_threads_config = settings.get("max_threads", {"local": 4, "online": 2})
 
         if settings.get("online_deployment", False):
-            value = max_threads_config.get("online", 2)
+            quota = detect_cpu_quota()
+            if quota is not None:
+                value = quota
+            else:
+                value = max_threads_config.get("online", 2)
         else:
             default = max_threads_config.get("local", 4)
             params = self.parameter_manager.get_parameters_from_json()
             value = params.get("max_threads", default)
 
-        return max(1, int(value))
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            # params.json is user supplied - the parameter import uploader
+            # writes it verbatim - so a non numeric thread budget degrades to
+            # serial execution instead of taking the whole run down.
+            self.logger.log(f"Invalid max_threads value {value!r}, falling back to 1.", 1)
+            value = 1
+
+        self._max_threads = max(1, value)
+        return self._max_threads
 
     def run_multiple_commands(
         self, commands: list[str]
@@ -234,10 +280,9 @@ class CommandExecutor:
             tool (str): The executable name or path of the tool.
             input_output (dict): A dictionary specifying the input/output parameter names (as key) and their corresponding file paths (as value).
             custom_params (dict): A dictionary of custom parameters to pass to the tool.
-            tool_instance_name (str, optional): Key for ``params.json`` when it differs
-                from ``tool`` (e.g. multiple instances). Defaults to ``tool``.
-            Custom parameters whose keys appear in the tool's ParamXML ``type="bool"``
-            entries are passed as valueless CLI flags (``-name`` only when enabled).
+            tool_instance_name (str, optional): A unique instance name for this tool
+                invocation, used for parameter lookup when multiple instances of the
+                same tool exist. If not provided, defaults to the tool name.
 
         Returns:
             bool: True if all commands succeeded, False if any failed.
@@ -246,6 +291,8 @@ class CommandExecutor:
             ValueError: If the lengths of input/output file lists are inconsistent,
                         except for single string inputs.
         """
+        # Use tool_instance_name for parameter lookup, fall back to tool name
+        params_key = tool_instance_name if tool_instance_name else tool
         # check input: any input lists must be same length, other items can be a single string
         # e.g. input_mzML : [list of n mzML files], output_featureXML : [list of n featureXML files], input_database : database.tsv
         io_lengths = [len(v) for v in input_output.values() if len(v) > 1]
@@ -265,15 +312,17 @@ class CommandExecutor:
 
         commands = []
 
-        params = self.parameter_manager.get_parameters_from_json()
+        # Load merged parameters (_defaults + user overrides) for this tool instance
+        merged_params = self.parameter_manager.get_merged_params(params_key)
 
-        topp_tool_ini_path = Path(self.parameter_manager.ini_dir, f"{tool}.ini")
-        # Keys of type="bool" in the .ini: TOPP treats these as on/off flags (omit value when off)
-        topp_bool_flag_param_keys = (
-            bool_param_paths_from_param_xml_ini(topp_tool_ini_path, tool)
-            if topp_tool_ini_path.exists()
-            else set()
-        )
+        # Load flag parameter names: params.json takes priority (survives session restart),
+        # session_state is the live fallback during the current session.
+        flag_map = self.parameter_manager.get_parameters_from_json().get("_flag_params", {})
+        flag_list = flag_map.get(params_key)
+        if flag_list is None:
+            flag_list = st.session_state.get("_topp_flag_params", {}).get(params_key, [])
+        flag_params: set = set(flag_list)
+
         # Construct commands for each process
         for i in range(n_processes):
             command = [tool]
@@ -292,58 +341,47 @@ class CommandExecutor:
                 # standard case, files was a list of strings, take the file name at index
                 else:
                     command += [value[i]]
-            # Add non-default TOPP tool parameters
-            if tool in params.keys():
-                for k, v in params[tool].items():
-                    # Boolean flag handling. A parameter is emitted as a
-                    # valueless TOPP on/off flag when EITHER the tool's ParamXML
-                    # .ini marks the key type="bool" (upstream key-based
-                    # detection via topp_bool_flag_param_keys) OR the stored
-                    # value is itself boolean. The value-based branch is the
-                    # fallback FLASHApp relies on: checkbox widgets persist a
-                    # Python bool (True/False) to params.json, and pyOpenMS /
-                    # presets may surface the 'true'/'false' string form. This
-                    # keeps flags correct even when the .ini bool set is empty
-                    # (e.g. the .ini was not written).
-                    is_bool_value = isinstance(v, bool) or (
-                        isinstance(v, str) and v.lower() in ("true", "false")
-                    )
-                    if (k in topp_bool_flag_param_keys and v != "") or is_bool_value:
-                        # CLI flag: include "-k" only when enabled, never a value.
-                        if isinstance(v, str):
-                            is_enabled = v.lower() == "true"
-                        else:
-                            is_enabled = bool(v)
-                        if is_enabled:
-                            command += [f"-{k}"]
-                        continue
-                    command += [f"-{k}"]
-                    # Skip only empty strings (pass flag with no value)
-                    # Note: 0 and 0.0 are valid values, so use explicit check
-                    if v != "" and v is not None:
-                        if isinstance(v, str) and "\n" in v:
-                            command += v.split("\n")
-                        else:
-                            command += [str(v)]
+            # Add merged TOPP tool parameters (_defaults + user overrides)
+            for k, v in merged_params.items():
+                if k in flag_params:
+                    # CLI flag: include "-k" only when truthy, omit when false
+                    if isinstance(v, str):
+                        is_enabled = v.lower() == "true"
+                    else:
+                        is_enabled = bool(v)
+                    if is_enabled:
+                        command += [f"-{k}"]
+                    continue
+                # Regular parameter: skip empty/None/empty-list, append value otherwise
+                if v == "" or v is None or (isinstance(v, list) and not v):
+                    continue
+                command += [f"-{k}"]
+                if isinstance(v, str) and "\n" in v:
+                    command += v.split("\n")
+                elif isinstance(v, list):
+                    command += [str(x) for x in v]
+                else:
+                    command += [str(v)]
             # Add custom parameters
             for k, v in custom_params.items():
-                command += [f"-{k}"]
-                
-                # Skip only empty strings (pass flag with no value)
-                # Note: 0 and 0.0 are valid values, so use explicit check
-                if v != "" and v is not None:
-                    if isinstance(v, list):
-                        command += [str(x) for x in v]
+                if k in flag_params:
+                    if isinstance(v, str):
+                        is_enabled = v.lower() == "true"
                     else:
-                        command += [str(v)]
+                        is_enabled = bool(v)
+                    if is_enabled:
+                        command += [f"-{k}"]
+                    continue
+                if v == "" or v is None or (isinstance(v, list) and not v):
+                    continue
+                command += [f"-{k}"]
+                if isinstance(v, list):
+                    command += [str(x) for x in v]
+                else:
+                    command += [str(v)]
             # Add threads parameter for TOPP tools
             command += ["-threads", str(threads_per_command)]
             commands.append(command)
-
-            # check if a ini file has been written, if yes use it (contains custom defaults)
-            ini_path = Path(self.parameter_manager.ini_dir, tool + ".ini")
-            if ini_path.exists():
-                command += ["-ini", str(ini_path)]
 
         # Run command(s)
         if len(commands) == 1:
@@ -369,7 +407,7 @@ class CommandExecutor:
         shutil.rmtree(self.pid_dir, ignore_errors=True)
         self.logger.log("Workflow stopped.")
 
-    def run_python(self, script_file: str, input_output: dict = {}) -> None:
+    def run_python(self, script_file: str, input_output: dict = {}) -> bool:
         """
         Executes a specified Python script with dynamic input and output parameters,
         optionally logging the execution process. The method identifies and loads
@@ -386,6 +424,13 @@ class CommandExecutor:
                                 If the path is omitted, the method looks for the script in 'src/python-tools/'.
                                 The '.py' extension is appended if not present.
             input_output (dict, optional): A dictionary specifying the input/output parameter names (as key) and their corresponding file paths (as value). Defaults to {}.
+
+        Returns:
+            bool: True if the script ran and exited 0, False otherwise. Same
+                contract as run_topp(), so execution() can gate on it. This used
+                to discard run_command()'s result and return None, which made
+                every `if not self.executor.run_python(...)` guard dead code and
+                left a failed Python tool indistinguishable from a successful one.
         """
         # Check if script file exists (can be specified without path and extension)
         # default location: src/python-tools/script_file
@@ -395,8 +440,12 @@ class CommandExecutor:
         if not path.exists():
             path = Path("src", "python-tools", script_file)
             if not path.exists():
-                self.logger.log(f"Script file not found: {script_file}")
-                
+                # Bail out here: falling through to spec_from_file_location on a
+                # path that does not exist raises out of the workflow instead of
+                # reporting a failed step.
+                self.logger.log(f"ERROR: Script file not found: {script_file}", 0)
+                return False
+
         # load DEFAULTS
         if path.parent not in sys.path:
             sys.path.append(str(path.parent))
@@ -407,7 +456,7 @@ class CommandExecutor:
         if defaults is None:
             self.logger.log(f"WARNING: No DEFAULTS found in {path.name}")
             # run command without params
-            self.run_command(["python", str(path)])
+            return self.run_command([sys.executable, str(path)])
         elif isinstance(defaults, list):
             defaults = {entry["key"]: entry["value"] for entry in defaults}
             # load paramters from JSON file
@@ -422,6 +471,19 @@ class CommandExecutor:
             with open(tmp_params_file, "w", encoding="utf-8") as f:
                 json.dump(defaults, f, indent=4)
             # run command
-            self.run_command(["python", str(path), str(tmp_params_file)])
+            success = self.run_command(
+                [sys.executable, str(path), str(tmp_params_file)]
+            )
             # remove tmp params file
             tmp_params_file.unlink()
+            return success
+
+        # DEFAULTS exists but is not the documented list of parameter dicts, so
+        # nothing ran. Reporting that as success would put the workflow's
+        # WORKFLOW FINISHED marker on a step which never executed.
+        self.logger.log(
+            f"ERROR: DEFAULTS in {path.name} is a {type(defaults).__name__}, "
+            "expected a list of parameter dicts. Script not run.",
+            0,
+        )
+        return False

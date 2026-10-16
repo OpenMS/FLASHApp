@@ -21,6 +21,10 @@ from src.common.common import (
     tk_file_dialog,
 )
 from src.workflow._log_status import classify_log_outcome
+from src.workflow.ParameterManager import (
+    InvalidParameterFileError,
+    TransientParameterFileError,
+)
 
 
 def _mounted_data_root() -> Union[Path, None]:
@@ -558,7 +562,9 @@ class StreamlitUI:
         if not path.exists():
             st.warning(f"No **{name}** files!")
             return
-        options = [str(f) for f in path.iterdir() if "external_files.txt" not in str(f)]
+        options = sorted(
+            str(f) for f in path.iterdir() if "external_files.txt" not in str(f)
+        )
 
         # Check if local files are available
         external_files = Path(
@@ -674,11 +680,21 @@ class StreamlitUI:
 
         key = f"{self.parameter_manager.param_prefix}{key}"
 
+        # Streamlit ignores a widget's initial-value argument (value=/default=/index=)
+        # once that key already exists in session state -- but on Streamlit < 1.50 the
+        # argument is still hashed into the widget's element id. Since this method feeds
+        # the persisted parameter straight back in as that argument, the id changed on
+        # every interaction, the following interaction arrived under the now-stale id and
+        # was silently dropped: selecting six mzML files kept only three. Seed the widget
+        # on first render only; from then on session state owns the value.
+        def seed(**kwargs: Any) -> dict:
+            return {} if key in st.session_state else kwargs
+
         if widget_type == "text":
-            st.text_input(name, value=value, key=key, help=help, on_change=on_change)
+            st.text_input(name, key=key, help=help, on_change=on_change, **seed(value=value))
 
         elif widget_type == "textarea":
-            st.text_area(name, value=value, key=key, help=help, on_change=on_change)
+            st.text_area(name, key=key, help=help, on_change=on_change, **seed(value=value))
 
         elif widget_type == "number":
             number_type = float if isinstance(value, float) else int
@@ -692,27 +708,27 @@ class StreamlitUI:
                 name,
                 min_value=min_value,
                 max_value=max_value,
-                value=value,
                 step=step_size,
                 format=None,
                 key=key,
                 help=help,
                 on_change=on_change,
+                **seed(value=value),
             )
 
         elif widget_type == "checkbox":
-            st.checkbox(name, value=value, key=key, help=help, on_change=on_change)
+            st.checkbox(name, key=key, help=help, on_change=on_change, **seed(value=value))
 
         elif widget_type == "selectbox":
             if options is not None:
                 st.selectbox(
                     name,
                     options=options,
-                    index=options.index(value) if value in options else 0,
                     key=key,
                     format_func=format_files,
                     help=help,
                     on_change=on_change,
+                    **seed(index=options.index(value) if value in options else 0),
                 )
             else:
                 st.warning(f"Select widget '{name}' requires options parameter")
@@ -722,11 +738,11 @@ class StreamlitUI:
                 st.multiselect(
                     name,
                     options=options,
-                    default=value,
                     key=key,
                     format_func=format_files,
                     help=help,
                     on_change=on_change,
+                    **seed(default=value),
                 )
             else:
                 st.warning(f"Select widget '{name}' requires options parameter")
@@ -743,12 +759,12 @@ class StreamlitUI:
                     name,
                     min_value=min_value,
                     max_value=max_value,
-                    value=value,
                     step=step_size,
                     key=key,
                     format=None,
                     help=help,
                     on_change=on_change,
+                    **seed(value=value),
                 )
             else:
                 st.warning(
@@ -756,12 +772,12 @@ class StreamlitUI:
                 )
 
         elif widget_type == "password":
-            st.text_input(name, value=value, type="password", key=key, help=help, on_change=on_change)
+            st.text_input(name, type="password", key=key, help=help, on_change=on_change, **seed(value=value))
 
         elif widget_type == "auto":
             # Auto-determine widget type based on value
             if isinstance(value, bool):
-                st.checkbox(name, value=value, key=key, help=help, on_change=on_change)
+                st.checkbox(name, key=key, help=help, on_change=on_change, **seed(value=value))
             elif isinstance(value, (int, float)):
                 self._input_widget_impl(
                     key,
@@ -822,17 +838,19 @@ class StreamlitUI:
 
         self.parameter_manager.save_parameters()
 
-    @st.fragment
     def input_TOPP(
         self,
         topp_tool_name: str,
         num_cols: int = 4,
         exclude_parameters: List[str] = [],
         include_parameters: List[str] = [],
+        flag_parameters: List[str] = [],
         display_tool_name: bool = True,
         display_subsections: bool = True,
         display_subsection_tabs: bool = False,
         custom_defaults: dict = {},
+        tool_instance_name: str = None,
+        reactive: bool = False,
     ) -> None:
         """
         Generates input widgets for TOPP tool parameters dynamically based on the tool's
@@ -844,33 +862,187 @@ class StreamlitUI:
             num_cols (int, optional): Number of columns to use for the layout. Defaults to 3.
             exclude_parameters (List[str], optional): List of parameter names to exclude from the widget. Defaults to an empty list.
             include_parameters (List[str], optional): List of parameter names to include in the widget. Defaults to an empty list.
+            flag_parameters (List[str], optional): List of parameter names that should
+                be treated as no-value CLI flags during command construction.
             display_tool_name (bool, optional): Whether to display the TOPP tool name. Defaults to True.
             display_subsections (bool, optional): Whether to split parameters into subsections based on the prefix. Defaults to True.
             display_subsection_tabs (bool, optional): Whether to display main subsections in separate tabs (if more than one main section). Defaults to False.
             custom_defaults (dict, optional): Dictionary of custom defaults to use. Defaults to an empty dict.
+            tool_instance_name (str, optional): A unique instance name for this tool
+                invocation. Allows multiple instances of the same TOPP tool with
+                independent parameters (e.g., two IDFilter calls). If not provided,
+                defaults to topp_tool_name. The instance name is used for session
+                state keys and parameter storage, while topp_tool_name is used for
+                the actual tool executable and ini file creation.
+            reactive (bool, optional): If True, widget changes trigger the parent
+                section to re-render, enabling conditional UI based on this widget's
+                value. Use when downstream UI depends on a parameter value (e.g.,
+                TMT type driving channel count). Default is False.
         """
+        if reactive:
+            self._input_TOPP_impl(
+                topp_tool_name, num_cols, exclude_parameters, include_parameters,
+                flag_parameters, display_tool_name, display_subsections,
+                display_subsection_tabs, custom_defaults, tool_instance_name,
+            )
+        else:
+            self._input_TOPP_fragmented(
+                topp_tool_name, num_cols, exclude_parameters, include_parameters,
+                flag_parameters, display_tool_name, display_subsections,
+                display_subsection_tabs, custom_defaults, tool_instance_name,
+            )
+
+    @st.fragment
+    def _input_TOPP_fragmented(
+        self,
+        topp_tool_name: str,
+        num_cols: int = 4,
+        exclude_parameters: List[str] = [],
+        include_parameters: List[str] = [],
+        flag_parameters: List[str] = [],
+        display_tool_name: bool = True,
+        display_subsections: bool = True,
+        display_subsection_tabs: bool = False,
+        custom_defaults: dict = {},
+        tool_instance_name: str = None,
+    ) -> None:
+        self._input_TOPP_impl(
+            topp_tool_name, num_cols, exclude_parameters, include_parameters,
+            flag_parameters, display_tool_name, display_subsections,
+            display_subsection_tabs, custom_defaults, tool_instance_name,
+        )
+
+    def _read_params_for_update(self, tool_instance_name: str) -> dict:
+        """
+        Strict read of params.json for the read-modify-write-back sites below.
+
+        Both callers merge into what they read and write the result straight
+        back, so a tolerant empty dict from an unreadable file would be written
+        over everything stored - erasing `_defaults`, `_flag_params` and every
+        other tool's values while looking like a successful save.
+        read_parameters_strict() raises instead, and here that raise becomes a
+        halt: the write is skipped entirely, so the file on disk is preserved
+        for inspection and can still be repaired by hand, or reset from the
+        button rendered below.
+
+        Args:
+            tool_instance_name (str): Instance currently being rendered, used to
+                keep the reset button key unique across tool fragments.
+
+        Returns:
+            dict: Stored parameters, or an empty dict for an absent file.
+
+        Does not return if the file exists but cannot be read.
+        """
+        try:
+            return self.parameter_manager.read_parameters_strict()
+        except TransientParameterFileError as e:
+            # Ordered before InvalidParameterFileError, of which this is a
+            # subclass. The storage is not answering; the file itself is most
+            # likely intact, so deliberately no reset affordance here - a reset
+            # during a Ganesha restart is what would actually destroy it.
+            st.error(
+                f"**ERROR**: {e} Nothing was written, so no stored parameters "
+                "were lost. This usually clears by itself, reload the page in "
+                "a moment."
+            )
+            st.stop()
+            # st.stop() raises, so this is only reached when Streamlit is
+            # stubbed out; re-raise rather than fall through to the write.
+            raise
+        except InvalidParameterFileError as e:
+            st.error(
+                f"**ERROR**: {e} Nothing was written, so no stored parameters "
+                "were lost. Repair the file, or reset to defaults to continue."
+            )
+            if st.button(
+                "⚠️ Reset parameters to defaults",
+                help="Move the unreadable parameter file aside and start over from the default parameters.",
+                key=f"reset_unreadable_params_{tool_instance_name}",
+            ):
+                try:
+                    backup = self.parameter_manager.reset_to_default_parameters()
+                except OSError as reset_error:
+                    # Without this the button itself raises and the page stops
+                    # again on the next render, with no remaining way out.
+                    st.error(
+                        f"**ERROR**: Could not move "
+                        f"{self.parameter_manager.params_file} aside: "
+                        f"{reset_error}"
+                    )
+                else:
+                    self.parameter_manager.clear_parameter_session_state()
+                    st.toast(
+                        f"Parameters reset to defaults, previous file kept as {backup.name}"
+                        if backup is not None
+                        else "Parameters reset to defaults"
+                    )
+                    # Every tool section is affected, not just this fragment.
+                    st.rerun(scope="app")
+            st.stop()
+            # st.stop() raises, so this is only reached when Streamlit is
+            # stubbed out; re-raise rather than fall through to the write.
+            raise
+
+    def _input_TOPP_impl(
+        self,
+        topp_tool_name: str,
+        num_cols: int = 4,
+        exclude_parameters: List[str] = [],
+        include_parameters: List[str] = [],
+        flag_parameters: List[str] = [],
+        display_tool_name: bool = True,
+        display_subsections: bool = True,
+        display_subsection_tabs: bool = False,
+        custom_defaults: dict = {},
+        tool_instance_name: str = None,
+    ) -> None:
+        """Internal implementation of input_TOPP - contains all the widget logic."""
+        # Default instance name to the tool name when not provided
+        if tool_instance_name is None:
+            tool_instance_name = topp_tool_name
+
+        # Register instance-name → real-tool-name mapping in session state
+        if "_topp_tool_instance_map" not in st.session_state:
+            st.session_state["_topp_tool_instance_map"] = {}
+        st.session_state["_topp_tool_instance_map"][tool_instance_name] = topp_tool_name
+
+        # Persist flag_parameters to session_state and params.json so run_topp
+        # can skip appending a value for these boolean CLI flags.
+        if "_topp_flag_params" not in st.session_state:
+            st.session_state["_topp_flag_params"] = {}
+        st.session_state["_topp_flag_params"][tool_instance_name] = list(flag_parameters)
+        _fp = self._read_params_for_update(tool_instance_name)
+        if "_flag_params" not in _fp:
+            _fp["_flag_params"] = {}
+        _fp["_flag_params"][tool_instance_name] = list(flag_parameters)
+        # Atomic: a truncate-then-rewrite interrupted here leaves a torn
+        # params.json which every later strict read rejects, wedging this very
+        # method on each render.
+        self.parameter_manager.write_parameters(_fp)
 
         if not display_subsections:
             display_subsection_tabs = False
         if display_subsection_tabs:
             display_subsections = True
 
-        # write defaults ini files
+        # Create pristine ini file (never mutated with custom defaults)
         ini_file_path = Path(self.parameter_manager.ini_dir, f"{topp_tool_name}.ini")
-        ini_existed = ini_file_path.exists()
         if not self.parameter_manager.create_ini(topp_tool_name):
             st.error(f"TOPP tool **'{topp_tool_name}'** not found.")
             return
-        if not ini_existed:
-            # update custom defaults if necessary
-            if custom_defaults:
-                param = poms.Param()
-                poms.ParamXMLFile().load(str(ini_file_path), param)
-                for key, value in custom_defaults.items():
-                    encoded_key = f"{topp_tool_name}:1:{key}".encode()
-                    if encoded_key in param.keys():
-                        param.setValue(encoded_key, value)
-                poms.ParamXMLFile().store(str(ini_file_path), param)
+
+        # Seed custom defaults into params.json under _defaults key
+        if custom_defaults:
+            params = self._read_params_for_update(tool_instance_name)
+            if "_defaults" not in params:
+                params["_defaults"] = {}
+            params["_defaults"][tool_instance_name] = custom_defaults
+            self.parameter_manager.write_parameters(params)
+            # Refresh self.params so widget resolution sees _defaults - reuse
+            # what was just written instead of reading the file back, which
+            # could be torn by a concurrent writer.
+            self.params = params
 
         # read into Param object
         param = poms.Param()
@@ -947,18 +1119,18 @@ class StreamlitUI:
                 )
             params.append(p)
 
-        # for each parameter in params_decoded
-        # if a parameter with custom default value exists, use that value
-        # else check if the parameter is already in self.params, if yes take the value from self.params
+        # Build ini_params dict for three-layer merge
+        ini_params = {}
         for p in params:
             name = p["key"].decode().split(":1:")[1]
-            if topp_tool_name in self.params:
-                if name in self.params[topp_tool_name]:
-                    p["value"] = self.params[topp_tool_name][name]
-                elif name in custom_defaults:
-                    p["value"] = custom_defaults[name]
-            elif name in custom_defaults:
-                p["value"] = custom_defaults[name]
+            ini_params[name] = p["value"]
+
+        # Resolve effective values: ini < _defaults < user overrides
+        merged = self.parameter_manager.get_merged_params(tool_instance_name, ini_params=ini_params)
+        for p in params:
+            name = p["key"].decode().split(":1:")[1]
+            if name in merged:
+                p["value"] = merged[name]
             # Ensure list parameters stay as lists after loading from JSON
             # (JSON may store single-item lists as strings)
             if p["original_is_list"] and isinstance(p["value"], str):
@@ -992,7 +1164,7 @@ class StreamlitUI:
 
         # Display tool name if required
         if display_tool_name:
-            st.markdown(f"**{topp_tool_name}**")
+            st.markdown(f"**{tool_instance_name}**")
 
         tab_names = [k for k in param_sections.keys() if ":" not in k]
         tabs = None
@@ -1020,8 +1192,11 @@ class StreamlitUI:
             cols = st.columns(num_cols)
             i = 0
             for p in params:
-                # get key and name
-                key = f"{self.parameter_manager.topp_param_prefix}{p['key'].decode()}"
+                # get key and name – use tool_instance_name in session state key
+                key_str = p['key'].decode()
+                if tool_instance_name != topp_tool_name:
+                    key_str = key_str.replace(f"{topp_tool_name}:1:", f"{tool_instance_name}:1:", 1)
+                key = f"{self.parameter_manager.topp_param_prefix}{key_str}"
                 name = p["name"]
                 try:
                     # sometimes strings with newline, handle as list
@@ -1385,7 +1560,10 @@ class StreamlitUI:
                 key="param_import_uploader"
             )
             if up is not None:
-                with open(self.parameter_manager.params_file, "w") as f:
+                # encoding="utf-8" explicitly: the payload is decoded as utf-8
+                # just above, and writing it back in the platform codepage
+                # produced a params.json that no later utf-8 read could decode.
+                with open(self.parameter_manager.params_file, "w", encoding="utf-8") as f:
                     f.write(up.read().decode("utf-8"))
                 self.parameter_manager.clear_parameter_session_state()
                 st.toast("Parameters imported")
@@ -1616,7 +1794,8 @@ Started: {status.get('started_at', 'N/A')}""")
         general = {}
 
         for k, v in params.items():
-            # skip if v is a file path
+            if k == "_defaults":
+                continue
             if isinstance(v, dict):
                 topp[k] = v
             elif ".py" in k:
@@ -1626,6 +1805,13 @@ Started: {status.get('started_at', 'N/A')}""")
                 python[script][k.split(".py")[1][1:]] = v
             else:
                 general[k] = v
+
+        # Merge _defaults into topp so summary shows custom defaults + user overrides
+        defaults = params.get("_defaults", {})
+        for tool_name, default_vals in defaults.items():
+            if tool_name not in topp:
+                topp[tool_name] = {}
+            topp[tool_name] = {**default_vals, **topp.get(tool_name, {})}
 
         markdown = []
 
