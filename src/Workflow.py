@@ -18,6 +18,13 @@ EXAMPLE_DATA = [
     'example-data/tnt/example_native_antibody.mzML',
 ]
 
+# Valueless TOPP switches (registerFlag_ in the tool source), emitted as a bare
+# "-name" when on and omitted when off. Every other parameter is passed with its
+# value, so true/false string parameters such as iq:isotope_correction keep an
+# explicit "false".
+FLASHDECONV_FLAGS = ['keep_empty_out', 'write_detail']
+FLASHTNT_FLAGS = ['only_single_hit', 'discard_underdetermined', 'keep_decoy']
+
 class TagWorkflow(WorkflowManager):
     share_cache = True
 
@@ -64,7 +71,8 @@ class TagWorkflow(WorkflowManager):
                     'reporter_mz_tol', 'only_fully_quantified'
                 ],
                 display_subsections=True,
-                display_tool_name=False
+                display_tool_name=False,
+                flag_parameters=FLASHDECONV_FLAGS,
             )
         with t[1]:
             # FLASHTnT Configuration
@@ -73,6 +81,7 @@ class TagWorkflow(WorkflowManager):
                 display_subsections=True,
                 display_tool_name=False,
                 custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
+                flag_parameters=FLASHTNT_FLAGS,
             )
 
 
@@ -281,6 +290,7 @@ class DeconvWorkflow(WorkflowManager):
         # FLASHDeconv Configuration
         self.ui.input_TOPP(
             'FLASHDeconv', exclude_parameters = ['ida_log'], display_subsections=True,
+            flag_parameters=FLASHDECONV_FLAGS,
         )
 
 
