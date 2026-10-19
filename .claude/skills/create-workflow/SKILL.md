@@ -1,3 +1,8 @@
+---
+name: create-workflow
+description: Use when creating a TOPP Workflow Framework workflow that chains OpenMS TOPP tools through upload, configure, execute and results pages.
+---
+
 # Create a TOPP Workflow
 
 Create a complete mass spectrometry data processing workflow: a WorkflowManager subclass and its 4 associated content pages.
@@ -44,22 +49,31 @@ class MyWorkflow(WorkflowManager):
         with t[1]:
             self.ui.input_TOPP("ToolName2")
 
-    def execution(self) -> None:
+    def execution(self) -> bool:
+        # Must return True on success, False on any failure - see "Execution" below.
         if not self.params["mzML-files"]:
             self.logger.log("ERROR: No input files selected.")
-            return
+            return False
 
         in_files = self.file_manager.get_files(self.params["mzML-files"])
         self.logger.log(f"Processing {len(in_files)} files...")
 
         # Step 1
         out_step1 = self.file_manager.get_files(in_files, "featureXML", "step1")
-        self.executor.run_topp("ToolName1", input_output={"in": in_files, "out": out_step1})
+        if not self.executor.run_topp(
+            "ToolName1", input_output={"in": in_files, "out": out_step1}
+        ):
+            return False
 
         # Step 2
         in_step2 = self.file_manager.get_files(out_step1, collect=True)
         out_step2 = self.file_manager.get_files("result.consensusXML", set_results_dir="step2")
-        self.executor.run_topp("ToolName2", input_output={"in": in_step2, "out": out_step2})
+        if not self.executor.run_topp(
+            "ToolName2", input_output={"in": in_step2, "out": out_step2}
+        ):
+            return False
+
+        return True
 
     @st.fragment
     def results(self) -> None:
@@ -111,8 +125,14 @@ The 4 pages call these methods respectively:
 - `self.file_manager.get_files("name.ext", set_results_dir="dir")` — single result file
 
 ### Execution
-- `self.executor.run_topp("ToolName", input_output={"in": [...], "out": [...]})` — run a TOPP tool
-- `self.executor.run_python("script_name", {"in": [...]})` — run a Python tool from `src/python-tools/`
+- `self.executor.run_topp("ToolName", input_output={"in": [...], "out": [...]})` — run a TOPP tool; returns `False` if any command failed
+- `self.executor.run_python("script_name", {"in": [...]})` — run a Python tool from `src/python-tools/`; returns `False` if the script is missing or exited non-zero
+- **`execution()` must be annotated `-> bool` and return `True` only when every step
+  succeeded**, `False` on bad input or a failed tool. `workflow_process()` logs the
+  `WORKFLOW FINISHED` marker only for a truthy return, and a missing marker is classified
+  as an error — so an `execution()` that returns nothing renders "Errors occurred, check
+  log file." after a perfectly good run. Gate every `run_topp` / `run_python` call on its
+  return value too, or a tool that fails halfway is still reported as a success.
 
 ### UI widgets
 - `self.ui.upload_widget(key, name, file_types, fallback)` — file upload with example data fallback
@@ -120,9 +140,30 @@ The 4 pages call these methods respectively:
 - `self.ui.input_TOPP("ToolName", custom_defaults={})` — auto-generated TOPP parameter UI
 - `self.ui.input_python("script_name")` — auto-generated Python tool parameter UI
 - `self.ui.input_widget(key, default, label)` — single custom widget
+- `select_input_file`, `input_TOPP` and `input_widget` accept `reactive=True` to rerun `configure()` when the widget changes (for conditional UI — see below)
 
 ### Logging
 - `self.logger.log("message")` — log progress during execution
+
+## Conditional UI (reactive)
+
+Parameter widgets are isolated in an `st.fragment` by default, so a change reruns only that
+widget and can't show/hide other widgets. Pass `reactive=True` to render the widget in the
+parent scope instead — a change then reruns `configure()`. Read the live value from
+`st.session_state` (not `self.params`, which is stale within the rerun) using
+`self.parameter_manager.param_prefix` for custom-widget keys or `topp_param_prefix` for TOPP
+keys of the form `"<Tool>:1:<param path>"`.
+
+```python
+@st.fragment
+def configure(self) -> None:
+    pm = self.parameter_manager
+    # changing the tool's `type` selectbox reruns configure()
+    self.ui.input_TOPP("IsobaricAnalyzer", reactive=True)
+    iso_type = st.session_state.get(f"{pm.topp_param_prefix}IsobaricAnalyzer:1:type", "")
+    if iso_type.startswith("tmt"):
+        self.ui.input_widget("tmt-channels", 10, "TMT channels", widget_type="number")
+```
 
 ## Reference Files
 
@@ -143,7 +184,9 @@ The 4 pages call these methods respectively:
 - [ ] Workflow class in `src/` subclassing `WorkflowManager`
 - [ ] `__init__` calls `super().__init__("Name", st.session_state["workspace"])`
 - [ ] `upload()`, `configure()`, `execution()`, `results()` implemented
+- [ ] `execution()` annotated `-> bool`, returning `True` on success and `False` on any failure
 - [ ] `@st.fragment` on `configure()` and `results()`
+- [ ] `reactive=True` on any widget whose value controls other widgets' visibility
 - [ ] 4 content pages created in `content/`
 - [ ] All 4 pages registered as a group in `app.py`
 - [ ] Default parameters added to `default-parameters.json` if needed
