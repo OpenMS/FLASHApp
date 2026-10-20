@@ -140,6 +140,9 @@ xlsxwriter
 scipy>=1.15
 polars>=1.0.0
 
+# OpenMS-Insight visualization components (FLASHQuant FeatureView, Stage D)
+openms-insight>=0.1.11
+
 # Redis Queue dependencies (for online mode)
 redis>=5.0.0
 rq>=1.16.0
