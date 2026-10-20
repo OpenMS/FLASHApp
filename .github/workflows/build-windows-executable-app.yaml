@@ -317,6 +317,7 @@ jobs:
         cp -r static streamlit_exe
         cp -r example-data streamlit_exe
         cp openms-bin/*.dll streamlit_exe
+        rm streamlit_exe/userenv.dll
         cp -r .streamlit streamlit_exe
         cp -r share streamlit_exe/share
         cp -r js-component streamlit_exe/js-component
