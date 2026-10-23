@@ -10,6 +10,10 @@ from pyopenms import AASequence
 from scipy.stats import gaussian_kde
 
 from src.parse.masstable import parseFLASHTaggerOutput
+from src.parse.annotator import (
+    read_annotation, read_summary, group_annotation, build_fragments,
+    proteoform_offset
+)
 from src.parse.tag_resolution import build_tagspace_to_proteoform_map
 from src.render.sequence import (
     remove_ambigious, getFragmentDataFromSeq, getInternalFragmentDataFromSeq
@@ -67,12 +71,21 @@ def _linearize_tag_df(tag_df):
     return pd.read_csv(buf, sep='\t')
 
 
-def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_tsv, logger=None):
+def parseTnT(
+        file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_tsv,
+        annotation_tsv=None, annotated_protein_tsv=None, logger=None
+):
     logger.log("Progress of 'processing FLASHTnT results':", level=2)
     logger.log("0.0 %", level=2)
 
     tolerance = file_manager.get_results(dataset_id, ['deconv_tolerance'])['deconv_tolerance']
-    tag_df, protein_df = parseFLASHTaggerOutput(tag_tsv, protein_tsv)
+    # FLASHAnnotator's -out is the proteoform file with its raw annotation
+    # columns appended: use it as the protein table when it is there.
+    tag_df, protein_df = parseFLASHTaggerOutput(
+        tag_tsv, annotated_protein_tsv if annotated_protein_tsv is not None else protein_tsv
+    )
+    annotation_summary = read_summary(annotated_protein_tsv)
+    annotation_groups = group_annotation(read_annotation(annotation_tsv))
     # Map FLASHTagger tag-space ProteoformIndex -> protein-space index from the
     # raw frames (before protein_df is renamed and tag_df is linearized).
     tagspace_to_proteoform = build_tagspace_to_proteoform_map(tag_df, protein_df)
@@ -91,6 +104,10 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
     protein_df['description'] = protein_df['description'].apply(
         lambda x: x[:50] + '...' if len(x) > 50 else x
     )
+    # Not every FLASHTnT version or setting writes these columns
+    for column in ['ModCount', 'ModMass', 'ModStart', 'ModEnd', 'ModID']:
+        if column not in protein_df.columns:
+            protein_df[column] = 0 if column == 'ModCount' else np.nan
     file_manager.store_data(dataset_id, 'protein_dfs', protein_df)
     logger.log("30.0 %", level=2)
 
@@ -183,6 +200,22 @@ def parseTnT(file_manager, dataset_id, deconv_mzML, anno_mzML, tag_tsv, protein_
                 'labels' : l
             } for s, e, m, l in zip(mod_starts, mod_ends, mod_masses, mod_labels)
         ]
+
+        # Fragment envelopes FLASHAnnotator accepted on the raw spectrum
+        proteoform_sequence = row.get('ProteinSequence', '')
+        if not isinstance(proteoform_sequence, str) or len(proteoform_sequence) == 0:
+            proteoform_sequence = sequence[start_index:end_index+1]
+        # None: not annotated (results of an older pipeline); the frontend
+        # then matches theoretical fragments against the deconvolved masses
+        if annotation_tsv is None:
+            sequence_data[pid]['annotated_fragments'] = None
+        else:
+            sequence_data[pid]['annotated_fragments'] = build_fragments(
+                annotation_groups.get(pid, pd.DataFrame(columns=['IonType'])),
+                proteoform_offset(sequence, proteoform_sequence, proteoform_start, proteoform_end),
+                len(proteoform_sequence)
+            )
+        sequence_data[pid]['annotation_summary'] = annotation_summary.get(pid)
 
         # internal_fragment_data[pid] = getInternalFragmentDataFromSeq(
         #     str(sequence)[start_index:end_index+1], modifications

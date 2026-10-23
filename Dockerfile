@@ -12,7 +12,7 @@ FROM ubuntu:24.04 AS setup-build-system
 WORKDIR /
 
 ARG OPENMS_REPO=https://github.com/t0mdavid-m/OpenMS.git
-ARG OPENMS_BRANCH=FVdeploy
+ARG OPENMS_BRANCH=FDmerge
 ARG PORT=8501
 # Streamlit app Gihub user name (to download artifact from).
 ARG GITHUB_USER=OpenMS
