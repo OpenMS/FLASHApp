@@ -24,6 +24,25 @@ SCHEMA = pa.schema([
         ("start", pa.int64()), ("end", pa.int64()),
         ("mass_diff", pa.float64()), ("labels", pa.string()),
     ]))),
+    # FLASHAnnotator envelopes (see src/parse/annotator.py); null when the
+    # results predate FLASHAnnotator
+    ("annotated_fragments", pa.list_(pa.struct([
+        ("name", pa.string()), ("ion_type", pa.string()), ("kind", pa.string()),
+        ("length", pa.int64()), ("first", pa.int64()), ("last", pa.int64()),
+        ("start", pa.int64()), ("end", pa.int64()), ("charge", pa.int64()),
+        ("mono_mass", pa.float64()), ("observed_mass", pa.float64()),
+        ("mz", pa.float64()), ("ppm_error", pa.float64()),
+        ("matched_peaks", pa.int64()), ("predicted_peaks", pa.int64()),
+        ("cosine", pa.float64()), ("intensity", pa.float64()),
+    ]))),
+    ("annotation_summary", pa.struct([
+        (name, pa.float64()) for name in (
+            "fa_score", "raw_score", "matched_fragments", "fragment_hypotheses",
+            "covered_bonds", "coverage", "calibration_ppm", "internal_score",
+            "internal_matched", "internal_hypotheses", "authentic_cleavages",
+            "coverage_with_internal",
+        )
+    ])),
 ])
 
 ROW_GROUP_SIZE = 64
@@ -52,7 +71,7 @@ def build_table(sequence_data):
         entry = sequence_data[pid]
         row = {"proteoform_index": int(pid)}
         for k in ENTRY_KEYS:
-            row[k] = _py(entry[k])
+            row[k] = _py(entry.get(k))
         rows.append(row)
     return pa.Table.from_pylist(rows, schema=SCHEMA)
 

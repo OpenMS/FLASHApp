@@ -12,7 +12,7 @@ FROM ubuntu:24.04 AS setup-build-system
 WORKDIR /
 
 ARG OPENMS_REPO=https://github.com/t0mdavid-m/OpenMS.git
-ARG OPENMS_BRANCH=FVdeploy
+ARG OPENMS_BRANCH=FDmerge
 ARG PORT=8501
 # Streamlit app Gihub user name (to download artifact from).
 ARG GITHUB_USER=OpenMS
@@ -66,10 +66,12 @@ RUN echo "mamba activate streamlit-env" >> ~/.bashrc
 SHELL ["/bin/bash", "--rcfile", "~/.bashrc"]
 SHELL ["mamba", "run", "-n", "streamlit-env", "/bin/bash", "-c"]
 
-# Cython is capped below 3.3: autowrap 0.24 reflects on
-# Nodes.CConstTypeNode / Nodes.CConstOrVolatileTypeNode, which Cython 3.3
-# removed, breaking the pyOpenMS code generation in 'make pyopenms'.
-RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython>=3.1,<3.3' 'autowrap==0.24' pandas 'numpy>=2.0' pytest
+# autowrap 0.23.0: FDmerge's pyOpenMS predates the autowrap 0.24 migration
+# (create_cpp_extension.py passes include_boost, which 0.24 removed); its
+# requirements_bld.txt history pins 0.23.0. Cython is capped below 3.3, which
+# removed Nodes.CConstTypeNode / Nodes.CConstOrVolatileTypeNode that autowrap
+# reflects on, breaking the pyOpenMS code generation in 'make pyopenms'.
+RUN pip install --upgrade pip && python -m pip install -U setuptools nose 'Cython>=3.1,<3.3' 'autowrap==0.23.0' pandas 'numpy>=2.0' pytest
 
 # Clone OpenMS branch and the associcated contrib+thirdparties+pyOpenMS-doc submodules.
 RUN git clone --recursive --depth=1 -b ${OPENMS_BRANCH} --single-branch ${OPENMS_REPO} && cd /OpenMS
