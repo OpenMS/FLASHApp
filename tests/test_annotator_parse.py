@@ -4,7 +4,7 @@ FLASHAnnotator output -> per-proteoform fragment annotations
 
 The viewer draws the full database sequence, while FLASHAnnotator reports
 positions within the proteoform; these tests pin the coordinate conversion and
-the parsing of terminal and internal envelopes.
+the parsing of terminal and internal fragments.
 """
 import io
 import os
