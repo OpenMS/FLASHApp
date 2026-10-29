@@ -211,10 +211,35 @@ def proteoform_sequences(file_manager, dataset_id):
         pl.col('index').alias('scan_idx'), 'MonoMass', 'PrecursorMass'
     )
     return (
-        sequences.with_columns(pl.col('proteoform_index').cast(pl.Int64))
+        _generic_sequence_schema(sequences)
+        .with_columns(pl.col('proteoform_index').cast(pl.Int64))
         .join(proteoform_scans, on='proteoform_index', how='left', maintain_order='left')
         .join(spectrum, on='scan_idx', how='left', maintain_order='left')
     )
+
+
+# FLASH* sequence data names -> the column names of Insight's ProteinSequenceView
+SEQUENCE_COLUMN_NAMES = {
+    'proteoform_start': 'start_position',
+    'proteoform_end': 'end_position',
+    'computed_mass': 'observed_mass',
+}
+ANNOTATION_SUMMARY_NAMES = {'fa_score': 'score'}
+
+
+def _generic_sequence_schema(lf):
+    """Rename the sequence data columns (and FLASHAnnotator summary fields) to
+    the names ProteinSequenceView reads."""
+    schema = lf.collect_schema()
+    lf = lf.rename({k: v for k, v in SEQUENCE_COLUMN_NAMES.items() if k in schema})
+    summary = schema.get('annotation_summary')
+    if isinstance(summary, pl.Struct):
+        lf = lf.with_columns(
+            pl.col('annotation_summary').struct.rename_fields(
+                [ANNOTATION_SUMMARY_NAMES.get(f.name, f.name) for f in summary.fields]
+            )
+        )
+    return lf
 
 
 def _split_numbers(column):

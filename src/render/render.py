@@ -19,7 +19,7 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 import openms_insight
 from openms_insight import (
-    DeconvolvedSpectrum, Heatmap, Plot3D, ProteoformSequenceView, SeriesPlot,
+    DeconvolvedSpectrum, Heatmap, Plot3D, ProteinSequenceView, SeriesPlot,
     StateManager, Table,
 )
 from openms_insight.core.cache import CacheMissError
@@ -151,6 +151,22 @@ QUANT_COLUMNS = [
     {'title': 'Most Abundant Charge', 'field': 'MostAbundantFeatureCharge', 'sorter': 'number'},
     {'title': 'Isotope Cosine Score', 'field': 'IsotopeCosineScore', 'sorter': 'number'},
 ]
+
+# Columns of the FLASHDeconv spectrum caches (see src/parse/masstable.py)
+SPECTRUM_COLUMNS = dict(
+    mass_column='MonoMass', mass_intensity_column='SumIntensity',
+    peak_mz_column='MonoMass_Anno', peak_intensity_column='SumIntensity_Anno',
+    signal_column='SignalPeaks',
+)
+SPECTRUM_TITLES = {
+    'deconvolved': 'Deconvolved Spectrum',
+    'annotated': 'Annotated Spectrum',
+    'ladder': 'Augmented Deconvolved Spectrum',
+}
+SEQUENCE_VIEW_OPTIONS = dict(
+    mass_column='MonoMass', precursor_mass_column='PrecursorMass',
+    annotation_title='FLASHAnnotator', svg_filename='FLASHViewer-sequence',
+)
 
 HEATMAPS = {
     # component: (result, title, y label, click sets the mass too)
@@ -319,7 +335,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         elif comp_name == 'anno_spectrum':
             result, view = 'combined_spectrum', 'annotated'
         else:
-            result, view = 'combined_spectrum', 'augmented'
+            result, view = 'combined_spectrum', 'ladder'
         # FLASHTnT spectra follow the spectrum of the selected proteoform
         scan_identifier = 'pscan' if tool == 'flashtnt' else 'scan'
         component = _component(
@@ -327,10 +343,12 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             lambda: dict(
                 data=insight_data.spectra(fm, ds, result),
                 filters={scan_identifier: 'index'}, view=view, mass_identifier='mass',
+                title=SPECTRUM_TITLES[view], svg_filename='FLASHViewer-lineplot',
+                **SPECTRUM_COLUMNS,
                 float_precision='float64',
             ),
         )
-        if view == 'augmented':
+        if view == 'ladder':
             tag = _selected_tag(fm, ds, state_manager)
             if tag is None:
                 component.set_ladder(None)
@@ -401,13 +419,14 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name == 'sequence_view':
         if tool == 'flashtnt':
             component = _component(
-                ProteoformSequenceView, f'{comp_name}-{tool}', fm, ds,
+                ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
                 ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
                 lambda: dict(
                     data=insight_data.proteoform_sequences(fm, ds),
                     filters={'protein': 'proteoform_index'},
                     mass_identifier='mass', aa_identifier='aa',
                     settings=fm.get_results(ds, ['settings'])['settings'],
+                    **SEQUENCE_VIEW_OPTIONS,
                 ),
             )
             tag = _selected_tag(fm, ds, state_manager)
@@ -422,11 +441,12 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         if sequence is None:
             raise MissingResult('sequence')
         return _component(
-            ProteoformSequenceView, f'{comp_name}-{tool}', fm, ds, ['sequence_view'],
+            ProteinSequenceView, f'{comp_name}-{tool}', fm, ds, ['sequence_view'],
             lambda: dict(
                 data=insight_data.sequence_view_spectra(fm, ds),
                 filters={'scan': 'index'}, sequence=sequence,
                 mass_identifier='mass', aa_identifier='aa', sequence_identifier='sequence',
+                **SEQUENCE_VIEW_OPTIONS,
             ),
             extra=sequence,
         ), {}

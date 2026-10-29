@@ -109,6 +109,9 @@ def test_proteoform_sequences_from_pickled_results(tnt):
     row = rows.row(0, named=True)
     assert isinstance(row['sequence'], list) and len(row['sequence']) > 0
     assert len(row['MonoMass']) > 0
+    # Named as Insight's ProteinSequenceView reads them
+    assert {'start_position', 'end_position', 'observed_mass'} <= set(rows.columns)
+    assert not {'proteoform_start', 'proteoform_end', 'computed_mass'} & set(rows.columns)
 
 
 def test_quant_traces(quant):
@@ -120,3 +123,13 @@ def test_quant_traces(quant):
     assert first['mz'][0].to_list() == pytest.approx([float(v) for v in raw['MZs'][0][0].split(',')])
     table = insight_data.quant_table(quant, 'example').collect()
     assert 'Charges' not in table.columns and table.height == raw.height
+
+
+def test_annotation_summary_fields_renamed():
+    lf = pl.LazyFrame({
+        'proteoform_end': [3],
+        'annotation_summary': [{'fa_score': 1.0, 'coverage': 2.0}],
+    })
+    out = insight_data._generic_sequence_schema(lf).collect()
+    assert out.columns == ['end_position', 'annotation_summary']
+    assert out['annotation_summary'][0] == {'score': 1.0, 'coverage': 2.0}

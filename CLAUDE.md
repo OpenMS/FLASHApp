@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **FLASHTnT** (🧨) — tag-and-track top-down identification: runs FLASHDeconv, then matches short sequence "tags" against a protein FASTA database to identify proteins (PrSMs), with target/decoy FDR.
 - **FLASHQuant** (📊) — proteoform quantification from FLASHDeconv mass traces (view-only; no run step).
 
-The heavy lifting is done by **TOPP command-line tools** (`FLASHDeconv`, `FLASHTnT`, `DecoyDatabase`) shipped in the Docker image; the app drives them, parses their output into pandas DataFrames, caches them per workspace, and renders them with **openms-insight** components (`Table`, `Heatmap`, `DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteoformSequenceView`).
+The heavy lifting is done by **TOPP command-line tools** (`FLASHDeconv`, `FLASHTnT`, `DecoyDatabase`) shipped in the Docker image; the app drives them, parses their output into pandas DataFrames, caches them per workspace, and renders them with **openms-insight** components (`Table`, `Heatmap`, `DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`).
 
 ## Commands
 
@@ -36,7 +36,7 @@ Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is req
 
 ### openms-insight
 
-The viewers need `openms_insight` importable. Until the release with the FLASHViewer components (`DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteoformSequenceView`, the Table options they use) is on PyPI, it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and the Windows workflow's `build-openms-insight` job clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
+The viewers need `openms_insight` importable. Until the release with the components the viewers use (`DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`, the Table options they use) is on PyPI, it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and the Windows workflow's `build-openms-insight` job clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
 
 `.streamlit/config.toml` → `developmentMode = false` for production builds.
 
