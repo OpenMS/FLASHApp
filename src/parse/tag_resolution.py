@@ -2,8 +2,17 @@ import pandas as pd
 
 
 def _split_ints(s):
-    return [int(x) for x in str(s).replace(';', ' ').split()
-            if x.strip().lstrip('-').isdigit()]
+    # Tag rows that match no proteoform leave ProteoformIndex empty, so pandas
+    # reads the column as float and a single index arrives as "0.0".
+    out = []
+    for x in str(s).replace(';', ' ').split():
+        try:
+            v = float(x)
+        except ValueError:
+            continue
+        if v == v and v.is_integer():
+            out.append(int(v))
+    return out
 
 
 def build_tagspace_to_proteoform_map(raw_tag_df, raw_protein_df):

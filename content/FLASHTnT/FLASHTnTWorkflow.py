@@ -35,6 +35,9 @@ with t[3]:
         ('tags.tsv', 'tags_tsv', ''),
         ('tagged.tsv', 'tags_tsv', ''),
         ('protein.tsv', 'protein_tsv', ''),
+        # optional FLASHAnnotator output (-out, -out_annotation of the workflow)
+        ('annotated.tsv', 'annotated_tsv', ''),
+        ('fragments.tsv', 'fragments_tsv', ''),
     )
 
     REQUIRED_FILES = (
@@ -100,15 +103,20 @@ with t[3]:
                         results['out_deconv_mzML'], results['anno_annotated_mzML'],
                         logger=wf.logger
                     )
+                annotation = wf.file_manager.get_results(
+                    unparsed_dataset, ['annotated_tsv', 'fragments_tsv'], partial=True
+                )
                 parseTnT(
                     wf.file_manager, unparsed_dataset,
                     results['out_deconv_mzML'], results['anno_annotated_mzML'],
                     results['tags_tsv'], results['protein_tsv'],
+                    annotation_tsv=annotation.get('fragments_tsv'),
+                    annotated_protein_tsv=annotation.get('annotated_tsv'),
                     logger=wf.logger
                 )
 
     # Upload files via upload widget
-    st.subheader("**Upload FLASHDeconv & FLASHTnT output files (anno_annotated.mzML, out_deconv.mzML, tags.tsv & protein.tsv)**")
+    st.subheader("**Upload FLASHDeconv & FLASHTnT output files (anno_annotated.mzML, out_deconv.mzML, tags.tsv & protein.tsv; optionally FLASHAnnotator's annotated.tsv & fragments.tsv)**")
     # Display info how to upload files
     st.info(
         """

@@ -560,6 +560,78 @@ def render_workflow_selection():
             "content/FLASHQuant/FLASHQuantFileUpload.py"
         )
 
+def render_whats_new():
+    """Render the release highlights below the workflow buttons."""
+    spacer1, center_col, spacer2 = st.columns([1, 6, 1])
+    with center_col:
+        st.markdown(
+            """
+            <div class="whats-new">
+                <h3>✨ What's new in FLASHApp 1.1.0</h3>
+                <div class="whats-new-columns">
+                    <div>
+                        <h4>Faster and smoother</h4>
+                        <ul>
+                            <li>Results open much faster, even for large datasets.</li>
+                            <li>Your analysis finishes sooner after the tools have run.</li>
+                            <li>The viewer stays responsive while you click through scans and proteins.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>Better identification</h4>
+                        <ul>
+                            <li>Updated to the latest FLASHDeconv and FLASHTnT.</li>
+                            <li>More fragment ions are identified, matched directly on the raw spectra.</li>
+                            <li>New one-click settings for Lysate and Native samples.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <style>
+            .whats-new {
+                background: linear-gradient(135deg, #f8f9fa 0%, #eef0fb 100%);
+                border: 1px solid #dee2e6;
+                border-left: 5px solid #29379b;
+                border-radius: 12px;
+                padding: 1.5rem 2rem;
+                margin: 1.5rem 0 0.5rem 0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            }
+            .whats-new h3 {
+                color: #29379b;
+                font-size: 1.4rem;
+                font-weight: 700;
+                margin: 0 0 1rem 0;
+                padding: 0;
+            }
+            .whats-new-columns {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1rem 2.5rem;
+            }
+            .whats-new-columns > div {
+                flex: 1 1 260px;
+            }
+            .whats-new h4 {
+                color: #29379b;
+                font-size: 1.05rem;
+                font-weight: 600;
+                margin: 0 0 0.5rem 0;
+                padding: 0;
+            }
+            .whats-new ul {
+                margin: 0;
+                padding-left: 1.2rem;
+                color: #495057;
+            }
+            .whats-new li {
+                margin-bottom: 0.35rem;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
 def render_enhanced_download_section():
     """Render the enhanced download section with modular components."""
     # Add spacing
@@ -576,8 +648,9 @@ def main():
     
     # Render main sections
     render_workflow_selection()
-    
-    
+
+    render_whats_new()
+
     render_enhanced_download_section()
     
 

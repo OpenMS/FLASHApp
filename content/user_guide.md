@@ -130,7 +130,7 @@ The **Layout Manager** allows users to customize the experiment display settings
 
 ![Download Results](/static/images/flashTnT_upload.png)
 
-3. Click the **"Database"** tab to upload the necessary **FASTA** database files.
+3. Click the **"Database"** tab to upload the protein database (**FASTA** or **PEFF**). FLASHTnT estimates its FDR from decoys: a FASTA file without `DECOY_` entries gets shuffled decoys added automatically, a PEFF file gets its decoys from FLASHTnT.
 4. Click **"Add Database"** to confirm the upload.
 
 
@@ -139,13 +139,15 @@ The **Layout Manager** allows users to customize the experiment display settings
 ## **2️⃣ Configuring Parameters**
 1. Click the **"Configure"** tab.
 2. Select your uploaded **mzML file**.
-3. Choose the **FASTA database** file.
-4. There are two sub-tabs for configuring parameters: **FLASHDeconv** and **FLASHTnT**.
+3. Choose the **database** file.
+4. There are three sub-tabs for configuring parameters: **FLASHDeconv**, **FLASHTnT** and **FLASHAnnotator**.
 5. Adjust FLASHTnT parameters:
 Adjust **general settings** such as:
-   - **FDR settings** (prsm_fdr, pro_fdr) – Set thresholds for precursor and proteoform-level FDR (e.g., 1.00%).
-   - **Ion types** (ion_type) – Ion series to consider when generating tags (e.g., b, y).
-   - **Max modification count** (max_mod_count) – Maximum number of allowed modifications per protein.
+   - **FDR settings** (pro_fdr, protein_fdr) – Proteoform- and protein-level FDR thresholds (e.g., 0.01).
+   - **Ion types** (ion_type) – Ion series to consider (e.g., b, y; c, z for ETD/ECD). FLASHAnnotator uses the same ion types.
+   - **Modifications** (var_mod, fixed_mod, max_blind_mod_count) – Variable, fixed and blind (unknown) modifications.
+   - **Native mode** (native) – For native and targeted top-down data (one or a few spectra, often several proteins per spectrum).
+6. FLASHAnnotator annotates each reported proteoform on its raw MS2 spectrum (fragment isotope envelopes at every charge, including internal fragments) and scores it. Its fragment envelopes are the fragment ions shown in the Sequence View.
 
    
 5. Click **Save** to apply settings.
@@ -173,7 +175,7 @@ Adjust **general settings** such as:
 2. Select how many experiments to display simultaneously (e.g., 1–5).
 3. Choose **components** to add for each experiment:
 - **Protein Table** – Lists proteins identified by FLASHTnT, including accession, modifications, and score.
-- **Sequence View** – Annotates tags, PTMs, and fragments. Visualizes FLASHTnT results; for FLASHDeconv data must be user-supplied.
+- **Sequence View** – Annotates tags, PTMs, and fragments. Visualizes FLASHTnT results; for FLASHDeconv data must be user-supplied. For FLASHTnT the fragment ions are FLASHAnnotator's raw-spectrum annotation: terminal fragments are marked on the residues, internal fragments as a purple depth strip and brackets on the residues and as an internal fragment track below the sequence (one bar per piece, packed into lanes, colored by ion type, shaded by intensity). Click a bar or residue to select the fragment in the table and highlight its residues.
 - **Internal Fragment Map** – Shows internal fragment ions from the selected scan
 - **Tag Table** – Lists sequence tags with corresponding information.
 - **Spectrum View** – Shows the annotated spectrum with matched peaks.

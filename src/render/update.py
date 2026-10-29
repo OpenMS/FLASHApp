@@ -57,7 +57,7 @@ def render_heatmap(full_data, selection, dataset_name, component_name):
             filtered
             .limit(20000)
             .select(pl.len().alias("n"))
-            .collect(streaming=True)["n"][0]
+            .collect(engine="streaming")["n"][0]
         )
 
         relevant_data = filtered

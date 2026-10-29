@@ -217,6 +217,18 @@ def copy_demo_workspace(demo_name: str, target_path: Path) -> bool:
         return False
 
 
+def _keep_fragment_non_empty():
+    """Give an auto-rerunning fragment one element even when it shows nothing.
+
+    Precaution against a white page reported in Firefox after a page switch,
+    with the frontend throwing "Bad 'setIn' index". The suspected cause is a
+    `run_every` fragment that renders no element on a run, so a later delta
+    targets a block the browser no longer has. An empty placeholder keeps the
+    fragment's block in the element tree on every run.
+    """
+    st.empty()
+
+
 @st.fragment(run_every=5)
 def monitor_hardware():
     """
@@ -245,6 +257,7 @@ def monitor_hardware():
 @st.fragment(run_every=5)
 def monitor_queue():
     """Display queue metrics in sidebar (online mode only)"""
+    _keep_fragment_non_empty()
     try:
         from src.workflow.health import get_queue_metrics
 
@@ -303,6 +316,7 @@ def monitor_storage():
     docker-compose, apptainer - because a red tick for a mechanism that is not
     deployed is a false alarm pointing at the wrong layer.
     """
+    _keep_fragment_non_empty()
     try:
         from src.workflow.health import get_storage_status
 
@@ -750,10 +764,17 @@ def render_sidebar(page: str = "") -> None:
                 with st.expander("🖥️ **Workspaces**"):
                     # Define callback function to change workspace
                     def change_workspace():
+                        # A page switch while a page is still loading can replay
+                        # this widget's value before its key is mapped again, so
+                        # the callback fires with no readable value. The user did
+                        # not pick another workspace then: leave everything as is.
+                        chosen = st.session_state.get("chosen-workspace")
+                        if chosen is None or chosen == st.session_state.workspace.name:
+                            return
                         for key in params.keys():
                             if key in st.session_state.keys():
                                 del st.session_state[key]
-                        st.query_params.workspace = st.session_state["chosen-workspace"]
+                        st.query_params.workspace = chosen
 
                     # Get all available workspaces as options
                     options = [
@@ -763,7 +784,7 @@ def render_sidebar(page: str = "") -> None:
                     st.selectbox(
                         "choose existing workspace",
                         options,
-                        index=options.index(str(st.session_state.workspace.stem)),
+                        index=options.index(st.session_state.workspace.name),
                         on_change=change_workspace,
                         key="chosen-workspace",
                     )
