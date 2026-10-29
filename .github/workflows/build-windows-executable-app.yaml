@@ -83,6 +83,8 @@ jobs:
       run: |
         choco install ccache ninja -y --no-progress
         choco install cmake --version=3.31.1 -y --no-progress --force
+        # FDmerge no longer finds Eigen in contrib; its own CI installs it from choco.
+        choco install eigen -y --no-progress
         ## GH CLI "SHOULD BE" installed. Sometimes I had to manually install nonetheless. Super weird.
         # https://github.com/actions/runner-images/blob/main/images/win/scripts/Installers/Install-GitHub-CLI.ps1
         echo "C:/Program Files (x86)/GitHub CLI" >> $GITHUB_PATH
@@ -103,7 +105,8 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ${{ github.workspace }}/OpenMS/contrib
-        key: ${{ runner.os }}-contrib-${{ env.OPENMS_CONTRIB_VERSION || env.OPENMS_VERSION }}
+        # FDmerge builds against the latest contrib release, as its own CI does.
+        key: ${{ runner.os }}-contrib-latest-${{ hashFiles('OpenMS/vcpkg.json') }}
 
     - name: Load contrib build
       if: steps.cache-contrib-win.outputs.cache-hit != 'true'
@@ -112,7 +115,7 @@ jobs:
       run: |
         cd OpenMS/contrib
         # Download the file using the URL fetched from GitHub
-        gh release download release/${{ env.OPENMS_CONTRIB_VERSION || env.OPENMS_VERSION }} -R OpenMS/contrib --pattern 'contrib_build-Windows.tar.gz'
+        gh release download -R OpenMS/contrib --pattern 'contrib_build-Windows.tar.gz'
         # Extract the archive
         tar -xzf contrib_build-Windows.tar.gz
         rm contrib_build-Windows.tar.gz
@@ -157,7 +160,6 @@ jobs:
       shell: bash
       run: |
           mkdir $GITHUB_WORKSPACE/OpenMS/bld/
-          bash OpenMS/tools/ci/capture-env.sh -v $GITHUB_WORKSPACE/OpenMS/bld/CMakeCache.txt
           ctest --output-on-failure -V -S $GITHUB_WORKSPACE/OpenMS/tools/ci/cibuild.cmake
       env:
           OPENMS_CONTRIB_LIBS: "${{ github.workspace }}/OpenMS/contrib"
@@ -166,14 +168,22 @@ jobs:
           SOURCE_DIRECTORY: "${{ github.workspace }}/OpenMS"
           BUILD_NAME: "${{ env.RUN_NAME }}-Win64-class-topp-${{ github.run_number }}"
           ENABLE_STYLE_TESTING: "OFF"
-          ENABLE_TOPP_TESTING: "ON"
-          ENABLE_CLASS_TESTING: "ON"
+          # Only the TOPP tools are packaged; building the tests would double the build time.
+          ENABLE_TOPP_TESTING: "OFF"
+          ENABLE_CLASS_TESTING: "OFF"
           WITH_GUI: "OFF"
+          CMAKE_PREFIX_PATH: "${{ env.QT_ROOT_DIR }}/lib/cmake;${{ env.QT_ROOT_DIR }}"
+          Eigen3_DIR: 'C:\ProgramData\chocolatey\lib\eigen\share\cmake'
+          USE_EXTERNAL_JSON: "OFF"
           WITH_PARQUET: "OFF"
           ADDRESS_SANITIZER: "Off"
           BUILD_TYPE: "Release"
           OPENMP: "On"
           USE_STATIC_BOOST: "On"
+          # FDmerge's cibuild.cmake reads these names instead of the three above.
+          CMAKE_BUILD_TYPE: "Release"
+          MT_ENABLE_OPENMP: "ON"
+          BOOST_USE_STATIC: "ON"
           #  BUILD_FLAGS: "-p:CL_MPCount=2" # For VS Generator and MSBuild
           BUILD_FLAGS: "-j4" # Ninja will otherwise use all cores (doesn't go well in GHA)
           CMAKE_CCACHE_EXE: "ccache"
