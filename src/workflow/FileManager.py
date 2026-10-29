@@ -597,10 +597,13 @@ class FileManager:
 
         # Remove stored files
         shutil.rmtree(Path(self.cache_path, 'files', dataset_id))
+        # Viewer component caches built from them (see src/render/render.py)
+        shutil.rmtree(Path(self.cache_path, 'insight', dataset_id), ignore_errors=True)
 
     def clear_cache(self):
         shutil.rmtree(Path(self.cache_path, 'files'))
         Path(self.cache_path, 'files').mkdir()
+        shutil.rmtree(Path(self.cache_path, 'insight'), ignore_errors=True)
         self.cache_cursor.execute(f"DROP TABLE IF EXISTS stored_data;")
         self.cache_cursor.execute(f"DROP TABLE IF EXISTS stored_files;")
         self.cache_cursor.execute("""

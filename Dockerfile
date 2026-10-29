@@ -195,7 +195,10 @@ COPY default-parameters.json /app/default-parameters.json
 COPY presets.json /app/presets.json
 
 # Install openms-insight (built in the insight-build stage above).
-COPY --from=insight-build /openms-insight /tmp/openms-insight
+# Only the package, not js-component/node_modules. .gitignore keeps hatch from
+# adding the bundle twice (it is force-included because git ignores it).
+COPY --from=insight-build /openms-insight/pyproject.toml /openms-insight/README.md /openms-insight/LICENSE /openms-insight/.gitignore /tmp/openms-insight/
+COPY --from=insight-build /openms-insight/openms_insight /tmp/openms-insight/openms_insight
 # Its dependencies come from requirements.txt, with the versions pinned there
 RUN pip install --no-deps /tmp/openms-insight && rm -rf /tmp/openms-insight
 

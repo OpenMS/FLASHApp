@@ -241,6 +241,8 @@ def quant_traces(file_manager, dataset_id):
             _split_numbers('RTs').alias('rt'),
             _split_numbers('Intensities').alias('intensity'),
         )
+        # Legend in charge order, as FLASHViewer lists it
+        .sort(['FeatureGroupIndex', 'charge', 'trace'])
     )
 
 

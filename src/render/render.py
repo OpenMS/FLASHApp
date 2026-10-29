@@ -195,8 +195,10 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
         return cls(cache_id=cache_id, cache_path=str(cache_path))
     except CacheMissError:
         pass
-    # Caches built from earlier results or configurations are not used again
-    if cache_path.exists():
+    # Caches built from earlier results or configurations are not used again.
+    # Not for caches that depend on the selection (`extra`, e.g. a typed
+    # sequence): two grids on a page may each need their own.
+    if extra is None and cache_path.exists():
         for old in cache_path.glob(f'{name}-*'):
             if old.name != cache_id:
                 shutil.rmtree(old, ignore_errors=True)
@@ -398,14 +400,14 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
 
     if comp_name == 'sequence_view':
         if tool == 'flashtnt':
-            settings = fm.get_results(ds, ['settings'])['settings']
             component = _component(
                 ProteoformSequenceView, f'{comp_name}-{tool}', fm, ds,
                 ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
                 lambda: dict(
                     data=insight_data.proteoform_sequences(fm, ds),
                     filters={'protein': 'proteoform_index'},
-                    mass_identifier='mass', aa_identifier='aa', settings=settings,
+                    mass_identifier='mass', aa_identifier='aa',
+                    settings=fm.get_results(ds, ['settings'])['settings'],
                 ),
             )
             tag = _selected_tag(fm, ds, state_manager)
