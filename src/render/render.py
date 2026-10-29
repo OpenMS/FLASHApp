@@ -99,10 +99,10 @@ PROTEIN_COLUMNS = [
      'headerTooltip': 'The identifier of the mass spectrometry scan associated with the identified proteoform.'},
     {'title': 'Accession', 'field': 'accession',
      'headerTooltip': 'The unique identifier for the protein in the reference database.'},
-    {'title': 'Description', 'field': 'description'},
-    {'title': 'Length', 'field': 'length', 'sorter': 'number',
+    {'title': 'Description', 'field': 'description', 'responsive': 10},
+    {'title': 'Length', 'field': 'length', 'responsive': 6, 'sorter': 'number',
      'headerTooltip': 'The total number of amino acids in the matched protein.'},
-    {'title': 'Mass', 'field': 'ProteoformMass', 'sorter': 'number', **_DASH_FOR_MISSING,
+    {'title': 'Mass', 'field': 'ProteoformMass', 'responsive': 8, 'sorter': 'number', **_DASH_FOR_MISSING,
      'headerTooltip': 'The calculated mass of the proteoform in Daltons.'},
     {'title': 'No. of Matched Fragments', 'field': 'MatchingFragments', 'sorter': 'number',
      'headerTooltip': 'The number of fragment ions that match the protein sequence.'},
@@ -283,7 +283,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     fm, ds = file_manager, dataset_id
 
     if comp_name in HEATMAPS:
-        return _heatmap(comp_name, fm, ds), {}
+        return _heatmap(comp_name, fm, ds), {'height': 450}
 
     if comp_name == 'scan_table':
         return _component(
@@ -305,6 +305,8 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 column_definitions=MASS_COLUMNS, title='Mass Table',
                 index_field='mass_idx', go_to_fields=['mass_idx'],
                 filters={'scan': 'scan_idx'}, interactivity={'mass': 'mass_idx'},
+                # As in FLASHViewer, no mass is selected until one is clicked
+                default_row=-1,
                 float_precision='float64',
             ),
         ), {}
