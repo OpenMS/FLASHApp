@@ -53,7 +53,10 @@ jobs:
         path: openms-streamlit-vue-component/dist
 
   build-openms:
-    runs-on: windows-2022
+    # The latest OpenMS/contrib Windows release is built on Windows Server 2025
+    # with Visual Studio 2026; linking it with an older MSVC fails on missing STL
+    # symbols (__std_rotate, __std_unique_4, ...).
+    runs-on: windows-2025
 
     steps:
     - name: Checkout
@@ -236,6 +239,21 @@ jobs:
         name: openms-package
         path: ${{ github.workspace }}/OpenMS/bld/*.zip
 
+    - name: Collect the MSVC runtime the tools were built with
+      # Shipped next to the TOPP tools, so they do not depend on an older
+      # VC++ redistributable installed on the user's machine.
+      shell: bash
+      run: |
+        mkdir vc-runtime
+        redist=$(cygpath -u "$VCToolsRedistDir")
+        cp -v "$redist"/x64/Microsoft.VC*.CRT/*.dll "$redist"/x64/Microsoft.VC*.OpenMP/*.dll vc-runtime/
+
+    - name: Upload MSVC runtime as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: vc-runtime
+        path: vc-runtime
+
   build-executable:
     runs-on: windows-2022
     needs: [build-openms, build-vue-js-component]
@@ -269,6 +287,12 @@ jobs:
         unzip "*.zip" -d .
         cp -r openms-package/bin ../openms-bin
         cp -r openms-package/share ../share
+
+    - name: Download MSVC runtime as artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: vc-runtime
+        path: openms-bin
 
     - name: Set up Python (regular distribution)
       uses: actions/setup-python@v5
