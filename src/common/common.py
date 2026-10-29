@@ -712,10 +712,12 @@ def page_setup(page: str = "") -> dict[str, Any]:
         # Offline Mode: Copy all prepared workspaces
         else:
             if st.session_state.workspace.name == 'default':
-                shutil.copytree(
-                    Path('example-data', 'workspaces'), 
-                    st.session_state.workspace.parent
-                )
+                # Only the missing ones: the workspaces folder may already
+                # hold other (or edited demo) workspaces.
+                for demo in Path('example-data', 'workspaces').iterdir():
+                    target = Path(st.session_state.workspace.parent, demo.name)
+                    if demo.is_dir() and not target.exists():
+                        shutil.copytree(demo, target)
     Path(st.session_state.workspace, "mzML-files").mkdir(parents=True, exist_ok=True)
 
     # Render the sidebar
