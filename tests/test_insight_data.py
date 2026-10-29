@@ -133,3 +133,22 @@ def test_annotation_summary_fields_renamed():
     out = insight_data._generic_sequence_schema(lf).collect()
     assert out.columns == ['end_position', 'annotation_summary']
     assert out['annotation_summary'][0] == {'score': 1.0, 'coverage': 2.0}
+
+
+def test_heatmap_levels_are_the_stored_ones_smallest_first(fd):
+    levels = insight_data.heatmap_levels(fd, FD_DATASET, 'ms1_raw_heatmap')
+    assert levels == ['ms1_raw_heatmap_20000', 'ms1_raw_heatmap_200000']
+    sizes = [
+        insight_data.scan(fd, FD_DATASET, name).select(pl.len()).collect().item()
+        for name in levels
+    ]
+    assert sizes == sorted(sizes) and sizes[0] <= insight_data.HEATMAP_MIN_POINTS
+
+
+def test_heatmap_levels_none_when_one_is_missing(fd, monkeypatch):
+    real = insight_data.result_path
+    monkeypatch.setattr(
+        insight_data, 'result_path',
+        lambda fm, ds, tag: None if tag == 'ms1_raw_heatmap_200000' else real(fm, ds, tag),
+    )
+    assert insight_data.heatmap_levels(fd, FD_DATASET, 'ms1_raw_heatmap') is None

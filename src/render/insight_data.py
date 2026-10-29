@@ -10,7 +10,11 @@ Kept free of Streamlit and openms-insight so it can be tested on its own.
 
 import polars as pl
 
+from src.render.compression import compute_compression_levels
 from src.render.sequence_data_store import build_table
+
+# Size of the smallest heatmap level the parse stores (src/parse/deconv.py)
+HEATMAP_MIN_POINTS = 20000
 
 
 def result_path(file_manager, dataset_id, name_tag):
@@ -24,6 +28,19 @@ def result_path(file_manager, dataset_id, name_tag):
 def scan(file_manager, dataset_id, name_tag):
     """Lazy frame of a stored parquet result."""
     return pl.scan_parquet(result_path(file_manager, dataset_id, name_tag))
+
+
+def heatmap_levels(file_manager, dataset_id, name_tag):
+    """Names of the downsampled versions of a heatmap result that the parse
+    stored, smallest first, or None when any of them is missing."""
+    total = scan(file_manager, dataset_id, name_tag).select(pl.len()).collect().item()
+    names = [
+        f'{name_tag}_{size}'
+        for size in compute_compression_levels(HEATMAP_MIN_POINTS, total)
+    ]
+    if any(result_path(file_manager, dataset_id, name) is None for name in names):
+        return None
+    return names
 
 
 def scan_table(file_manager, dataset_id):

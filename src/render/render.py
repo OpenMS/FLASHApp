@@ -20,7 +20,7 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 import openms_insight
 from openms_insight import (
     DeconvolvedSpectrum, Heatmap, Plot3D, ProteinSequenceView, SeriesPlot,
-    StateManager, Table,
+    StateManager, Table, defer_reruns,
 )
 from openms_insight.core.cache import CacheMissError
 
@@ -226,14 +226,22 @@ def _heatmap(comp_name, file_manager, dataset_id):
     interactivity = {'scan': 'scan_idx'}
     if sets_mass:
         interactivity['mass'] = 'mass_idx'
+    if insight_data.result_path(file_manager, dataset_id, result) is None:
+        raise MissingResult(result)
+    # The levels the parse downsampled; without them Insight builds its own
+    levels = insight_data.heatmap_levels(file_manager, dataset_id, result)
     return _component(
-        Heatmap, comp_name, file_manager, dataset_id, [result],
+        Heatmap, comp_name, file_manager, dataset_id, [result, *(levels or [])],
         lambda: dict(
             data=insight_data.scan(file_manager, dataset_id, result),
+            levels=None if levels is None else [
+                insight_data.scan(file_manager, dataset_id, name) for name in levels
+            ],
             x_column='rt', y_column='mass', intensity_column='intensity',
             interactivity=interactivity, zoom_identifier=f'{comp_name}_zoom',
             title=title, x_label='Retention Time', y_label=y_label,
-            colorscale='Portland', log_scale=True, min_points=20000,
+            colorscale='Portland', log_scale=True,
+            min_points=insight_data.HEATMAP_MIN_POINTS,
         ),
     )
 
@@ -323,8 +331,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 column_definitions=MASS_COLUMNS, title='Mass Table',
                 index_field='mass_idx', go_to_fields=['mass_idx'],
                 filters={'scan': 'scan_idx'}, interactivity={'mass': 'mass_idx'},
-                # As in FLASHViewer, no mass is selected until one is clicked
-                default_row=-1,
+                # As in FLASHViewer, no mass is selected until one is clicked,
+                # and clicking the selected mass again clears the selection
+                default_row=-1, deselect_on_reclick=True,
                 float_precision='float64',
             ),
         ), {}
@@ -412,6 +421,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 filters={'pscan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
                 interactivity={'tag': 'TagIndex'}, on_select={'mass': None},
+                deselect_on_reclick=True,
                 float_precision='float64',
             ),
         ), {}
@@ -535,11 +545,13 @@ def render_grid(
 ):
     with _grid_lock():
         state_manager = _state_manager(tool, identifier, selected_data)
-        for row_index, row in enumerate(layout_info_per_exp):
-            columns = st.columns(len(row))
-            for col_index, (col, comp_name) in enumerate(zip(columns, row)):
-                with col:
-                    _render_cell(
-                        comp_name, file_manager, selected_data, tool, state_manager,
-                        f'{grid_key}_{row_index}_{col_index}',
-                    )
+        # A click updates every view of the grid in one rerun, not one per view
+        with defer_reruns():
+            for row_index, row in enumerate(layout_info_per_exp):
+                columns = st.columns(len(row))
+                for col_index, (col, comp_name) in enumerate(zip(columns, row)):
+                    with col:
+                        _render_cell(
+                            comp_name, file_manager, selected_data, tool, state_manager,
+                            f'{grid_key}_{row_index}_{col_index}',
+                        )
