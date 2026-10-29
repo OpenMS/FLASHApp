@@ -187,6 +187,8 @@ jobs:
           CMAKE_PREFIX_PATH: "${{ env.QT_ROOT_DIR }}/lib/cmake;${{ env.QT_ROOT_DIR }}"
           Eigen3_DIR: 'C:\ProgramData\chocolatey\lib\eigen\share\cmake'
           USE_EXTERNAL_JSON: "OFF"
+          # The parameter docs run the freshly built tools during the build and are not shipped.
+          ENABLE_DOCS: "OFF"
           WITH_PARQUET: "OFF"
           ADDRESS_SANITIZER: "Off"
           BUILD_TYPE: "Release"
