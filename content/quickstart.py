@@ -581,7 +581,7 @@ def render_whats_new():
                         <h4>Better identification</h4>
                         <ul>
                             <li>Updated to the latest FLASHDeconv and FLASHTnT.</li>
-                            <li>Fragment ions are now annotated directly on your spectra.</li>
+                            <li>More fragment ions are identified, matched directly on the raw spectra.</li>
                             <li>New one-click settings for Lysate and Native samples.</li>
                         </ul>
                     </div>
