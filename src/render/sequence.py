@@ -55,12 +55,16 @@ def getFragmentMassesWithSeq(protein, res_type):
 
 
 # NOTE: cannot cache this function: cannot hash "OpenMS.AASequence"
-def setFixedModification(protein):
+def setFixedModification(protein, fixed_mods=None):
+    """Apply the fixed modifications named in `fixed_mods` ({'fixed_mod_cysteine':
+    name, 'fixed_mod_methionine': name}); read from the session when None."""
+    if fixed_mods is None:
+        fixed_mods = st.session_state
     fixed_mod_site = []
 
     # fixed modification on cysteine
-    if 'fixed_mod_cysteine' in st.session_state and st.session_state['fixed_mod_cysteine']:
-        mod_mass = fixed_mod_cysteine[st.session_state['fixed_mod_cysteine']]
+    mod_mass = fixed_mod_cysteine.get(fixed_mods.get('fixed_mod_cysteine'), 0)
+    if mod_mass:
         for index, aa in enumerate(protein.toString()):
             if aa != 'C':
                 continue
@@ -70,8 +74,8 @@ def setFixedModification(protein):
         fixed_mod_site.append('C')
 
     # fixed modification on methionine
-    if 'fixed_mod_methionine' in st.session_state and st.session_state['fixed_mod_methionine']:
-        mod_mass = fixed_mod_methionine[st.session_state['fixed_mod_methionine']]
+    mod_mass = fixed_mod_methionine.get(fixed_mods.get('fixed_mod_methionine'), 0)
+    if mod_mass:
         for index, aa in enumerate(protein.toUnmodifiedString()):
             if aa != 'M':
                 continue
@@ -84,12 +88,12 @@ def setFixedModification(protein):
 
 
 #@st.cache_data
-def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modifications=None):
+def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modifications=None, fixed_mods=None):
     protein = AASequence.fromString(sequence)
 
     # Only apply for FD
     if modifications is None:
-        protein, fixed_mods = setFixedModification(protein)  # handling fixed modifications
+        protein, fixed_mods = setFixedModification(protein, fixed_mods)  # handling fixed modifications
     else:
         fixed_mods = []
 

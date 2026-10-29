@@ -18,36 +18,44 @@ env:
   APP_UpgradeCode: "69ae44ad-d554-4e3c-8715-7c4daf60f8bb"
 
 jobs:
-  build-vue-js-component:
+  # TEMPORARY: openms-insight is built from source until the release with the
+  # FLASHViewer components is on PyPI; then add it to requirements.txt instead.
+  build-openms-insight:
     runs-on: ubuntu-latest
 
     steps:
-
-    # Step to set up Node.js environment
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '21'
 
-    # Step to clone the Vue.js repository
-    - name: Checkout Vue.js repository
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Checkout openms-insight
       uses: actions/checkout@v4
       with:
-        repository: 't0mdavid-m/openms-streamlit-vue-component'
-        ref: 'FVdeploy'
-        path: 'openms-streamlit-vue-component'
+        repository: 't0mdavid-m/openms-insight'
+        ref: 'claude/project-thread-hxjbbs'
+        path: 'openms-insight'
 
-    - name: Install and build Vue.js component
+    - name: Build the Vue bundle and the wheel
       run: |
-        cd openms-streamlit-vue-component
-        npm install
+        cd openms-insight/js-component
+        npm ci
         npm run build
+        mkdir -p ../openms_insight/js-component
+        cp -r dist ../openms_insight/js-component/
+        cd ..
+        python -m pip wheel --no-deps -w wheel .
 
-    - name: Upload dist as artifact
+    - name: Upload wheel as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: vue-js-dist
-        path: openms-streamlit-vue-component/dist
+        name: openms-insight-wheel
+        path: openms-insight/wheel/*.whl
 
   build-openms:
     runs-on: windows-2022
@@ -207,17 +215,17 @@ jobs:
 
   build-executable:
     runs-on: windows-2022
-    needs: [build-openms, build-vue-js-component]
+    needs: [build-openms, build-openms-insight]
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Download vue js as artifact
+    - name: Download openms-insight wheel
       uses: actions/download-artifact@v4
       with:
-        name: vue-js-dist
-        path: js-dist
+        name: openms-insight-wheel
+        path: openms-insight-wheel
 
     - name: Set Version in settings.json
       run: |
@@ -278,6 +286,8 @@ jobs:
       run: |
         python -m pip install -r requirements.txt --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
         python -m pip install 'polars-lts-cpu >= 1.0' --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
+        # openms-insight's dependencies come from requirements.txt (keeps polars-lts-cpu)
+        python -m pip install --no-deps (Get-ChildItem openms-insight-wheel/*.whl).FullName --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
 
     - name: Set to offline deployment
       run: |
@@ -319,7 +329,6 @@ jobs:
         cp openms-bin/*.dll streamlit_exe
         cp -r .streamlit streamlit_exe
         cp -r share streamlit_exe/share
-        cp -r js-component streamlit_exe/js-component
         cp app.py streamlit_exe
         cp settings.json streamlit_exe
         cp default-parameters.json streamlit_exe

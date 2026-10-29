@@ -9,42 +9,28 @@ run locally:
 
 `streamlit run app.py local`
 
-### Working with submodules
+### Visualizations
 
-This project uses a git submodule to integrate openms-streamlit-vue-component.
+The viewers are built from [openms-insight](https://github.com/t0mdavid-m/openms-insight)
+components (tables, heatmaps, spectra, 3D plots and the proteoform sequence view).
+Until the openms-insight release with these components is on PyPI, install it
+from source (the Docker and Windows builds do this for you):
 
-When checking out this repository you will need to run a few extra commands:
-
-`git submodule init`
-
-`git submodule update`
-
-If you would like to update the submodule to the latest commit, use the following:
-
-`git submodule update --remote`
-
-See [https://git-scm.com/book/en/v2/Git-Tools-Submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules)
-for more documentation on submodules
+```
+git clone -b claude/project-thread-hxjbbs https://github.com/t0mdavid-m/openms-insight.git
+cd openms-insight/js-component && npm ci && npm run build
+mkdir -p ../openms_insight/js-component && cp -r dist ../openms_insight/js-component/
+cd .. && pip install --no-deps .
+```
 
 ## Build
 
-To build FLASHApp, you first need to build the `openms-streamlit-vue-component`
-and copy the build from `./openms-streamlit-vue-component/dist` to 
-`./js-component/dist`.
-
-You then should set streamlit to production in two locations:
-
-* in `./.streamlit/config.toml` set `developmentMode` to `false`
-* in `./src/components.py` set `_RELEASE` to `True`
-
-These steps should be done before building any version of FLASHApp.
+Set streamlit to production in `./.streamlit/config.toml` (`developmentMode = false`)
+before building any version of FLASHApp.
 
 ### Docker
 
 First you need to build an image locally.
-
-Prerequisite: `src/components.py` has `RELEASE=True` and `dist/` contains a build of the Vue
-component. These should be the settings on the `main` branch.
 
 build image with: `docker build -f Dockerfile --no-cache -t flashapp:latest --build-arg GITHUB_TOKEN=<your-github-token> .`
 
