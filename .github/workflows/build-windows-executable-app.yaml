@@ -10,12 +10,15 @@ on:
 
 # Define needed TOPP tools here
 env:
-  TOPP_TOOLS: "FLASHDeconv FLASHTnT DecoyDatabase"
+  TOPP_TOOLS: "FLASHDeconv FLASHTnT FLASHAnnotator DecoyDatabase"
   OPENMS_VERSION: 3.5.0
   PYTHON_VERSION: 3.11.0
   # Name of the installer
   APP_NAME: FLASHApp-1.1.0
   APP_UpgradeCode: "69ae44ad-d554-4e3c-8715-7c4daf60f8bb"
+  # Electron app name without the version, so the install folder and the
+  # workspaces in %APPDATA%\FLASHApp stay the same across upgrades.
+  ELECTRON_NAME: FLASHApp
 
 jobs:
   build-vue-js-component:
@@ -57,7 +60,8 @@ jobs:
       uses: actions/checkout@v3
       with:
         repository: t0mdavid-m/OpenMS
-        ref: FVdeploy
+        # Same branch as the Docker image (Dockerfile OPENMS_BRANCH); it has FLASHAnnotator.
+        ref: FDmerge
         path: 'OpenMS'
 
     - name: Install Qt (Windows)
@@ -358,6 +362,77 @@ jobs:
         Thank you for using ${{ env.APP_NAME }}!
         EOF
         
+    - name: Set up Node.js for the Electron installer
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: electron/package-lock.json
+
+    - name: Build Electron installer
+      # Same payload as the MSI, wrapped in the Electron shell (electron/) as a
+      # per-user NSIS installer that needs no admin rights.
+      run: |
+        Copy-Item -Recurse streamlit_exe electron/payload
+        Remove-Item "electron/payload/${{ env.APP_NAME }}.bat"
+        # electron-builder needs a semver version; take it from settings.json.
+        $version = (Get-Content -Raw settings.json | ConvertFrom-Json).version
+        if ("${{ github.event.release.tag_name }}" -match '(\d+)(?:\.(\d+))?(?:\.(\d+))?') {
+          $version = "$($Matches[1]).$(if ($Matches[2]) { $Matches[2] } else { 0 }).$(if ($Matches[3]) { $Matches[3] } else { 0 })"
+        }
+        if ($version -notmatch '^\d+\.\d+\.\d+$') { $version = "1.0.0" }
+        cd electron
+        npm ci
+        npx electron-builder --win nsis --publish never `
+          "-c.productName=${{ env.ELECTRON_NAME }}" `
+          "-c.appId=de.openms.${{ env.ELECTRON_NAME }}" `
+          "-c.extraMetadata.productName=${{ env.ELECTRON_NAME }}" `
+          "-c.extraMetadata.version=$version" `
+          ('-c.nsis.artifactName=${{ env.APP_NAME }}-Setup.${ext}')
+
+    - name: Smoke test Electron installer
+      # Installs silently, then checks pyOpenMS, every TOPP tool and the
+      # Streamlit server with the shell's environment, and finally launches the
+      # installed app, which exits 0 once the page has created a workspace.
+      run: |
+        Start-Process -FilePath "electron/dist/${{ env.APP_NAME }}-Setup.exe" -ArgumentList "/S" -Wait
+        $inst = Join-Path $env:LOCALAPPDATA "Programs/${{ env.ELECTRON_NAME }}"
+        node electron/scripts/smoke-payload.js "$inst/resources/app-payload" @($env:TOPP_TOOLS -split ' ')
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        $env:OPENMS_APP_SMOKE_TEST = "1"
+        $app = Start-Process -FilePath "$inst/${{ env.ELECTRON_NAME }}.exe" -PassThru
+        if (-not $app.WaitForExit(300000)) { Stop-Process -Id $app.Id -Force; throw "Electron app did not finish its smoke test" }
+        $log = Join-Path $env:APPDATA "${{ env.ELECTRON_NAME }}/logs/streamlit.log"
+        if (Test-Path $log) { Get-Content $log }
+        if ($app.ExitCode -ne 0) { throw "Electron app smoke test failed with exit code $($app.ExitCode)" }
+
+    - name: End-to-end test in the Electron window
+      # Drives the installed app with Playwright: opens every page, runs the
+      # FLASHDeconv and FLASHTnT workflows (incl. FLASHAnnotator) on the
+      # example data, and checks that each Viewer draws its plots and tables.
+      run: |
+        $inst = Join-Path $env:LOCALAPPDATA "Programs/${{ env.ELECTRON_NAME }}"
+        node electron/scripts/e2e.js --exe "$inst/${{ env.ELECTRON_NAME }}.exe" --out e2e-output --scenario tests/e2e/electron-workflows.js
+        $code = $LASTEXITCODE
+        $log = Join-Path $env:APPDATA "${{ env.ELECTRON_NAME }}/logs/streamlit.log"
+        if (Test-Path $log) { Get-Content $log -Tail 200 }
+        exit $code
+
+    - name: Archive end-to-end screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: electron-e2e-screenshots
+        path: e2e-output
+        if-no-files-found: ignore
+
+    - name: Archive Electron installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: OpenMS-App-Electron
+        path: electron/dist/${{ env.APP_NAME }}-Setup.exe
+
     - name: Install WiX Toolset
       run: |
         curl -LO https://github.com/wixtoolset/wix3/releases/download/wix3111rtm/wix311-binaries.zip
@@ -488,6 +563,17 @@ jobs:
         asset_path: OpenMS-App.zip
         asset_name: OpenMS-App.zip
         asset_content_type: application/zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Electron installer as release asset
+      if: ${{ github.event_name == 'release' }}
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: electron/dist/${{ env.APP_NAME }}-Setup.exe
+        asset_name: ${{ env.APP_NAME }}-Setup.exe
+        asset_content_type: application/vnd.microsoft.portable-executable
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
