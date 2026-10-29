@@ -242,6 +242,9 @@ def _heatmap(comp_name, file_manager, dataset_id):
             title=title, x_label='Retention Time', y_label=y_label,
             colorscale='Portland', log_scale=True,
             min_points=insight_data.HEATMAP_MIN_POINTS,
+            # A zoomed view is downsampled like FLASHViewer did, filling bins
+            # up to min_points rather than keeping a fixed number per bin
+            use_streaming=False,
         ),
     )
 
