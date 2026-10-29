@@ -127,8 +127,8 @@ jobs:
         # Add contrib library path for runtime DLL resolution
         echo "${{ github.workspace }}/OpenMS/contrib/lib" >> $GITHUB_PATH
 
-    - name: Setup ccache cache
-      uses: actions/cache@v3
+    - name: Restore ccache cache
+      uses: actions/cache/restore@v4
       with:
         path: .ccache
         key: ${{ runner.os }}-ccache-${{ env.RUN_NAME }}-${{ github.run_number }}
@@ -160,7 +160,16 @@ jobs:
       shell: bash
       run: |
           mkdir $GITHUB_WORKSPACE/OpenMS/bld/
+          set +e
           ctest --output-on-failure -V -S $GITHUB_WORKSPACE/OpenMS/tools/ci/cibuild.cmake
+          retVal=$?
+          if [ $retVal -ne 0 ]; then
+            # The errors otherwise only reach CDash.
+            echo "::group::Compiler errors"
+            find $GITHUB_WORKSPACE/OpenMS/bld/Testing -name "LastBuild*" -type f -exec grep -n -B2 -A12 -E "error C[0-9]+|error LNK|fatal error|FAILED:" {} \; | head -n 600
+            echo "::endgroup::"
+          fi
+          exit $retVal
       env:
           OPENMS_CONTRIB_LIBS: "${{ github.workspace }}/OpenMS/contrib"
           CI_PROVIDER: "GitHub-Actions"
@@ -192,6 +201,14 @@ jobs:
           CCACHE_COMPRESS: true
           CCACHE_COMPRESSLEVEL: 12
           CCACHE_MAXSIZE: 400M
+
+    - name: Save ccache cache
+      # Also after a failed build, so the next attempt does not start cold.
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: .ccache
+        key: ${{ runner.os }}-ccache-${{ env.RUN_NAME }}-${{ github.run_number }}-${{ github.run_attempt }}
 
     - name: Package
       shell: bash
