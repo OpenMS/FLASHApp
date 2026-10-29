@@ -141,7 +141,7 @@ FROM node:21 AS js-build
 # JS Component
 ARG VUE_REPO=https://github.com/t0mdavid-m/openms-streamlit-vue-component.git
 # TEMPORARY: vue-component PR #32 head until it is merged into FVdeploy; switch back then.
-ARG VUE_BRANCH=claude/project-thread-rgd897
+ARG VUE_BRANCH=FVdeploy
 
 ADD https://api.github.com/repos/t0mdavid-m/openms-streamlit-vue-component/git/refs/heads/$VUE_BRANCH version.json
 
