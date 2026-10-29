@@ -160,6 +160,12 @@ function makeHelpers(app, page, baseUrl, out) {
 }
 
 async function navTargets(page) {
+  // A long navigation is collapsed behind "View more".
+  const more = page.locator('[data-testid="stSidebarNavViewButton"]');
+  if ((await more.count()) && /more/i.test(await more.first().innerText())) {
+    await more.first().click();
+    await settle(page);
+  }
   const hrefs = await page
     .locator('[data-testid="stSidebarNav"] a')
     .evaluateAll((as) => as.map((a) => a.getAttribute("href")));
