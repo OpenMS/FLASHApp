@@ -507,7 +507,7 @@ def create_navigation_button(emoji, title, subtitle, page_path):
 
 def render_workflow_selection():
     """Render the main workflow selection section."""
-    # Hero section with title on left and OpenMS logo on right
+    # Hero section with title on left and FLASHApp logo on right
     st.markdown(
         """
         <div class="hero-section">
@@ -528,7 +528,7 @@ def render_workflow_selection():
         )
     
     with logo_col:
-        st.image("assets/OpenMS.png", width=200)
+        st.image("assets/flashapp-icon.svg", width=160)
     
     st.markdown("</div>", unsafe_allow_html=True)
     

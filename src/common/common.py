@@ -512,7 +512,7 @@ def page_setup(page: str = "") -> dict[str, Any]:
     # Set Streamlit page configurations
     st.set_page_config(
         page_title=st.session_state.settings["app-name"],
-        page_icon="assets/openms_transparent_bg_logo.svg",
+        page_icon="assets/flashapp-icon-small.svg",
         layout="wide",
         initial_sidebar_state="auto",
         menu_items=None,
@@ -532,7 +532,11 @@ def page_setup(page: str = "") -> dict[str, Any]:
         unsafe_allow_html=True,
     )
 
-    st.logo("assets/OpenMS.png")
+    st.logo(
+        "assets/flashapp-logo-horizontal.svg",
+        size="large",
+        icon_image="assets/flashapp-icon.svg",
+    )
 
     # Create google analytics if consent was given
     if (
