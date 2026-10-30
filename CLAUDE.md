@@ -108,6 +108,7 @@ The container entrypoint starts **Redis** + one or more **RQ workers** (queue `o
 ## Conventions & gotchas
 
 - **`app.py` sets multiprocessing start method to `spawn`** (polars + Unix fork are incompatible) and imports `pyopenms` early (required for the Windows build). Don't remove these.
+- **Vendor input:** FLASHDeconv and FLASHTnT accept Thermo `.raw` and Bruker timsTOF `.d` (`MS_DATA_TYPES` in `src/Workflow.py`). `execution()` converts them with `self.executor.convert_to_mzml()` (from the streamlit-template): FileConverter + ThermoRawFileParser for `.raw` (mono in the Docker images, .NET on Windows, `FileConverter` in the Windows `TOPP_TOOLS`), `src/python-tools/bruker_to_mzml.py` (timsrust + pyOpenMS) for `.d`. Converted mzML is cached in `<workflow_dir>/converted-mzML/`. Online, a `.d` is uploaded zipped.
 - **Running workflows locally needs the TOPP binaries** (`FLASHDeconv`, `FLASHTnT`) on `PATH` — they ship only in the full Docker image. The upload/viewer/download paths work on pre-computed result files without them.
 - **Windows packaged build:** `run_app.py` + `run_app_temp.spec` (PyInstaller). A `windows` arg in `sys.argv` triggers a working-directory `chdir` in `page_setup()`.
 - Pages start with `page_setup()` from `src/common/common.py`, which initializes the workspace, sidebar, and params; call `save_params(params)` at the end. Use `show_fig()` / `show_table()` for consistent display.
