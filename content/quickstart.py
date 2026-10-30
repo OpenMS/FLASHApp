@@ -634,6 +634,9 @@ def render_whats_new():
 
 def render_enhanced_download_section():
     """Render the enhanced download section with modular components."""
+    # The offline downloads are pointless inside the offline app itself.
+    if st.session_state.get("location") == "local":
+        return
     # Add spacing
     st.markdown("<br><hr><br>", unsafe_allow_html=True)
     
