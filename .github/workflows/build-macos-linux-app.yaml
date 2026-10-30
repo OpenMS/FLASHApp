@@ -170,6 +170,13 @@ jobs:
 
     - name: Package OpenMS
       run: |
+        if [[ $RUNNER_OS == macOS ]]; then
+          # Without the GUI there are no Qt plugins, and fix_dependencies.rb
+          # aborts on the missing plugin folder before it fixes the TOPP tools'
+          # library paths. Skip the plugin folder when it does not exist.
+          sed -i '' 's|\$plugin_dir = Pathname.new(arg).realpath$|$plugin_dir = Pathname.new(arg).realpath if File.directory?(arg)|' OpenMS/cmake/MacOSX/fix_dependencies.rb
+          grep -n 'plugin_dir = Pathname' OpenMS/cmake/MacOSX/fix_dependencies.rb
+        fi
         set +e
         ctest --output-on-failure -V -S "$GITHUB_WORKSPACE/OpenMS/tools/ci/cipackage.cmake"
         retVal=$?
