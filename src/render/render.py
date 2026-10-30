@@ -146,6 +146,8 @@ QUANT_COLUMNS = [
     {'title': 'Start Retention Time (FWHM)', 'field': 'StartRetentionTime(FWHM)', 'sorter': 'number'},
     {'title': 'End Retention Time (FWHM)', 'field': 'EndRetentionTime(FWHM)', 'sorter': 'number'},
     {'title': 'Feature Group Quantity', 'field': 'FeatureGroupQuantity', 'sorter': 'number'},
+    # Twice, as in FLASHViewer (the second one is the first in the collapsed details)
+    {'title': 'Feature Group Quantity', 'field': 'FeatureGroupQuantity', 'sorter': 'number'},
     {'title': 'Min Charge', 'field': 'MinCharge', 'sorter': 'number'},
     {'title': 'Max Charge', 'field': 'MaxCharge', 'sorter': 'number'},
     {'title': 'Most Abundant Charge', 'field': 'MostAbundantFeatureCharge', 'sorter': 'number'},
@@ -493,7 +495,7 @@ def _render_quant(file_manager, dataset_id, state_manager, key):
             data=insight_data.quant_table(file_manager, dataset_id),
             column_definitions=QUANT_COLUMNS, title='Feature groups',
             index_field='FeatureGroupIndex', interactivity={'feature_group': 'FeatureGroupIndex'},
-            reclick=RECLICK, pagination=False, float_precision='float64',
+            go_to_fields=[], reclick=RECLICK, pagination=False, float_precision='float64',
         ),
     )
     traces = _component(
@@ -505,10 +507,28 @@ def _render_quant(file_manager, dataset_id, state_manager, key):
             trace_column='trace', series_column='charge', series_name_template='Charge: {}',
             color='#3366CC', title='Feature group signals',
             x_label='m/z', y_label='retention time', z_label='intensity',
+            # FLASHViewer's plot: plain title, no border, Plotly's PNG download
+            title_bold=False, border=False, export_format='png',
         ),
     )
-    table(key=f'{key}_table', state_manager=state_manager, height=TABLE_HEIGHT)
-    traces(key=f'{key}_traces', state_manager=state_manager, height=800)
+    # FLASHViewer drew the table and the plot in one 1184 px panel: the table 4 px
+    # from its edges, the plot 16 px from the left, 90% wide, overlapping the
+    # table's last 12 px
+    panel = f'{key}_panel'
+    with st.container(key=panel):
+        st.markdown(
+            f'''<style>
+            .st-key-{panel} {{ gap: 0; }}
+            .st-key-{panel} > div:nth-child(1) {{ display: none; }}
+            .st-key-{panel} > div:nth-child(2) {{ margin: 4px 4px 0; width: calc(100% - 8px); }}
+            .st-key-{panel} > div:nth-child(3) {{
+                margin: -20px 0 16px 16px; width: calc((100% - 32px) * 0.9); z-index: 1;
+            }}
+            </style>''',
+            unsafe_allow_html=True,
+        )
+        table(key=f'{key}_table', state_manager=state_manager, height=TABLE_HEIGHT)
+        traces(key=f'{key}_traces', state_manager=state_manager, height=800)
 
 
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
