@@ -528,7 +528,7 @@ def render_workflow_selection():
         )
     
     with logo_col:
-        st.image("assets/flashapp-icon.svg", width=160)
+        st.image("assets/flashapp-icon-light.svg", width=160)
     
     st.markdown("</div>", unsafe_allow_html=True)
     
