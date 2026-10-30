@@ -248,7 +248,7 @@ jobs:
       # copies the system libraries (Qt, Xerces, ...) into the bundle.
       run: |
         export OPENMS_PACKAGE
-        OPENMS_PACKAGE=$(ls openms-package/*.pkg openms-package/*.deb 2>/dev/null | head -n 1)
+        OPENMS_PACKAGE=$(find openms-package -maxdepth 1 \( -name "*.pkg" -o -name "*.deb" \) | head -n 1)
         electron/scripts/stage-openms.sh "" electron/payload $TOPP_TOOLS
 
     - name: Stage Python with the app's requirements
