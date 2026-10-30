@@ -44,18 +44,15 @@ def structure_files_section(file_manager, dataset_id, layout, identifier):
         )
         counter_key = f'structure_upload_counter_{identifier}'
         counter = st.session_state.setdefault(counter_key, 0)
-        # Follow the protein selected in the viewer, until the user picks another
-        select_key = f'structure_upload_protein_{identifier}'
-        followed_key = f'structure_upload_followed_{identifier}'
-        if default_key in keys and st.session_state.get(followed_key) != default_key:
-            st.session_state[followed_key] = default_key
-            st.session_state[select_key] = default_key
-        if st.session_state.get(select_key) not in keys:
-            st.session_state.pop(select_key, None)
+        # Follow the protein selected in the viewer, until the user picks another:
+        # a new selection gets a fresh widget (a widget value set from code can be
+        # lost when the viewer's click reruns the script)
         c1, c2 = st.columns(2)
         with c1:
             key = st.selectbox(
-                'Protein', keys, format_func=lambda k: options[k], key=select_key,
+                'Protein', keys, format_func=lambda k: options[k],
+                index=keys.index(default_key) if default_key in keys else 0,
+                key=f'structure_upload_protein_{identifier}_{default_key}',
             )
         with c2:
             uploaded = st.file_uploader(
