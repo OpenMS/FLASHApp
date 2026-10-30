@@ -8,6 +8,7 @@ from src.workflow.FileManager import FileManager
 from src.render.sequence import getFragmentDataFromSeq, getInternalFragmentDataFromSeq
 from pathlib import Path
 from src.render.sequence_data_store import load_entry
+from src.render.structure import StructureStore, get_structure, download_enabled
 
 
 def get_sequence(selection_store):
@@ -116,7 +117,7 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
     if component in [
         'Annotated Spectrum', 'Deconvolved Spectrum', 
         'Augmented Deconvolved Spectrum', 
-        'Mass Table', 'Sequence View', 'Internal Fragment Map'
+        'Mass Table', 'Sequence View', 'Internal Fragment Map', 'Structure View'
     ]:
         if tool == 'flashtnt':
             scan_map = additional_data.get('proteoform_scan_map', {})
@@ -192,7 +193,7 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
             data['tag_table'] = sel
 
     if (
-        (component in ['Internal Fragment Map', 'Sequence View'])
+        (component in ['Internal Fragment Map', 'Sequence View', 'Structure View'])
         and (tool == 'flashtnt')
     ):
         if 'proteinIndex' not in selection_store:
@@ -201,6 +202,17 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
             pid = selection_store['proteinIndex']
             entry = load_entry(additional_data['sequence_data_ds'], pid)
             data['sequence_data'] = {pid: entry} if entry is not None else {}
+
+    if component == 'Structure View':
+        pid = selection_store.get('proteinIndex')
+        accession = additional_data['accessions'].get(pid)
+        if accession is None:
+            data['structure'] = {}
+        else:
+            data['structure'] = get_structure(
+                StructureStore(additional_data['structure_dir']), accession,
+                download=download_enabled(st.session_state.get('settings'))
+            )
 
     if (component == 'Internal Fragment Map') and (tool == 'flashtnt'):
         if 'proteinIndex' not in selection_store:

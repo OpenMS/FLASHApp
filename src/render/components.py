@@ -89,6 +89,12 @@ class SequenceView:
         self.componentName = 'SequenceView'
 
 
+class StructureView:
+    def __init__(self, title):
+        self.title = title
+        self.componentName = 'StructureView'
+
+
 class InternalFragmentMap:
     def __init__(self, title):
         self.title = title
