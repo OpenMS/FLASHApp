@@ -8,9 +8,10 @@ on:
   release:
     types: [published]
 
-# Define needed TOPP tools here
+# Define needed TOPP tools here. FileConverter converts Thermo .raw input
+# (CommandExecutor.convert_to_mzml) with share/OpenMS/THIRDPARTY/ThermoRawFileParser.
 env:
-  TOPP_TOOLS: "FLASHDeconv FLASHTnT FLASHAnnotator DecoyDatabase"
+  TOPP_TOOLS: "FLASHDeconv FLASHTnT FLASHAnnotator DecoyDatabase FileConverter"
   OPENMS_VERSION: 3.5.0
   PYTHON_VERSION: 3.11.0
   # Name of the installer
