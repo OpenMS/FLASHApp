@@ -26,7 +26,10 @@ from openms_insight.core.cache import CacheMissError
 
 from src.render import insight_data
 from src.render.sequence import getFragmentDataFromSeq
-from src.render.structure import StructureStore, download_enabled, get_structure, structure_dir
+from src.render.structure import (
+    StructureStore, download_enabled, get_structure, structure_dir, structure_key,
+)
+from src.render.structure_files import structure_action_handler, upload_errors
 
 
 def _code_version():
@@ -506,6 +509,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             ),
         )
         component.set_structure(_structure(fm, ds, state_manager.get_selection('protein')))
+        component.on_structure_action(structure_action_handler(structure_dir(fm)))
         return component, {}
 
     if comp_name == 'quant_visualization':
@@ -527,6 +531,9 @@ def _structure(file_manager, dataset_id, protein_index):
         StructureStore(structure_dir(file_manager)), match.iloc[0],
         download=download_enabled(st.session_state.get('settings')),
     )
+    error = upload_errors().get(structure_key(match.iloc[0]))
+    if error is not None:
+        structure['upload_error'] = error
     if structure['status'] == 'ok':
         structure['label'] = (
             f"AlphaFold DB model {structure.get('name') or structure['accession']}"
@@ -534,11 +541,6 @@ def _structure(file_manager, dataset_id, protein_index):
             else f"Uploaded structure {structure.get('name') or ''}".strip()
         )
     return structure
-
-
-def selected_protein(identifier):
-    """Proteoform selected in a FLASHTnT grid, or None."""
-    return StateManager(session_key=f'flash_insight_state_flashtnt_{identifier}').get_selection('protein')
 
 
 def _render_quant(file_manager, dataset_id, state_manager, key):
