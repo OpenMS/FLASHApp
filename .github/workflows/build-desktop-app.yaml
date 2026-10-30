@@ -687,8 +687,13 @@ jobs:
         electron/scripts/stage-python.sh "$PYTHON_STANDALONE_VERSION" electron/payload requirements.txt
         if [[ $RUNNER_OS == Linux ]]; then
           # Same as the Windows build: polars' default wheel needs AVX2 and
-          # more; the LTS build runs on any x86_64 CPU.
-          "electron/payload/python-$PYTHON_STANDALONE_VERSION/bin/python3" -m pip install --no-warn-script-location --disable-pip-version-check 'polars-lts-cpu >= 1.0, < 2'
+          # more; the LTS build runs on any x86_64 CPU. Both ship the polars/
+          # package, so remove the default one first: installing over it mixed
+          # files of two versions (ImportError in polars.io).
+          py="electron/payload/python-$PYTHON_STANDALONE_VERSION/bin/python3"
+          "$py" -m pip uninstall -y --disable-pip-version-check polars $("$py" -m pip list --format=freeze --disable-pip-version-check | grep -o '^polars-runtime[^=]*' || true)
+          "$py" -m pip install --no-warn-script-location --disable-pip-version-check 'polars-lts-cpu >= 1.0, < 2'
+          "$py" -c 'import polars, polars.io.delta; print("polars", polars.__version__)'
         fi
 
     - name: Copy the app into the payload
