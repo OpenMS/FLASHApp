@@ -493,6 +493,25 @@ def save_params(params: dict[str, Any]) -> None:
     return params
 
 
+def themed_asset(light: str, dark: str) -> str:
+    """
+    Picks the image for the app's active light or dark theme.
+
+    The theme comes from st.context.theme, which Streamlit fills from the
+    browser on each rerun. After a switch in the settings menu it updates on
+    the next rerun; before the first one it is unknown and the light image is
+    used.
+
+    Args:
+        light (str): Image for the light theme (dark text, white tile).
+        dark (str): Image for the dark theme (white text, dark tile).
+
+    Returns:
+        str: The path of the image for the active theme.
+    """
+    return dark if st.context.theme.type == "dark" else light
+
+
 def page_setup(page: str = "") -> dict[str, Any]:
     """
     Set up the Streamlit page configuration and determine the workspace for the current session.
@@ -533,9 +552,14 @@ def page_setup(page: str = "") -> dict[str, Any]:
     )
 
     st.logo(
-        "assets/flashapp-logo-horizontal-light.svg",
+        themed_asset(
+            "assets/flashapp-logo-horizontal-light.svg",
+            "assets/flashapp-logo-horizontal-white.svg",
+        ),
         size="large",
-        icon_image="assets/flashapp-icon-light.svg",
+        icon_image=themed_asset(
+            "assets/flashapp-icon-light.svg", "assets/flashapp-icon.svg"
+        ),
     )
 
     # Create google analytics if consent was given
