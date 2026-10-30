@@ -493,6 +493,25 @@ def save_params(params: dict[str, Any]) -> None:
     return params
 
 
+def themed_asset(light: str, dark: str) -> str:
+    """
+    Picks the image for the app's active light or dark theme.
+
+    The theme comes from st.context.theme, which Streamlit fills from the
+    browser on each rerun. After a switch in the settings menu it updates on
+    the next rerun; before the first one it is unknown and the light image is
+    used.
+
+    Args:
+        light (str): Image for the light theme (dark text, white tile).
+        dark (str): Image for the dark theme (white text, dark tile).
+
+    Returns:
+        str: The path of the image for the active theme.
+    """
+    return dark if st.context.theme.type == "dark" else light
+
+
 def page_setup(page: str = "") -> dict[str, Any]:
     """
     Set up the Streamlit page configuration and determine the workspace for the current session.
@@ -533,9 +552,14 @@ def page_setup(page: str = "") -> dict[str, Any]:
     )
 
     st.logo(
-        "assets/flashapp-logo-horizontal-light.svg",
+        themed_asset(
+            "assets/flashapp-logo-horizontal-light.svg",
+            "assets/flashapp-logo-horizontal-white.svg",
+        ),
         size="large",
-        icon_image="assets/flashapp-icon-light.svg",
+        icon_image=themed_asset(
+            "assets/flashapp-icon-light.svg", "assets/flashapp-icon.svg"
+        ),
     )
 
     # Create google analytics if consent was given
@@ -1083,6 +1107,35 @@ def show_table(df: pd.DataFrame, download_name: str = "") -> None:
     return df
 
 
+def follow_app_theme(fig):
+    """
+    Removes fixed light-mode styling from a Plotly figure.
+
+    Figures from pyopenms-viz, or built with templates such as "plotly_white",
+    carry a white background, black axes and black annotation text, which
+    disappear on the dark theme. Without them, st.plotly_chart applies the
+    Streamlit theme, so the figure matches the active light or dark app theme.
+    Trace colors are kept.
+
+    Args:
+        fig (plotly.graph_objs._figure.Figure): The Plotly figure to adjust.
+
+    Returns:
+        plotly.graph_objs._figure.Figure: The same figure, for chaining.
+    """
+    black = {"black", "#000", "#000000", "rgb(0,0,0)", "rgb(0, 0, 0)"}
+    fig.update_layout(template="streamlit", paper_bgcolor=None, plot_bgcolor=None)
+    for axis in list(fig.select_xaxes()) + list(fig.select_yaxes()):
+        if str(axis.linecolor).lower() in black:
+            axis.linecolor = None
+        if str(axis.tickcolor).lower() in black:
+            axis.tickcolor = None
+    for annotation in fig.layout.annotations:
+        if str(annotation.font.color).lower() in black:
+            annotation.font.color = None
+    return fig
+
+
 def show_fig(
     fig,
     download_name: str,
@@ -1101,6 +1154,7 @@ def show_fig(
     Returns:
         None
     """
+    follow_app_theme(fig)
     if not selection_session_state_key:
         st.plotly_chart(
             fig,

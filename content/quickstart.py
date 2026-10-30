@@ -1,7 +1,7 @@
 from pathlib import Path
 import streamlit as st
 
-from src.common.common import page_setup, v_space
+from src.common.common import page_setup, themed_asset, v_space
 
 page_setup(page="main")
 
@@ -98,8 +98,8 @@ def apply_download_box_styling(container_key):
         f"""
         <style>
         .st-key-{container_key} {{
-            background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%) !important;
-            border: 1px solid #e0e0e0 !important;
+            background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%) !important;
+            border: 1px solid rgba(128, 128, 128, 0.3) !important;
             border-radius: 8px !important;
             padding: 1.5rem !important;
             margin: 1rem 0 !important;
@@ -158,6 +158,22 @@ def render_download_boxes_responsive():
             apply_download_box_styling("flash_cli_tools_container")
 
 
+def inject_theme_colors():
+    """Define the accent and body text colors for the active light or dark theme."""
+    dark = st.context.theme.type == "dark"
+    st.markdown(
+        f"""
+        <style>
+        :root {{
+            --fa-accent: {"#7d8ce8" if dark else "#29379b"};
+            --fa-body-text: {"#c9ccd3" if dark else "#495057"};
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def inject_workflow_button_css():
     """Inject CSS for custom workflow button styling with responsive design."""
     st.markdown(
@@ -165,8 +181,8 @@ def inject_workflow_button_css():
         <style>
         /* Main workflow button styling */
         .workflow-button {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border: 2px solid #dee2e6;
+            background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%);
+            border: 2px solid rgba(128, 128, 128, 0.3);
             border-radius: 12px;
             padding: 2rem 1.5rem;
             text-align: center;
@@ -236,7 +252,7 @@ def inject_workflow_button_css():
         .workflow-title {
             font-size: clamp(1.25rem, 2.5vw, 2rem);
             font-weight: 700;
-            color: #29379b;
+            color: var(--fa-accent);
             margin-bottom: clamp(0.375rem, 0.75vh, 0.75rem);
             transition: color 0.3s ease;
         }
@@ -250,8 +266,8 @@ def inject_workflow_button_css():
         
         /* Enhanced download section */
         .download-section {
-            background: linear-gradient(135deg, #f1f3f4 0%, #e8eaed 100%);
-            border: 2px solid #dadce0;
+            background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%);
+            border: 2px solid rgba(128, 128, 128, 0.3);
             border-radius: 12px;
             padding: 2rem;
             margin: 2rem 0;
@@ -259,7 +275,7 @@ def inject_workflow_button_css():
         }
         
         .download-section h3 {
-            color: #29379b;
+            color: var(--fa-accent);
             margin-bottom: 1rem;
             font-size: 1.5rem;
             font-weight: 700;
@@ -274,7 +290,7 @@ def inject_workflow_button_css():
         .hero-title {
             font-size: 2.5rem;
             font-weight: 700;
-            color: #29379b;
+            color: var(--fa-accent);
             margin-bottom: 1rem;
         }
         
@@ -288,7 +304,7 @@ def inject_workflow_button_css():
         .footer-section {
             margin-top: 3rem;
             padding-top: 2rem;
-            border-top: 1px solid #dee2e6;
+            border-top: 1px solid rgba(128, 128, 128, 0.3);
         }
         
         /* Responsive design with dynamic scaling */
@@ -411,8 +427,8 @@ def create_navigation_button(emoji, title, subtitle, page_path):
         <style>
         /* Target the specific button using key-based selector */
         .st-key-{button_key} button {{
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
-            border: 2px solid #dee2e6 !important;
+            background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%) !important;
+            border: 2px solid rgba(128, 128, 128, 0.3) !important;
             border-radius: 12px !important;
             padding: 2rem 1.5rem !important;
             height: max(280px, 20vh) !important;
@@ -420,7 +436,7 @@ def create_navigation_button(emoji, title, subtitle, page_path):
             box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
             transition: all 0.3s ease !important;
             margin-bottom: 1rem !important;
-            color: #29379b !important;
+            color: var(--fa-accent) !important;
             font-size: clamp(1.25rem, 2.5vw, 1.5rem) !important;
             white-space: nowrap !important;
             overflow: hidden !important;
@@ -436,7 +452,7 @@ def create_navigation_button(emoji, title, subtitle, page_path):
         }}
         
         .st-key-{button_key} button p {{
-            color: #29379b !important;
+            color: var(--fa-accent) !important;
             font-size: clamp(1.25rem, 2.5vw, 1.5rem) !important;
             white-space: nowrap !important;
             overflow: hidden !important;
@@ -528,7 +544,7 @@ def render_workflow_selection():
         )
     
     with logo_col:
-        st.image("assets/flashapp-icon-light.svg", width=160)
+        st.image(themed_asset("assets/flashapp-icon-light.svg", "assets/flashapp-icon.svg"), width=160)
     
     st.markdown("</div>", unsafe_allow_html=True)
     
@@ -589,16 +605,16 @@ def render_whats_new():
             </div>
             <style>
             .whats-new {
-                background: linear-gradient(135deg, #f8f9fa 0%, #eef0fb 100%);
-                border: 1px solid #dee2e6;
-                border-left: 5px solid #29379b;
+                background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%);
+                border: 1px solid rgba(128, 128, 128, 0.3);
+                border-left: 5px solid var(--fa-accent);
                 border-radius: 12px;
                 padding: 1.5rem 2rem;
                 margin: 1.5rem 0 0.5rem 0;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             }
             .whats-new h3 {
-                color: #29379b;
+                color: var(--fa-accent);
                 font-size: 1.4rem;
                 font-weight: 700;
                 margin: 0 0 1rem 0;
@@ -613,7 +629,7 @@ def render_whats_new():
                 flex: 1 1 260px;
             }
             .whats-new h4 {
-                color: #29379b;
+                color: var(--fa-accent);
                 font-size: 1.05rem;
                 font-weight: 600;
                 margin: 0 0 0.5rem 0;
@@ -622,7 +638,7 @@ def render_whats_new():
             .whats-new ul {
                 margin: 0;
                 padding-left: 1.2rem;
-                color: #495057;
+                color: var(--fa-body-text);
             }
             .whats-new li {
                 margin-bottom: 0.35rem;
@@ -647,6 +663,7 @@ def render_enhanced_download_section():
 def main():
     """Main function to render the quickstart page."""
     # Inject custom CSS
+    inject_theme_colors()
     inject_workflow_button_css()
     
     # Render main sections
