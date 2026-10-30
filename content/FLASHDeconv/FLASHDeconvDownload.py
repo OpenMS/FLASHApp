@@ -4,13 +4,18 @@ from pathlib import Path
 from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
 
-from src.common.common import page_setup
+from src.common.common import page_setup, export_files, export_folder_input
 from src.workflow.FileManager import FileManager
 
 
 page_setup()
 
-st.title('Download')
+# A local install exports each result set to a folder on disk instead of
+# downloading it as a ZIP.
+local = st.session_state.location == "local"
+st.title('Export' if local else 'Download')
+if local:
+    export_dir = export_folder_input('results-export')
 
 file_manager = FileManager(
     st.session_state["workspace"],
@@ -32,7 +37,7 @@ else:
     # Table Header
     columns = st.columns([1.1, 1, 1])
     columns[0].write('**Name**')
-    columns[1].write('**Download**')
+    columns[1].write('**Export**' if local else '**Download**')
     columns[2].write('**Delete Result Set**')
 
     # Table Body
@@ -88,10 +93,23 @@ else:
         
         # Download
         with columns[2]:
-            button_placeholder = st.empty()
-            
-            # Show placeholder button before download is prepared
-            clicked = button_placeholder.button('Prepare Download', key=i, use_container_width=True)
+            if local:
+                # One click copies the result set to <export folder>/<name>.
+                if st.button('📤 Export', key=i, use_container_width=True):
+                    export_files(
+                        [
+                            (Path(filepath), Path(filepath).name)
+                            for filepath in file_manager.get_all_files_except(
+                                experiment, ['download_archive']
+                            ).values()
+                        ],
+                        Path(export_dir, current_name),
+                    )
+                clicked = False
+            else:
+                button_placeholder = st.empty()
+                # Show placeholder button before download is prepared
+                clicked = button_placeholder.button('Prepare Download', key=i, use_container_width=True)
             if clicked:
                 button_placeholder.empty()
                 with st.spinner():

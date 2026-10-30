@@ -135,11 +135,14 @@ class StreamlitUI:
             name = key.replace("-", " ")
 
         c1, c2 = st.columns(2)
-        c1.markdown("**Upload file(s)**")
 
         mount_root = _mounted_data_root() if st.session_state.location == "online" else None
 
         if st.session_state.location == "local":
+            # A local install reads files straight from disk, so the browser
+            # upload widget (which streams every byte through the browser) is
+            # not offered. Files are picked from disk and copied or referenced.
+            c1.markdown("**Add file(s) from your computer**")
             c2_text, c2_checkbox = c2.columns([1.5, 1], gap="large")
             c2_text.markdown("**OR add files from local folder**")
             use_copy = c2_checkbox.checkbox(
@@ -149,13 +152,14 @@ class StreamlitUI:
                 help="Create a copy of files in workspace.",
             )
         else:
+            c1.markdown("**Upload file(s)**")
             use_copy = True
 
         # Convert file_types to a list if it's a string
         if isinstance(file_types, str):
             file_types = [file_types]
 
-        if use_copy:
+        if st.session_state.location != "local":
             with c1.form(f"{key}-upload", clear_on_submit=True):
                 # Streamlit file uploader accepts file types as a list or None.
                 # A .d folder cannot be uploaded from a browser, only a zip of it.
@@ -165,7 +169,7 @@ class StreamlitUI:
 
                 files = st.file_uploader(
                     f"{name}",
-                    accept_multiple_files=(st.session_state.location == "local"),
+                    accept_multiple_files=False,
                     type=file_type_for_uploader,
                     label_visibility="collapsed",
                 )
@@ -198,18 +202,14 @@ class StreamlitUI:
                     else:
                         st.error("Nothing to add, please upload file.")
         else:
-            # Create a temporary file to store the path to the local directories
             external_files = Path(files_dir, "external_files.txt")
-            # Check if the file exists, if not create it
-            if not external_files.exists():
-                external_files.touch()
             c1.write("\n")
             with c1.container(border=True):
                 dialog_button = st.button(
                     rf"$\textsf{{\Large 📁 Add }} \textsf{{ \Large \textbf{{{name}}} }}$",
                     type="primary",
                     use_container_width=True,
-                    key="local_browse_single",
+                    key=f"local_browse_single_{key}",
                     help="Browse for your local MS data files.",
                     disabled=not TK_AVAILABLE,
                 )
@@ -234,13 +234,24 @@ class StreamlitUI:
                     if local_files:
                         my_bar = st.progress(0)
                         for i, f in enumerate(local_files):
-                            with open(external_files, "a") as f_handle:
-                                f_handle.write(f"{f}\n")
+                            my_bar.progress((i + 1) / len(local_files))
+                            if use_copy:
+                                if os.path.isdir(f):
+                                    shutil.copytree(
+                                        f,
+                                        Path(files_dir, Path(f).name),
+                                        dirs_exist_ok=True,
+                                    )
+                                else:
+                                    shutil.copy(f, Path(files_dir, Path(f).name))
+                            else:
+                                with open(external_files, "a") as f_handle:
+                                    f_handle.write(f"{f}\n")
                         my_bar.empty()
                         st.success("Successfully added files!")
+                        st.rerun()
 
                         st.session_state["previous_dir"] = Path(local_files[0]).parent
-                        st.rerun()
 
         # Local file upload option: via directory path
         if st.session_state.location == "local":
@@ -729,10 +740,20 @@ class StreamlitUI:
         # argument is still hashed into the widget's element id. Since this method feeds
         # the persisted parameter straight back in as that argument, the id changed on
         # every interaction, the following interaction arrived under the now-stale id and
-        # was silently dropped: selecting six mzML files kept only three. Seed the widget
-        # on first render only; from then on session state owns the value.
+        # was silently dropped: selecting six mzML files kept only three. Passing it on
+        # the first render only is not enough either: the second render then has another
+        # id, and the widget restarts from its built-in default (a checkbox seeded True
+        # came back False on the next rerun). So the initial value never goes into the
+        # call; it is written to session state once, and session state owns it from then on.
         def seed(**kwargs: Any) -> dict:
-            return {} if key in st.session_state else kwargs
+            if key not in st.session_state:
+                ((arg, initial),) = kwargs.items()
+                if arg == "index":
+                    initial = options[initial] if options else None
+                elif arg == "default":
+                    initial = [v for v in (initial or []) if v in options]
+                st.session_state[key] = initial
+            return {}
 
         if widget_type == "text":
             st.text_input(name, key=key, help=help, on_change=on_change, **seed(value=value))
@@ -1529,6 +1550,9 @@ class StreamlitUI:
 
     def file_upload_section(self, custom_upload_function) -> None:
         custom_upload_function()
+        # A local install already has the input files on disk.
+        if st.session_state.location == "local":
+            return
         c1, _ = st.columns(2)
         if c1.button("⬇️ Download files", use_container_width=True):
             self.zip_and_download_files(Path(self.workflow_dir, "input-files"))

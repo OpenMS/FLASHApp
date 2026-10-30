@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.Workflow import DeconvWorkflow
 from src.parse.deconv import parseDeconv
-from src.common.common import page_setup, save_params
+from src.common.common import page_setup, save_params, local_folder_files
 
 
 params = page_setup()
@@ -51,7 +51,7 @@ with t[3]:
                 experiment = file.name[:-len(suffix)].rstrip('_')
                 if experiment in ('', tool_prefix):
                     experiment = default_dataset
-                wf.file_manager.store_file(experiment, name_tag, file)
+                wf.file_manager.store_file(experiment, name_tag, file, remove=False)
                 break
             else:
                 st.warning(f'Invalid file : {file.name}')
@@ -89,30 +89,45 @@ with t[3]:
         """
         **💡 How to upload files**
 
-        1. Browse files on your computer or drag and drops files
-        2. Click the **Add the uploaded files** button to use them in the workflows
+        {step1}
+        {step2} to use them in the workflows
 
         Select data for analysis from the uploaded files shown below.
 
         **💡 Make sure that the same number of deconvolved and annotated mzML files are uploaded!**
-        """
+        """.format(
+        step1="1. Enter the folder with the files (or pick it with 📁)" if st.session_state.location == "local"
+        else "1. Browse files on your computer or drag and drops files",
+        step2="2. Click the **Add files from folder** button" if st.session_state.location == "local"
+        else "2. Click the **Add files to workspace** button",
     )
-    with st.form('input_files', clear_on_submit=True):
-        uploaded_files = st.file_uploader(
-            "FLASHDeconv output mzML files or TSV files", accept_multiple_files=True, type=["mzML", "tsv"]
+    )
+    if st.session_state.location == "local":
+        # A local install reads the files from a folder instead of uploading them.
+        local_files = local_folder_files(
+            "deconv-results", "FLASHDeconv output files",
+            tuple(suffix for suffix, _, _ in UPLOAD_FILE_TYPES),
         )
-        _, c2, _ = st.columns(3)
-        if c2.form_submit_button("Add files to workspace", type="primary"):
-            if uploaded_files:
-                # A list of files is required, since online allows only single upload, create a list
-                if type(uploaded_files) != list:
-                    uploaded_files = [uploaded_files]
+        if local_files:
+            process_uploaded_files(local_files)
+            st.success("Successfully added files!")
+    else:
+        with st.form('input_files', clear_on_submit=True):
+            uploaded_files = st.file_uploader(
+                "FLASHDeconv output mzML files or TSV files", accept_multiple_files=True, type=["mzML", "tsv"]
+            )
+            _, c2, _ = st.columns(3)
+            if c2.form_submit_button("Add files to workspace", type="primary"):
+                if uploaded_files:
+                    # A list of files is required, since online allows only single upload, create a list
+                    if type(uploaded_files) != list:
+                        uploaded_files = [uploaded_files]
 
-                # opening file dialog and closing without choosing a file results in None upload
-                process_uploaded_files(uploaded_files)
-                st.success("Successfully added uploaded files!")
-            else:
-                st.warning("Upload some files before adding them.")
+                    # opening file dialog and closing without choosing a file results in None upload
+                    process_uploaded_files(uploaded_files)
+                    st.success("Successfully added uploaded files!")
+                else:
+                    st.warning("Upload some files before adding them.")
 
     # File Upload Table
     experiments = (

@@ -11,12 +11,14 @@ on:
 # Define needed TOPP tools here. FileConverter converts Thermo .raw input
 # (CommandExecutor.convert_to_mzml) with share/OpenMS/THIRDPARTY/ThermoRawFileParser.
 env:
-  TOPP_TOOLS: "FLASHDeconv FLASHTnT DecoyDatabase FileConverter"
+  TOPP_TOOLS: "FLASHDeconv FLASHTnT FLASHAnnotator DecoyDatabase FileConverter"
   OPENMS_VERSION: 3.5.0
   PYTHON_VERSION: 3.11.0
   # Name of the installer
   APP_NAME: FLASHApp-1.1.0
-  APP_UpgradeCode: "69ae44ad-d554-4e3c-8715-7c4daf60f8bb"
+  # Electron app name without the version, so the install folder and the
+  # workspaces in %APPDATA%\FLASHApp stay the same across upgrades.
+  ELECTRON_NAME: FLASHApp
 
 jobs:
   build-vue-js-component:
@@ -51,14 +53,18 @@ jobs:
         path: openms-streamlit-vue-component/dist
 
   build-openms:
-    runs-on: windows-2022
+    # The latest OpenMS/contrib Windows release is built on Windows Server 2025
+    # with Visual Studio 2026; linking it with an older MSVC fails on missing STL
+    # symbols (__std_rotate, __std_unique_4, ...).
+    runs-on: windows-2025
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
       with:
         repository: t0mdavid-m/OpenMS
-        ref: FVdeploy
+        # Same branch as the Docker image (Dockerfile OPENMS_BRANCH); it has FLASHAnnotator.
+        ref: FDmerge
         path: 'OpenMS'
 
     - name: Install Qt (Windows)
@@ -80,6 +86,8 @@ jobs:
       run: |
         choco install ccache ninja -y --no-progress
         choco install cmake --version=3.31.1 -y --no-progress --force
+        # FDmerge no longer finds Eigen in contrib; its own CI installs it from choco.
+        choco install eigen -y --no-progress
         ## GH CLI "SHOULD BE" installed. Sometimes I had to manually install nonetheless. Super weird.
         # https://github.com/actions/runner-images/blob/main/images/win/scripts/Installers/Install-GitHub-CLI.ps1
         echo "C:/Program Files (x86)/GitHub CLI" >> $GITHUB_PATH
@@ -100,7 +108,8 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ${{ github.workspace }}/OpenMS/contrib
-        key: ${{ runner.os }}-contrib-${{ env.OPENMS_CONTRIB_VERSION || env.OPENMS_VERSION }}
+        # FDmerge builds against the latest contrib release, as its own CI does.
+        key: ${{ runner.os }}-contrib-latest-${{ hashFiles('OpenMS/vcpkg.json') }}
 
     - name: Load contrib build
       if: steps.cache-contrib-win.outputs.cache-hit != 'true'
@@ -109,7 +118,7 @@ jobs:
       run: |
         cd OpenMS/contrib
         # Download the file using the URL fetched from GitHub
-        gh release download release/${{ env.OPENMS_CONTRIB_VERSION || env.OPENMS_VERSION }} -R OpenMS/contrib --pattern 'contrib_build-Windows.tar.gz'
+        gh release download -R OpenMS/contrib --pattern 'contrib_build-Windows.tar.gz'
         # Extract the archive
         tar -xzf contrib_build-Windows.tar.gz
         rm contrib_build-Windows.tar.gz
@@ -121,8 +130,8 @@ jobs:
         # Add contrib library path for runtime DLL resolution
         echo "${{ github.workspace }}/OpenMS/contrib/lib" >> $GITHUB_PATH
 
-    - name: Setup ccache cache
-      uses: actions/cache@v3
+    - name: Restore ccache cache
+      uses: actions/cache/restore@v4
       with:
         path: .ccache
         key: ${{ runner.os }}-ccache-${{ env.RUN_NAME }}-${{ github.run_number }}
@@ -154,8 +163,16 @@ jobs:
       shell: bash
       run: |
           mkdir $GITHUB_WORKSPACE/OpenMS/bld/
-          bash OpenMS/tools/ci/capture-env.sh -v $GITHUB_WORKSPACE/OpenMS/bld/CMakeCache.txt
+          set +e
           ctest --output-on-failure -V -S $GITHUB_WORKSPACE/OpenMS/tools/ci/cibuild.cmake
+          retVal=$?
+          if [ $retVal -ne 0 ]; then
+            # The errors otherwise only reach CDash.
+            echo "::group::Compiler errors"
+            find $GITHUB_WORKSPACE/OpenMS/bld/Testing -name "LastBuild*" -type f -exec grep -n -B2 -A12 -E "error C[0-9]+|error LNK|fatal error|FAILED:" {} \; | head -n 600
+            echo "::endgroup::"
+          fi
+          exit $retVal
       env:
           OPENMS_CONTRIB_LIBS: "${{ github.workspace }}/OpenMS/contrib"
           CI_PROVIDER: "GitHub-Actions"
@@ -163,14 +180,24 @@ jobs:
           SOURCE_DIRECTORY: "${{ github.workspace }}/OpenMS"
           BUILD_NAME: "${{ env.RUN_NAME }}-Win64-class-topp-${{ github.run_number }}"
           ENABLE_STYLE_TESTING: "OFF"
-          ENABLE_TOPP_TESTING: "ON"
-          ENABLE_CLASS_TESTING: "ON"
+          # Only the TOPP tools are packaged; building the tests would double the build time.
+          ENABLE_TOPP_TESTING: "OFF"
+          ENABLE_CLASS_TESTING: "OFF"
           WITH_GUI: "OFF"
+          CMAKE_PREFIX_PATH: "${{ env.QT_ROOT_DIR }}/lib/cmake;${{ env.QT_ROOT_DIR }}"
+          Eigen3_DIR: 'C:\ProgramData\chocolatey\lib\eigen\share\cmake'
+          USE_EXTERNAL_JSON: "OFF"
+          # The parameter docs run the freshly built tools during the build and are not shipped.
+          ENABLE_DOCS: "OFF"
           WITH_PARQUET: "OFF"
           ADDRESS_SANITIZER: "Off"
           BUILD_TYPE: "Release"
           OPENMP: "On"
           USE_STATIC_BOOST: "On"
+          # FDmerge's cibuild.cmake reads these names instead of the three above.
+          CMAKE_BUILD_TYPE: "Release"
+          MT_ENABLE_OPENMP: "ON"
+          BOOST_USE_STATIC: "ON"
           #  BUILD_FLAGS: "-p:CL_MPCount=2" # For VS Generator and MSBuild
           BUILD_FLAGS: "-j4" # Ninja will otherwise use all cores (doesn't go well in GHA)
           CMAKE_CCACHE_EXE: "ccache"
@@ -179,6 +206,14 @@ jobs:
           CCACHE_COMPRESS: true
           CCACHE_COMPRESSLEVEL: 12
           CCACHE_MAXSIZE: 400M
+
+    - name: Save ccache cache
+      # Also after a failed build, so the next attempt does not start cold.
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: .ccache
+        key: ${{ runner.os }}-ccache-${{ env.RUN_NAME }}-${{ github.run_number }}-${{ github.run_attempt }}
 
     - name: Package
       shell: bash
@@ -206,6 +241,21 @@ jobs:
         name: openms-package
         path: ${{ github.workspace }}/OpenMS/bld/*.zip
 
+    - name: Collect the MSVC runtime the tools were built with
+      # Shipped next to the TOPP tools, so they do not depend on an older
+      # VC++ redistributable installed on the user's machine.
+      shell: bash
+      run: |
+        mkdir vc-runtime
+        redist=$(cygpath -u "$VCToolsRedistDir")
+        cp -v "$redist"/x64/Microsoft.VC*.CRT/*.dll "$redist"/x64/Microsoft.VC*.OpenMP/*.dll vc-runtime/
+
+    - name: Upload MSVC runtime as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: vc-runtime
+        path: vc-runtime
+
   build-executable:
     runs-on: windows-2022
     needs: [build-openms, build-vue-js-component]
@@ -222,10 +272,14 @@ jobs:
 
     - name: Set Version in settings.json
       run: |
+        # Only release builds carry a tag; other builds keep settings.json's
+        # version instead of blanking it in the app's sidebar.
         $VERSION="${{ github.event.release.tag_name }}"
-        $content = Get-Content -Raw settings.json | ConvertFrom-Json
-        $content.version = $VERSION
-        $content | ConvertTo-Json -Depth 100 | Set-Content settings.json
+        if ($VERSION) {
+          $content = Get-Content -Raw settings.json | ConvertFrom-Json
+          $content.version = $VERSION
+          $content | ConvertTo-Json -Depth 100 | Set-Content settings.json
+        }
 
     - name: Download package as artifact
       uses: actions/download-artifact@v4
@@ -239,6 +293,12 @@ jobs:
         unzip "*.zip" -d .
         cp -r openms-package/bin ../openms-bin
         cp -r openms-package/share ../share
+
+    - name: Download MSVC runtime as artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: vc-runtime
+        path: openms-bin
 
     - name: Set up Python (regular distribution)
       uses: actions/setup-python@v5
@@ -286,27 +346,6 @@ jobs:
         $content.online_deployment = $false
         $content | ConvertTo-Json -Depth 100 | Set-Content settings.json
 
-    - name: Create .bat file
-      run: |
-        echo '@echo off' > ${{ env.APP_NAME }}.bat
-        echo 'setlocal EnableDelayedExpansion' > ${{ env.APP_NAME }}.bat
-        echo '' >> ${{ env.APP_NAME }}.bat
-        echo 'REM Set OpenMS data path for TOPP tools' >> ${{ env.APP_NAME }}.bat
-        echo 'set OPENMS_DATA_PATH=%~dp0share\OpenMS' >> ${{ env.APP_NAME }}.bat
-        echo '' >> ${{ env.APP_NAME }}.bat
-        echo 'REM Add each subfolder in share\OpenMS\THIRDPARTY to PATH' >> ${{ env.APP_NAME }}.bat
-        echo 'for /D %%D in ("%OPENMS_DATA_PATH%\THIRDPARTY\*") do (' >> ${{ env.APP_NAME }}.bat
-        echo '    set "PATH=!PATH!;%%D"' >> ${{ env.APP_NAME }}.bat
-        echo ')' >> ${{ env.APP_NAME }}.bat
-        echo '' >> ${{ env.APP_NAME }}.bat
-        echo 'REM Create .streamlit directory in user''s home if it doesn''t exist' >> ${{ env.APP_NAME }}.bat
-        echo 'if not exist "%USERPROFILE%\.streamlit" mkdir "%USERPROFILE%\.streamlit"' >> ${{ env.APP_NAME }}.bat
-        echo '' >> ${{ env.APP_NAME }}.bat
-        echo 'REM Create credentials.toml with empty email to disable email prompt' >> ${{ env.APP_NAME }}.bat
-        echo 'copy /Y ".streamlit\credentials.toml" "%USERPROFILE%\.streamlit\credentials.toml" > nul' >> ${{ env.APP_NAME }}.bat
-        echo '' >> ${{ env.APP_NAME }}.bat
-        echo 'start /min .\python-${{ env.PYTHON_VERSION }}\python -m streamlit run app.py local' >> ${{ env.APP_NAME }}.bat
-
     - name: Create All-in-one executable folder
       run: |
         mkdir streamlit_exe
@@ -324,7 +363,8 @@ jobs:
         cp app.py streamlit_exe
         cp settings.json streamlit_exe
         cp default-parameters.json streamlit_exe
-        cp ${{ env.APP_NAME }}.bat streamlit_exe
+        # Parameter presets of the workflows; without it the preset buttons are missing.
+        if (Test-Path presets.json) { cp presets.json streamlit_exe }
 
         $files = $env:TOPP_TOOLS -split ' '
         foreach ($file in $files) {
@@ -335,166 +375,90 @@ jobs:
       run: |
         (Get-Content streamlit_exe/.streamlit/config.toml) -notmatch '^address' | Set-Content streamlit_exe/.streamlit/config.toml
 
-    - name: Generate Readme.txt
-      shell: bash
-      run: |
-        cat <<EOF > streamlit_exe/Readme.txt
-        Welcome to ${{ env.APP_NAME }} app!
+    - name: Set up Node.js for the Electron installer
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: electron/package-lock.json
 
-        To launch the application:
-        1. Navigate to the installation directory.
-        2. Double-click on the file: ${{ env.APP_NAME }}.bat or ${{ env.APP_NAME }} shortcut.
+    - name: Build Electron installer
+      # Wraps the folder in the Electron shell (electron/) as a per-user NSIS
+      # installer that needs no admin rights.
+      run: |
+        Copy-Item -Recurse streamlit_exe electron/payload
+        # electron-builder needs a semver version; take it from settings.json.
+        $version = (Get-Content -Raw settings.json | ConvertFrom-Json).version
+        if ("${{ github.event.release.tag_name }}" -match '(\d+)(?:\.(\d+))?(?:\.(\d+))?') {
+          $version = "$($Matches[1]).$(if ($Matches[2]) { $Matches[2] } else { 0 }).$(if ($Matches[3]) { $Matches[3] } else { 0 })"
+        }
+        if ($version -notmatch '^\d+\.\d+\.\d+$') { $version = "1.0.0" }
+        cd electron
+        npm ci
+        npx electron-builder --win nsis --publish never `
+          "-c.productName=${{ env.ELECTRON_NAME }}" `
+          "-c.appId=de.openms.${{ env.ELECTRON_NAME }}" `
+          "-c.extraMetadata.productName=${{ env.ELECTRON_NAME }}" `
+          "-c.extraMetadata.version=$version" `
+          ('-c.nsis.artifactName=${{ env.APP_NAME }}-Setup.${ext}')
 
-        Additional Information:
-        - If multiple Streamlit apps are running, you can change the port in the .streamlit/config.toml file.
-          Example:
-            [server]
-            port = 8502
+    - name: Smoke test Electron installer
+      # Installs silently, then checks pyOpenMS, every TOPP tool and the
+      # Streamlit server with the shell's environment, and finally launches the
+      # installed app, which exits 0 once the page has created a workspace.
+      run: |
+        Start-Process -FilePath "electron/dist/${{ env.APP_NAME }}-Setup.exe" -ArgumentList "/S" -Wait
+        $inst = Join-Path $env:LOCALAPPDATA "Programs/${{ env.ELECTRON_NAME }}"
+        node electron/scripts/smoke-payload.js "$inst/resources/app-payload" @($env:TOPP_TOOLS -split ' ')
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-        Reach out to us:
-        - Join our Discord server for support and community discussions: https://discord.com/invite/4TAGhqJ7s5
-        - Contribute or stay updated with the latest OpenMS web app developments on GitHub: https://github.com/OpenMS/streamlit-template
-        - Visit our website for more information: https://openms.de/
-        
-        Thank you for using ${{ env.APP_NAME }}!
-        EOF
-        
-    - name: Install WiX Toolset
-      run: |
-        curl -LO https://github.com/wixtoolset/wix3/releases/download/wix3111rtm/wix311-binaries.zip
-        unzip wix311-binaries.zip -d wix
-        rm wix311-binaries.zip
-    
-    - name: Build .wxs for streamlit_exe folder
-      run: |
-        ./wix/heat.exe dir streamlit_exe -gg -sfrag -sreg -srd -template component -cg StreamlitExeFiles -dr AppSubFolder -out streamlit_exe_files.wxs
-    
-    - name: Generate VBScript file
-      shell: bash
-      run: |
-        cat <<EOF > ShowSuccessMessage.vbs
-        MsgBox "The ${{ env.APP_NAME }} application is successfully installed.", vbInformation, "Installation Complete"
-        EOF
+        $env:OPENMS_APP_SMOKE_TEST = "1"
+        $app = Start-Process -FilePath "$inst/${{ env.ELECTRON_NAME }}.exe" -PassThru
+        if (-not $app.WaitForExit(300000)) { Stop-Process -Id $app.Id -Force; throw "Electron app did not finish its smoke test" }
+        $log = Join-Path $env:APPDATA "${{ env.ELECTRON_NAME }}/logs/streamlit.log"
+        if (Test-Path $log) { Get-Content $log }
+        if ($app.ExitCode -ne 0) { throw "Electron app smoke test failed with exit code $($app.ExitCode)" }
 
-    - name: Prepare SourceDir
+    - name: End-to-end test in the Electron window
+      # Drives the installed app with Playwright: opens every page, runs the
+      # FLASHDeconv and FLASHTnT workflows (incl. FLASHAnnotator) on the
+      # example data, and checks that each Viewer draws its plots and tables.
       run: |
-        mkdir SourceDir
-        mv streamlit_exe/* SourceDir
-        cp ShowSuccessMessage.vbs SourceDir
-        cp assets/openms_license.rtf SourceDir
-        # Logo of app
-        cp assets/openms.ico SourceDir
-        
-    - name: Generate WiX XML file
-      shell: bash
-      run: |
-        cat <<EOF > streamlit_exe.wxs
-        <?xml version="1.0"?>
-        <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-          <Product Id="*" Name="${{ env.APP_NAME }}" Language="1033" Version="1.0.0.0" Codepage="1252" Manufacturer="OpenMS Developer Team" UpgradeCode="${{ env.APP_UpgradeCode }}">
-            <Package Id="*" InstallerVersion="300" Compressed="yes" InstallPrivileges="elevated" Platform="x64" />
-            <MediaTemplate EmbedCab="yes" MaximumUncompressedMediaSize="200" CabinetTemplate="data{0}.cab" />
-        
-            <!-- Folder structure -->
-            <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-            <Directory Id="TARGETDIR" Name="SourceDir">
-              <Directory Id="ProgramFilesFolder"> 
-                <Directory Id="INSTALLFOLDER" Name="${{ env.APP_NAME }}">
-                  <Directory Id="AppSubFolder" Name="${{ env.APP_NAME }}" /> 
-                  <Component Id="CreateAppFolder" Guid="95dbfa06-d36a-427f-995c-e87769ac2e59">
-                    <CreateFolder>
-                      <Permission User="Everyone" GenericAll="yes" />
-                    </CreateFolder>
-                  </Component>
-                </Directory>
-              </Directory>
-              <Directory Id="DesktopFolder" />
-            </Directory>
-        
-            <!-- Add components -->
-            <Feature Id="MainFeature" Title="Main Application" Level="1">
-              <ComponentGroupRef Id="StreamlitExeFiles" />
-              <ComponentRef Id="CreateAppFolder" />
-              <ComponentRef Id="DesktopShortcutComponent" />
-              <ComponentRef Id="InstallDirShortcutComponent" />
-            </Feature>
-        
-            <!-- Create shortcut for running app on desktop -->
-            <Component Id="DesktopShortcutComponent" Guid="3597b243-9180-4d0b-b105-30d8b0d1a334" Directory="DesktopFolder">
-              <Shortcut Id="DesktopShortcut" Name="${{ env.APP_NAME }}" Description="Launch ${{ env.APP_NAME }}" Target="[AppSubFolder]${{ env.APP_NAME }}.bat" WorkingDirectory="AppSubFolder" Icon="AppIcon" />
-              <RegistryValue Root="HKCU" Key="Software\\OpenMS\\${{ env.APP_NAME }}" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
-            </Component>
-        
-            <!-- Create shortcut for running app in installer folder -->
-            <Component Id="InstallDirShortcutComponent" Guid="c2df9472-3b45-4558-a56d-6034cf7c8b72" Directory="AppSubFolder">
-              <Shortcut Id="InstallDirShortcut" Name="${{ env.APP_NAME }}" Description="Launch ${{ env.APP_NAME }}" Target="[AppSubFolder]${{ env.APP_NAME }}.bat" WorkingDirectory="AppSubFolder" Icon="AppIcon" />
-              <RegistryValue Root="HKCU" Key="Software\\OpenMS\\${{ env.APP_NAME }}" Name="InstallFolderShortcut" Type="integer" Value="1" KeyPath="yes" />
-            </Component>
-        
-            <!-- Provide icon here; it should exist in the SourceDir folder -->
-            <Icon Id="AppIcon" SourceFile="SourceDir/openms.ico" />
-        
-            <!-- Run app directly after installation -->
-            <!-- <CustomAction Id="RunApp" Directory="AppSubFolder" Execute="deferred" Return="asyncNoWait" Impersonate="no"
-                          ExeCommand="cmd.exe /c &quot;[AppSubFolder]${{ env.APP_NAME }}.bat&quot;" /> -->
-            
-            <!-- Custom Action to Show Success Message -->
-            <Binary Id="ShowMessageScript" SourceFile="SourceDir/ShowSuccessMessage.vbs" />
-            <CustomAction Id="ShowSuccessMessage" BinaryKey="ShowMessageScript" VBScriptCall="" Execute="immediate" Return="check" />
-        
-            <!-- Add all Custom Actions -->
-            <InstallExecuteSequence>
-              <!-- Custom action display success message -->
-              <Custom Action="ShowSuccessMessage" After="InstallFinalize">NOT Installed</Custom>
-              <!-- Run app directly after installation -->
-              <!-- <Custom Action="RunApp" Before="InstallFinalize">NOT REMOVE</Custom> -->
-            </InstallExecuteSequence>
-        
-            <!-- Interface options -->
-            <UI>
-                  <UIRef Id="WixUI_InstallDir" />
-                  <UIRef Id="WixUI_ErrorProgressText" />
-            </UI> 
-        
-            <!-- Provide license; it should exist in the SourceDir folder -->
-            <WixVariable Id="WixUILicenseRtf" Value="SourceDir/openms_license.rtf" />
-          </Product>
-        </Wix>
-        EOF
+        $inst = Join-Path $env:LOCALAPPDATA "Programs/${{ env.ELECTRON_NAME }}"
+        node electron/scripts/e2e.js --exe "$inst/${{ env.ELECTRON_NAME }}.exe" --out e2e-output --scenario tests/e2e/electron-workflows.js
+        $code = $LASTEXITCODE
+        $log = Join-Path $env:APPDATA "${{ env.ELECTRON_NAME }}/logs/streamlit.log"
+        if (Test-Path $log) { Get-Content $log -Tail 200 }
+        exit $code
 
-    - name: Build .wixobj file with candle.exe
-      run: |
-        ./wix/candle.exe streamlit_exe.wxs streamlit_exe_files.wxs
-        
-    - name: Link .wixobj file into .msi with light.exe
-      run: |
-        ./wix/light.exe -ext WixUIExtension -sice:ICE60 -o ${{ env.APP_NAME }}.msi streamlit_exe_files.wixobj streamlit_exe.wixobj
-
-    - name: Compress Installer
-      run: |
-        7z a OpenMS-App.zip ${{ env.APP_NAME }}.msi
-
-    - name: Archive build artifacts
+    - name: Archive end-to-end screenshots
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: OpenMS-App
-        path: OpenMS-App.zip
+        name: electron-e2e-screenshots
+        path: e2e-output
+        if-no-files-found: ignore
 
-    - name: Upload artifact as release asset
+    - name: Archive Electron installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: OpenMS-App-Electron
+        path: electron/dist/${{ env.APP_NAME }}-Setup.exe
+
+    - name: Upload Electron installer as release asset
       if: ${{ github.event_name == 'release' }}
-      id: upload-release
       uses: actions/upload-release-asset@v1
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: OpenMS-App.zip
-        asset_name: OpenMS-App.zip
-        asset_content_type: application/zip
+        asset_path: electron/dist/${{ env.APP_NAME }}-Setup.exe
+        asset_name: ${{ env.APP_NAME }}-Setup.exe
+        asset_content_type: application/vnd.microsoft.portable-executable
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-web-image:
     # On a published Release, run the full Build-and-Test pipeline AFTER the
-    # Windows installer (OpenMS-App.zip) has been uploaded as a release asset,
+    # Windows installer (<APP_NAME>-Setup.exe) has been uploaded as a release asset,
     # so the Docker build's `gh release download` bundles the matching
     # installer. build-and-test.yml builds the image, runs the apptainer +
     # nginx + traefik integration tests, and only then stitches and pushes the

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.Workflow import QuantWorkflow
 from src.parse.quant import parseQuant
-from src.common.common import page_setup
+from src.common.common import page_setup, local_folder_files
 
 
 # page initialization
@@ -23,15 +23,15 @@ def process_uploaded_files(uploaded_files):
             if file.name.endswith("tsv"):
                 if file.name.endswith('.mts.tsv'):
                     wf.file_manager.store_file(
-                        file.name.split('.mts.tsv')[0], 'trace_tsv', file
+                        file.name.split('.mts.tsv')[0], 'trace_tsv', file, remove=False
                     )
                 elif file.name.endswith('_shared.tsv'):
                     wf.file_manager.store_file(
-                        file.name.split('_shared.tsv')[0], 'conflict_tsv', file
+                        file.name.split('_shared.tsv')[0], 'conflict_tsv', file, remove=False
                     )
                 elif file.name.endswith('.tsv'):
                     wf.file_manager.store_file(
-                        file.name.split('.tsv')[0], 'quant_tsv', file
+                        file.name.split('.tsv')[0], 'quant_tsv', file, remove=False
                     )
                 else:
                     st.warning(f'Invalid file : {file.name}')
@@ -76,33 +76,45 @@ st.info(
     """
 **💡 How to upload files**
 
-1. Browse files on your computer or drag and drops files
-2. Click the **Add the uploaded quant files** button to use them in the workflows
+{step1}
+{step2} to use them in the workflows
 
 Select data for analysis from the uploaded files shown below.
 
 **💡 Make sure that the same number of FLASHQuant result files (\*fq.tsv and \*fq.mts.tsv) are uploaded!**
 
 **💡 To visualize conflict resolution, \*fq_shared.tsv files should be uploaded**
-"""
+""".format(
+    step1="1. Enter the folder with the files (or pick it with 📁)" if st.session_state.location == "local"
+    else "1. Browse files on your computer or drag and drops files",
+    step2="2. Click the **Add files from folder** button" if st.session_state.location == "local"
+    else "2. Click the **Add files to workspace** button",
 )
-with st.form('files_uploader_form', clear_on_submit=True):
-    uploaded_files = st.file_uploader(
-        "FLASHQuant output files", accept_multiple_files=True
-    )
-    _, c2, _ = st.columns(3)
-    # User needs to click button to upload selected files
-    if c2.form_submit_button("Add files to workspace", type="primary"):
-            if uploaded_files:
-                # A list of files is required, since online allows only single upload, create a list
-                if type(uploaded_files) != list:
-                    uploaded_files = [uploaded_files]
+)
+if st.session_state.location == "local":
+    # A local install reads the files from a folder instead of uploading them.
+    local_files = local_folder_files("quant-results", "FLASHQuant output files", ('tsv',))
+    if local_files:
+        process_uploaded_files(local_files)
+        st.success("Successfully added files!")
+else:
+    with st.form('files_uploader_form', clear_on_submit=True):
+        uploaded_files = st.file_uploader(
+            "FLASHQuant output files", accept_multiple_files=True
+        )
+        _, c2, _ = st.columns(3)
+        # User needs to click button to upload selected files
+        if c2.form_submit_button("Add files to workspace", type="primary"):
+                if uploaded_files:
+                    # A list of files is required, since online allows only single upload, create a list
+                    if type(uploaded_files) != list:
+                        uploaded_files = [uploaded_files]
 
-                # opening file dialog and closing without choosing a file results in None upload
-                process_uploaded_files(uploaded_files)
-                st.success("Successfully added uploaded files!")
-            else:
-                st.warning("Upload some files before adding them.")
+                    # opening file dialog and closing without choosing a file results in None upload
+                    process_uploaded_files(uploaded_files)
+                    st.success("Successfully added uploaded files!")
+                else:
+                    st.warning("Upload some files before adding them.")
 
 # File Upload Table
 experiments = (

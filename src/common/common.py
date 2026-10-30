@@ -82,6 +82,25 @@ def is_safe_workspace_name(name: str) -> bool:
     return "/" not in name and "\\" not in name and name not in ("..", ".")
 
 
+def local_workspaces_dir(settings: dict) -> Path:
+    """
+    Resolve the directory holding workspaces in local mode.
+
+    ``LOCAL_WORKSPACES_DIR`` wins when set, so a desktop launcher (the
+    Electron shell) can keep workspaces in the user profile instead of next
+    to a read-only install folder. Otherwise ``workspaces_dir`` from
+    settings.json is used, falling back to the parent directory.
+    """
+    override = os.environ.get("LOCAL_WORKSPACES_DIR")
+    if override:
+        return Path(override)
+    if settings.get("workspaces_dir"):
+        return Path(
+            settings["workspaces_dir"], "workspaces-" + settings["repository-name"]
+        )
+    return Path("..")
+
+
 def get_demo_source_dirs() -> list[Path]:
     """
     Get list of demo workspace source directories from settings.
@@ -493,7 +512,7 @@ def page_setup(page: str = "") -> dict[str, Any]:
     # Set Streamlit page configurations
     st.set_page_config(
         page_title=st.session_state.settings["app-name"],
-        page_icon="assets/openms_transparent_bg_logo.svg",
+        page_icon="assets/flashapp-icon-small-light.svg",
         layout="wide",
         initial_sidebar_state="auto",
         menu_items=None,
@@ -513,7 +532,11 @@ def page_setup(page: str = "") -> dict[str, Any]:
         unsafe_allow_html=True,
     )
 
-    st.logo("assets/OpenMS.png")
+    st.logo(
+        "assets/flashapp-logo-horizontal-light.svg",
+        size="large",
+        icon_image="assets/flashapp-icon-light.svg",
+    )
 
     # Create google analytics if consent was given
     if (
@@ -601,14 +624,8 @@ def page_setup(page: str = "") -> dict[str, Any]:
         if "windows" in sys.argv:
             os.chdir("../streamlit-template")
         # Define the directory where all workspaces will be stored
-        if (
-            st.session_state.settings["workspaces_dir"]
-            and st.session_state.location == "local"
-        ):
-            workspaces_dir = Path(
-                st.session_state.settings["workspaces_dir"],
-                "workspaces-" + st.session_state.settings["repository-name"],
-            )
+        if st.session_state.location == "local":
+            workspaces_dir = local_workspaces_dir(st.session_state.settings)
         elif st.session_state.location == "online":
             workspaces_dir = Path(
                 os.environ.get("WORKSPACES_DIR", "/workspaces-streamlit-template")
@@ -699,10 +716,12 @@ def page_setup(page: str = "") -> dict[str, Any]:
         # Offline Mode: Copy all prepared workspaces
         else:
             if st.session_state.workspace.name == 'default':
-                shutil.copytree(
-                    Path('example-data', 'workspaces'), 
-                    st.session_state.workspace.parent
-                )
+                # Only the missing ones: the workspaces folder may already
+                # hold other (or edited demo) workspaces.
+                for demo in Path('example-data', 'workspaces').iterdir():
+                    target = Path(st.session_state.workspace.parent, demo.name)
+                    if demo.is_dir() and not target.exists():
+                        shutil.copytree(demo, target)
     Path(st.session_state.workspace, "mzML-files").mkdir(parents=True, exist_ok=True)
 
     # Render the sidebar
@@ -749,14 +768,8 @@ def render_sidebar(page: str = "") -> None:
         # Display workspace switcher if workspace is enabled in local mode
         if st.session_state.settings["enable_workspaces"]:
             # Workspaces directory specified in the settings.json
-            if (
-                st.session_state.settings["workspaces_dir"]
-                and st.session_state.location == "local"
-            ):
-                workspaces_dir = Path(
-                    st.session_state.settings["workspaces_dir"],
-                    "workspaces-" + st.session_state.settings["repository-name"],
-                )
+            if st.session_state.location == "local":
+                workspaces_dir = local_workspaces_dir(st.session_state.settings)
             else:
                 workspaces_dir = ".."
             # Online: show current workspace name in info text and option to change to other existing workspace
@@ -1222,6 +1235,130 @@ def tk_file_dialog(
     )
     root.destroy()
     return file_path
+
+
+def export_folder_input(key: str) -> Path:
+    """
+    Show the folder that local exports are written to, with a browse button.
+
+    The folder is kept in ``st.session_state["export_dir"]``, so every export
+    page starts from the last folder chosen. It defaults to
+    ``~/Documents/<app-name>`` and is created on the first export.
+
+    Args:
+        key (str): Prefix for the widget keys, unique on the page.
+
+    Returns:
+        Path: The chosen folder (not checked for existence).
+    """
+    if "export_dir" not in st.session_state:
+        st.session_state["export_dir"] = str(
+            Path.home() / "Documents" / st.session_state.settings["app-name"]
+        )
+    widget_key = f"{key}-export-dir"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = st.session_state["export_dir"]
+    c1, c2 = st.columns([0.05, 0.95], gap="small")
+    with c1:
+        st.write("\n")
+        st.write("\n")
+        if st.button(
+            "📁",
+            key=f"{key}-export-browse",
+            help="Choose the export folder.",
+            disabled=not TK_AVAILABLE,
+        ):
+            chosen = tk_directory_dialog(
+                "Select the export folder", st.session_state["export_dir"]
+            )
+            if chosen:
+                st.session_state[widget_key] = chosen
+    with c2:
+        folder = st.text_input("Export folder", key=widget_key)
+    st.session_state["export_dir"] = folder
+    return Path(folder).expanduser()
+
+
+def export_files(files: list[tuple[Path, Path]], target: Path) -> bool:
+    """
+    Copy files into an export folder, keeping their relative paths.
+
+    Args:
+        files (list[tuple[Path, Path]]): Pairs of (source file, path relative to ``target``).
+        target (Path): Folder to write into; created if missing.
+
+    Returns:
+        bool: True if every file was copied, otherwise False (with an error shown).
+    """
+    try:
+        with st.spinner(f"Exporting {len(files)} files..."):
+            for source, rel in files:
+                dest = Path(target, rel)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, dest)
+    except OSError as e:
+        st.error(f"Export failed: {e}")
+        return False
+    st.success(f"Exported {len(files)} files to **{target}**.")
+    return True
+
+def local_folder_files(key: str, label: str, suffixes: tuple[str, ...]) -> list[Path] | None:
+    """
+    Pick files from a folder on disk, for local installs that do not upload.
+
+    Shows a folder field with a browse button and an add button.
+
+    Args:
+        key (str): Prefix for the widget keys, unique on the page.
+        label (str): What the folder holds, e.g. "FLASHDeconv output files".
+        suffixes (tuple[str, ...]): File name endings to pick up from the folder.
+
+    Returns:
+        list[Path] | None: The matching files once the add button is clicked,
+            otherwise None.
+    """
+    widget_key = f"{key}-import-dir"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = str(st.session_state.get("local_dir", ""))
+    c1, c2 = st.columns([0.05, 0.95], gap="small")
+    with c1:
+        st.write("\n")
+        st.write("\n")
+        if st.button(
+            "📁",
+            key=f"{key}-import-browse",
+            help="Choose the folder.",
+            disabled=not TK_AVAILABLE,
+        ):
+            chosen = tk_directory_dialog(
+                f"Select the folder with your {label}",
+                st.session_state.get("previous_dir", os.getcwd()),
+            )
+            if chosen:
+                st.session_state[widget_key] = chosen
+                st.session_state["previous_dir"] = chosen
+    with c2:
+        folder = st.text_input(f"Folder with {label}", key=widget_key)
+    _, c, _ = st.columns(3)
+    if not c.button(
+        "Add files from folder",
+        type="primary",
+        key=f"{key}-import-add",
+        disabled=not folder,
+        use_container_width=True,
+    ):
+        return None
+    folder = Path(folder).expanduser()
+    if not folder.is_dir():
+        st.error(f"The folder **{folder}** does not exist.")
+        return None
+    files = sorted(
+        f for f in folder.iterdir() if f.is_file() and f.name.endswith(suffixes)
+    )
+    if not files:
+        st.warning(f"No {label} found in **{folder}**.")
+        return None
+    return files
 
 
 # General warning/error messages

@@ -18,8 +18,8 @@ ARG PORT=8501
 ARG GITHUB_USER=OpenMS
 # Streamlit app Gihub repository name (to download artifact from).
 ARG GITHUB_REPO=FLASHApp
-# Name of the zip file containing the windows executable
-ARG ASSET_NAME=OpenMS-App.zip
+# Name the Windows installer is stored under in the image
+ARG ASSET_NAME=OpenMS-App-Setup.exe
 
 
 USER root
@@ -263,7 +263,7 @@ RUN mamba run -n streamlit-env python hooks/hook-analytics.py
 # Set Online Deployment
 RUN jq '.online_deployment = true' settings.json > tmp.json && mv tmp.json settings.json
 
-# Download latest OpenMS App executable as a ZIP file
+# Download the Windows installer of the release
 # Re-declare ARGs needed in this stage (ARGs don't persist across FROM)
 ARG GITHUB_TOKEN
 ARG GITHUB_USER=OpenMS
@@ -275,9 +275,10 @@ ARG RELEASE_TAG
 RUN if [ -n "$GITHUB_TOKEN" ]; then \
         echo "Downloading release asset..."; \
         if [ -n "$RELEASE_TAG" ]; then \
-            GH_TOKEN="$GITHUB_TOKEN" gh release download "$RELEASE_TAG" -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
+            GH_TOKEN="$GITHUB_TOKEN" gh release download "$RELEASE_TAG" -R ${GITHUB_USER}/${GITHUB_REPO} -p "*-Setup.exe" -O /app/OpenMS-App-Setup.exe; \
         else \
-            GH_TOKEN="$GITHUB_TOKEN" gh release download -R ${GITHUB_USER}/${GITHUB_REPO} -p "OpenMS-App.zip" -D /app; \
+            GH_TOKEN="$GITHUB_TOKEN" gh release download -R ${GITHUB_USER}/${GITHUB_REPO} -p "*-Setup.exe" -O /app/OpenMS-App-Setup.exe \
+                || echo "The latest release has no Windows installer, skipping."; \
         fi; \
     else \
         echo "No token, skipping download."; \
