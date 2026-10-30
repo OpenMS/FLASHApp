@@ -1233,6 +1233,130 @@ def tk_file_dialog(
     return file_path
 
 
+def export_folder_input(key: str) -> Path:
+    """
+    Show the folder that local exports are written to, with a browse button.
+
+    The folder is kept in ``st.session_state["export_dir"]``, so every export
+    page starts from the last folder chosen. It defaults to
+    ``~/Documents/<app-name>`` and is created on the first export.
+
+    Args:
+        key (str): Prefix for the widget keys, unique on the page.
+
+    Returns:
+        Path: The chosen folder (not checked for existence).
+    """
+    if "export_dir" not in st.session_state:
+        st.session_state["export_dir"] = str(
+            Path.home() / "Documents" / st.session_state.settings["app-name"]
+        )
+    widget_key = f"{key}-export-dir"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = st.session_state["export_dir"]
+    c1, c2 = st.columns([0.05, 0.95], gap="small")
+    with c1:
+        st.write("\n")
+        st.write("\n")
+        if st.button(
+            "📁",
+            key=f"{key}-export-browse",
+            help="Choose the export folder.",
+            disabled=not TK_AVAILABLE,
+        ):
+            chosen = tk_directory_dialog(
+                "Select the export folder", st.session_state["export_dir"]
+            )
+            if chosen:
+                st.session_state[widget_key] = chosen
+    with c2:
+        folder = st.text_input("Export folder", key=widget_key)
+    st.session_state["export_dir"] = folder
+    return Path(folder).expanduser()
+
+
+def export_files(files: list[tuple[Path, Path]], target: Path) -> bool:
+    """
+    Copy files into an export folder, keeping their relative paths.
+
+    Args:
+        files (list[tuple[Path, Path]]): Pairs of (source file, path relative to ``target``).
+        target (Path): Folder to write into; created if missing.
+
+    Returns:
+        bool: True if every file was copied, otherwise False (with an error shown).
+    """
+    try:
+        with st.spinner(f"Exporting {len(files)} files..."):
+            for source, rel in files:
+                dest = Path(target, rel)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, dest)
+    except OSError as e:
+        st.error(f"Export failed: {e}")
+        return False
+    st.success(f"Exported {len(files)} files to **{target}**.")
+    return True
+
+def local_folder_files(key: str, label: str, suffixes: tuple[str, ...]) -> list[Path] | None:
+    """
+    Pick files from a folder on disk, for local installs that do not upload.
+
+    Shows a folder field with a browse button and an add button.
+
+    Args:
+        key (str): Prefix for the widget keys, unique on the page.
+        label (str): What the folder holds, e.g. "FLASHDeconv output files".
+        suffixes (tuple[str, ...]): File name endings to pick up from the folder.
+
+    Returns:
+        list[Path] | None: The matching files once the add button is clicked,
+            otherwise None.
+    """
+    widget_key = f"{key}-import-dir"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = str(st.session_state.get("local_dir", ""))
+    c1, c2 = st.columns([0.05, 0.95], gap="small")
+    with c1:
+        st.write("\n")
+        st.write("\n")
+        if st.button(
+            "📁",
+            key=f"{key}-import-browse",
+            help="Choose the folder.",
+            disabled=not TK_AVAILABLE,
+        ):
+            chosen = tk_directory_dialog(
+                f"Select the folder with your {label}",
+                st.session_state.get("previous_dir", os.getcwd()),
+            )
+            if chosen:
+                st.session_state[widget_key] = chosen
+                st.session_state["previous_dir"] = chosen
+    with c2:
+        folder = st.text_input(f"Folder with {label}", key=widget_key)
+    _, c, _ = st.columns(3)
+    if not c.button(
+        "Add files from folder",
+        type="primary",
+        key=f"{key}-import-add",
+        disabled=not folder,
+        use_container_width=True,
+    ):
+        return None
+    folder = Path(folder).expanduser()
+    if not folder.is_dir():
+        st.error(f"The folder **{folder}** does not exist.")
+        return None
+    files = sorted(
+        f for f in folder.iterdir() if f.is_file() and f.name.endswith(suffixes)
+    )
+    if not files:
+        st.warning(f"No {label} found in **{folder}**.")
+        return None
+    return files
+
+
 # General warning/error messages
 WARNINGS = {
     "missing-mzML": "Upload or select some mzML files first!",

@@ -130,11 +130,14 @@ class StreamlitUI:
             name = key.replace("-", " ")
 
         c1, c2 = st.columns(2)
-        c1.markdown("**Upload file(s)**")
 
         mount_root = _mounted_data_root() if st.session_state.location == "online" else None
 
         if st.session_state.location == "local":
+            # A local install reads files straight from disk, so the browser
+            # upload widget (which streams every byte through the browser) is
+            # not offered. Files are picked from disk and copied or referenced.
+            c1.markdown("**Add file(s) from your computer**")
             c2_text, c2_checkbox = c2.columns([1.5, 1], gap="large")
             c2_text.markdown("**OR add files from local folder**")
             use_copy = c2_checkbox.checkbox(
@@ -144,20 +147,21 @@ class StreamlitUI:
                 help="Create a copy of files in workspace.",
             )
         else:
+            c1.markdown("**Upload file(s)**")
             use_copy = True
 
         # Convert file_types to a list if it's a string
         if isinstance(file_types, str):
             file_types = [file_types]
 
-        if use_copy:
+        if st.session_state.location != "local":
             with c1.form(f"{key}-upload", clear_on_submit=True):
                 # Streamlit file uploader accepts file types as a list or None
                 file_type_for_uploader = file_types if file_types else None
 
                 files = st.file_uploader(
                     f"{name}",
-                    accept_multiple_files=(st.session_state.location == "local"),
+                    accept_multiple_files=False,
                     type=file_type_for_uploader,
                     label_visibility="collapsed",
                 )
@@ -180,29 +184,20 @@ class StreamlitUI:
                     else:
                         st.error("Nothing to add, please upload file.")
         else:
-            # Create a temporary file to store the path to the local directories
             external_files = Path(files_dir, "external_files.txt")
-            # Check if the file exists, if not create it
-            if not external_files.exists():
-                external_files.touch()
             c1.write("\n")
             with c1.container(border=True):
                 dialog_button = st.button(
                     rf"$\textsf{{\Large 📁 Add }} \textsf{{ \Large \textbf{{{name}}} }}$",
                     type="primary",
                     use_container_width=True,
-                    key="local_browse_single",
+                    key=f"local_browse_single_{key}",
                     help="Browse for your local MS data files.",
                     disabled=not TK_AVAILABLE,
                 )
 
                 # Tk file dialog requires file types to be a list of tuples
-                if isinstance(file_types, str):
-                    tk_file_types = [(f"{file_types}", f"*.{file_types}")]
-                elif isinstance(file_types, list):
-                    tk_file_types = [(f"{ft}", f"*.{ft}") for ft in file_types]
-                else:
-                    raise ValueError("'file_types' must be either of type str or list")
+                tk_file_types = [(f"{ft}", f"*.{ft}") for ft in file_types]
 
                 if dialog_button:
                     local_files = tk_file_dialog(
@@ -213,13 +208,24 @@ class StreamlitUI:
                     if local_files:
                         my_bar = st.progress(0)
                         for i, f in enumerate(local_files):
-                            with open(external_files, "a") as f_handle:
-                                f_handle.write(f"{f}\n")
+                            my_bar.progress((i + 1) / len(local_files))
+                            if use_copy:
+                                if os.path.isdir(f):
+                                    shutil.copytree(
+                                        f,
+                                        Path(files_dir, Path(f).name),
+                                        dirs_exist_ok=True,
+                                    )
+                                else:
+                                    shutil.copy(f, Path(files_dir, Path(f).name))
+                            else:
+                                with open(external_files, "a") as f_handle:
+                                    f_handle.write(f"{f}\n")
                         my_bar.empty()
                         st.success("Successfully added files!")
+                        st.rerun()
 
                         st.session_state["previous_dir"] = Path(local_files[0]).parent
-                        st.rerun()
 
         # Local file upload option: via directory path
         if st.session_state.location == "local":
@@ -1510,6 +1516,9 @@ class StreamlitUI:
 
     def file_upload_section(self, custom_upload_function) -> None:
         custom_upload_function()
+        # A local install already has the input files on disk.
+        if st.session_state.location == "local":
+            return
         c1, _ = st.columns(2)
         if c1.button("⬇️ Download files", use_container_width=True):
             self.zip_and_download_files(Path(self.workflow_dir, "input-files"))
