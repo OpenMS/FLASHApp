@@ -35,22 +35,12 @@ def render_desktop_download_box():
                 FLASHApp for your computer
             </h4>
             <p style="color: #6c757d; margin-bottom: 1rem;">
-                FLASHApp is best enjoyed online but you can download an offline version for Windows, macOS (Apple Silicon) and Linux below.
+                FLASHApp is best enjoyed online but you can download an offline version for Windows, macOS and Linux below.
             </p>
             """,
             unsafe_allow_html=True,
         )
         render_installer_buttons(app_name="FLASHApp")
-        st.markdown(
-            """
-            <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
-                No admin rights are needed on Windows. On macOS, drag FLASHApp from the
-                disk image to Applications. On Linux, make the AppImage executable and start it.<br>
-                Even offline, it's still a web app - just packaged so you can use it without an internet connection.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
     return True
 
