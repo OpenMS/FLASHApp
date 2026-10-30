@@ -177,6 +177,13 @@ HEATMAPS = {
 }
 
 
+# Clicking the highlighted row of a table again only removes the highlight; the
+# selection stays (FLASHViewer's tables behaved so)
+RECLICK = 'unhighlight'
+# FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
+TABLE_HEIGHT = 376
+
+
 class MissingResult(Exception):
     """A result the component is drawn from was not written for this dataset."""
 
@@ -242,9 +249,11 @@ def _heatmap(comp_name, file_manager, dataset_id):
             title=title, x_label='Retention Time', y_label=y_label,
             colorscale='Portland', log_scale=True,
             min_points=insight_data.HEATMAP_MIN_POINTS,
-            # A zoomed view is downsampled like FLASHViewer did, filling bins
-            # up to min_points rather than keeping a fixed number per bin
-            use_streaming=False,
+            # As in FLASHViewer, a zoomed view shows every point of the first
+            # level with 20,000 points in range
+            downsample_zoomed=False,
+            # FLASHViewer's export name; its wheel scrolled the page
+            svg_filename='FLASHViewer-heatmap', scroll_zoom=False,
         ),
     )
 
@@ -263,6 +272,8 @@ def _fdr_plot(comp_name, file_manager, dataset_id):
             series_colors={'target': 'green', 'decoy': 'red'},
             mode='lines+markers', title='FDR Plot', x_label='QScore', y_label='Density',
             fixed_y_range=True, svg_filename='FDR-plot',
+            # FLASHViewer's FDR plot: Arial in black, densities unrounded
+            font={'family': 'Arial', 'color': 'black'}, float_precision='float64',
         ),
         required=[target],
     )
@@ -322,9 +333,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 column_definitions=SCAN_COLUMNS, title='Scan Table',
                 index_field='index', go_to_fields=['index', 'Scan'],
                 interactivity={'scan': 'index'}, on_select={'mass': 0},
-                float_precision='float64',
+                reclick=RECLICK, pagination=False, float_precision='float64',
             ),
-        ), {}
+        ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'mass_table':
         return _component(
@@ -334,12 +345,12 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 column_definitions=MASS_COLUMNS, title='Mass Table',
                 index_field='mass_idx', go_to_fields=['mass_idx'],
                 filters={'scan': 'scan_idx'}, interactivity={'mass': 'mass_idx'},
-                # As in FLASHViewer, no mass is selected until one is clicked,
-                # and clicking the selected mass again clears the selection
-                default_row=-1, deselect_on_reclick=True,
-                float_precision='float64',
+                # As in FLASHViewer, the first mass is highlighted but not
+                # selected until a mass or another scan is clicked
+                default_row_selects=False,
+                reclick=RECLICK, pagination=False, float_precision='float64',
             ),
-        ), {}
+        ), {'height': TABLE_HEIGHT}
 
     if comp_name in ('deconv_spectrum', 'anno_spectrum', 'combined_spectrum'):
         if comp_name == 'deconv_spectrum':
@@ -390,6 +401,8 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 x_column='mass', y_column='charge', z_column='intensity', mode='stems',
                 series_column='kind',
                 series_colors={'Signal': '#3366CC', 'Noise': '#DC3912'},
+                # Both in the legend, as in FLASHViewer, also when one is empty
+                series_names={'Signal': 'Signal', 'Noise': 'Noise'},
                 title='', selection_titles={'mass': 'Mass signals', 'scan': 'Precursor signals'},
                 x_label='Mass', y_label='Charge', z_label='Intensity', y_dtick=1,
                 camera_eye={'x': 2.5, 'y': 0, 'z': 0.2}, svg_filename='FLASHViewer-3d-plot',
@@ -407,12 +420,16 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 column_definitions=PROTEIN_COLUMNS, title='Protein Table',
                 index_field='index', go_to_fields=['Scan', 'accession'],
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
-                toggle_filters=[{'label': 'Best per spectrum', 'column': 'is_best', 'group_column': 'Scan'}],
+                toggle_filters=[{
+                    'label': 'Best per spectrum', 'column': 'is_best', 'group_column': 'Scan',
+                    # FLASHViewer's checkbox colour
+                    'color': '#6200EE',
+                }],
                 interactivity={'protein': 'index', 'pscan': 'scan_idx'},
                 on_select={'tag': None, 'aa': None, 'mass': None},
-                float_precision='float64',
+                reclick=RECLICK, pagination=False, float_precision='float64',
             ),
-        ), {}
+        ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'tag_table':
         return _component(
@@ -424,10 +441,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 filters={'pscan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
                 interactivity={'tag': 'TagIndex'}, on_select={'mass': None},
-                deselect_on_reclick=True,
-                float_precision='float64',
+                reclick=RECLICK, pagination=False, float_precision='float64',
             ),
-        ), {}
+        ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'sequence_view':
         if tool == 'flashtnt':
@@ -477,7 +493,7 @@ def _render_quant(file_manager, dataset_id, state_manager, key):
             data=insight_data.quant_table(file_manager, dataset_id),
             column_definitions=QUANT_COLUMNS, title='Feature groups',
             index_field='FeatureGroupIndex', interactivity={'feature_group': 'FeatureGroupIndex'},
-            float_precision='float64',
+            reclick=RECLICK, pagination=False, float_precision='float64',
         ),
     )
     traces = _component(
@@ -491,7 +507,7 @@ def _render_quant(file_manager, dataset_id, state_manager, key):
             x_label='m/z', y_label='retention time', z_label='intensity',
         ),
     )
-    table(key=f'{key}_table', state_manager=state_manager)
+    table(key=f'{key}_table', state_manager=state_manager, height=TABLE_HEIGHT)
     traces(key=f'{key}_traces', state_manager=state_manager, height=800)
 
 
