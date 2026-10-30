@@ -29,6 +29,7 @@ TNT_COMPONENTS = [
     {'name': 'protein_table', 'label': 'Protein table', 'group': 'Tables'},
     {'name': 'tag_table', 'label': 'Tag table', 'group': 'Tables', 'requires': 'protein_table'},
     {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': 'protein_table'},
+    {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': 'protein_table'},
     # Internal fragment map is disabled for FLASHTnT for now.
     {'name': 'combined_spectrum', 'label': 'Sequence tag view', 'group': 'Sequence', 'requires': 'tag_table'},
     {'name': 'id_fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},

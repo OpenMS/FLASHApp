@@ -3,10 +3,11 @@ import polars as pl
 from src.render.components import (
     PlotlyHeatmap, PlotlyLineplot, PlotlyLineplotTagger, Plotly3Dplot, 
     Tabulator, SequenceView, InternalFragmentMap, FlashViewerComponent, 
-    FDRPlotly, FLASHQuant
+    FDRPlotly, FLASHQuant, StructureView
 )
 from src.render.compression import compute_compression_levels
 from src.render.scan_resolution import build_proteoform_scan_map
+from src.render.structure import structure_dir
 
 
 def _attach_proteoform_scan_map(file_manager, selected_data, additional_data):
@@ -159,6 +160,18 @@ def initialize_data(comp_name, selected_data, file_manager, tool):
             data = file_manager.get_results(selected_data,  ['settings'])
             data_to_send['settings'] = data['settings']
         component_arguments = SequenceView(title='Sequence View')
+    elif comp_name == 'structure_view':
+        # Same proteoform data as the sequence view, plus the protein accession
+        # to look the structure up by (see filter_data)
+        data_to_send['per_scan_data'] = _load_scan_scoped(
+            file_manager, selected_data, 'sequence_view', tool, additional_data)
+        seq = file_manager.get_results(selected_data, ['sequence_data'], use_pyarrow=True)
+        additional_data['sequence_data_ds'] = seq['sequence_data']
+        data_to_send['settings'] = file_manager.get_results(selected_data, ['settings'])['settings']
+        protein_df = file_manager.get_results(selected_data, ['protein_dfs'])['protein_dfs']
+        additional_data['accessions'] = dict(zip(protein_df['index'], protein_df['accession']))
+        additional_data['structure_dir'] = structure_dir(file_manager)
+        component_arguments = StructureView(title='Structure View')
     # elif comp_name == 'internal_fragment_map':
     #     data = file_manager.get_results(selected_data,  ['sequence_view'])
     #     data_to_send['per_scan_data'] = data['sequence_view']

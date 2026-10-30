@@ -5,6 +5,7 @@ from pathlib import Path
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src.render.render import render_grid
+from src.render.structure_files import structure_files_section
 
 
 DEFAULT_LAYOUT = [
@@ -86,6 +87,7 @@ if len(layout) == 2 and side_by_side:
         )
         if 'selected_experiment0_tagger' in st.session_state:
             render_grid(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'flashtnt', 'selected_experiment0_tagger')
+            structure_files_section(file_manager, st.session_state.selected_experiment0_tagger, layout[0], 'selected_experiment0_tagger')
     with c2:
         st.selectbox(
             "choose experiment", display_names,
@@ -95,6 +97,7 @@ if len(layout) == 2 and side_by_side:
         )
         if f"selected_experiment1_tagger" in st.session_state:
             render_grid(st.session_state.selected_experiment1_tagger, layout[1], file_manager, 'flashtnt', 'selected_experiment1_tagger', 'flash_viewer_grid_1')
+            structure_files_section(file_manager, st.session_state.selected_experiment1_tagger, layout[1], 'selected_experiment1_tagger')
 
 
 else:
@@ -108,6 +111,7 @@ else:
 
     if 'selected_experiment0_tagger' in st.session_state:
         render_grid(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'flashtnt', 'selected_experiment0_tagger')
+        structure_files_section(file_manager, st.session_state.selected_experiment0_tagger, layout[0], 'selected_experiment0_tagger')
 
     ### for multiple experiments on one view
     if len(layout) > 1:
@@ -127,5 +131,6 @@ else:
             # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
             if f"selected_experiment{exp_index}_tagger" in st.session_state:
                 render_grid(st.session_state["selected_experiment%d_tagger" % exp_index], layout[exp_index], file_manager, 'flashtnt', f"selected_experiment{exp_index}_tagger", 'flash_viewer_grid_%d' % exp_index)
+                structure_files_section(file_manager, st.session_state["selected_experiment%d_tagger" % exp_index], layout[exp_index], f"selected_experiment{exp_index}_tagger")
 
 save_params(params)
