@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **FLASHTnT** (🧨) — tag-and-track top-down identification: runs FLASHDeconv, then matches short sequence "tags" against a protein FASTA database to identify proteins (PrSMs), with target/decoy FDR.
 - **FLASHQuant** (📊) — proteoform quantification from FLASHDeconv mass traces (view-only; no run step).
 
-The heavy lifting is done by **TOPP command-line tools** (`FLASHDeconv`, `FLASHTnT`, `DecoyDatabase`) shipped in the Docker image; the app drives them, parses their output into pandas DataFrames, caches them per workspace, and renders them through a custom **Vue.js Streamlit component** (`flash_viewer_grid`).
+The heavy lifting is done by **TOPP command-line tools** (`FLASHDeconv`, `FLASHTnT`, `DecoyDatabase`) shipped in the Docker image; the app drives them, parses their output into pandas DataFrames, caches them per workspace, and renders them with **openms-insight** components (`Table`, `Heatmap`, `DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`).
 
 ## Commands
 
@@ -26,38 +26,19 @@ pytest tests/test_selection_clear.py::test_name -v      # single test
 # Lint (errors-only; mirrors .github/workflows/pylint.yml, which runs on `main`)
 pylint $(git ls-files '*.py') --errors-only --disable=C0103,C0114,C0301,C0411,W0212,W0631,W0602,W1514,W2402,E0401,E1101,F0001,R1732
 
-# Docker (full image with OpenMS + TOPP tools + Vue build)
+# Docker (full image with OpenMS + TOPP tools + openms-insight built from source)
 docker build -f Dockerfile --no-cache -t flashapp:latest --build-arg GITHUB_TOKEN=<gh-token> .
 docker run -p 8501:8501 flashapp:latest          # → http://localhost:8501
 # Dockerfile.arm is the linux/arm64 variant (swaps miniforge installer to aarch64).
 ```
 
-Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is required at build time to fetch the private `openms-streamlit-vue-component` submodule and OpenMS resources.
+Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is required at build time to fetch OpenMS resources.
 
-### Prerequisites before any production / Docker build
+### openms-insight
 
-These are already the defaults on the `main`/release branches; verify them when building or debugging a blank viewer:
+The viewers need `openms_insight` importable. Until the release with the components the viewers use (`DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`, the Table options they use) is on PyPI, it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and the Windows workflow's `build-openms-insight` job clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
 
-1. **Submodule present:** `git submodule init && git submodule update` (update to latest: `git submodule update --remote`).
-2. **Vue component built & copied:** the bundle in `js-component/dist/` is produced from the `openms-streamlit-vue-component/` submodule (a Vite/Vue project). **Always prefer building the bundle via Docker, never a local Node toolchain** — the repo `Dockerfile` `js-build` stage (`node:21` → `npm install && npm run build`) is the canonical, reproducible build. To rebuild the committed bundle from *local* submodule source (e.g. after editing a `.vue` file), use a small Docker stage that `COPY`s the local submodule and runs `npm run build`, then export and copy `dist/` over `js-component/dist/`:
-   ```dockerfile
-   FROM node:21 AS build
-   WORKDIR /openms-streamlit-vue-component
-   COPY . .
-   RUN npm install && npm run build
-   FROM scratch AS export
-   COPY --from=build /openms-streamlit-vue-component/dist /
-   ```
-   ```bash
-   docker build -f vue-build.Dockerfile --target export \
-     --output type=local,dest=./vue-dist openms-streamlit-vue-component
-   # then replace js-component/dist/ with ./vue-dist/
-   ```
-   Only the prebuilt `js-component/dist/` is committed; the submodule source is fetched separately. (A bare local `npm install && npm run build` also works but is **not** preferred — Docker guarantees the toolchain.)
-3. **`src/render/components.py` → `_RELEASE = True`** (loads the bundle from `js-component/dist/`). When `False`, the component is loaded from the Vite dev server at `http://localhost:5173` for live Vue development.
-4. **`.streamlit/config.toml` → `developmentMode = false`**.
-
-> Build order matters: the OpenMS/TOPP build must precede the Vue build in the Dockerfiles (see recent commits reordering this). `--no-cache` is recommended for the full image.
+`.streamlit/config.toml` → `developmentMode = false` for production builds.
 
 ## Architecture
 
@@ -72,13 +53,13 @@ mzML upload ──► WorkflowManager.execution()
                             └─ src/parse/* turns those into pandas DataFrames
                                 └─ FileManager.store_data(dataset_id, key, df)  ──► workspace cache
                                                                                        │
-Viewer page ◄── render_grid() (src/render/render.py) ◄── reads cached dfs + layout ◄──┘
-                   └─ get_component_function()  ──► Vue `flash_viewer_grid` component
+Viewer page ◄── render_grid() (src/render/render.py) ◄── reads cached results + layout ◄──┘
+                   └─ one openms-insight component per layout cell (shared StateManager)
 ```
 
 - **Workflows:** `src/Workflow.py` defines `DeconvWorkflow`, `TagWorkflow` (FLASHTnT), and `QuantWorkflow`, all subclasses of `WorkflowManager` (`src/workflow/WorkflowManager.py`). Each implements `upload()`, `configure()`, `execution()`, `results()`. `execution()` runs TOPP tools, stores every output file via `FileManager.store_file()`, then calls the parsers. `TagWorkflow` chains `DecoyDatabase` → `FLASHDeconv` → `FLASHTnT`.
 - **Parsers (`src/parse/`):** `deconv.py::parseDeconv`, `tnt.py::parseTnT`, `quant.py::parseQuant` / `flashquant.py::parseFLASHQuantOutput` are the entry points. The mzML→DataFrame heavy lifting lives in `masstable.py` (`parseFLASHDeconvOutput`, `parseFLASHTaggerOutput`) using a **multiprocessing pool**; `tag_resolution.py` maps tags ↔ proteoforms.
-- **Renderers (`src/render/`):** `render.py` (`render_grid`, `render_component`) pushes state into the Vue component and reads user selections back out. `components.py` declares the component and defines the per-cell component classes: `PlotlyHeatmap`, `Tabulator` (Scan/Mass/Protein/Tag tables), `PlotlyLineplot`, `Plotly3Dplot`, `FDRPlotly`, `SequenceView`, `InternalFragmentMap`, `FLASHQuant`. `compression.py` compresses payloads sent to the browser; `StateTracker.py` tracks selection state across cells (cross-component linking via shared scan/mass identifiers).
+- **Renderers (`src/render/`):** `insight_data.py` turns the cached results into the lazy frames each component is built from (one row per mass, signal peaks per mass, best hit per spectrum, …; Streamlit-free, tested in `tests/test_insight_data.py`). `render.py::render_grid` builds one openms-insight component per layout cell; the components of a grid share a `StateManager` (identifiers `scan`, `mass`, `protein`, `pscan`, `tag`, `aa`, `sequence`, `feature_group`), cleared when the grid switches dataset. Each component's preprocessed cache lives in `<cache>/insight/<dataset>/`; its cache id hashes the source results (size, mtime) and the code of `render.py`/`insight_data.py`, so editing either rebuilds the caches. `compression.py` is still used by the parsers.
 
 ### Pages and the Layout Manager
 

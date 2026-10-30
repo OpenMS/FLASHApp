@@ -7,7 +7,8 @@ import requests
 from src.render import structure
 from src.render.layout_editor.catalog import TNT_COMPONENTS, validate_layout
 from src.render.structure import (
-    StructureStore, get_structure, structure_format, structure_key, uniprot_accession,
+    StructureStore, apply_structure_action, get_structure, structure_format, structure_key,
+    uniprot_accession,
 )
 
 PDB = (
@@ -161,3 +162,32 @@ def test_no_download_without_uniprot_accession_or_when_disabled(tmp_path):
 def test_structure_view_needs_protein_table():
     assert validate_layout([[['protein_table'], ['sequence_view', 'structure_view']]], TNT_COMPONENTS) == ''
     assert 'needs Protein table' in validate_layout([[['structure_view']]], TNT_COMPONENTS)
+
+
+def test_upload_from_the_viewer_keeps_the_alphafold_model(tmp_path):
+    session = FakeSession({
+        API: (200, json.dumps([{'entryId': 'AF-P60844-F1', 'pdbUrl': FILE}]).encode()),
+        FILE: (200, PDB),
+    })
+    store = StructureStore(tmp_path)
+    assert get_structure(store, 'sp|P60844|AQPZ_ECOLI', session=session)['source'] == 'alphafold'
+    action = {'op': 'upload', 'accession': 'sp|P60844|AQPZ_ECOLI', 'name': 'mine.cif', 'data': CIF.decode()}
+    assert apply_structure_action(store, action) == (True, None)
+    result = get_structure(store, 'sp|P60844|AQPZ_ECOLI', session=session)
+    assert (result['source'], result['format'], result['name']) == ('upload', 'cif', 'mine.cif')
+    # Removing the upload goes back to the stored model, without downloading it again
+    assert apply_structure_action(store, {'op': 'remove', 'accession': 'sp|P60844|AQPZ_ECOLI'}) == (True, None)
+    assert get_structure(store, 'sp|P60844|AQPZ_ECOLI', session=session)['source'] == 'alphafold'
+    assert len(session.calls) == 2
+
+
+def test_viewer_upload_is_checked(tmp_path):
+    store = StructureStore(tmp_path)
+    changed, error = apply_structure_action(
+        store, {'op': 'upload', 'accession': 'P60844', 'name': 'x.pdb', 'data': '<html></html>'})
+    assert not changed and 'not a PDB or mmCIF file' in error
+    changed, error = apply_structure_action(
+        store, {'op': 'upload', 'accession': '../..', 'name': 'x.pdb', 'data': PDB.decode()})
+    assert not changed and error
+    assert apply_structure_action(store, {'op': 'remove', 'accession': 'P60844'}) == (False, None)
+    assert store.list() == {}

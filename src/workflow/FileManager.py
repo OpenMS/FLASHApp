@@ -561,6 +561,28 @@ class FileManager:
             return True
         return False
 
+    def get_result_path(self, dataset_id, name_tag):
+        """
+        Path of a stored result (parquet, pickle or file), or None.
+
+        Args:
+            dataset_id (str): The ID of the dataset.
+            name_tag (str): The name of the result.
+
+        Returns:
+            Path | None: Where the result is stored, None if it was not stored.
+        """
+        for table in ('stored_data', 'stored_files'):
+            if name_tag not in self._get_column_list(table):
+                continue
+            self.cache_cursor.execute(
+                f'SELECT "{name_tag}" FROM {table} WHERE id = ?', (dataset_id,)
+            )
+            row = self.cache_cursor.fetchone()
+            if row is not None and row[0] is not None:
+                return Path(self.cache_path, row[0])
+        return None
+
     def remove_results(self, dataset_id):
     
         # Remove references
@@ -575,10 +597,13 @@ class FileManager:
 
         # Remove stored files
         shutil.rmtree(Path(self.cache_path, 'files', dataset_id))
+        # Viewer component caches built from them (see src/render/render.py)
+        shutil.rmtree(Path(self.cache_path, 'insight', dataset_id), ignore_errors=True)
 
     def clear_cache(self):
         shutil.rmtree(Path(self.cache_path, 'files'))
         Path(self.cache_path, 'files').mkdir()
+        shutil.rmtree(Path(self.cache_path, 'insight'), ignore_errors=True)
         self.cache_cursor.execute(f"DROP TABLE IF EXISTS stored_data;")
         self.cache_cursor.execute(f"DROP TABLE IF EXISTS stored_files;")
         self.cache_cursor.execute("""
