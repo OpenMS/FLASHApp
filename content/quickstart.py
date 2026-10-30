@@ -1,7 +1,7 @@
-from pathlib import Path
 import streamlit as st
 
 from src.common.common import page_setup, themed_asset, v_space
+from src.common.installers import installers_available, render_installer_buttons
 
 page_setup(page="main")
 
@@ -23,43 +23,35 @@ def render_download_box(container_key, title, description, icon="", subtitle="")
         # Return context for button placement
         return st.columns([1, 2, 1])
 
-def render_windows_download_box():
-    """Render the Windows app download box."""
-    if not Path("OpenMS-App-Setup.exe").exists():
+def render_desktop_download_box():
+    """Render the desktop app download box: one button per platform."""
+    if not installers_available():
         return False
-        
-    cols = render_download_box(
-        container_key="windows_download_container",
-        title="FLASHApp for Windows",
-        description="FLASHApp is best enjoyed online but you can download an offline version for Windows systems below.",
-        icon=""
-    )
-    
-    # Center the download button
-    with cols[1]:
-        with open("OpenMS-App-Setup.exe", "rb") as file:
-            st.download_button(
-                label="📥 Download for Windows",
-                data=file,
-                file_name="FLASHApp-Setup.exe",
-                mime="application/vnd.microsoft.portable-executable",
-                type="secondary",
-                use_container_width=True,
-                help="Download FLASHApp for Windows systems"
-            )
-    
-    # Add subtitle text
-    st.markdown(
-        """
-        <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
-            Run the installer to install the app for your user; no admin rights are needed.
-            Launch using the desktop icon after installation.<br>
-            Even offline, it's still a web app - just packaged so you can use it without an internet connection.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    
+
+    with st.container(key="desktop_download_container"):
+        st.markdown(
+            """
+            <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
+                FLASHApp for your computer
+            </h4>
+            <p style="color: #6c757d; margin-bottom: 1rem;">
+                FLASHApp is best enjoyed online but you can download an offline version for Windows, macOS (Apple Silicon) and Linux below.
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_installer_buttons(app_name="FLASHApp")
+        st.markdown(
+            """
+            <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
+                No admin rights are needed on Windows. On macOS, drag FLASHApp from the
+                disk image to Applications. On Linux, make the AppImage executable and start it.<br>
+                Even offline, it's still a web app - just packaged so you can use it without an internet connection.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     return True
 
 def render_flash_cli_tools_box():
@@ -120,9 +112,9 @@ def render_download_boxes_responsive():
     # Collect available boxes
     available_boxes = []
     
-    # Check if Windows download is available
-    if Path("OpenMS-App-Setup.exe").exists():
-        available_boxes.append("windows")
+    # Check if a desktop installer is available
+    if installers_available():
+        available_boxes.append("desktop")
     
     # Always include FLASH* CLI tools
     available_boxes.append("flash_cli")
@@ -142,7 +134,7 @@ def render_download_boxes_responsive():
         unsafe_allow_html=True,
     )
 
-    spacer1, center_col, spacer2 = st.columns([2, 4, 2])
+    spacer1, center_col, spacer2 = st.columns([1, 3, 1])
     # Render boxes based on count
     if num_boxes == 1:
         # Single box: centered
@@ -152,8 +144,8 @@ def render_download_boxes_responsive():
                 
     elif num_boxes == 2:
         with center_col:
-            render_windows_download_box()
-            apply_download_box_styling("windows_download_container")
+            render_desktop_download_box()
+            apply_download_box_styling("desktop_download_container")
             render_flash_cli_tools_box()
             apply_download_box_styling("flash_cli_tools_container")
 
