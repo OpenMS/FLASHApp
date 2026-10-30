@@ -23,7 +23,7 @@ env:
   # macOS/Linux: minor version; the latest patch release from python-build-standalone.
   PYTHON_STANDALONE_VERSION: "3.11"
   # Prefix of the installer names: <APP_NAME>-Setup.exe, -macOS-arm64.dmg,
-  # -Linux-x86_64.AppImage, -Linux-amd64.deb.
+  # -Linux-x86_64.AppImage.
   APP_NAME: FLASHApp-1.1.0
   # Electron app name without the version, so the install folder and the
   # workspaces in %APPDATA%\FLASHApp stay the same across upgrades.
@@ -730,7 +730,7 @@ jobs:
           version="${BASH_REMATCH[1]}.${BASH_REMATCH[3]:-0}.${BASH_REMATCH[5]:-0}"
         fi
         [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || version=1.0.0
-        # Package and executable name: lowercase, so two apps never share a deb package.
+        # Executable name: lowercase, the Linux convention.
         id=$(tr '[:upper:]' '[:lower:]' <<<"$ELECTRON_NAME")
         args=(
           --publish never
@@ -738,7 +738,7 @@ jobs:
           "-c.appId=de.openms.$ELECTRON_NAME"
           "-c.extraMetadata.name=$id"
           # Electron takes the Linux app_id / WM_CLASS from desktopName; the .desktop
-          # entry (deb, and the one the AppImage writes) must match it for the icon.
+          # entry the AppImage writes must match it for the icon.
           "-c.extraMetadata.desktopName=$id.desktop"
           "-c.extraMetadata.productName=$ELECTRON_NAME"
           "-c.extraMetadata.version=$version"
@@ -777,10 +777,9 @@ jobs:
             unset APPLE_ID
           fi
         else
-          args+=(--linux AppImage deb --x64
+          args+=(--linux AppImage --x64
             "-c.linux.executableName=$id"
-            "-c.appImage.artifactName=$APP_NAME-Linux-x86_64.\${ext}"
-            "-c.deb.artifactName=$APP_NAME-Linux-amd64.\${ext}")
+            "-c.appImage.artifactName=$APP_NAME-Linux-x86_64.\${ext}")
         fi
         # The signer opens every file of the payload (tens of thousands) at once;
         # lift macOS's per-process limit above that.
@@ -830,10 +829,6 @@ jobs:
         image="$PWD/electron/dist/$APP_NAME-Linux-x86_64.AppImage"
         chmod +x "$image"
 
-        # The deb installs to /opt/<product name>; check its payload too.
-        sudo apt-get install -y -q "./electron/dist/$APP_NAME-Linux-amd64.deb"
-        node electron/scripts/smoke-payload.js "/opt/$ELECTRON_NAME/resources/app-payload" $TOPP_TOOLS
-
         (cd "$RUNNER_TEMP" && "$image" --appimage-extract >/dev/null)
         node electron/scripts/smoke-payload.js "$RUNNER_TEMP/squashfs-root/resources/app-payload" $TOPP_TOOLS
 
@@ -877,7 +872,6 @@ jobs:
         path: |
           electron/dist/*.dmg
           electron/dist/*.AppImage
-          electron/dist/*.deb
 
   # One release job for all platforms. Only this job can write to the
   # repository; the build jobs run third-party code (pip, npm, electron-builder)

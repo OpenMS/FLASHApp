@@ -1,8 +1,8 @@
-// Desktop integration for the Linux AppImage. A .deb installs a .desktop entry
-// with the app icon; an AppImage started directly has none, so the dock and
-// taskbar show a generic icon. On each start this writes (or refreshes) a
-// per-user entry pointing at the AppImage, with the icon copied out of the
-// mounted image, which disappears when the app exits.
+// Desktop integration for the Linux AppImage. An AppImage started directly
+// has no .desktop entry, so the dock and taskbar show a generic icon. On each
+// start this writes (or refreshes) a per-user entry pointing at the AppImage,
+// with the icon copied out of the mounted image, which disappears when the
+// app exits.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
