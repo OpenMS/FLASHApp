@@ -737,6 +737,9 @@ jobs:
           "-c.productName=$ELECTRON_NAME"
           "-c.appId=de.openms.$ELECTRON_NAME"
           "-c.extraMetadata.name=$id"
+          # Electron takes the Linux app_id / WM_CLASS from desktopName; the .desktop
+          # entry (deb, and the one the AppImage writes) must match it for the icon.
+          "-c.extraMetadata.desktopName=$id.desktop"
           "-c.extraMetadata.productName=$ELECTRON_NAME"
           "-c.extraMetadata.version=$version"
           "-c.linux.synopsis=Visualization of top-down proteomics results from FLASHDeconv, FLASHTnT and FLASHQuant"

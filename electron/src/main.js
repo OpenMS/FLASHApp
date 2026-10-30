@@ -6,6 +6,7 @@ const path = require("path");
 const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
 const payload = require("./payload");
 const { checkForUpdate } = require("./update-check");
+const { integrateAppImage } = require("./linux-desktop");
 
 // Set by the CI smoke test: exit 0 once the app page has loaded, 1 on failure.
 const SMOKE_TEST = process.env.OPENMS_APP_SMOKE_TEST === "1";
@@ -48,12 +49,27 @@ async function start() {
   const logFile = path.join(logDir, "streamlit.log");
   const logStream = fs.createWriteStream(logFile, { flags: "w" });
 
+  const iconFile = path.join(__dirname, "..", "build", process.platform === "win32" ? "icon.ico" : "icon.png");
+  if (process.platform === "linux") {
+    try {
+      integrateAppImage({
+        appImage: process.env.APPIMAGE,
+        desktopName: require("../package.json").desktopName,
+        name: title,
+        iconSource: iconFile,
+        iconDir: app.getPath("userData"),
+      });
+    } catch (err) {
+      console.error("AppImage desktop integration failed:", err);
+    }
+  }
+
   mainWindow = new BrowserWindow({
     title,
     width: 1400,
     height: 900,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, "..", "build", process.platform === "win32" ? "icon.ico" : "icon.png"),
+    icon: iconFile,
     webPreferences: { contextIsolation: true, sandbox: true },
   });
   mainWindow.on("page-title-updated", (e) => e.preventDefault());
