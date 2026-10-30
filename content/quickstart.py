@@ -32,7 +32,7 @@ def render_desktop_download_box():
         st.markdown(
             """
             <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
-                FLASHApp for your computer
+                Use FLASHApp Offline
             </h4>
             """,
             unsafe_allow_html=True,
