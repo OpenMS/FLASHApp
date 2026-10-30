@@ -168,6 +168,8 @@ SPECTRUM_TITLES = {
 SEQUENCE_VIEW_OPTIONS = dict(
     mass_column='MonoMass', precursor_mass_column='PrecursorMass',
     annotation_title='FLASHAnnotator', svg_filename='FLASHViewer-sequence',
+    # FLASHViewer's dialog button colour
+    accent_color='#6200EE',
 )
 
 HEATMAPS = {
