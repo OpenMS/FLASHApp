@@ -19,13 +19,14 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 import openms_insight
 from openms_insight import (
-    DeconvolvedSpectrum, Heatmap, Plot3D, ProteinSequenceView, SeriesPlot,
-    StateManager, Table, defer_reruns,
+    DeconvolvedSpectrum, Heatmap, Plot3D, ProteinSequenceView, ProteinStructureView,
+    SeriesPlot, StateManager, Table, defer_reruns,
 )
 from openms_insight.core.cache import CacheMissError
 
 from src.render import insight_data
 from src.render.sequence import getFragmentDataFromSeq
+from src.render.structure import StructureStore, download_enabled, get_structure, structure_dir
 
 
 def _code_version():
@@ -279,8 +280,8 @@ def _fdr_plot(comp_name, file_manager, dataset_id):
             series_colors={'target': 'green', 'decoy': 'red'},
             mode='lines+markers', title='FDR Plot', x_label='QScore', y_label='Density',
             fixed_y_range=True, svg_filename='FDR-plot',
-            # FLASHViewer's FDR plot: Arial in black, densities unrounded
-            font={'family': 'Arial', 'color': 'black'}, float_precision='float64',
+            # FLASHViewer's FDR plot: Arial in the theme's text colour, densities unrounded
+            font={'family': 'Arial'}, float_precision='float64',
         ),
         required=[target],
     )
@@ -489,10 +490,51 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             extra=sequence,
         ), {}
 
+    if comp_name == 'structure_view':
+        component = _component(
+            ProteinStructureView, f'{comp_name}-{tool}', fm, ds,
+            ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+            lambda: dict(
+                data=insight_data.proteoform_sequences(fm, ds),
+                filters={'protein': 'proteoform_index'}, mass_column='MonoMass',
+                aa_identifier='aa', settings=fm.get_results(ds, ['settings'])['settings'],
+                empty_message='Select a proteoform in the protein table to show its structure.',
+            ),
+        )
+        component.set_structure(_structure(fm, ds, state_manager.get_selection('protein')))
+        return component, {}
+
     if comp_name == 'quant_visualization':
         return None, {}
 
     raise ValueError(f'Unknown viewer component {comp_name!r}')
+
+
+def _structure(file_manager, dataset_id, protein_index):
+    """The selected proteoform's structure for the Structure View (see
+    src/render/structure.py), or None while no proteoform is selected."""
+    if protein_index is None:
+        return None
+    proteins = file_manager.get_results(dataset_id, ['protein_dfs'])['protein_dfs']
+    match = proteins.loc[proteins['index'] == protein_index, 'accession']
+    if len(match) == 0:
+        return None
+    structure = get_structure(
+        StructureStore(structure_dir(file_manager)), match.iloc[0],
+        download=download_enabled(st.session_state.get('settings')),
+    )
+    if structure['status'] == 'ok':
+        structure['label'] = (
+            f"AlphaFold DB model {structure.get('name') or structure['accession']}"
+            if structure.get('source') == 'alphafold'
+            else f"Uploaded structure {structure.get('name') or ''}".strip()
+        )
+    return structure
+
+
+def selected_protein(identifier):
+    """Proteoform selected in a FLASHTnT grid, or None."""
+    return StateManager(session_key=f'flash_insight_state_flashtnt_{identifier}').get_selection('protein')
 
 
 def _render_quant(file_manager, dataset_id, state_manager, key):

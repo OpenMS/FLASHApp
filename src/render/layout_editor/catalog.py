@@ -29,6 +29,7 @@ TNT_COMPONENTS = [
     {'name': 'protein_table', 'label': 'Protein table', 'group': 'Tables'},
     {'name': 'tag_table', 'label': 'Tag table', 'group': 'Tables', 'requires': 'protein_table'},
     {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': 'protein_table'},
+    {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': 'protein_table'},
     # Internal fragment map is disabled for FLASHTnT for now.
     {'name': 'combined_spectrum', 'label': 'Sequence tag view', 'group': 'Sequence', 'requires': 'tag_table'},
     {'name': 'id_fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
@@ -39,7 +40,7 @@ TNT_COMPONENTS = [
 # Mirrors DEFAULT_LAYOUT in the Viewer pages, which use it when nothing is saved.
 DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                          ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
-TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['tag_table'], ['combined_spectrum']]
+TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['structure_view'], ['tag_table'], ['combined_spectrum']]
 
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3

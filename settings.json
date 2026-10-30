@@ -47,5 +47,8 @@
         "max_download_gb_online": 50,
         "allowed_hosts": [],
         "parallel_downloads": 4
+    },
+    "structure_view": {
+        "alphafold_download": true
     }
 }
