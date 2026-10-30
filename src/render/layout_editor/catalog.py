@@ -40,7 +40,7 @@ TNT_COMPONENTS = [
 # Mirrors DEFAULT_LAYOUT in the Viewer pages, which use it when nothing is saved.
 DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                          ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
-TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['tag_table'], ['combined_spectrum']]
+TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['structure_view'], ['tag_table'], ['combined_spectrum']]
 
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3

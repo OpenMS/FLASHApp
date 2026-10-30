@@ -11,6 +11,7 @@ from src.render.structure_files import structure_files_section
 DEFAULT_LAYOUT = [
     ['protein_table'], 
     ['sequence_view'], 
+    ['structure_view'],
     ['tag_table'],
     ['combined_spectrum']
 ]
