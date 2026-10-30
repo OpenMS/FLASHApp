@@ -34,9 +34,6 @@ def render_desktop_download_box():
             <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
                 FLASHApp for your computer
             </h4>
-            <p style="color: #6c757d; margin-bottom: 1rem;">
-                FLASHApp is best enjoyed online but you can download an offline version for Windows, macOS and Linux below.
-            </p>
             """,
             unsafe_allow_html=True,
         )
