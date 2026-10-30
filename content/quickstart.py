@@ -111,16 +111,6 @@ def render_download_boxes_responsive():
     if num_boxes == 0:
         return
     
-    # Section header
-    st.markdown(
-        """
-        <h4 style="color: #6c757d; margin-bottom: 1.5rem; font-size: 1.3rem; font-weight: 600; text-align: center;">
-            Want to use FLASHApp offline?
-        </h4>
-        """,
-        unsafe_allow_html=True,
-    )
-
     spacer1, center_col, spacer2 = st.columns([1, 3, 1])
     # Render boxes based on count
     if num_boxes == 1:
