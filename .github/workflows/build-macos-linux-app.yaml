@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# A new push supersedes the multi-hour build of the previous one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Same TOPP tools as the Windows build. FileConverter converts Thermo .raw input
 # with share/OpenMS/THIRDPARTY/ThermoRawFileParser, which needs mono on macOS
 # and Linux.
@@ -105,6 +110,9 @@ jobs:
         retVal=$?
         if [ $retVal -ne 0 ]; then
           # The errors otherwise only reach CDash.
+          echo "::group::Configure log"
+          find OpenMS/bld/Testing -name "LastConfigure*" -type f -exec tail -n 150 {} \;
+          echo "::endgroup::"
           echo "::group::Compiler errors"
           find OpenMS/bld/Testing -name "LastBuild*" -type f -exec grep -n -B2 -A12 -E "error:|fatal error|FAILED:" {} \; | head -n 600
           echo "::endgroup::"
@@ -112,6 +120,7 @@ jobs:
         exit $retVal
       env:
         CMAKE_PREFIX_PATH: ${{ steps.deps.outputs.cmake_prefix }}
+        OPENMS_CONTRIB_LIBS: "${{ github.workspace }}/OpenMS/contrib"
         CI_PROVIDER: "GitHub-Actions"
         CMAKE_GENERATOR: "Ninja"
         SOURCE_DIRECTORY: "${{ github.workspace }}/OpenMS"
