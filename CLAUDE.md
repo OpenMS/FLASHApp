@@ -84,13 +84,16 @@ The container entrypoint starts **Redis** + one or more **RQ workers** (queue `o
 ### CI (`.github/workflows/`)
 
 - `build-and-test.yml` — multi-arch (amd64 + arm64) Docker build → merged manifest, kustomize/kubeconform lint, and **container smoke tests** under apptainer / nginx-on-kind / traefik-on-kind, then publishes images + an ORAS SIF to GHCR. (Its "test" jobs are deployment smoke tests, **not** pytest.)
-- `unit-tests.yml` — the pytest suite. `pylint.yml` — lint. `build-windows-executable-app.yaml` + `test-win-exe-w-embed-py.yaml` — the PyInstaller desktop build. `ghcr-cleanup.yml` — registry GC.
+- `unit-tests.yml` — the pytest suite. `pylint.yml` — lint. `build-windows-executable-app.yaml` — the Windows build: OpenMS from source, then the Electron installer (`FLASHApp-<version>-Setup.exe`), smoke- and end-to-end-tested in CI. `ghcr-cleanup.yml` — registry GC.
 
 ## Conventions & gotchas
 
 - **`app.py` sets multiprocessing start method to `spawn`** (polars + Unix fork are incompatible) and imports `pyopenms` early (required for the Windows build). Don't remove these.
+- **Vendor input:** FLASHDeconv and FLASHTnT accept Thermo `.raw` and Bruker timsTOF `.d` (`MS_DATA_TYPES` in `src/Workflow.py`). `execution()` converts them with `self.executor.convert_to_mzml()` (from the streamlit-template): FileConverter + ThermoRawFileParser for `.raw` (mono in the Docker images, .NET on Windows, `FileConverter` in the Windows `TOPP_TOOLS`), `src/python-tools/bruker_to_mzml.py` (timsrust + pyOpenMS) for `.d`. Converted mzML is cached in `<workflow_dir>/converted-mzML/`. Online, a `.d` is uploaded zipped.
+- **Import from a link** (`src/data_import/`, from streamlit-template #428): the FLASHDeconv/FLASHTnT upload pages get a section that imports files from a link (HTTPS incl. presigned, public S3/Swift folders such as CSC Allas, OneDrive/SharePoint, Zenodo, Figshare; tar/zip listed in place) into the matching `upload_widget()` folder, as a background process reporting through `<workflow_dir>/link-import/`. Online, an SSRF guard refuses non-public addresses. Toggled by `data_import` in `settings.json`.
 - **Running workflows locally needs the TOPP binaries** (`FLASHDeconv`, `FLASHTnT`) on `PATH` — they ship only in the full Docker image. The upload/viewer/download paths work on pre-computed result files without them.
 - **Windows packaged build:** `run_app.py` + `run_app_temp.spec` (PyInstaller). A `windows` arg in `sys.argv` triggers a working-directory `chdir` in `page_setup()`.
 - Pages start with `page_setup()` from `src/common/common.py`, which initializes the workspace, sidebar, and params; call `save_params(params)` at the end. Use `show_fig()` / `show_table()` for consistent display.
+- **Light and dark theme**: `.streamlit/config.toml` defines `[theme.light]` and `[theme.dark]` without `theme.base`, so the app follows the OS color scheme (switch under ⋮ → Settings). `show_fig()` runs figures through `follow_app_theme()`; call it yourself before a direct `st.plotly_chart`. The Vue component reads the active theme from Streamlit's render args. Logos: `*-light.svg` (white tile, dark text) for the light theme, `flashapp-icon.svg` / `*-white.svg` (dark tile, white text) for the dark theme, picked by `st.context.theme.type`.
 - Decorate `configure()` / page sections with `@st.fragment` for partial reruns.
 - Workflow display names map to lowercase-hyphenated keys ("FLASHTnT" → workflow dir / preset keys); TOPP params use colon paths (`tag:min_length`).

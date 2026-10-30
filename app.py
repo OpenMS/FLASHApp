@@ -14,6 +14,9 @@ if "settings" not in st.session_state:
             st.session_state.settings = json.load(f)
 
 if __name__ == '__main__':
+    # A local install exports results to a folder instead of downloading them.
+    export = "Export" if not st.session_state.settings["online_deployment"] else "Download"
+    export_icon = "📤" if export == "Export" else "⬇️"
     pages = {
         "FLASHApp" : [
             st.Page(Path("content", "quickstart.py"), title="Quickstart", icon="👋"),
@@ -26,13 +29,13 @@ if __name__ == '__main__':
             st.Page(Path("content", "FLASHDeconv", "FLASHDeconvSequenceInput.py"), title="Sequence Input", icon="🧵"),
             st.Page(Path("content", "FLASHDeconv", "FLASHDeconvLayoutManager.py"), title="Layout Manager", icon="📝️"),
             st.Page(Path("content", "FLASHDeconv", "FLASHDeconvViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvDownload.py"), title="Download", icon="⬇️"),
+            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvDownload.py"), title=export, icon=export_icon),
         ],
         "🧨 FLASHTnT": [
             st.Page(Path("content", "FLASHTnT", "FLASHTnTWorkflow.py"), title="Workflow", icon="⚙️"),
             st.Page(Path("content", "FLASHTnT", "FLASHTnTLayoutManager.py"), title="Layout Manager", icon="📝️"),
             st.Page(Path("content", "FLASHTnT", "FLASHTnTViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTDownload.py"), title="Download", icon="⬇️"),
+            st.Page(Path("content", "FLASHTnT", "FLASHTnTDownload.py"), title=export, icon=export_icon),
         ],
         "📊 FLASHQuant" : [
             st.Page(Path("content", "FLASHQuant", "FLASHQuantFileUpload.py"), title="File Upload", icon="📂"),

@@ -11,7 +11,11 @@ DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
 
 def select_experiment():
     # Map display name back to experiment ID
-    st.session_state.selected_experiment0 = display_name_to_id[st.session_state.selected_experiment_dropdown]
+    # A cleared selectbox reports None; show no experiment instead of failing.
+    if st.session_state.selected_experiment_dropdown is None:
+        st.session_state.pop('selected_experiment0', None)
+    else:
+        st.session_state.selected_experiment0 = display_name_to_id[st.session_state.selected_experiment_dropdown]
     if len(layout) > 1:
         for exp_index in range(1, len(layout)):
             if st.session_state[f'selected_experiment_dropdown_{exp_index}'] is None:
