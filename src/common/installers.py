@@ -1,7 +1,7 @@
 """Download buttons for the desktop installers of the app's latest release.
 
-The release workflows attach one installer per platform to each GitHub release
-(build-windows-executable-app.yaml and build-macos-linux-app.yaml). Their names
+The desktop app workflow (build-desktop-app.yaml) attaches one installer per
+platform to each GitHub release. Their names
 end in a fixed suffix, so they are found whatever the app and version are
 called. The buttons link to the release assets instead of serving files from
 the image, so a deployment does not carry several hundred MB of installers.
