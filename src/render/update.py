@@ -8,7 +8,8 @@ from src.workflow.FileManager import FileManager
 from src.render.sequence import getFragmentDataFromSeq, getInternalFragmentDataFromSeq
 from pathlib import Path
 from src.render.sequence_data_store import load_entry
-from src.render.structure import StructureStore, get_structure, download_enabled
+from src.render.structure import StructureStore, get_structure, download_enabled, structure_key
+from src.render.structure_files import upload_errors
 
 
 def get_sequence(selection_store):
@@ -213,6 +214,9 @@ def filter_data(data, out_components, selection_store, additional_data, tool):
                 StructureStore(additional_data['structure_dir']), accession,
                 download=download_enabled(st.session_state.get('settings'))
             )
+            error = upload_errors().get(structure_key(accession))
+            if error is not None:
+                data['structure']['upload_error'] = error
 
     if (component == 'Internal Fragment Map') and (tool == 'flashtnt'):
         if 'proteinIndex' not in selection_store:

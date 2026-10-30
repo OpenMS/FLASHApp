@@ -8,6 +8,7 @@ from src.render.StateTracker import StateTracker
 from src.render.initialize import initialize_data
 from src.render.update import update_data, filter_data
 from src.render.components import get_component_function
+from src.render.structure_files import handle_structure_action
 
 # @st.fragment()
 def render_component(
@@ -55,6 +56,11 @@ def render_component(
 
     # Update state
     if new_state is not None:
+        # A structure upload or removal from the Structure View rides along with
+        # the selection; it is applied once, not stored in the state
+        action = new_state.pop('structure_action', None)
+        if action is not None and handle_structure_action(action, additional_data):
+            st.rerun(scope='app')
         updated = state_tracker.updateState(new_state)
 
         if updated:
