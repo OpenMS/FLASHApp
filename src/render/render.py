@@ -444,10 +444,12 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         return _component(
             Table, comp_name, fm, ds, ['tag_dfs', 'scan_table'],
             lambda: dict(
-                data=insight_data.tags(fm, ds),
+                # Rows come sorted by score, with no sort shown on the header
+                data=insight_data.tags(fm, ds).sort(
+                    'Score', descending=True, nulls_last=True, maintain_order=True
+                ),
                 column_definitions=TAG_COLUMNS, title='Tag Table',
                 index_field='TagIndex', go_to_fields=['Scan', 'StartPos', 'EndPos', 'TagSequence'],
-                initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 filters={'pscan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
                 interactivity={'tag': 'TagIndex'}, on_select={'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
@@ -463,8 +465,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 lambda: dict(
                     data=insight_data.proteoform_sequences(fm, ds),
                     filters={'protein': 'proteoform_index'},
-                    mass_identifier='mass', aa_identifier='aa',
+                    mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
                     settings=fm.get_results(ds, ['settings'])['settings'],
+                    entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
                     **SEQUENCE_VIEW_OPTIONS,
                 ),
             )
@@ -497,7 +500,8 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             lambda: dict(
                 data=insight_data.proteoform_sequences(fm, ds),
                 filters={'protein': 'proteoform_index'}, mass_column='MonoMass',
-                aa_identifier='aa', settings=fm.get_results(ds, ['settings'])['settings'],
+                aa_identifier='aa', fragment_identifier='fragment',
+                settings=fm.get_results(ds, ['settings'])['settings'],
                 empty_message='Select a proteoform in the protein table to show its structure.',
             ),
         )
