@@ -103,7 +103,7 @@ The container entrypoint starts **Redis** + one or more **RQ workers** (queue `o
 ### CI (`.github/workflows/`)
 
 - `build-and-test.yml` — multi-arch (amd64 + arm64) Docker build → merged manifest, kustomize/kubeconform lint, and **container smoke tests** under apptainer / nginx-on-kind / traefik-on-kind, then publishes images + an ORAS SIF to GHCR. (Its "test" jobs are deployment smoke tests, **not** pytest.)
-- `unit-tests.yml` — the pytest suite. `pylint.yml` — lint. `build-windows-executable-app.yaml` + `test-win-exe-w-embed-py.yaml` — the PyInstaller desktop build. `ghcr-cleanup.yml` — registry GC.
+- `unit-tests.yml` — the pytest suite. `pylint.yml` — lint. `build-windows-executable-app.yaml` — the Windows build: OpenMS from source, then the Electron installer (`FLASHApp-<version>-Setup.exe`), smoke- and end-to-end-tested in CI. `ghcr-cleanup.yml` — registry GC.
 
 ## Conventions & gotchas
 

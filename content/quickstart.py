@@ -25,7 +25,7 @@ def render_download_box(container_key, title, description, icon="", subtitle="")
 
 def render_windows_download_box():
     """Render the Windows app download box."""
-    if not Path("OpenMS-App.zip").exists():
+    if not Path("OpenMS-App-Setup.exe").exists():
         return False
         
     cols = render_download_box(
@@ -37,12 +37,12 @@ def render_windows_download_box():
     
     # Center the download button
     with cols[1]:
-        with open("OpenMS-App.zip", "rb") as file:
+        with open("OpenMS-App-Setup.exe", "rb") as file:
             st.download_button(
                 label="📥 Download for Windows",
                 data=file,
-                file_name="OpenMS-App.zip",
-                mime="archive/zip",
+                file_name="FLASHApp-Setup.exe",
+                mime="application/vnd.microsoft.portable-executable",
                 type="secondary",
                 use_container_width=True,
                 help="Download FLASHApp for Windows systems"
@@ -52,7 +52,7 @@ def render_windows_download_box():
     st.markdown(
         """
         <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
-            Extract the zip file and run the installer (.msi) to install the app.
+            Run the installer to install the app for your user; no admin rights are needed.
             Launch using the desktop icon after installation.<br>
             Even offline, it's still a web app - just packaged so you can use it without an internet connection.
         </div>
@@ -121,7 +121,7 @@ def render_download_boxes_responsive():
     available_boxes = []
     
     # Check if Windows download is available
-    if Path("OpenMS-App.zip").exists():
+    if Path("OpenMS-App-Setup.exe").exists():
         available_boxes.append("windows")
     
     # Always include FLASH* CLI tools
