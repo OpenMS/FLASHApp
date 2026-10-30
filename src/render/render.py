@@ -337,7 +337,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 column_definitions=SCAN_COLUMNS, title='Scan Table',
                 index_field='index', go_to_fields=['index', 'Scan'],
                 interactivity={'scan': 'index'}, on_select={'mass': 0},
-                reclick=RECLICK, scroll_position=SCROLL, pagination=False, float_precision='float64',
+                reclick=RECLICK, scroll_position=SCROLL, column_menu=False, pagination=False, float_precision='float64',
             ),
         ), {'height': TABLE_HEIGHT}
 
@@ -352,7 +352,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 # As in FLASHViewer, the first mass is highlighted but not
                 # selected until a mass or another scan is clicked
                 default_row_selects=False,
-                reclick=RECLICK, scroll_position=SCROLL, pagination=False, float_precision='float64',
+                reclick=RECLICK, scroll_position=SCROLL, column_menu=False, pagination=False, float_precision='float64',
             ),
         ), {'height': TABLE_HEIGHT}
 
@@ -431,7 +431,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 }],
                 interactivity={'protein': 'index', 'pscan': 'scan_idx'},
                 on_select={'tag': None, 'aa': None, 'mass': None},
-                reclick=RECLICK, scroll_position=SCROLL, pagination=False, float_precision='float64',
+                reclick=RECLICK, scroll_position=SCROLL, column_menu=False, pagination=False, float_precision='float64',
             ),
         ), {'height': TABLE_HEIGHT}
 
@@ -445,7 +445,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 filters={'pscan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
                 interactivity={'tag': 'TagIndex'}, on_select={'mass': None},
-                reclick=RECLICK, scroll_position=SCROLL, pagination=False, float_precision='float64',
+                reclick=RECLICK, scroll_position=SCROLL, column_menu=False, pagination=False, float_precision='float64',
             ),
         ), {'height': TABLE_HEIGHT}
 
@@ -497,7 +497,7 @@ def _render_quant(file_manager, dataset_id, state_manager, key):
             data=insight_data.quant_table(file_manager, dataset_id),
             column_definitions=QUANT_COLUMNS, title='Feature groups',
             index_field='FeatureGroupIndex', interactivity={'feature_group': 'FeatureGroupIndex'},
-            go_to_fields=[], reclick=RECLICK, scroll_position=SCROLL, pagination=False, float_precision='float64',
+            go_to_fields=[], reclick=RECLICK, scroll_position=SCROLL, column_menu=False, pagination=False, float_precision='float64',
         ),
     )
     traces = _component(
