@@ -435,3 +435,102 @@ def precursor_xics(file_manager, dataset_id, tolerance_ppm=XIC_TOLERANCE_PPM):
         .sort(['scan_idx', 'charge', 'rt'])
         .select(list(XIC_SCHEMA))
     )
+
+
+# --- Characterization ----------------------------------------------------------
+
+# Levels of the characterization badge in the protein table, best first
+CHARACTERIZED = 'Characterized'
+PARTIAL = 'Partial'
+AMBIGUOUS = 'Ambiguous'
+# Bonds explained by fragments, in % of the proteoform's bonds, at least for
+# CHARACTERIZED / PARTIAL
+CHARACTERIZED_MIN_CLEAVAGES = 25.0
+PARTIAL_MIN_CLEAVAGES = 10.0
+
+CHARACTERIZATION_SCHEMA = {
+    'proteoform_index': pl.Int64,
+    'Cleavages': pl.Float64,
+    'LocalizedMods': pl.String,
+    'Characterization': pl.String,
+}
+
+
+def explained_bonds(fragments):
+    """Bonds explained by terminal fragments; bond b lies between database
+    residues b and b + 1. A prefix fragment (a/b/c) ends at its residue, a
+    suffix fragment (x/y/z) starts at it."""
+    bonds = set()
+    for fragment in fragments:
+        ion = str(fragment['ion_type'])[:1]
+        residue = fragment['residue']
+        if residue is None:
+            continue
+        if ion in PREFIX_IONS:
+            bonds.add(int(residue))
+        elif ion in SUFFIX_IONS:
+            bonds.add(int(residue) - 1)
+    return bonds
+
+
+def characterize(entry, fragments):
+    """Characterization of one proteoform, ProSight's C-score traffic light in
+    spirit but from FLASHTnT's own evidence:
+
+    - Cleavages: % of the proteoform's bonds explained by terminal fragments.
+    - LocalizedMods: modifications (mass shifts) FLASHTnT localized to one
+      residue, of all of them ('k/n').
+    - Characterization: CHARACTERIZED when both termini are determined, every
+      modification is localized and at least CHARACTERIZED_MIN_CLEAVAGES % of
+      the bonds are explained; AMBIGUOUS below PARTIAL_MIN_CLEAVAGES %;
+      PARTIAL otherwise.
+    """
+    sequence = entry.get('sequence') or []
+    start_reported = entry.get('proteoform_start')
+    end_reported = entry.get('proteoform_end')
+    start_reported = -1 if start_reported is None else int(start_reported)
+    end_reported = -1 if end_reported is None else int(end_reported)
+    start = max(start_reported, 0)
+    end = end_reported if end_reported >= 0 else len(sequence) - 1
+    total_bonds = max(end - start, 0)
+    bonds = {b for b in explained_bonds(fragments) if start <= b < end}
+    cleavages = 100.0 * len(bonds) / total_bonds if total_bonds else 0.0
+
+    modifications = [m for m in (entry.get('modifications') or []) if m]
+    localized = sum(1 for m in modifications if m.get('start') == m.get('end'))
+
+    if cleavages < PARTIAL_MIN_CLEAVAGES:
+        level = AMBIGUOUS
+    elif (
+        start_reported >= 0 and end_reported >= 0
+        and localized == len(modifications)
+        and cleavages >= CHARACTERIZED_MIN_CLEAVAGES
+    ):
+        level = CHARACTERIZED
+    else:
+        level = PARTIAL
+    return {
+        'Cleavages': round(cleavages, 1),
+        'LocalizedMods': f'{localized}/{len(modifications)}' if modifications else '-',
+        'Characterization': level,
+    }
+
+
+def characterization(file_manager, dataset_id):
+    """Characterization (see characterize) of every proteoform."""
+    errors = fragment_errors(file_manager, dataset_id).collect()
+    by_proteoform = {
+        key[0]: group.to_dicts()
+        for key, group in errors.group_by(['proteoform_index'])
+    }
+    sequences = insight_data.proteoform_sequences(file_manager, dataset_id).select(
+        'proteoform_index', 'sequence', 'start_position', 'end_position', 'modifications'
+    ).collect()
+    rows = []
+    for entry in sequences.iter_rows(named=True):
+        entry['proteoform_start'] = entry.pop('start_position')
+        entry['proteoform_end'] = entry.pop('end_position')
+        row = characterize(entry, by_proteoform.get(entry['proteoform_index'], []))
+        row['proteoform_index'] = entry['proteoform_index']
+        rows.append(row)
+    return pl.DataFrame(rows, schema=CHARACTERIZATION_SCHEMA).lazy()
