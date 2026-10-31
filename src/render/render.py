@@ -103,11 +103,26 @@ PROTEIN_COLUMNS = [
      'headerTooltip': 'The identifier of the mass spectrometry scan associated with the identified proteoform.'},
     {'title': 'Accession', 'field': 'accession',
      'headerTooltip': 'The unique identifier for the protein in the reference database.'},
+    {'title': 'Characterization', 'field': 'Characterization', 'sorter': 'string',
+     'formatter': 'badge', 'formatterParams': {'colorMap': {
+         'Characterized': '#2E7D32', 'Partial': '#F9A825', 'Ambiguous': '#C62828',
+     }},
+     'headerTooltip': (
+         'How completely the fragments pin down the proteoform (in the spirit of '
+         "ProSight's C-score colors). Characterized: both termini determined, every "
+         'mass shift localized to one residue and at least 25% of the bonds explained '
+         'by fragments. Ambiguous: less than 10% of the bonds explained. Partial: '
+         'anything in between.'
+     )},
     {'title': 'Description', 'field': 'description', 'responsive': 10},
     {'title': 'Length', 'field': 'length', 'responsive': 6, 'sorter': 'number',
      'headerTooltip': 'The total number of amino acids in the matched protein.'},
     {'title': 'Mass', 'field': 'ProteoformMass', 'responsive': 8, 'sorter': 'number', **_DASH_FOR_MISSING,
      'headerTooltip': 'The calculated mass of the proteoform in Daltons.'},
+    {'title': 'Cleavages (%)', 'field': 'Cleavages', 'sorter': 'number', 'responsive': 7,
+     'headerTooltip': 'Bonds of the proteoform explained by matched terminal fragments, in %.'},
+    {'title': 'Localized Mods', 'field': 'LocalizedMods', 'sorter': 'string', 'responsive': 7,
+     'headerTooltip': 'Modifications (mass shifts) localized to a single residue, of all modifications.'},
     {'title': 'No. of Matched Fragments', 'field': 'MatchingFragments', 'sorter': 'number',
      'headerTooltip': 'The number of fragment ions that match the protein sequence.'},
     {'title': 'No. of Modifications', 'field': 'ModCount', 'sorter': 'number',
@@ -367,6 +382,25 @@ def _precursor_xic(comp_name, file_manager, dataset_id, tool):
     )
 
 
+def _proteins_with_characterization(file_manager, dataset_id):
+    """Protein table rows with the characterization columns (empty when the
+    results have no sequence data)."""
+    proteins = insight_data.proteins(file_manager, dataset_id)
+    if any(
+        insight_data.result_path(file_manager, dataset_id, name) is None
+        for name in ('sequence_data', 'sequence_view')
+    ):
+        return proteins.with_columns(
+            pl.lit(None, dtype=pl.Float64).alias('Cleavages'),
+            pl.lit(None, dtype=pl.String).alias('LocalizedMods'),
+            pl.lit(None, dtype=pl.String).alias('Characterization'),
+        )
+    return proteins.join(
+        validation_data.characterization(file_manager, dataset_id),
+        left_on='index', right_on='proteoform_index', how='left', maintain_order='left',
+    )
+
+
 def _deconv_sequence(file_manager, state_manager):
     """Sequence data for the FLASHDeconv sequence view: the sequence the user
     typed into the view, else the one saved on the Sequence Input page."""
@@ -512,9 +546,10 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
 
     if comp_name == 'protein_table':
         return _component(
-            Table, comp_name, fm, ds, ['protein_dfs', 'scan_table'],
+            Table, comp_name, fm, ds,
+            ['protein_dfs', 'scan_table', 'sequence_data', 'sequence_view', 'settings'],
             lambda: dict(
-                data=insight_data.proteins(fm, ds),
+                data=_proteins_with_characterization(fm, ds),
                 column_definitions=PROTEIN_COLUMNS, title='Protein Table',
                 index_field='index', go_to_fields=['Scan', 'accession'],
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
@@ -527,6 +562,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 on_select={'tag': None, 'aa': None, 'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
+            required=['protein_dfs', 'scan_table'],
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'tag_table':

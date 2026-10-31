@@ -150,3 +150,46 @@ def test_precursor_xics_on_demo(fd):
 def test_precursor_xics_without_ms1(tnt):
     # The FLASHTnT demo is a single fragmentation spectrum
     assert validation_data.precursor_xics(tnt, TNT_DATASET).collect().is_empty()
+
+
+# --- Characterization ----------------------------------------------------------
+
+def _fragments(*pairs):
+    return [{'ion_type': ion, 'residue': residue} for ion, residue in pairs]
+
+
+def test_explained_bonds():
+    # b ends at its residue, y starts at it: both explain bond 4 (residues 4|5)
+    bonds = validation_data.explained_bonds(_fragments(('b', 4), ('y', 5), ('c', 7), ('internal', 3)))
+    assert bonds == {4, 7}
+
+
+def test_characterize_levels():
+    entry = {'sequence': list('A' * 11), 'proteoform_start': 0, 'proteoform_end': 10,
+             'modifications': [{'start': 3, 'end': 3}]}
+    # 3 of 10 bonds, termini known, the one modification localized
+    full = validation_data.characterize(entry, _fragments(('b', 0), ('b', 1), ('y', 9)))
+    assert full == {'Cleavages': 30.0, 'LocalizedMods': '1/1', 'Characterization': 'Characterized'}
+    # An unlocalized mass shift
+    entry_shift = dict(entry, modifications=[{'start': 3, 'end': 6}])
+    partial = validation_data.characterize(entry_shift, _fragments(('b', 0), ('b', 1), ('y', 9)))
+    assert partial['Characterization'] == 'Partial'
+    assert partial['LocalizedMods'] == '0/1'
+    # Undetermined C-terminus
+    entry_open = dict(entry, proteoform_end=-1)
+    assert validation_data.characterize(entry_open, _fragments(('b', 0), ('b', 1), ('b', 2)))['Characterization'] == 'Partial'
+    # No fragments
+    assert validation_data.characterize(entry, [])['Characterization'] == 'Ambiguous'
+    assert validation_data.characterize(dict(entry, modifications=[]), [])['LocalizedMods'] == '-'
+
+
+def test_characterization_on_demo(tnt):
+    table = validation_data.characterization(tnt, TNT_DATASET).collect()
+    assert table.height == 17
+    assert set(table['Characterization']) <= {'Characterized', 'Partial', 'Ambiguous'}
+    # The best hit of the demo (AQPZ, score 505) is identified but carries an
+    # unlocalized mass shift
+    best = table.filter(pl.col('proteoform_index') == 9).row(0, named=True)
+    assert best['Characterization'] == 'Partial'
+    assert best['LocalizedMods'] == '0/1'
+    assert best['Cleavages'] > 25
