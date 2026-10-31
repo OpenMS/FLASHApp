@@ -24,7 +24,7 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
-from src.render import insight_data, validation_data
+from src.render import insight_data, qc_data, validation_data
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -37,7 +37,7 @@ def _code_version():
     the frame builders or openms-insight. Part of every cache id, so caches
     are rebuilt after an update."""
     digest = hashlib.md5(openms_insight.__version__.encode())
-    for module in (__file__, insight_data.__file__, validation_data.__file__):
+    for module in (__file__, insight_data.__file__, validation_data.__file__, qc_data.__file__):
         try:
             digest.update(Path(module).read_bytes())
         except OSError:
@@ -708,12 +708,72 @@ def _render_quant(file_manager, dataset_id, state_manager, key):
         traces(key=f'{key}_traces', state_manager=state_manager, height=800)
 
 
+# Run-level QC panels: (component, frame builder, sources, title, x label,
+# y label, mode, y axis range mode)
+RUN_QC_PLOTS = [
+    ('qc_qscore', qc_data.qscore_distribution, ['mass_table', 'scan_table'],
+     'QScore Distribution', 'QScore', 'Masses', 'lines', 'nonnegative'),
+    ('qc_charge', qc_data.charge_distribution, ['mass_table', 'scan_table'],
+     'Charge States', 'Charge', 'Masses', 'lines+markers', 'nonnegative'),
+    ('qc_mass', qc_data.mass_distribution, ['mass_table', 'scan_table'],
+     'Mass Distribution', 'Monoisotopic mass (Da)', 'Masses', 'lines', 'nonnegative'),
+    ('qc_masses_per_spectrum', qc_data.masses_per_spectrum, ['scan_table'],
+     'Masses per Spectrum', 'Retention time (s)', 'Masses', 'markers', 'nonnegative'),
+]
+ID_QC_PLOTS = [
+    ('qc_identifications', qc_data.identifications_over_time, ['protein_dfs', 'scan_table'],
+     'Identifications over Time', 'Retention time (s)', 'PrSMs per minute', 'lines+markers',
+     'nonnegative'),
+    ('qc_fragment_error', qc_data.fragment_error_over_time,
+     ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+     'Fragment Mass Error over Time', 'Retention time (s)', 'Median error (ppm)', 'markers',
+     'normal'),
+]
+
+
+def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
+    """A panel of run-level plots, two per row; plots whose results are
+    missing are left out."""
+    components = []
+    for name, builder, sources, title, x_label, y_label, mode, y_range in plots:
+        try:
+            components.append(_component(
+                SeriesPlot, f'{name}-{tool}', file_manager, dataset_id, sources,
+                lambda builder=builder, name=name, title=title, x_label=x_label,
+                y_label=y_label, mode=mode, y_range=y_range: dict(
+                    data=builder(file_manager, dataset_id),
+                    x_column='x', y_column='y', series_column='series',
+                    mode=mode, title=title, x_label=x_label, y_label=y_label,
+                    y_range_mode=y_range, svg_filename=f'FLASHViewer-{name}',
+                ),
+                required=[source for source in sources if source != 'settings'],
+            ))
+        except MissingResult:
+            continue
+    if not components:
+        st.info('This dataset has no data for the run QC plots.')
+        return
+    for row_start in range(0, len(components), 2):
+        columns = st.columns(2)
+        for offset, component in enumerate(components[row_start:row_start + 2]):
+            with columns[offset]:
+                component(
+                    key=f'{key}_{row_start + offset}', state_manager=state_manager, height=320,
+                )
+
+
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
     if comp_name == 'internal_fragment_map':
         st.info('The internal fragment map is not available yet.')
         return
     if comp_name == 'quant_visualization':
         _render_quant(file_manager, dataset_id, state_manager, key)
+        return
+    if comp_name == 'run_qc':
+        _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        return
+    if comp_name == 'id_qc':
+        _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
         return
     try:
         component, render_args = _build(comp_name, file_manager, dataset_id, tool, state_manager)

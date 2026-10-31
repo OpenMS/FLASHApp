@@ -19,6 +19,7 @@ DECONV_COMPONENTS = [
     {'name': 'fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
     {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': 'scan_table'},
     {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': 'scan_table'},
+    {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
 ]
 
 # Offered only once a sequence has been submitted on the Sequence Input page.
@@ -38,6 +39,8 @@ TNT_COMPONENTS = [
     {'name': 'fragment_error_plot', 'label': 'Fragment mass errors', 'group': 'Validation', 'requires': 'protein_table'},
     {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': 'protein_table'},
     {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': 'protein_table'},
+    {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
+    {'name': 'id_qc', 'label': 'Identification QC (IDs and fragment error over time)', 'group': 'Quality control'},
     {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
 ]
@@ -45,9 +48,9 @@ TNT_COMPONENTS = [
 # Mirrors DEFAULT_LAYOUT in the Viewer pages, which use it when nothing is saved.
 DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                          ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot'],
-                         ['isotope_envelope', 'precursor_xic']]
+                         ['isotope_envelope', 'precursor_xic'], ['run_qc']]
 TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['fragment_error_plot', 'isotope_envelope'],
-                      ['structure_view'], ['tag_table'], ['combined_spectrum']]
+                      ['structure_view'], ['tag_table'], ['combined_spectrum'], ['id_qc']]
 
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3
