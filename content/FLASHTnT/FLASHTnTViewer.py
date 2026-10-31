@@ -13,7 +13,8 @@ DEFAULT_LAYOUT = [
     ['fragment_error_plot', 'isotope_envelope'],
     ['structure_view'],
     ['tag_table'],
-    ['combined_spectrum']
+    ['combined_spectrum'],
+    ['id_qc'],
 ]
 
 

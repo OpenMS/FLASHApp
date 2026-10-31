@@ -8,7 +8,7 @@ from src.render.render import render_grid
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                   ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot'],
-                  ['isotope_envelope', 'precursor_xic']]
+                  ['isotope_envelope', 'precursor_xic'], ['run_qc']]
 
 def select_experiment():
     # Map display name back to experiment ID
