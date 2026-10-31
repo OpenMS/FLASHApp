@@ -41,7 +41,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: 't0mdavid-m/openms-insight'
-        ref: 'claude/project-thread-hxjbbs'
+        ref: 'claude/project-thread-y0mgos'
         path: 'openms-insight'
 
     - name: Build the Vue bundle and the wheel

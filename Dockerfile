@@ -141,7 +141,7 @@ RUN rm -rf openms-build
 FROM node:21 AS insight-build
 
 ARG INSIGHT_REPO=https://github.com/t0mdavid-m/openms-insight.git
-ARG INSIGHT_REF=claude/project-thread-hxjbbs
+ARG INSIGHT_REF=claude/project-thread-y0mgos
 
 ADD https://api.github.com/repos/t0mdavid-m/openms-insight/git/refs/heads/$INSIGHT_REF version.json
 
