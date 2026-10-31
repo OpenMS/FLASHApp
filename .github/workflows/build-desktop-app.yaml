@@ -808,7 +808,12 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign -dv --verbose=2 "$app" 2>&1 | grep -E '^(Authority|TeamIdentifier|Runtime)'
           if [[ $NOTARIZED == true ]]; then
-            xcrun stapler validate "$app"
+            # stapler asks Apple's CloudKit for the ticket; retry dropped connections.
+            for i in 1 2 3 4 5; do
+              xcrun stapler validate "$app" && break
+              [[ $i == 5 ]] && exit 1
+              sleep $((i * 15))
+            done
             spctl --assess --type execute --verbose=2 "$app"
           fi
         fi
