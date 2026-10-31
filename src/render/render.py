@@ -37,7 +37,10 @@ def _code_version():
     the frame builders or openms-insight. Part of every cache id, so caches
     are rebuilt after an update."""
     digest = hashlib.md5(openms_insight.__version__.encode())
-    for module in (__file__, insight_data.__file__, validation_data.__file__):
+    for module in (
+        __file__, insight_data.__file__, validation_data.__file__,
+        str(Path(__file__).with_name('compare.py')),
+    ):
         try:
             digest.update(Path(module).read_bytes())
         except OSError:
