@@ -220,6 +220,31 @@ Adjust **general settings** such as:
 ---
 
 
+# **FLASHQuant Guide**
+
+## **1️⃣ Uploading Results**
+
+Upload FLASHQuant output (`*.fdq.tsv` with its mass traces) on **FLASHQuant > File Upload**, one result per run. The **Viewer** shows the feature groups of one run and their mass traces.
+
+## **2️⃣ Comparing Runs**
+
+**FLASHQuant > Compare Runs** compares the proteoform abundances of several runs.
+
+1. Tick the runs to compare and give each one its **condition** (for example `control` and `treated`). Runs with the same condition are replicates; runs without a condition are linked but not tested.
+2. Set the **mass tolerance** (ppm) and **retention time tolerance** (s) for linking, and in how many of a condition's runs a proteoform must be quantified to be tested.
+3. Click **Compare runs**. The feature groups of the runs are linked by monoisotopic mass and apex retention time with OpenMS's FeatureLinkerUnlabeledKD algorithm, which also corrects retention time shifts between runs. Abundances are log2 transformed, median normalized, missing values imputed with the smallest value of the proteoform, and compared with a moderated t-test (two conditions) or F-test (more), Benjamini-Hochberg adjusted.
+
+The page then shows:
+- **Volcano plot** (two conditions) – log2 fold change against adjusted p-value, with adjustable thresholds.
+- **Abundance per run** – the normalized abundance of the selected proteoform in every run, coloured by condition.
+- **Linked proteoforms** – every linked proteoform with the number of runs it was found in and its test result.
+- **Feature groups per run** – the feature groups linked into the selected proteoform; their index finds them in the Viewer.
+- **Clustered heatmap** – z-scores of the 50 most significant proteoforms, with runs and proteoforms clustered.
+
+Clicking a point in the volcano plot or a row in the table selects the proteoform in the other views.
+
+---
+
 ## **📖 Need Help?**
 
 If you have any questions or need assistance, feel free to contact our support team.
