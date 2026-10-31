@@ -91,6 +91,8 @@ The **Layout Manager** allows users to customize the experiment display settings
    - **Raw spectrum** - Plots raw spectrum for a scan(intensity vs m/z).
    - **Mass table** - Display deconvolved masses for a selected scan with properties.
    - **3D S/N plot** - Visualizes S/N ratio of deconvolved masses in 3D.
+   - **Isotope envelope fit** - The observed isotope envelope of the selected mass (all charges summed; the precursor of a fragmentation spectrum while no mass is selected) mirrored against the averagine envelope. A shifted apex points to a wrong monoisotopic mass.
+   - **Precursor XIC by charge** - The precursor mass of the selected fragmentation spectrum traced over the MS1 spectra, one line per charge plus their sum.
 3. Click **Save** to apply changes.
 
 
@@ -180,6 +182,9 @@ Adjust **general settings** such as:
 - **Internal Fragment Map** – Shows internal fragment ions from the selected scan
 - **Tag Table** – Lists sequence tags with corresponding information.
 - **Spectrum View** – Shows the annotated spectrum with matched peaks.
+- **Fragment Mass Errors** – Part of the default layout. The mass error (ppm) of every matched fragment of the selected proteoform against its mass, colored by ion type (FLASHAnnotator's envelopes when present, else the fragments matched within the FLASHTnT tolerance). Errors should scatter around zero; a drift or a group of outliers points to a calibration problem or a wrong assignment. Clicking a point selects the residue next to the fragment's bond.
+- **Isotope Envelope Fit** – Part of the default layout. The observed isotope envelope of the precursor (or of the mass selected in a spectrum) mirrored against the averagine envelope.
+- **Precursor XIC by Charge** – The precursor mass of the selected proteoform's spectrum traced over the MS1 spectra, one line per charge plus their sum. Empty when the input has no MS1 spectra.
 
 ![Download Results](/static/images/layoutmanager_tnt.png)
 

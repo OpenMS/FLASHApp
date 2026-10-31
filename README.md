@@ -17,7 +17,7 @@ Until the openms-insight release with these components is on PyPI, install it
 from source (the Docker and Windows builds do this for you):
 
 ```
-git clone -b claude/project-thread-hxjbbs https://github.com/t0mdavid-m/openms-insight.git
+git clone -b claude/project-thread-y0mgos https://github.com/t0mdavid-m/openms-insight.git
 cd openms-insight/js-component && npm ci && npm run build
 mkdir -p ../openms_insight/js-component && cp -r dist ../openms_insight/js-component/
 cd .. && pip install --no-deps .

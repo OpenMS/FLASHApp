@@ -9,7 +9,8 @@ from src.render.render import render_grid
 
 DEFAULT_LAYOUT = [
     ['protein_table'], 
-    ['sequence_view'], 
+    ['sequence_view'],
+    ['fragment_error_plot', 'isotope_envelope'],
     ['structure_view'],
     ['tag_table'],
     ['combined_spectrum']

@@ -17,6 +17,8 @@ DECONV_COMPONENTS = [
     {'name': 'anno_spectrum', 'label': 'Raw spectrum', 'group': 'Spectra & plots', 'requires': 'scan_table'},
     {'name': '3D_SN_plot', 'label': '3D S/N plot', 'group': 'Spectra & plots', 'requires': 'mass_table'},
     {'name': 'fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
+    {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': 'scan_table'},
+    {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': 'scan_table'},
 ]
 
 # Offered only once a sequence has been submitted on the Sequence Input page.
@@ -33,14 +35,19 @@ TNT_COMPONENTS = [
     # Internal fragment map is disabled for FLASHTnT for now.
     {'name': 'combined_spectrum', 'label': 'Sequence tag view', 'group': 'Sequence', 'requires': 'tag_table'},
     {'name': 'id_fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
+    {'name': 'fragment_error_plot', 'label': 'Fragment mass errors', 'group': 'Validation', 'requires': 'protein_table'},
+    {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': 'protein_table'},
+    {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': 'protein_table'},
     {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
 ]
 
 # Mirrors DEFAULT_LAYOUT in the Viewer pages, which use it when nothing is saved.
 DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
-                         ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
-TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['structure_view'], ['tag_table'], ['combined_spectrum']]
+                         ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot'],
+                         ['isotope_envelope', 'precursor_xic']]
+TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['fragment_error_plot', 'isotope_envelope'],
+                      ['structure_view'], ['tag_table'], ['combined_spectrum']]
 
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3
