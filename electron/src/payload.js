@@ -10,6 +10,9 @@ const { spawn, execFileSync } = require("child_process");
 const isWindows = process.platform === "win32";
 
 // Folder holding app.py, the python-<version> folder, TOPP executables and share/.
+// On Windows the TOPP executables and DLLs sit next to app.py; on macOS and
+// Linux they keep OpenMS's own openms/bin + openms/lib layout so the binaries
+// find their libraries through their relative rpath.
 function payloadDir(resourcesPath, isPackaged) {
   if (process.env.OPENMS_APP_PAYLOAD) return path.resolve(process.env.OPENMS_APP_PAYLOAD);
   if (isPackaged) return path.join(resourcesPath, "app-payload");
@@ -17,7 +20,8 @@ function payloadDir(resourcesPath, isPackaged) {
   return path.resolve(__dirname, "..", "..");
 }
 
-// The embedded interpreter is python-<version>/python.exe; fall back to the
+// The embedded interpreter is python-<version>/python.exe (Windows) or
+// python-<version>/bin/python3 (a python-build-standalone tree); fall back to the
 // python on PATH when running from a checkout.
 function pythonExecutable(payload) {
   const embedded = fs
@@ -42,17 +46,21 @@ function embeddedPythonDir(payload) {
 // OPENMS_DATA_PATH pointing at share/OpenMS, and every THIRDPARTY tool folder
 // (Comet, Percolator, Sirius, ...) on PATH. The bundled interpreter and the
 // console scripts of its packages (pip --target puts them in
-// Lib/site-packages/bin) come first too, so a workflow that calls `python` or
+// Lib/site-packages/bin on Windows, a python-build-standalone tree in bin/)
+// come first too, so a workflow that calls `python` or
 // a tool such as `pyprophet` finds the bundled one.
 function appEnvironment(payload, workspacesDir) {
   const env = { ...process.env };
   const pathKey = Object.keys(env).find((k) => k.toUpperCase() === "PATH") || "PATH";
   const extraPath = [payload];
+  const toppBin = path.join(payload, "openms", "bin");
+  if (fs.existsSync(toppBin)) extraPath.push(toppBin);
 
   const pythonDir = embeddedPythonDir(payload);
   if (pythonDir) {
     extraPath.push(pythonDir);
-    for (const sub of [["Scripts"], ["Lib", "site-packages", "bin"]]) {
+    const subs = isWindows ? [["Scripts"], ["Lib", "site-packages", "bin"]] : [["bin"]];
+    for (const sub of subs) {
       const dir = path.join(pythonDir, ...sub);
       if (fs.existsSync(dir)) extraPath.push(dir);
     }
@@ -73,6 +81,9 @@ function appEnvironment(payload, workspacesDir) {
   if (workspacesDir) env.LOCAL_WORKSPACES_DIR = workspacesDir;
   env.PYTHONUNBUFFERED = "1";
   env.PYTHONNOUSERSITE = "1";
+  // The macOS bundle is sealed by its signature and the AppImage is read-only;
+  // their bytecode is compiled at build time instead.
+  if (!isWindows) env.PYTHONDONTWRITEBYTECODE = "1";
   return env;
 }
 

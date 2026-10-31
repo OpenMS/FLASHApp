@@ -28,6 +28,15 @@ test("appEnvironment mirrors the MSI launcher", () => {
   assert.ok(entries.includes(path.join(dir, "share", "OpenMS", "THIRDPARTY", "Percolator")));
 });
 
+test("appEnvironment puts openms/bin on PATH when present", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "payload-"));
+  fs.mkdirSync(path.join(dir, "openms", "bin"), { recursive: true });
+  const env = payload.appEnvironment(dir);
+  const pathKey = Object.keys(env).find((k) => k.toUpperCase() === "PATH");
+  const entries = env[pathKey].split(path.delimiter);
+  assert.deepEqual(entries.slice(0, 2), [dir, path.join(dir, "openms", "bin")]);
+});
+
 test("pythonExecutable prefers the embedded interpreter", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "payload-"));
   const exe = process.platform === "win32" ? "python.exe" : path.join("bin", "python3");
@@ -46,5 +55,32 @@ test("appEnvironment puts the bundled Python and its console scripts on PATH", (
   const env = payload.appEnvironment(dir, "/tmp/ws");
   const pathKey = Object.keys(env).find((k) => k.toUpperCase() === "PATH");
   const entries = env[pathKey].split(path.delimiter);
-  assert.deepEqual(entries.slice(0, 3), [dir, pyDir, path.join(pyDir, "Lib", "site-packages", "bin")]);
+  const scripts = process.platform === "win32" ? path.join(pyDir, "Lib", "site-packages", "bin") : path.join(pyDir, "bin");
+  assert.deepEqual(entries.slice(0, 3), [dir, pyDir, scripts]);
+});
+
+test("AppImage desktop entry points at the AppImage and the copied icon", () => {
+  const { integrateAppImage } = require("../src/linux-desktop");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "desktop-"));
+  const old = process.env.XDG_DATA_HOME;
+  process.env.XDG_DATA_HOME = dir;
+  try {
+    assert.equal(integrateAppImage({ desktopName: "app.desktop" }), null);
+    const icon = path.join(dir, "src.png");
+    fs.writeFileSync(icon, "png");
+    const file = integrateAppImage({
+      appImage: '/home/u/My Apps/A"pp.AppImage',
+      desktopName: "app.desktop",
+      name: "App",
+      iconSource: icon,
+      iconDir: path.join(dir, "cfg"),
+    });
+    const entry = fs.readFileSync(file, "utf8");
+    assert.match(entry, /^Exec="\/home\/u\/My Apps\/A\\"pp\.AppImage" %U$/m);
+    assert.match(entry, /^StartupWMClass=app$/m);
+    assert.equal(fs.readFileSync(path.join(dir, "cfg", "app.png"), "utf8"), "png");
+  } finally {
+    if (old === undefined) delete process.env.XDG_DATA_HOME;
+    else process.env.XDG_DATA_HOME = old;
+  }
 });
