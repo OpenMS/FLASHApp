@@ -10,9 +10,8 @@ Two steps, both free of Streamlit so they can run anywhere:
    whose "m/z" is its monoisotopic mass, so the m/z tolerance in ppm is a
    mass tolerance.
 2. differential: abundances of the linked proteoforms are compared between
-   two or more conditions with openms-insight's analysis functions (filter,
-   impute, log2 transform, median normalization, moderated t-test or
-   F-test, Benjamini-Hochberg).
+   two or more conditions with OpenDDA's comparison chain (filter, impute,
+   transform and normalize, test, adjust; see src/parse/differential.py).
 """
 
 import numpy as np
@@ -23,9 +22,6 @@ import pyopenms
 # one proteoform within a minute after the linker's retention time correction
 MASS_TOLERANCE_PPM = 10.0
 RT_TOLERANCE_S = 60.0
-# A proteoform must be quantified in at least this share of the runs of one
-# condition to be tested
-MIN_PRESENT_RATIO = 0.5
 
 ID_COLUMN = 'Proteoform'
 
@@ -117,62 +113,50 @@ def link_runs(runs, mass_tolerance_ppm=MASS_TOLERANCE_PPM, rt_tolerance=RT_TOLER
     return consensus, members
 
 
-def _metadata(design):
-    return pl.DataFrame(
-        [{'sample_id': run, 'group': condition} for run, condition in design.items()],
-        schema={'sample_id': pl.String, 'group': pl.String},
-    )
-
-
-def differential(consensus, design, min_present_ratio=MIN_PRESENT_RATIO):
+def differential(consensus, design, settings=None):
     """Differential abundance of the linked proteoforms between conditions.
 
-    `design` maps run names (quantity columns of `consensus`) to conditions;
-    runs without a condition are left out. Returns (statistics, normalized):
+    Runs OpenDDA's comparison chain (src/parse/differential.py: filter,
+    impute, transform and normalize, test, adjust) with `settings` (OpenDDA's
+    defaults when None). `design` maps run names (quantity columns of
+    `consensus`) to conditions; runs without a condition are left out.
+    Returns (statistics, normalized, steps):
 
     - statistics: one row per tested proteoform with ConsensusIndex,
-      Proteoform, MonoisotopicMass, RT, the normalized log2 abundance per
-      run, log2FC (second condition over the first, in sorted order, for two
-      conditions), stat, p-value and p-adj.
-    - normalized: the normalized log2 abundances in long form
-      (ConsensusIndex, Run, Condition, Abundance) for abundance profiles.
+      Proteoform, MonoisotopicMass, RT, the normalized abundance per run,
+      log2FC (last condition over the first, in sorted order), stat, p-value
+      and p-adj.
+    - normalized: the normalized abundances in long form (ConsensusIndex,
+      Run, Abundance, Condition) for abundance profiles.
+    - steps: the tables after each step (filtered, imputed, normalized; wide,
+      polars) and the test that was used, for the diagnostic plots.
     """
     # pylint: disable=import-outside-toplevel
     # Imported here: linking runs does not need openms-insight
-    from openms_insight.analysis.filter import filter_low_repeatability
-    from openms_insight.analysis.imputation import impute_smallest_value
-    from openms_insight.analysis.normalization import normalize_samples, transform_data
-    from openms_insight.analysis.statistics import adjust_fdr_lazy, calculate_statistical_tests
+    from src.parse.differential import default_settings, run_differential
 
     design = {run: condition for run, condition in design.items() if condition}
-    conditions = sorted(set(design.values()))
-    if len(conditions) < 2:
-        raise ValueError('Comparing conditions needs runs of at least two conditions.')
-    metadata = _metadata(design)
     runs = list(design)
-    data = consensus.select('ConsensusIndex', ID_COLUMN, 'MonoisotopicMass', 'RT', *runs).lazy()
-    data = filter_low_repeatability(
-        quantification_data=data, metadata=metadata, group_column='group',
-        max_missing_ratio=1.0 - min_present_ratio,
-    )
-    data = impute_smallest_value(quantification_data=data, metadata=metadata, scope='row')
-    data = transform_data(quantification_data=data, metadata=metadata, strategy='log2')
-    data = normalize_samples(
-        quantification_data=data, metadata=metadata, strategy='median', id_col=ID_COLUMN,
-        reference_feature=None,
-    )
-    method = 'limma_like'
-    data = calculate_statistical_tests(quantification_data=data, metadata=metadata, method=method)
-    statistics = adjust_fdr_lazy(quantification_data=data, strategy='BH').collect()
-
+    settings = {**default_settings(), **(settings or {})}
+    pivot = consensus.select('ConsensusIndex', ID_COLUMN, 'MonoisotopicMass', 'RT', *runs).to_pandas()
+    out = run_differential(pivot, design, ID_COLUMN, settings)
+    statistics = pl.from_pandas(out['statistics_df'])
     normalized = (
         statistics.select('ConsensusIndex', *runs)
         .unpivot(index='ConsensusIndex', variable_name='Run', value_name='Abundance')
-        .join(metadata.rename({'sample_id': 'Run', 'group': 'Condition'}), on='Run')
+        .join(
+            pl.DataFrame({'Run': runs, 'Condition': [design[r] for r in runs]}), on='Run',
+        )
         .with_columns(pl.col('Abundance').cast(pl.Float64))
         .sort(['ConsensusIndex', 'Condition', 'Run'])
     )
-    return statistics, normalized
+    steps = {
+        name: pl.from_pandas(out[f'{name}_df'])
+        for name in ('filtered', 'imputed', 'normalized')
+    }
+    steps['stat_test'] = out['stat_test']
+    steps['transform'] = out['normalized_transform']
+    return statistics, normalized, steps
 
 
 def zscores(statistics, runs, top=50):

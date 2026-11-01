@@ -63,13 +63,16 @@ def test_differential_finds_the_changed_proteoforms():
     runs = _runs()
     consensus, _ = quant_compare.link_runs(runs)
     design = {name: name[0] for name in runs}
-    statistics, normalized = quant_compare.differential(consensus, design)
+    statistics, normalized, steps = quant_compare.differential(consensus, design)
     up = statistics.filter((pl.col('p-adj') < 0.05) & (pl.col('log2FC') > 1))
     # Exactly the proteoforms four times as abundant in B (log2FC near 2)
     assert up.height == 20
     assert up['log2FC'].is_between(1.5, 2.5).all()
     assert normalized.columns == ['ConsensusIndex', 'Run', 'Abundance', 'Condition']
     assert normalized.height == statistics.height * 6
+
+    assert steps['stat_test'] == 'limma_like'
+    assert {'filtered', 'imputed', 'normalized'} <= set(steps)
 
     heat = quant_compare.zscores(statistics, list(design), top=10)
     assert heat.height == 10
@@ -82,3 +85,27 @@ def test_differential_needs_two_conditions():
     consensus, _ = quant_compare.link_runs(runs)
     with pytest.raises(ValueError):
         quant_compare.differential(consensus, {name: 'A' for name in runs})
+
+
+def test_differential_follows_settings():
+    pytest.importorskip('openms_insight')
+    runs = _runs()
+    consensus, _ = quant_compare.link_runs(runs)
+    design = {name: name[0] for name in runs}
+    statistics, _, steps = quant_compare.differential(
+        consensus, design, {'postproc-stat-test': 'welch', 'postproc-fdr': 'Bonferroni'},
+    )
+    assert steps['stat_test'] == 'welch'
+    # Bonferroni is stricter than Benjamini-Hochberg
+    bh, _, _ = quant_compare.differential(consensus, design)
+    assert (statistics['p-adj'] < 0.05).sum() <= (bh['p-adj'] < 0.05).sum()
+
+
+def test_differential_falls_back_to_a_test_that_fits():
+    pytest.importorskip('openms_insight')
+    runs = _runs(n=50)
+    consensus, _ = quant_compare.link_runs(runs)
+    design = {name: name[0] for name in runs}
+    # anova is for more than two conditions: OpenDDA falls back to limma_like
+    _, _, steps = quant_compare.differential(consensus, design, {'postproc-stat-test': 'anova'})
+    assert steps['stat_test'] == 'limma_like'
