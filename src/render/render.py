@@ -25,6 +25,7 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import insight_data, qc_data, validation_data
+from src.render.fragmentation import mzml_scan_methods
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -229,6 +230,14 @@ def _stamp(file_manager, dataset_id, sources, extra):
         stat = path.stat()
         parts.append([name_tag, path.name, stat.st_size, stat.st_mtime_ns])
     return hashlib.md5(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+
+def _scan_methods(file_manager, dataset_id):
+    """Fragmentation method of each spectrum of a dataset, by spectrum index,
+    read from the deconvolved mzML (FLASHDeconv keeps the uploaded scans'
+    activation methods). Empty when the file is not stored."""
+    path = insight_data.result_path(file_manager, dataset_id, 'out_deconv_mzML')
+    return () if path is None else mzml_scan_methods(path)
 
 
 def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, required=None):
@@ -589,15 +598,22 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         if tool == 'flashtnt':
             component = _component(
                 ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
-                ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+                ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings',
+                 'out_deconv_mzML'],
                 lambda: dict(
-                    data=insight_data.proteoform_sequences(fm, ds),
+                    # Without FLASHAnnotator fragments, the proteoform's scan
+                    # selects the ion series of its fragmentation method
+                    data=insight_data.with_fragmentation(
+                        insight_data.proteoform_sequences(fm, ds), _scan_methods(fm, ds), 'scan_idx'
+                    ),
                     filters={'protein': 'proteoform_index'},
                     mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
+                    fragmentation_column='fragmentation',
                     settings=fm.get_results(ds, ['settings'])['settings'],
                     entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
                     **SEQUENCE_VIEW_OPTIONS,
                 ),
+                required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
             )
             tag = _selected_tag(fm, ds, state_manager)
             # Tags FLASHTnT could not place on the proteoform have no positions
@@ -611,14 +627,19 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         if sequence is None:
             raise MissingResult('sequence')
         return _component(
-            ProteinSequenceView, f'{comp_name}-{tool}', fm, ds, ['sequence_view'],
+            ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
+            ['sequence_view', 'out_deconv_mzML'],
             lambda: dict(
-                data=insight_data.sequence_view_spectra(fm, ds),
+                # Each scan selects the ion series of its own fragmentation method
+                data=insight_data.with_fragmentation(
+                    insight_data.sequence_view_spectra(fm, ds), _scan_methods(fm, ds), 'index'
+                ),
                 filters={'scan': 'index'}, sequence=sequence,
                 mass_identifier='mass', aa_identifier='aa', sequence_identifier='sequence',
+                fragmentation_column='fragmentation',
                 **SEQUENCE_VIEW_OPTIONS,
             ),
-            extra=sequence,
+            extra=sequence, required=['sequence_view'],
         ), {}
 
     if comp_name == 'structure_view':
