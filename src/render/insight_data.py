@@ -296,6 +296,17 @@ def quant_table(file_manager, dataset_id):
     )
 
 
+def with_fragmentation(lf, methods, on):
+    """Add a 'fragmentation' column to `lf`: the method of the spectrum whose
+    index is in column `on`, from `methods` (one entry per spectrum index,
+    None when unknown; see src.render.fragmentation)."""
+    frame = pl.LazyFrame(
+        {'_scan': list(range(len(methods))), 'fragmentation': list(methods)},
+        schema={'_scan': pl.Int64, 'fragmentation': pl.String},
+    )
+    return lf.join(frame, left_on=on, right_on='_scan', how='left', maintain_order='left')
+
+
 def sequence_view_spectra(file_manager, dataset_id):
     """Deconvolved masses and precursor mass per spectrum, for matching a
     user-given sequence (FLASHDeconv)."""
