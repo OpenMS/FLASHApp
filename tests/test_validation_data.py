@@ -150,3 +150,85 @@ def test_precursor_xics_on_demo(fd):
 def test_precursor_xics_without_ms1(tnt):
     # The FLASHTnT demo is a single fragmentation spectrum
     assert validation_data.precursor_xics(tnt, TNT_DATASET).collect().is_empty()
+
+
+# --- Characterization ----------------------------------------------------------
+
+def _fragments(*pairs):
+    return [{'ion_type': ion, 'residue': residue} for ion, residue in pairs]
+
+
+def test_explained_bonds():
+    # b ends at its residue, y starts at it: both explain bond 4 (residues 4|5)
+    bonds = validation_data.explained_bonds(_fragments(('b', 4), ('y', 5), ('c', 7), ('internal', 3)))
+    assert bonds == {4, 7}
+
+
+def test_characterize_levels():
+    entry = {'sequence': list('A' * 11), 'proteoform_start': 0, 'proteoform_end': 10,
+             'modifications': [{'start': 3, 'end': 3}]}
+    # 3 of 10 bonds, termini known, the one modification localized
+    full = validation_data.characterize(entry, _fragments(('b', 0), ('b', 1), ('y', 9)))
+    assert full == {'Cleavages': 30.0, 'LocalizedMods': '1/1', 'Characterization': 'Characterized'}
+    # An unlocalized mass shift
+    entry_shift = dict(entry, modifications=[{'start': 3, 'end': 6}])
+    partial = validation_data.characterize(entry_shift, _fragments(('b', 0), ('b', 1), ('y', 9)))
+    assert partial['Characterization'] == 'Partial'
+    assert partial['LocalizedMods'] == '0/1'
+    # Undetermined C-terminus
+    entry_open = dict(entry, proteoform_end=-1)
+    assert validation_data.characterize(entry_open, _fragments(('b', 0), ('b', 1), ('b', 2)))['Characterization'] == 'Partial'
+    # No fragments
+    assert validation_data.characterize(entry, [])['Characterization'] == 'Ambiguous'
+    assert validation_data.characterize(dict(entry, modifications=[]), [])['LocalizedMods'] == '-'
+
+
+def test_characterization_on_demo(tnt):
+    table = validation_data.characterization(tnt, TNT_DATASET).collect()
+    assert table.height == 17
+    assert set(table['Characterization']) <= {'Characterized', 'Partial', 'Ambiguous'}
+    # The best hit of the demo (AQPZ, score 505) is identified but carries an
+    # unlocalized mass shift
+    best = table.filter(pl.col('proteoform_index') == 9).row(0, named=True)
+    assert best['Characterization'] == 'Partial'
+    assert best['LocalizedMods'] == '0/1'
+    assert best['Cleavages'] > 25
+
+
+# --- Run QC (src/render/qc_data.py) --------------------------------------------
+
+from src.render import qc_data  # noqa: E402
+
+
+def test_histogram_shared_bins():
+    frame = qc_data.histogram({'MS1': [0.1, 0.2, 0.9], 'MS2': [0.5]}, bins=4, value_range=(0, 1)).collect()
+    assert frame.filter(pl.col('series') == 'MS1')['y'].to_list() == [2.0, 0.0, 0.0, 1.0]
+    assert frame.filter(pl.col('series') == 'MS2')['x'].to_list() == [0.125, 0.375, 0.625, 0.875]
+    assert qc_data.histogram({'MS1': []}).collect().is_empty()
+
+
+def test_histogram_integer_bins():
+    frame = qc_data.histogram({'MS1': [1, 1, 3]}, integer=True).collect()
+    assert frame['x'].to_list() == [1.0, 2.0, 3.0]
+    assert frame['y'].to_list() == [2.0, 0.0, 1.0]
+
+
+def test_run_qc_on_demo(fd):
+    masses = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / 'example_fd' / 'mass_table.pq')
+    total = masses['MonoMass'].list.len().sum()
+    qscores = qc_data.qscore_distribution(fd, FD_DATASET).collect()
+    assert qscores['y'].sum() == total
+    assert qscores['series'].unique(maintain_order=True).to_list() == ['MS1', 'MS2']
+    assert qc_data.mass_distribution(fd, FD_DATASET).collect()['y'].sum() == total
+    charges = qc_data.charge_distribution(fd, FD_DATASET).collect()
+    assert charges['y'].sum() >= total
+    assert qc_data.masses_per_spectrum(fd, FD_DATASET).collect().height == 317
+
+
+def test_id_qc_on_demo(tnt):
+    ids = qc_data.identifications_over_time(tnt, TNT_DATASET).collect()
+    # One spectrum, one best hit; the demo has no q-values
+    assert ids.to_dicts() == [{'series': 'Best hit per spectrum', 'x': 30.0, 'y': 1.0}]
+    errors = qc_data.fragment_error_over_time(tnt, TNT_DATASET).collect()
+    assert errors.height == 1
+    assert abs(errors['y'][0]) < 5
