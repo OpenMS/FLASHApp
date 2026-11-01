@@ -193,3 +193,42 @@ def test_characterization_on_demo(tnt):
     assert best['Characterization'] == 'Partial'
     assert best['LocalizedMods'] == '0/1'
     assert best['Cleavages'] > 25
+
+
+# --- Run QC (src/render/qc_data.py) --------------------------------------------
+
+from src.render import qc_data  # noqa: E402
+
+
+def test_histogram_shared_bins():
+    frame = qc_data.histogram({'MS1': [0.1, 0.2, 0.9], 'MS2': [0.5]}, bins=4, value_range=(0, 1)).collect()
+    assert frame.filter(pl.col('series') == 'MS1')['y'].to_list() == [2.0, 0.0, 0.0, 1.0]
+    assert frame.filter(pl.col('series') == 'MS2')['x'].to_list() == [0.125, 0.375, 0.625, 0.875]
+    assert qc_data.histogram({'MS1': []}).collect().is_empty()
+
+
+def test_histogram_integer_bins():
+    frame = qc_data.histogram({'MS1': [1, 1, 3]}, integer=True).collect()
+    assert frame['x'].to_list() == [1.0, 2.0, 3.0]
+    assert frame['y'].to_list() == [2.0, 0.0, 1.0]
+
+
+def test_run_qc_on_demo(fd):
+    masses = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / 'example_fd' / 'mass_table.pq')
+    total = masses['MonoMass'].list.len().sum()
+    qscores = qc_data.qscore_distribution(fd, FD_DATASET).collect()
+    assert qscores['y'].sum() == total
+    assert qscores['series'].unique(maintain_order=True).to_list() == ['MS1', 'MS2']
+    assert qc_data.mass_distribution(fd, FD_DATASET).collect()['y'].sum() == total
+    charges = qc_data.charge_distribution(fd, FD_DATASET).collect()
+    assert charges['y'].sum() >= total
+    assert qc_data.masses_per_spectrum(fd, FD_DATASET).collect().height == 317
+
+
+def test_id_qc_on_demo(tnt):
+    ids = qc_data.identifications_over_time(tnt, TNT_DATASET).collect()
+    # One spectrum, one best hit; the demo has no q-values
+    assert ids.to_dicts() == [{'series': 'Best hit per spectrum', 'x': 30.0, 'y': 1.0}]
+    errors = qc_data.fragment_error_over_time(tnt, TNT_DATASET).collect()
+    assert errors.height == 1
+    assert abs(errors['y'][0]) < 5
