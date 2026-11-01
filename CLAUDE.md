@@ -26,7 +26,7 @@ pytest tests/test_selection_clear.py::test_name -v      # single test
 # Lint (errors-only; mirrors .github/workflows/pylint.yml, which runs on `main`)
 pylint $(git ls-files '*.py') --errors-only --disable=C0103,C0114,C0301,C0411,W0212,W0631,W0602,W1514,W2402,E0401,E1101,F0001,R1732
 
-# Docker (full image with OpenMS + TOPP tools + openms-insight built from source)
+# Docker (full image with OpenMS + TOPP tools)
 docker build -f Dockerfile --no-cache -t flashapp:latest --build-arg GITHUB_TOKEN=<gh-token> .
 docker run -p 8501:8501 flashapp:latest          # → http://localhost:8501
 # Dockerfile.arm is the linux/arm64 variant (swaps miniforge installer to aarch64).
@@ -36,7 +36,7 @@ Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is req
 
 ### openms-insight
 
-The viewers need `openms_insight` importable. Until the release with the components the viewers use (`DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`, the Table options they use) is on PyPI, it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and `build-desktop-app.yaml`'s `build-openms-insight` job (a wheel for the Windows, macOS and Linux apps) clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
+The viewers need `openms_insight` (`>=0.4.0`, the first release with `DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`, `ProteinStructureView`). It is an ordinary entry of `requirements.txt`, installed from PyPI by the Dockerfiles and the desktop builds. The unit tests do not import it.
 
 `.streamlit/config.toml` → `developmentMode = false` for production builds.
 

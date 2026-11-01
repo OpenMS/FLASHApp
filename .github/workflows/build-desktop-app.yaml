@@ -30,45 +30,6 @@ env:
   ELECTRON_NAME: FLASHApp
 
 jobs:
-  # TEMPORARY: openms-insight is built from source until the release with the
-  # components the viewers use is on PyPI; then add it to requirements.txt instead.
-  build-openms-insight:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '21'
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Checkout openms-insight
-      uses: actions/checkout@v4
-      with:
-        repository: 't0mdavid-m/openms-insight'
-        ref: 'claude/project-thread-hxjbbs'
-        path: 'openms-insight'
-
-    - name: Build the Vue bundle and the wheel
-      run: |
-        cd openms-insight/js-component
-        npm ci
-        npm run build
-        mkdir -p ../openms_insight/js-component
-        cp -r dist ../openms_insight/js-component/
-        cd ..
-        python -m pip wheel --no-deps -w wheel .
-
-    - name: Upload wheel as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: openms-insight-wheel
-        path: openms-insight/wheel/*.whl
-
   build-openms-windows:
     # The latest OpenMS/contrib Windows release is built on Windows Server 2025
     # with Visual Studio 2026; linking it with an older MSVC fails on missing STL
@@ -277,17 +238,11 @@ jobs:
     runs-on: windows-2022
     permissions:
       contents: read
-    needs: [build-openms-windows, build-openms-insight]
+    needs: [build-openms-windows]
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-
-    - name: Download openms-insight wheel
-      uses: actions/download-artifact@v4
-      with:
-        name: openms-insight-wheel
-        path: openms-insight-wheel
 
     - name: Set Version in settings.json
       run: |
@@ -358,8 +313,6 @@ jobs:
       run: |
         python -m pip install -r requirements.txt --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
         python -m pip install 'polars-lts-cpu >= 1.0' --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
-        # openms-insight's dependencies come from requirements.txt (keeps polars-lts-cpu)
-        python -m pip install --no-deps (Get-ChildItem openms-insight-wheel/*.whl).FullName --target python-${{ env.PYTHON_VERSION }}/Lib/site-packages --upgrade --no-warn-script-location
 
     - name: Set to offline deployment
       run: |
@@ -645,7 +598,7 @@ jobs:
     name: App ${{ matrix.platform }}
     permissions:
       contents: read
-    needs: [build-openms-unix, build-openms-insight]
+    needs: [build-openms-unix]
     strategy:
       fail-fast: false
       matrix:
@@ -691,17 +644,9 @@ jobs:
         OPENMS_PACKAGE=$(find openms-package -maxdepth 1 \( -name "*.pkg" -o -name "*.deb" \) | head -n 1)
         electron/scripts/stage-openms.sh "" electron/payload $TOPP_TOOLS
 
-    - name: Download openms-insight wheel
-      uses: actions/download-artifact@v4
-      with:
-        name: openms-insight-wheel
-        path: openms-insight-wheel
-
     - name: Stage Python with the app's requirements
       run: |
         electron/scripts/stage-python.sh "$PYTHON_STANDALONE_VERSION" electron/payload requirements.txt
-        # openms-insight's dependencies come from requirements.txt
-        "electron/payload/python-$PYTHON_STANDALONE_VERSION/bin/python3" -m pip install --no-deps --no-warn-script-location --disable-pip-version-check openms-insight-wheel/*.whl
         "electron/payload/python-$PYTHON_STANDALONE_VERSION/bin/python3" -c 'import openms_insight; print("openms_insight", openms_insight.__version__)'
         if [[ $RUNNER_OS == Linux ]]; then
           # Same as the Windows build: polars' default wheel needs AVX2 and
