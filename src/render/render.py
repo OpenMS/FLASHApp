@@ -19,12 +19,12 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 import openms_insight
 from openms_insight import (
-    DeconvolvedSpectrum, Heatmap, Plot3D, ProteinSequenceView, ProteinStructureView,
-    SeriesPlot, StateManager, Table, defer_reruns,
+    DeconvolvedSpectrum, Heatmap, MirrorPlot, Plot3D, ProteinSequenceView,
+    ProteinStructureView, SeriesPlot, StateManager, Table, defer_reruns,
 )
 from openms_insight.core.cache import CacheMissError
 
-from src.render import insight_data
+from src.render import insight_data, validation_data
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -37,7 +37,7 @@ def _code_version():
     the frame builders or openms-insight. Part of every cache id, so caches
     are rebuilt after an update."""
     digest = hashlib.md5(openms_insight.__version__.encode())
-    for module in (__file__, insight_data.__file__):
+    for module in (__file__, insight_data.__file__, validation_data.__file__):
         try:
             digest.update(Path(module).read_bytes())
         except OSError:
@@ -290,6 +290,83 @@ def _fdr_plot(comp_name, file_manager, dataset_id):
     )
 
 
+# Ion type colours of the fragment error plot: prefix ions blue, suffix ions red
+FRAGMENT_ION_COLORS = {
+    'a': '#9ecae1', 'b': '#4292c6', 'c': '#08519c',
+    'x': '#fcbba1', 'y': '#ef3b2c', 'z': '#a50f15', 'z+1': '#cb181d', 'z+2': '#67000d',
+    'internal': '#8E44AD',
+}
+
+
+def _fragment_error_plot(comp_name, file_manager, dataset_id):
+    """Mass error of the matched fragments of the selected proteoform; a click
+    selects the residue next to the fragment's bond."""
+    return _component(
+        SeriesPlot, comp_name, file_manager, dataset_id,
+        ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+        lambda: dict(
+            data=validation_data.fragment_errors(file_manager, dataset_id),
+            filters={'protein': 'proteoform_index'}, interactivity={'aa': 'residue'},
+            x_column='theoretical_mass', y_column='ppm_error', series_column='ion_type',
+            series_colors=FRAGMENT_ION_COLORS, mode='markers',
+            y_range_mode='normal', hover_column='fragment',
+            title='Fragment Mass Errors', x_label='Fragment mass (Da)', y_label='Error (ppm)',
+            svg_filename='FLASHViewer-fragment-errors',
+        ),
+        required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view'],
+    )
+
+
+def _isotope_envelope(comp_name, file_manager, dataset_id, tool):
+    """Observed isotope envelope of the selected mass (the precursor while no
+    mass is selected) over the averagine envelope."""
+    scan_identifier = 'pscan' if tool == 'flashtnt' else 'scan'
+
+    def data():
+        envelopes = validation_data.isotope_envelopes(file_manager, dataset_id)
+        observed = pl.col('side') == 'observed'
+        return envelopes.with_columns(
+            pl.when(observed).then(pl.col('scan_idx')).alias('top_scan'),
+            pl.when(observed).then(pl.col('mass_idx')).alias('top_mass'),
+            pl.when(~observed).then(pl.col('scan_idx')).alias('bottom_scan'),
+            pl.when(~observed).then(pl.col('mass_idx')).alias('bottom_mass'),
+        )
+
+    return _component(
+        MirrorPlot, f'{comp_name}-{tool}', file_manager, dataset_id,
+        ['mass_table', 'threedim_SN_plot', 'scan_table'],
+        lambda: dict(
+            data=data(),
+            filters_top={scan_identifier: 'top_scan', 'mass': 'top_mass'},
+            filter_defaults_top={'mass': -1},
+            filters_bottom={scan_identifier: 'bottom_scan', 'mass': 'bottom_mass'},
+            filter_defaults_bottom={'mass': -1},
+            x_column='mass', y_column='abundance', title='Isotope Envelope Fit',
+            title_top='Observed (all charges)', title_bottom='Averagine',
+            x_label='Mass (Da)', y_label='Relative abundance',
+            styling={'unhighlightedColor': '#3366CC'},
+        ),
+    )
+
+
+def _precursor_xic(comp_name, file_manager, dataset_id, tool):
+    """The precursor mass of the selected fragmentation spectrum traced over
+    the MS1 spectra, per charge."""
+    scan_identifier = 'pscan' if tool == 'flashtnt' else 'scan'
+    return _component(
+        SeriesPlot, f'{comp_name}-{tool}', file_manager, dataset_id,
+        ['mass_table', 'threedim_SN_plot', 'scan_table'],
+        lambda: dict(
+            data=validation_data.precursor_xics(file_manager, dataset_id),
+            filters={scan_identifier: 'scan_idx'},
+            x_column='rt', y_column='intensity', series_column='series',
+            series_names={'All charges': 'All charges'}, mode='lines+markers',
+            title='Precursor XIC by Charge', x_label='Retention time (s)', y_label='Intensity',
+            svg_filename='FLASHViewer-precursor-xic',
+        ),
+    )
+
+
 def _deconv_sequence(file_manager, state_manager):
     """Sequence data for the FLASHDeconv sequence view: the sequence the user
     typed into the view, else the one saved on the Sequence Input page."""
@@ -420,6 +497,15 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 camera_eye={'x': 2.5, 'y': 0, 'z': 0.2}, svg_filename='FLASHViewer-3d-plot',
             ),
         ), {'height': 800}
+
+    if comp_name == 'fragment_error_plot':
+        return _fragment_error_plot(comp_name, fm, ds), {'height': 400}
+
+    if comp_name == 'isotope_envelope':
+        return _isotope_envelope(comp_name, fm, ds, tool), {'height': 400}
+
+    if comp_name == 'precursor_xic':
+        return _precursor_xic(comp_name, fm, ds, tool), {'height': 400}
 
     if comp_name in ('fdr_plot', 'id_fdr_plot'):
         return _fdr_plot(comp_name, fm, ds), {'height': 400}

@@ -13,8 +13,16 @@ run locally:
 
 The viewers are built from [openms-insight](https://github.com/t0mdavid-m/openms-insight)
 components (tables, heatmaps, spectra, 3D plots and the proteoform sequence view).
-It is installed with the other requirements (`openms-insight>=0.4.0` in
-`requirements.txt`).
+The validation, QC and run comparison views need changes from
+t0mdavid-m/openms-insight#21 that are not in 0.4.0. Until a release with them
+is on PyPI, install it from source (the Docker and desktop builds do this for you):
+
+```
+git clone -b claude/project-thread-y0mgos https://github.com/t0mdavid-m/openms-insight.git
+cd openms-insight/js-component && npm ci && npm run build
+mkdir -p ../openms_insight/js-component && cp -r dist ../openms_insight/js-component/
+cd .. && pip install --no-deps .
+```
 
 ## Build
 
