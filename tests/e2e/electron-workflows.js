@@ -12,7 +12,9 @@ async function runWorkflow(t, workflowPage, inputs) {
   for (const [label, file] of inputs) await t.choose(label, file);
   await t.shot(`${workflowPage}-configured`);
   await t.clickTab("Run");
-  await t.clickButton("Start Workflow");
+  // No settle() here: while the workflow runs, the status fragment reruns the
+  // page, which can keep it from going quiet for 120 s. waitForText waits.
+  await t.page.getByRole("button", { name: "Start Workflow" }).first().click();
   await t.waitForText("Workflow completed successfully.", {
     timeout: RUN_TIMEOUT,
     failOn: ["Errors occurred, check log file."],
