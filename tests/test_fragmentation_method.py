@@ -1,10 +1,12 @@
-"""Fragmentation method of a run, for the Sequence View's ion series."""
+"""Fragmentation method per scan, for the Sequence View's ion series."""
 from pathlib import Path
 
+import polars as pl
 import pyopenms as oms
 import pytest
 
-from src.render.fragmentation import method_of, mzml_method, run_method
+from src.render.fragmentation import method_of, mzml_scan_methods, spectrum_method
+from src.render.insight_data import with_fragmentation
 
 AM = oms.Precursor.ActivationMethod
 DEMO_MZML = Path(
@@ -28,42 +30,47 @@ def test_method_of(methods, expected):
     assert method_of(methods) == expected
 
 
-def _experiment(per_spectrum):
-    experiment = oms.MSExperiment()
-    ms1 = oms.MSSpectrum()
-    ms1.setMSLevel(1)
-    experiment.addSpectrum(ms1)
-    for methods in per_spectrum:
-        spectrum = oms.MSSpectrum()
-        spectrum.setMSLevel(2)
+def _spectrum(level, methods=()):
+    spectrum = oms.MSSpectrum()
+    spectrum.setMSLevel(level)
+    if level > 1:
         precursor = oms.Precursor()
         precursor.setActivationMethods(set(methods))
         spectrum.setPrecursors([precursor])
+    return spectrum
+
+
+def test_spectrum_method():
+    assert spectrum_method(_spectrum(1)) is None
+    assert spectrum_method(_spectrum(2, {AM.ETD})) == 'ETD/ECD'
+    assert spectrum_method(_spectrum(2, {AM.PD})) is None
+    assert spectrum_method(_spectrum(2)) is None
+
+
+def test_mzml_scan_methods_mixed_run(tmp_path):
+    """Alternating HCD and ETD scans each get their own method."""
+    experiment = oms.MSExperiment()
+    for spectrum in [_spectrum(1), _spectrum(2, {AM.HCD}), _spectrum(2, {AM.ETD}),
+                     _spectrum(1), _spectrum(2, {AM.ETD, AM.HCD})]:
         experiment.addSpectrum(spectrum)
-    return experiment
+    path = tmp_path / 'mixed.mzML'
+    oms.MzMLFile().store(str(path), experiment)
+    assert mzml_scan_methods(path) == (None, 'CID/HCD', 'ETD/ECD', None, 'EThcD')
+    assert mzml_scan_methods(tmp_path / 'missing.mzML') == ()
 
 
-def test_run_method_most_common():
-    experiment = _experiment([{AM.ETD}, {AM.ETD}, {AM.HCD}, {AM.PD}])
-    assert run_method(experiment) == 'ETD/ECD'
-
-
-def test_run_method_tie_prefers_collisional():
-    assert run_method(_experiment([{AM.ETD}, {AM.HCD}])) == 'CID/HCD'
-
-
-def test_run_method_unknown():
-    assert run_method(_experiment([{AM.PD}, set()])) is None
-    assert run_method(_experiment([])) is None
-
-
-def test_mzml_method(tmp_path):
-    path = tmp_path / 'etd.mzML'
-    oms.MzMLFile().store(str(path), _experiment([{AM.ETD}, {AM.ETD}]))
-    assert mzml_method(path) == 'ETD/ECD'
-    assert mzml_method(tmp_path / 'missing.mzML') is None
+def test_with_fragmentation_joins_by_scan_index():
+    lf = pl.LazyFrame({'scan_idx': [2, 0, 7, None], 'x': [1, 2, 3, 4]},
+                      schema={'scan_idx': pl.Int64, 'x': pl.Int64})
+    out = with_fragmentation(lf, (None, 'CID/HCD', 'ETD/ECD'), 'scan_idx').collect()
+    assert out['x'].to_list() == [1, 2, 3, 4]
+    assert out['fragmentation'].to_list() == ['ETD/ECD', None, None, None]
+    empty = with_fragmentation(lf, (), 'scan_idx').collect()
+    assert empty['fragmentation'].null_count() == 4
 
 
 @pytest.mark.skipif(not DEMO_MZML.exists(), reason='demo workspace not present')
-def test_demo_run_is_collisional():
-    assert mzml_method(DEMO_MZML) == 'CID/HCD'
+def test_demo_scans_are_collisional():
+    methods = mzml_scan_methods(DEMO_MZML)
+    assert len(methods) == 317
+    assert set(methods) == {None, 'CID/HCD'}

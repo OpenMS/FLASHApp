@@ -1,11 +1,13 @@
-"""Fragmentation method of a run, read from its mzML, for the Sequence View.
+"""Fragmentation method of each scan, read from its mzML, for the Sequence View.
 
 The Sequence View (openms-insight ProteinSequenceView) picks the ion series to
 match from a fragmentation method, as ProSight Lite does: CID/HCD -> b, y;
-ETD/ECD -> c, z•; EThcD -> b, c, y, z•; UVPD -> nine series. This module finds
-the method most MS2 spectra of a run were acquired with. Streamlit-free.
+ETD/ECD -> c, z•; EThcD -> b, c, y, z•; UVPD -> nine series. This module reads
+the method each spectrum was acquired with from the precursor activation
+methods FLASHDeconv carries over from the uploaded mzML, so a run that mixes
+methods (e.g. alternating HCD and ETD scans) gets the right series per scan.
+Streamlit-free.
 """
-from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -38,42 +40,37 @@ def method_of(activation_methods):
     return None
 
 
-def run_method(experiment):
-    """Most common fragmentation method of the MS2+ spectra of an MSExperiment,
-    or None when no spectrum states a known one."""
-    counts = Counter()
-    for spectrum in experiment:
-        if spectrum.getMSLevel() < 2:
-            continue
-        for precursor in spectrum.getPrecursors():
-            method = method_of(precursor.getActivationMethods())
-            if method is not None:
-                counts[method] += 1
-    if not counts:
+def spectrum_method(spectrum):
+    """Fragmentation method of one spectrum (None for MS1 or when unknown)."""
+    if spectrum.getMSLevel() < 2:
         return None
-    # Ties: the order above (collisional first) as the stable fallback
-    order = ['CID/HCD', 'ETD/ECD', 'EThcD']
-    return max(counts, key=lambda m: (counts[m], -order.index(m)))
+    for precursor in spectrum.getPrecursors():
+        method = method_of(precursor.getActivationMethods())
+        if method is not None:
+            return method
+    return None
 
 
 @lru_cache(maxsize=64)
-def _mzml_method(path, size, mtime_ns):
+def _mzml_scan_methods(path, size, mtime_ns):
     options = oms.PeakFileOptions()
     options.setFillData(False)
-    options.setMSLevels([2, 3, 4])
     mzml = oms.MzMLFile()
     mzml.setOptions(options)
     experiment = oms.MSExperiment()
     mzml.load(path, experiment)
-    return run_method(experiment)
+    return tuple(spectrum_method(spectrum) for spectrum in experiment)
 
 
-def mzml_method(path):
-    """Fragmentation method of an mzML file (spectra metadata only), cached
-    per file version. None when the file is missing or unreadable."""
+def mzml_scan_methods(path):
+    """Fragmentation method of every spectrum of an mzML file, by spectrum
+    index (None for MS1 and unknown methods). Reads spectra metadata only,
+    cached per file version. An empty tuple when the file is missing or
+    unreadable."""
     path = Path(path)
     try:
         stat = path.stat()
-        return _mzml_method(str(path), stat.st_size, stat.st_mtime_ns)
+        return _mzml_scan_methods(str(path), stat.st_size, stat.st_mtime_ns)
     except Exception:  # pylint: disable=broad-except
-        return None
+        return ()
+
