@@ -176,7 +176,8 @@ def get_structure(store: StructureStore, accession, download=True, session=None,
     if key is None:
         return {**result, 'status': 'missing',
                 'message': 'This protein has no accession to look up a structure for.'}
-    found = store.find(key)
+    # An upload wins; the AlphaFold model stays stored next to it
+    found = store.find(upload_key(key)) or store.find(key)
     if found is None and download and uniprot_accession(accession) is not None:
         now = time.time() if now is None else now
         failed = _failures.get(key)
@@ -191,13 +192,13 @@ def get_structure(store: StructureStore, accession, download=True, session=None,
         if found is None:
             return {**result, 'status': 'unavailable', 'message': (
                 f'No structure for {key} could be downloaded from AlphaFold DB '
-                f'({_failures[key][1]}). Upload a PDB or mmCIF file for it below the viewer.'
+                f'({_failures[key][1]}). Upload a PDB or mmCIF file for it here.'
             )}
     if found is None:
         hint = '' if uniprot_accession(accession) is not None or not download else (
             ' Its identifier is not a UniProt accession, so none can be downloaded.')
         return {**result, 'status': 'missing', 'message': (
-            f'No structure stored for {key}.{hint} Upload a PDB or mmCIF file for it below the viewer.'
+            f'No structure stored for {key}.{hint} Upload a PDB or mmCIF file for it here.'
         )}
     path, meta = found
     return {
@@ -205,6 +206,40 @@ def get_structure(store: StructureStore, accession, download=True, session=None,
         'data': path.read_text(errors='replace'), 'source': meta.get('source', 'upload'),
         'name': meta.get('name'), 'url': meta.get('url'),
     }
+
+
+def upload_key(key):
+    """Store key of the structure uploaded for a protein."""
+    return f'{key}.upload'
+
+
+def apply_structure_action(store: StructureStore, action) -> tuple[bool, str | None]:
+    """Apply an upload or removal sent by the Structure View.
+
+    ``action`` is ``{'op': 'upload', 'accession', 'name', 'data'}`` (the file's
+    text) or ``{'op': 'remove', 'accession'}``. Returns (changed, error)."""
+    if not isinstance(action, dict):
+        return False, None
+    key = structure_key(action.get('accession'))
+    if key is None:
+        return False, 'This protein has no identifier to store a structure under.'
+    if action.get('op') == 'remove':
+        if store.find(upload_key(key)) is None:
+            return False, None
+        store.remove(upload_key(key))
+        return True, None
+    if action.get('op') != 'upload':
+        return False, None
+    name = str(action.get('name') or 'structure')
+    text = action.get('data')
+    data = text.encode() if isinstance(text, str) else b''
+    if len(data) > MAX_BYTES:
+        return False, f'{name} is larger than {MAX_BYTES // (1024 * 1024)} MB.'
+    fmt = structure_format(name, data)
+    if fmt is None:
+        return False, f'{name} is not a PDB or mmCIF file.'
+    store.save(upload_key(key), data, fmt, 'upload', Path(name).name)
+    return True, None
 
 
 def _describe(error):
