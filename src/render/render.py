@@ -25,6 +25,7 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import insight_data
+from src.render.fragmentation import mzml_method
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -211,6 +212,15 @@ def _stamp(file_manager, dataset_id, sources, extra):
         stat = path.stat()
         parts.append([name_tag, path.name, stat.st_size, stat.st_mtime_ns])
     return hashlib.md5(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+
+def _deconv_fragment_settings(file_manager, dataset_id):
+    """Sequence View settings of a FLASHDeconv dataset: the ion series of the
+    run's fragmentation method (ETD runs start with c and z•), else None
+    (b and y)."""
+    path = insight_data.result_path(file_manager, dataset_id, 'out_deconv_mzML')
+    method = None if path is None else mzml_method(path)
+    return None if method is None else {'fragmentation': method}
 
 
 def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, required=None):
@@ -486,14 +496,16 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         if sequence is None:
             raise MissingResult('sequence')
         return _component(
-            ProteinSequenceView, f'{comp_name}-{tool}', fm, ds, ['sequence_view'],
+            ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
+            ['sequence_view', 'out_deconv_mzML'],
             lambda: dict(
                 data=insight_data.sequence_view_spectra(fm, ds),
                 filters={'scan': 'index'}, sequence=sequence,
                 mass_identifier='mass', aa_identifier='aa', sequence_identifier='sequence',
+                settings=_deconv_fragment_settings(fm, ds),
                 **SEQUENCE_VIEW_OPTIONS,
             ),
-            extra=sequence,
+            extra=sequence, required=['sequence_view'],
         ), {}
 
     if comp_name == 'structure_view':
