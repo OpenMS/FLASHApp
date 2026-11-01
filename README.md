@@ -13,8 +13,11 @@ run locally:
 
 The viewers are built from [openms-insight](https://github.com/t0mdavid-m/openms-insight)
 components (tables, heatmaps, spectra, 3D plots and the proteoform sequence view).
-Until the openms-insight release with these components is on PyPI, install it
-from source (the Docker and Windows builds do this for you):
+The validation, QC and run comparison views need changes from
+t0mdavid-m/openms-insight#21 that are not in 0.4.0, and the per-scan
+fragmentation method in the sequence view needs t0mdavid-m/openms-insight#23
+(whose branch includes #21). Until a release with them
+is on PyPI, install it from source (the Docker and desktop builds do this for you):
 
 ```
 git clone -b claude/project-thread-54ihjf https://github.com/t0mdavid-m/openms-insight.git
