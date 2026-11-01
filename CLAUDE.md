@@ -36,7 +36,7 @@ Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is req
 
 ### openms-insight
 
-The viewers need `openms_insight` importable. Until the release with the components the viewers use (`DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`, the Table options they use) is on PyPI, it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and the Windows workflow's `build-openms-insight` job clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
+The viewers need `openms_insight` importable. Until a release after 0.4.0 includes t0mdavid-m/openms-insight#21 (MirrorPlot shared selections, SeriesPlot `y_range_mode`/`hover_column`, NaN-safe table formatters, used by the validation, QC and run comparison views), it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and `build-desktop-app.yaml`'s `build-openms-insight` job (a wheel for the Windows, macOS and Linux apps) clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
 
 `.streamlit/config.toml` → `developmentMode = false` for production builds.
 
@@ -84,7 +84,7 @@ The container entrypoint starts **Redis** + one or more **RQ workers** (queue `o
 ### CI (`.github/workflows/`)
 
 - `build-and-test.yml` — multi-arch (amd64 + arm64) Docker build → merged manifest, kustomize/kubeconform lint, and **container smoke tests** under apptainer / nginx-on-kind / traefik-on-kind, then publishes images + an ORAS SIF to GHCR. (Its "test" jobs are deployment smoke tests, **not** pytest.)
-- `unit-tests.yml` — the pytest suite. `pylint.yml` — lint. `build-windows-executable-app.yaml` — the Windows build: OpenMS from source, then the Electron installer (`FLASHApp-<version>-Setup.exe`), smoke- and end-to-end-tested in CI. `ghcr-cleanup.yml` — registry GC.
+- `unit-tests.yml` — the pytest suite. `pylint.yml` — lint. `build-desktop-app.yaml` — one run builds the Electron app for all three platforms. Windows: OpenMS from source, then the installer (`FLASHApp-<version>-Setup.exe`), smoke- and end-to-end-tested. macOS (Apple Silicon only, `-macOS-arm64.dmg`, signed and notarized in the `electron/scripts/notarize.js` afterSign hook when the `MACOS_CERTIFICATE`/`APPLE_*` secrets exist) and Linux (`-Linux-x86_64.AppImage`): OpenMS `FDmerge` is built and packaged as .pkg/.deb (`build-openms-unix`), staged with `electron/scripts/stage-openms.sh` (`OPENMS_PACKAGE`), with python-build-standalone from `stage-python.sh` (`build-app-unix`). On a release every installer is attached as an asset. The Quickstart's download buttons (`src/common/installers.py`) link the installers of the latest release. `ghcr-cleanup.yml` — registry GC.
 
 ## Conventions & gotchas
 

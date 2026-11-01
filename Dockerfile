@@ -136,8 +136,8 @@ RUN rm -rf openms-build
 # Build openms-insight, the visualization components of the viewers (quick).
 # Placed after the slow OpenMS build so that changes to openms-insight do not
 # invalidate the OpenMS compile cache; it is installed in the run-app stage.
-# TEMPORARY: built from source until the openms-insight release with the
-# FLASHViewer components is on PyPI; then add it to requirements.txt instead.
+# TEMPORARY: built from source until an openms-insight release after 0.4.0
+# includes t0mdavid-m/openms-insight#21; then add it to requirements.txt instead.
 FROM node:21 AS insight-build
 
 ARG INSIGHT_REPO=https://github.com/t0mdavid-m/openms-insight.git
