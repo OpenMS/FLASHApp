@@ -15,12 +15,12 @@ The viewers are built from [openms-insight](https://github.com/t0mdavid-m/openms
 components (tables, heatmaps, spectra, 3D plots and the proteoform sequence view).
 The validation, QC and run comparison views need changes from
 t0mdavid-m/openms-insight#21 that are not in 0.4.0, and the per-scan
-fragmentation method in the sequence view needs t0mdavid-m/openms-insight#23
-(whose branch includes #21). Until a release with them
+fragmentation method in the sequence view needs t0mdavid-m/openms-insight#23. Both are on the openms-insight branch
+`claude/project-thread-hxjbbs`. Until a release with them
 is on PyPI, install it from source (the Docker and desktop builds do this for you):
 
 ```
-git clone -b claude/project-thread-54ihjf https://github.com/t0mdavid-m/openms-insight.git
+git clone -b claude/project-thread-hxjbbs https://github.com/t0mdavid-m/openms-insight.git
 cd openms-insight/js-component && npm ci && npm run build
 mkdir -p ../openms_insight/js-component && cp -r dist ../openms_insight/js-component/
 cd .. && pip install --no-deps .
