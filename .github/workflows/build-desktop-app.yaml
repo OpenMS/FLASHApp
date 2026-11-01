@@ -30,37 +30,6 @@ env:
   ELECTRON_NAME: FLASHApp
 
 jobs:
-  build-vue-js-component:
-    runs-on: ubuntu-latest
-
-    steps:
-
-    # Step to set up Node.js environment
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '21'
-
-    # Step to clone the Vue.js repository
-    - name: Checkout Vue.js repository
-      uses: actions/checkout@v4
-      with:
-        repository: 't0mdavid-m/openms-streamlit-vue-component'
-        ref: 'FVdeploy'
-        path: 'openms-streamlit-vue-component'
-
-    - name: Install and build Vue.js component
-      run: |
-        cd openms-streamlit-vue-component
-        npm install
-        npm run build
-
-    - name: Upload dist as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: vue-js-dist
-        path: openms-streamlit-vue-component/dist
-
   build-openms-windows:
     # The latest OpenMS/contrib Windows release is built on Windows Server 2025
     # with Visual Studio 2026; linking it with an older MSVC fails on missing STL
@@ -269,17 +238,11 @@ jobs:
     runs-on: windows-2022
     permissions:
       contents: read
-    needs: [build-openms-windows, build-vue-js-component]
+    needs: [build-openms-windows]
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-
-    - name: Download vue js as artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: vue-js-dist
-        path: js-dist
 
     - name: Set Version in settings.json
       run: |
@@ -370,7 +333,6 @@ jobs:
         cp openms-bin/*.dll streamlit_exe
         cp -r .streamlit streamlit_exe
         cp -r share streamlit_exe/share
-        cp -r js-component streamlit_exe/js-component
         cp app.py streamlit_exe
         cp settings.json streamlit_exe
         cp default-parameters.json streamlit_exe
@@ -636,7 +598,7 @@ jobs:
     name: App ${{ matrix.platform }}
     permissions:
       contents: read
-    needs: build-openms-unix
+    needs: [build-openms-unix]
     strategy:
       fail-fast: false
       matrix:
@@ -685,6 +647,7 @@ jobs:
     - name: Stage Python with the app's requirements
       run: |
         electron/scripts/stage-python.sh "$PYTHON_STANDALONE_VERSION" electron/payload requirements.txt
+        "electron/payload/python-$PYTHON_STANDALONE_VERSION/bin/python3" -c 'import openms_insight; print("openms_insight", openms_insight.__version__)'
         if [[ $RUNNER_OS == Linux ]]; then
           # Same as the Windows build: polars' default wheel needs AVX2 and
           # more; the LTS build runs on any x86_64 CPU. Both ship the polars/
@@ -699,7 +662,7 @@ jobs:
     - name: Copy the app into the payload
       run: |
         p=electron/payload
-        cp -R src content assets static example-data js-component .streamlit app.py settings.json default-parameters.json presets.json "$p/"
+        cp -R src content assets static example-data .streamlit app.py settings.json default-parameters.json presets.json "$p/"
         # The local server only listens on loopback; the shell passes the address.
         grep -v '^address' "$p/.streamlit/config.toml" > config.tmp && mv config.tmp "$p/.streamlit/config.toml"
         "$p/python-$PYTHON_STANDALONE_VERSION/bin/python3" -m compileall -q --invalidation-mode unchecked-hash "$p/src"

@@ -1,4 +1,0 @@
-[submodule "openms-streamlit-vue-component"]
-	path = openms-streamlit-vue-component
-	url = git@github.com:t0mdavid-m/openms-streamlit-vue-component.git
-	branch = master

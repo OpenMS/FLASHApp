@@ -9,26 +9,17 @@ def upload_errors():
     return st.session_state.setdefault('structure_upload_errors', {})
 
 
-def handle_structure_action(action, additional_data) -> bool:
-    """Apply an action sent by the Structure View once. True if the stored
-    structures changed or an error is to be shown, so the page reruns."""
-    if not isinstance(action, dict) or additional_data is None:
-        return False
-    if 'structure_dir' not in additional_data:
-        return False
-    # Streamlit returns the component's last value on every rerun
-    handled = st.session_state.setdefault('structure_actions_handled', set())
-    nonce = action.get('nonce')
-    if nonce is None or nonce in handled:
-        return False
-    handled.add(nonce)
-    changed, error = apply_structure_action(
-        StructureStore(additional_data['structure_dir']), action
-    )
-    key = structure_key(action.get('accession'))
-    errors = upload_errors()
-    if error is not None:
-        errors[key] = error
-        return True
-    errors.pop(key, None)
-    return changed
+def structure_action_handler(directory):
+    """Handler for the Structure View's uploads and removals (applied once per
+    action by openms-insight). True if the stored structures changed or an
+    error is to be shown, so the page reruns."""
+    def handle(action) -> bool:
+        changed, error = apply_structure_action(StructureStore(directory), action)
+        key = structure_key(action.get('accession'))
+        errors = upload_errors()
+        if error is not None:
+            errors[key] = error
+            return True
+        errors.pop(key, None)
+        return changed
+    return handle

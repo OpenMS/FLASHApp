@@ -2,6 +2,8 @@
 
 *Investigated 2026-09-10 on the local build (Windows 11, Edge driven by Playwright, Streamlit 1.49.1, polars 1.44.2, pyarrow 19.0.1, Python 3.11).*
 
+*Since then the viewers have moved from the `flash_viewer_grid` Vue component to openms-insight components, and `initialize.py` / `update.py` are gone. The per-session lock around `render_grid` (Fix 2b) is kept in `src/render/render.py`.*
+
 ## Summary
 
 The "white screen that needs a refresh" is the **Streamlit server process dying with a native access violation**, not a front-end glitch. It was reproduced three times in the FLASHDeconv Viewer, each time within about a second of an action that makes the grid re-render (selecting an experiment, navigating back to the Viewer, clicking a Scan Table row).
