@@ -1,0 +1,112 @@
+# App spec: what this app is. Schema and checker come from the template
+# (utils/app_spec.schema.json, `python -m utils.app_spec`); the weekly
+# template-sync job reads `template:` and `sync.app_owned` from here.
+# App-owned: template syncs never overwrite this file.
+spec_version: 1
+template:
+  repository: OpenMS/streamlit-template
+  branch: main
+app:
+  slug: flashapp
+  name: FLASHApp
+  description: 'Top-down proteomics: FLASHDeconv deconvolution, FLASHTnT tag-based identification and
+    FLASHQuant quantification, with a configurable linked viewer.'
+  repository: OpenMS/FLASHApp
+  domain: top-down-proteomics
+  image: ghcr.io/openms/flashapp
+inputs:
+  mzML-files:
+    types:
+    - mzML
+    - raw
+    - d
+    multiple: true
+    description: Top-down LC-MS runs; .raw and .d are converted.
+  fasta-file:
+    types:
+    - fasta
+    - peff
+    multiple: false
+    description: Protein database for FLASHTnT.
+workflows:
+- name: FLASHDeconv
+  class: src/Workflow.py:DeconvWorkflow
+  inputs:
+  - mzML-files
+  steps:
+  - tool: FLASHDeconv
+    in: mzML-files
+- name: FLASHTnT
+  class: src/Workflow.py:TagWorkflow
+  inputs:
+  - mzML-files
+  - fasta-file
+  steps:
+  - tool: DecoyDatabase
+    in: fasta-file
+  - tool: FLASHDeconv
+    in: mzML-files
+  - tool: FLASHTnT
+    in: FLASHDeconv
+  - tool: FLASHAnnotator
+    optional: true
+- name: FLASHQuant
+  class: src/Workflow.py:QuantWorkflow
+  steps: []
+results:
+- role: custom
+  workflow: FLASHDeconv
+  title: Viewer (Vue grid)
+  page: content/FLASHDeconv/FLASHDeconvViewer.py
+- role: custom
+  workflow: FLASHTnT
+  title: Viewer (Vue grid)
+  page: content/FLASHTnT/FLASHTnTViewer.py
+- role: custom
+  workflow: FLASHQuant
+  title: Viewer
+  page: content/FLASHQuant/FLASHQuantViewer.py
+pages:
+- content/quickstart.py
+- content/user_guide.py
+- content/FLASHDeconv/FLASHDeconvWorkflow.py
+- content/FLASHDeconv/FLASHDeconvSequenceInput.py
+- content/FLASHDeconv/FLASHDeconvLayoutManager.py
+- content/FLASHDeconv/FLASHDeconvViewer.py
+- content/FLASHDeconv/FLASHDeconvDownload.py
+- content/FLASHTnT/FLASHTnTWorkflow.py
+- content/FLASHTnT/FLASHTnTLayoutManager.py
+- content/FLASHTnT/FLASHTnTViewer.py
+- content/FLASHTnT/FLASHTnTDownload.py
+- content/FLASHQuant/FLASHQuantFileUpload.py
+- content/FLASHQuant/FLASHQuantViewer.py
+deploy:
+  k8s:
+    enabled: true
+    hosts:
+    - flashapp.webapps.openms.de
+    - flashapp.webapps.openms.org
+    worker_tier: high
+  docker_compose: true
+  desktop:
+  - windows
+  online_deployment: false
+sync:
+  app_owned:
+  - app.yaml
+  - app.py
+  - settings.json
+  - default-parameters.json
+  - presets.json
+  - README.md
+  - content/*
+  - src/python-tools/*
+  - example-data/*
+  - assets/*
+  - k8s/overlays/*
+  - src/Workflow.py
+  - js-component/*
+  - .gitmodules
+  - openms-streamlit-vue-component
+  - src/parse/*
+  - src/render/*
