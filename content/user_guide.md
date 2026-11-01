@@ -182,8 +182,8 @@ Adjust **general settings** such as:
 - **Internal Fragment Map** – Shows internal fragment ions from the selected scan
 - **Tag Table** – Lists sequence tags with corresponding information.
 - **Spectrum View** – Shows the annotated spectrum with matched peaks.
-- **Fragment Mass Errors** – Part of the default layout. The mass error (ppm) of every matched fragment of the selected proteoform against its mass, colored by ion type (FLASHAnnotator's envelopes when present, else the fragments matched within the FLASHTnT tolerance). Errors should scatter around zero; a drift or a group of outliers points to a calibration problem or a wrong assignment. Clicking a point selects the residue next to the fragment's bond.
-- **Isotope Envelope Fit** – Part of the default layout. The observed isotope envelope of the precursor (or of the mass selected in a spectrum) mirrored against the averagine envelope.
+- **Fragment Mass Errors** – Optional (add it in the Layout Manager). The mass error (ppm) of every matched fragment of the selected proteoform against its mass, colored by ion type (FLASHAnnotator's envelopes when present, else the fragments matched within the FLASHTnT tolerance). Errors should scatter around zero; a drift or a group of outliers points to a calibration problem or a wrong assignment. Clicking a point selects the residue next to the fragment's bond.
+- **Isotope Envelope Fit** – Optional (add it in the Layout Manager). The observed isotope envelope of the precursor (or of the mass selected in a spectrum) mirrored against the averagine envelope.
 - **Precursor XIC by Charge** – The precursor mass of the selected proteoform's spectrum traced over the MS1 spectra, one line per charge plus their sum. Empty when the input has no MS1 spectra.
 
 ![Download Results](/static/images/layoutmanager_tnt.png)
