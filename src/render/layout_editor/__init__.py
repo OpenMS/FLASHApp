@@ -25,12 +25,15 @@ def get_saved_layout(file_manager, dataset_id):
     return saved['layout'], saved['side_by_side']
 
 
-def layout_editor(file_manager, dataset_id, components, default_layout, key):
+def layout_editor(file_manager, dataset_id, components, default_layout, key, start_layout=None):
     """Render the editor and persist the layout it submits.
 
     The saved format is unchanged from the previous Layout Manager:
     ``{'layout': [[[name, ...], ...], ...], 'side_by_side': bool}`` under
     ``file_manager.store_data(dataset_id, 'layout', ...)``.
+
+    ``start_layout`` (experiments -> rows -> names) replaces the editor's
+    draft when given, without saving it; bump the revision with it.
     """
     revision_key = '%s_revision' % key
     handled_key = '%s_handled' % key
@@ -42,6 +45,8 @@ def layout_editor(file_manager, dataset_id, components, default_layout, key):
     error = ''
     if submitted and submitted.get('nonce') != st.session_state.get(handled_key):
         st.session_state[handled_key] = submitted.get('nonce')
+        # A chosen starting point is done with once the draft is saved or reset
+        start_layout = None
         if submitted.get('action') == 'save':
             error = validate_layout(submitted.get('layout'), components)
             if not error:
@@ -60,6 +65,7 @@ def layout_editor(file_manager, dataset_id, components, default_layout, key):
         components=components,
         default_layout=default_layout,
         saved_layout=saved[0] if saved else None,
+        start_layout=start_layout,
         side_by_side=saved[1] if saved else False,
         max_experiments=MAX_EXPERIMENTS,
         max_columns=MAX_COLUMNS,

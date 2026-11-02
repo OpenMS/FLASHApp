@@ -103,10 +103,17 @@ sync:
   - src/python-tools/*
   - example-data/*
   - assets/*
-  - k8s/overlays/*
+  - k8s/*
+  - .github/workflows/build-and-test.yml
+  - .github/kind-config.yaml
+  - CLAUDE.md
   - src/Workflow.py
   - js-component/*
   - .gitmodules
   - openms-streamlit-vue-component
   - src/parse/*
   - src/render/*
+  - tests/test_tasks.py
+  - tests/test_workspace_sync.py
+  - tests/test_seed_demos.py
+  - tests/test_run_manager.py

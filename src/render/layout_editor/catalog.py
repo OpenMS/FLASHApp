@@ -3,7 +3,8 @@
 Each entry's ``name`` is the identifier stored in the saved layout and read by
 the Viewer pages, so it must not change. ``requires`` names another component
 that has to be in the same experiment (e.g. the mass table follows the scan
-table's selection).
+table's selection), or lists several of which one has to be there
+(``requires_label`` then names them briefly in the editor).
 """
 
 DECONV_COMPONENTS = [
@@ -29,31 +30,57 @@ DECONV_SEQUENCE_COMPONENTS = [
     {'name': 'internal_fragment_map', 'label': 'Internal fragment map', 'group': 'Sequence', 'requires': 'mass_table'},
 ]
 
+# Components following the selected proteoform: either table selects it
+_SELECTED_PROTEOFORM = ['protein_table', 'proteoform_table']
+
 TNT_COMPONENTS = [
     {'name': 'protein_table', 'label': 'Protein table', 'group': 'Tables'},
-    {'name': 'tag_table', 'label': 'Tag table', 'group': 'Tables', 'requires': 'protein_table'},
-    {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': 'protein_table'},
-    {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': 'protein_table'},
+    {'name': 'tag_table', 'label': 'Tag table', 'group': 'Tables', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
+    {'name': 'protein_group_table', 'label': 'Proteins', 'group': 'Tables'},
+    {'name': 'proteoform_table', 'label': 'Proteoforms of the protein', 'group': 'Tables', 'requires': 'protein_group_table'},
+    {'name': 'proteoform_prsm_table', 'label': 'PrSMs of the proteoform', 'group': 'Tables', 'requires': 'proteoform_table'},
+    {'name': 'prsm_mass_table', 'label': 'PrSM mass table', 'group': 'Tables', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
+    {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
+    {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     # Internal fragment map is disabled for FLASHTnT for now.
     {'name': 'combined_spectrum', 'label': 'Sequence tag view', 'group': 'Sequence', 'requires': 'tag_table'},
     {'name': 'id_fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
     {'name': 'chromatogram', 'label': 'Chromatogram (TIC, base peak, deconvolved)', 'group': 'Spectra & plots'},
-    {'name': 'fragment_error_plot', 'label': 'Fragment mass errors', 'group': 'Validation', 'requires': 'protein_table'},
-    {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': 'protein_table'},
-    {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': 'protein_table'},
+    {'name': 'fragment_error_plot', 'label': 'Fragment mass errors', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
+    {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
+    {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
     {'name': 'id_qc', 'label': 'Identification QC (IDs and fragment error over time)', 'group': 'Quality control'},
     {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
 ]
 
-# Mirrors DEFAULT_LAYOUT in the Viewer pages, which use it when nothing is saved.
+# Mirrors DEFAULT_LAYOUT in the FLASHDeconv Viewer, which uses it when nothing is saved.
 DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                          ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
-TNT_DEFAULT_LAYOUT = [['protein_table'], ['sequence_view'], ['structure_view'], ['tag_table'], ['combined_spectrum']]
+# FLASHTnT defaults by sample type (src/sample_type.py): a native or targeted
+# run has few spectra, each worth inspecting in depth; a lysate run has many
+# identifications, browsed protein by protein.
+TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['structure_view'], ['tag_table'], ['combined_spectrum']]
+TNT_LYSATE_LAYOUT = [
+    ['protein_group_table', 'proteoform_table', 'proteoform_prsm_table'],
+    ['sequence_view'],
+    ['fragment_error_plot', 'precursor_xic'],
+    ['id_fdr_plot', 'id_qc'],
+]
+TNT_DEFAULT_LAYOUT = TNT_NATIVE_LAYOUT
+TNT_DEFAULT_LAYOUTS = {'Native': TNT_NATIVE_LAYOUT, 'Lysate': TNT_LYSATE_LAYOUT}
 
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3
+
+
+def requirements(component):
+    """Components one of which has to be in the same experiment."""
+    required = component.get('requires')
+    if not required:
+        return []
+    return [required] if isinstance(required, str) else list(required)
 
 
 def validate_layout(layout, components):
@@ -82,8 +109,9 @@ def validate_layout(layout, components):
         if len(set(names)) != len(names):
             return 'Experiment %d contains a component twice' % (exp_index + 1)
         for name in names:
-            required = by_name[name].get('requires')
-            if required and required not in names:
+            required = requirements(by_name[name])
+            if required and not any(r in names for r in required):
                 return '%s needs %s in experiment %d' % (
-                    by_name[name]['label'], by_name[required]['label'], exp_index + 1)
+                    by_name[name]['label'],
+                    ' or '.join(by_name[r]['label'] for r in required), exp_index + 1)
     return ''
