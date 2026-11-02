@@ -112,3 +112,7 @@ sync:
   - openms-streamlit-vue-component
   - src/parse/*
   - src/render/*
+  - tests/test_tasks.py
+  - tests/test_workspace_sync.py
+  - tests/test_seed_demos.py
+  - tests/test_run_manager.py
