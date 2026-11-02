@@ -24,7 +24,7 @@ env:
   PYTHON_STANDALONE_VERSION: "3.11"
   # Prefix of the installer names: <APP_NAME>-Setup.exe, -macOS-arm64.dmg,
   # -Linux-x86_64.AppImage.
-  APP_NAME: FLASHApp-1.1.0
+  APP_NAME: FLASHApp-1.2.0
   # Electron app name without the version, so the install folder and the
   # workspaces in %APPDATA%\FLASHApp stay the same across upgrades.
   ELECTRON_NAME: FLASHApp

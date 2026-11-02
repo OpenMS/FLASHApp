@@ -552,22 +552,22 @@ def render_whats_new():
         st.markdown(
             """
             <div class="whats-new">
-                <h3>✨ What's new in FLASHApp 1.1.0</h3>
+                <h3>✨ What's new in FLASHApp 1.2.0</h3>
                 <div class="whats-new-columns">
                     <div>
-                        <h4>Faster and smoother</h4>
+                        <h4>Check every identification</h4>
                         <ul>
-                            <li>Results open much faster, even for large datasets.</li>
-                            <li>Your analysis finishes sooner after the tools have run.</li>
-                            <li>The viewer stays responsive while you click through scans and proteins.</li>
+                            <li>FLASHTnT results go from protein to proteoform to PrSM, with matched and unmatched masses per PrSM.</li>
+                            <li>New validation views: fragment mass errors, isotope envelope fit and the precursor XIC by charge.</li>
+                            <li>Run QC and identification QC panels.</li>
                         </ul>
                     </div>
                     <div>
-                        <h4>Better identification</h4>
+                        <h4>More accurate sequence view</h4>
                         <ul>
-                            <li>Updated to the latest FLASHDeconv and FLASHTnT.</li>
-                            <li>More fragment ions are identified, matched directly on the raw spectra.</li>
-                            <li>New one-click settings for Lysate and Native samples.</li>
+                            <li>Ion series follow each scan's fragmentation method (ETD, EThcD, UVPD), with a tolerance in Da.</li>
+                            <li>The protein table shows characterization, cleavages and localized modifications.</li>
+                            <li>FLASHQuant compares runs side by side.</li>
                         </ul>
                     </div>
                 </div>
