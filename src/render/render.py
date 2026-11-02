@@ -210,7 +210,7 @@ RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
 # off (not in FLASHQuant, whose table did not follow its selection)
 SCROLL = 'top'
-# TopMSV-style identification levels: proteins, the proteoforms of a protein,
+# Identification levels: proteins, the proteoforms of a protein,
 # the PrSMs of a proteoform (src/render/hierarchy_data.py)
 _QVALUE = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 0, 'placeholders': {'NaN': '-'}}}
 # hierarchy_data turns FLASHTnT's -1 / 0 into nulls; show them as "-"

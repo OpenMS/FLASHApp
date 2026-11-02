@@ -1,16 +1,16 @@
 """Input frames of the protein → proteoform → PrSM tables.
 
-TopMSV browses identifications in three levels: a protein list (each protein
+Identifications are browsed in three levels: a protein list (each protein
 with its number of proteoforms and its best hit), the proteoforms of a protein
 (each with its number of PrSMs), and the PrSMs of a proteoform. This module
 builds those levels from FLASHTnT's protein table.
 
-As in TopPIC, a PrSM is the best hit of a spectrum (`is_best`), and when
-FLASHTnT estimated q-values (a target/decoy search) only hits within
-QVALUE_CUTOFF count. A proteoform is identified by its ProForma string (the
-sequence with its modifications); hits without one fall back to accession,
-residue range and modification masses. Like insight_data, the module is free
-of Streamlit and openms-insight.
+A PrSM is the best hit of a spectrum (`is_best`), and when FLASHTnT estimated
+q-values (a target/decoy search) only hits within QVALUE_CUTOFF count. A
+proteoform is identified by its ProForma string (the sequence with its
+modifications); hits without one fall back to accession, residue range and
+modification masses. Like insight_data, the module is free of Streamlit and
+openms-insight.
 """
 
 import polars as pl
