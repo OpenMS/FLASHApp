@@ -33,7 +33,7 @@ jobs:
   # TEMPORARY: openms-insight is built from source until a release after 0.4.0
   # includes t0mdavid-m/openms-insight#21; then add it to requirements.txt instead.
   build-openms-insight:
-    runs-on: self-hosted
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
 
     steps:
     - name: Set up Node.js
@@ -486,7 +486,7 @@ jobs:
             package_type: pkg
           # Built on the oldest Ubuntu we support: the bundle needs glibc >= 2.35.
           - platform: Linux-x86_64
-            runs-on: self-hosted
+            runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-22.04' || 'self-hosted' }}
             tp_folder: Linux
             package_type: deb
     runs-on: ${{ matrix.runs-on }}
@@ -653,7 +653,7 @@ jobs:
           - platform: macOS-arm64
             runs-on: macos-15
           - platform: Linux-x86_64
-            runs-on: self-hosted
+            runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-22.04' || 'self-hosted' }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 120
     defaults:
@@ -902,7 +902,7 @@ jobs:
   release:
     needs: [windows, macos-linux]
     if: github.event_name == 'release'
-    runs-on: self-hosted
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     permissions:
       contents: write
     steps:

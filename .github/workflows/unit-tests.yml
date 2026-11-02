@@ -12,7 +12,7 @@ on:
 
 jobs:
   pytest:
-    runs-on: self-hosted
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'self-hosted' }}
     steps:
       - uses: actions/checkout@v4
 
