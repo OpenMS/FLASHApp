@@ -91,6 +91,9 @@ The **Layout Manager** allows users to customize the experiment display settings
    - **Raw spectrum** - Plots raw spectrum for a scan(intensity vs m/z).
    - **Mass table** - Display deconvolved masses for a selected scan with properties.
    - **3D S/N plot** - Visualizes S/N ratio of deconvolved masses in 3D.
+   - **Isotope envelope fit** - The observed isotope envelope of the selected mass (all charges summed; the precursor of a fragmentation spectrum while no mass is selected) mirrored against the averagine envelope. A shifted apex points to a wrong monoisotopic mass.
+   - **Precursor XIC by charge** - The precursor mass of the selected fragmentation spectrum traced over the MS1 spectra, one line per charge plus their sum.
+   - **Run QC** - Optional (add it in the Layout Manager). Distributions over the whole run, per MS level: QScores, charge states and masses of the deconvolved masses, and the number of masses per spectrum over retention time. A failed acquisition or poor deconvolution shows here before the identifications are read.
 3. Click **Save** to apply changes.
 
 
@@ -174,12 +177,16 @@ Adjust **general settings** such as:
 1. Navigate to Layout Manager.
 2. Select how many experiments to display simultaneously (e.g., 1–5).
 3. Choose **components** to add for each experiment:
-- **Protein Table** – Lists proteins identified by FLASHTnT, including accession, modifications, and score.
+- **Protein Table** – Lists proteins identified by FLASHTnT, including accession, modifications, and score. The **Characterization** badge tells how completely the fragments pin down each proteoform: *Characterized* (green) when both termini are determined, every mass shift is localized to one residue and at least 25% of the bonds are explained by fragments; *Ambiguous* (red) below 10%; *Partial* (amber) in between. **Cleavages (%)** and **Localized Mods** give the numbers behind it.
 - **Sequence View** – Annotates tags, PTMs, and fragments. Visualizes FLASHTnT results; for FLASHDeconv data must be user-supplied. For FLASHTnT the fragment ions are FLASHAnnotator's raw-spectrum annotation: terminal fragments are marked on the residues, internal fragments as a purple depth strip and brackets on the residues and as an internal fragment track below the sequence (one bar per piece, packed into lanes, colored by ion type, shaded by intensity). Click a bar or residue to select the fragment in the table and highlight its residues.
 - **Structure View (3D)** – Part of the default layout. Shows the 3D structure of the selected protein, with the fragmentation points marked in the Sequence View's colors: one residue per terminal ion, where it ends (a/x green, b/y blue, c/z red), and, when FLASHAnnotator reports internal ions, both cleavage sites of each (purple). Modified residues carry the Sequence View's dotted pattern, and termini cleaved off the proteoform are not shown. For proteins with a UniProt accession the AlphaFold DB model is downloaded once and kept in the workspace. The upload button in the viewer stores a PDB or mmCIF file for the selected protein in the workspace too and shows it instead (needed offline and for proteins without a UniProt accession); the delete button goes back to the stored AlphaFold DB model. The database sequence is aligned to the structure, so experimental structures with their own residue numbering work too. Clicking a residue selects it in the Sequence View and Tag Table, and the other way round. Selecting a fragment in the Sequence View (table row, residue or internal fragment bar) colours the residues it covers, labels where it was cleaved (one residue for a terminal ion, both ends for an internal ion), fades the rest of the protein and fits the view to the fragment.
 - **Internal Fragment Map** – Shows internal fragment ions from the selected scan
 - **Tag Table** – Lists sequence tags with corresponding information.
 - **Spectrum View** – Shows the annotated spectrum with matched peaks.
+- **Fragment Mass Errors** – Optional (add it in the Layout Manager). The mass error (ppm) of every matched fragment of the selected proteoform against its mass, colored by ion type (FLASHAnnotator's envelopes when present, else the fragments matched within the FLASHTnT tolerance). Errors should scatter around zero; a drift or a group of outliers points to a calibration problem or a wrong assignment. Clicking a point selects the residue next to the fragment's bond.
+- **Isotope Envelope Fit** – Optional (add it in the Layout Manager). The observed isotope envelope of the precursor (or of the mass selected in a spectrum) mirrored against the averagine envelope.
+- **Identification QC** – Optional (add it in the Layout Manager). Proteoform-spectrum matches per minute of retention time (all best hits, and those within 1% q-value when FLASHTnT estimated q-values), and the median fragment mass error of every best hit over retention time, where a trend shows calibration drift.
+- **Precursor XIC by Charge** – The precursor mass of the selected proteoform's spectrum traced over the MS1 spectra, one line per charge plus their sum. Empty when the input has no MS1 spectra.
 
 ![Download Results](/static/images/layoutmanager_tnt.png)
 
@@ -214,6 +221,31 @@ Adjust **general settings** such as:
 
 ---
 
+
+# **FLASHQuant Guide**
+
+## **1️⃣ Uploading Results**
+
+Upload FLASHQuant output (`*.fdq.tsv` with its mass traces) on **FLASHQuant > File Upload**, one result per run. The **Viewer** shows the feature groups of one run and their mass traces.
+
+## **2️⃣ Comparing Runs**
+
+**FLASHQuant > Compare Runs** compares the proteoform abundances of several runs.
+
+1. Tick the runs to compare and give each one its **condition** (for example `control` and `treated`). Runs with the same condition are replicates; runs without a condition are linked but not tested.
+2. Set the **mass tolerance** (ppm) and **retention time tolerance** (s) for linking, and in how many of a condition's runs a proteoform must be quantified to be tested.
+3. Click **Compare runs**. The feature groups of the runs are linked by monoisotopic mass and apex retention time with OpenMS's FeatureLinkerUnlabeledKD algorithm, which also corrects retention time shifts between runs. Abundances are log2 transformed, median normalized, missing values imputed with the smallest value of the proteoform, and compared with a moderated t-test (two conditions) or F-test (more), Benjamini-Hochberg adjusted.
+
+The page then shows:
+- **Volcano plot** (two conditions) – log2 fold change against adjusted p-value, with adjustable thresholds.
+- **Abundance per run** – the normalized abundance of the selected proteoform in every run, coloured by condition.
+- **Linked proteoforms** – every linked proteoform with the number of runs it was found in and its test result.
+- **Feature groups per run** – the feature groups linked into the selected proteoform; their index finds them in the Viewer.
+- **Clustered heatmap** – z-scores of the 50 most significant proteoforms, with runs and proteoforms clustered.
+
+Clicking a point in the volcano plot or a row in the table selects the proteoform in the other views.
+
+---
 
 ## **📖 Need Help?**
 

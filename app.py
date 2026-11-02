@@ -40,6 +40,7 @@ if __name__ == '__main__':
         "📊 FLASHQuant" : [
             st.Page(Path("content", "FLASHQuant", "FLASHQuantFileUpload.py"), title="File Upload", icon="📂"),
             st.Page(Path("content", "FLASHQuant", "FLASHQuantViewer.py"), title="Viewer", icon="👀"),
+            st.Page(Path("content", "FLASHQuant", "FLASHQuantCompare.py"), title="Compare Runs", icon="⚖️"),
         ],
     }
 

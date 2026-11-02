@@ -19,12 +19,13 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 import openms_insight
 from openms_insight import (
-    DeconvolvedSpectrum, Heatmap, Plot3D, ProteinSequenceView, ProteinStructureView,
-    SeriesPlot, StateManager, Table, defer_reruns,
+    DeconvolvedSpectrum, Heatmap, MirrorPlot, Plot3D, ProteinSequenceView,
+    ProteinStructureView, SeriesPlot, StateManager, Table, defer_reruns,
 )
 from openms_insight.core.cache import CacheMissError
 
-from src.render import insight_data
+from src.render import insight_data, qc_data, validation_data
+from src.render.fragmentation import mzml_scan_methods
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -37,7 +38,10 @@ def _code_version():
     the frame builders or openms-insight. Part of every cache id, so caches
     are rebuilt after an update."""
     digest = hashlib.md5(openms_insight.__version__.encode())
-    for module in (__file__, insight_data.__file__):
+    for module in (
+        __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
+        str(Path(__file__).with_name('compare.py')),
+    ):
         try:
             digest.update(Path(module).read_bytes())
         except OSError:
@@ -103,11 +107,26 @@ PROTEIN_COLUMNS = [
      'headerTooltip': 'The identifier of the mass spectrometry scan associated with the identified proteoform.'},
     {'title': 'Accession', 'field': 'accession',
      'headerTooltip': 'The unique identifier for the protein in the reference database.'},
+    {'title': 'Characterization', 'field': 'Characterization', 'sorter': 'string',
+     'formatter': 'badge', 'formatterParams': {'colorMap': {
+         'Characterized': '#2E7D32', 'Partial': '#F9A825', 'Ambiguous': '#C62828',
+     }},
+     'headerTooltip': (
+         'How completely the fragments pin down the proteoform (in the spirit of '
+         "ProSight's C-score colors). Characterized: both termini determined, every "
+         'mass shift localized to one residue and at least 25% of the bonds explained '
+         'by fragments. Ambiguous: less than 10% of the bonds explained. Partial: '
+         'anything in between.'
+     )},
     {'title': 'Description', 'field': 'description', 'responsive': 10},
     {'title': 'Length', 'field': 'length', 'responsive': 6, 'sorter': 'number',
      'headerTooltip': 'The total number of amino acids in the matched protein.'},
     {'title': 'Mass', 'field': 'ProteoformMass', 'responsive': 8, 'sorter': 'number', **_DASH_FOR_MISSING,
      'headerTooltip': 'The calculated mass of the proteoform in Daltons.'},
+    {'title': 'Cleavages (%)', 'field': 'Cleavages', 'sorter': 'number', 'responsive': 7,
+     'headerTooltip': 'Bonds of the proteoform explained by matched terminal fragments, in %.'},
+    {'title': 'Localized Mods', 'field': 'LocalizedMods', 'sorter': 'string', 'responsive': 7,
+     'headerTooltip': 'Modifications (mass shifts) localized to a single residue, of all modifications.'},
     {'title': 'No. of Matched Fragments', 'field': 'MatchingFragments', 'sorter': 'number',
      'headerTooltip': 'The number of fragment ions that match the protein sequence.'},
     {'title': 'No. of Modifications', 'field': 'ModCount', 'sorter': 'number',
@@ -213,6 +232,14 @@ def _stamp(file_manager, dataset_id, sources, extra):
     return hashlib.md5(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
+def _scan_methods(file_manager, dataset_id):
+    """Fragmentation method of each spectrum of a dataset, by spectrum index,
+    read from the deconvolved mzML (FLASHDeconv keeps the uploaded scans'
+    activation methods). Empty when the file is not stored."""
+    path = insight_data.result_path(file_manager, dataset_id, 'out_deconv_mzML')
+    return () if path is None else mzml_scan_methods(path)
+
+
 def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, required=None):
     """The Insight component `name` of a dataset: loaded from its cache, or
     built with the keyword arguments `build()` returns.
@@ -287,6 +314,102 @@ def _fdr_plot(comp_name, file_manager, dataset_id):
             font={'family': 'Arial'}, float_precision='float64',
         ),
         required=[target],
+    )
+
+
+# Ion type colours of the fragment error plot: prefix ions blue, suffix ions red
+FRAGMENT_ION_COLORS = {
+    'a': '#9ecae1', 'b': '#4292c6', 'c': '#08519c',
+    'x': '#fcbba1', 'y': '#ef3b2c', 'z': '#a50f15', 'z+1': '#cb181d', 'z+2': '#67000d',
+    'internal': '#8E44AD',
+}
+
+
+def _fragment_error_plot(comp_name, file_manager, dataset_id):
+    """Mass error of the matched fragments of the selected proteoform; a click
+    selects the residue next to the fragment's bond."""
+    return _component(
+        SeriesPlot, comp_name, file_manager, dataset_id,
+        ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+        lambda: dict(
+            data=validation_data.fragment_errors(file_manager, dataset_id),
+            filters={'protein': 'proteoform_index'}, interactivity={'aa': 'residue'},
+            x_column='theoretical_mass', y_column='ppm_error', series_column='ion_type',
+            series_colors=FRAGMENT_ION_COLORS, mode='markers',
+            y_range_mode='normal', hover_column='fragment',
+            title='Fragment Mass Errors', x_label='Fragment mass (Da)', y_label='Error (ppm)',
+            svg_filename='FLASHViewer-fragment-errors',
+        ),
+        required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view'],
+    )
+
+
+def _isotope_envelope(comp_name, file_manager, dataset_id, tool):
+    """Observed isotope envelope of the selected mass (the precursor while no
+    mass is selected) over the averagine envelope."""
+    scan_identifier = 'pscan' if tool == 'flashtnt' else 'scan'
+
+    def data():
+        envelopes = validation_data.isotope_envelopes(file_manager, dataset_id)
+        observed = pl.col('side') == 'observed'
+        return envelopes.with_columns(
+            pl.when(observed).then(pl.col('scan_idx')).alias('top_scan'),
+            pl.when(observed).then(pl.col('mass_idx')).alias('top_mass'),
+            pl.when(~observed).then(pl.col('scan_idx')).alias('bottom_scan'),
+            pl.when(~observed).then(pl.col('mass_idx')).alias('bottom_mass'),
+        )
+
+    return _component(
+        MirrorPlot, f'{comp_name}-{tool}', file_manager, dataset_id,
+        ['mass_table', 'threedim_SN_plot', 'scan_table'],
+        lambda: dict(
+            data=data(),
+            filters_top={scan_identifier: 'top_scan', 'mass': 'top_mass'},
+            filter_defaults_top={'mass': -1},
+            filters_bottom={scan_identifier: 'bottom_scan', 'mass': 'bottom_mass'},
+            filter_defaults_bottom={'mass': -1},
+            x_column='mass', y_column='abundance', title='Isotope Envelope Fit',
+            title_top='Observed (all charges)', title_bottom='Averagine',
+            x_label='Mass (Da)', y_label='Relative abundance',
+            styling={'unhighlightedColor': '#3366CC'},
+        ),
+    )
+
+
+def _precursor_xic(comp_name, file_manager, dataset_id, tool):
+    """The precursor mass of the selected fragmentation spectrum traced over
+    the MS1 spectra, per charge."""
+    scan_identifier = 'pscan' if tool == 'flashtnt' else 'scan'
+    return _component(
+        SeriesPlot, f'{comp_name}-{tool}', file_manager, dataset_id,
+        ['mass_table', 'threedim_SN_plot', 'scan_table'],
+        lambda: dict(
+            data=validation_data.precursor_xics(file_manager, dataset_id),
+            filters={scan_identifier: 'scan_idx'},
+            x_column='rt', y_column='intensity', series_column='series',
+            series_names={'All charges': 'All charges'}, mode='lines+markers',
+            title='Precursor XIC by Charge', x_label='Retention time (s)', y_label='Intensity',
+            svg_filename='FLASHViewer-precursor-xic',
+        ),
+    )
+
+
+def _proteins_with_characterization(file_manager, dataset_id):
+    """Protein table rows with the characterization columns (empty when the
+    results have no sequence data)."""
+    proteins = insight_data.proteins(file_manager, dataset_id)
+    if any(
+        insight_data.result_path(file_manager, dataset_id, name) is None
+        for name in ('sequence_data', 'sequence_view')
+    ):
+        return proteins.with_columns(
+            pl.lit(None, dtype=pl.Float64).alias('Cleavages'),
+            pl.lit(None, dtype=pl.String).alias('LocalizedMods'),
+            pl.lit(None, dtype=pl.String).alias('Characterization'),
+        )
+    return proteins.join(
+        validation_data.characterization(file_manager, dataset_id),
+        left_on='index', right_on='proteoform_index', how='left', maintain_order='left',
     )
 
 
@@ -421,14 +544,24 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             ),
         ), {'height': 800}
 
+    if comp_name == 'fragment_error_plot':
+        return _fragment_error_plot(comp_name, fm, ds), {'height': 400}
+
+    if comp_name == 'isotope_envelope':
+        return _isotope_envelope(comp_name, fm, ds, tool), {'height': 400}
+
+    if comp_name == 'precursor_xic':
+        return _precursor_xic(comp_name, fm, ds, tool), {'height': 400}
+
     if comp_name in ('fdr_plot', 'id_fdr_plot'):
         return _fdr_plot(comp_name, fm, ds), {'height': 400}
 
     if comp_name == 'protein_table':
         return _component(
-            Table, comp_name, fm, ds, ['protein_dfs', 'scan_table'],
+            Table, comp_name, fm, ds,
+            ['protein_dfs', 'scan_table', 'sequence_data', 'sequence_view', 'settings'],
             lambda: dict(
-                data=insight_data.proteins(fm, ds),
+                data=_proteins_with_characterization(fm, ds),
                 column_definitions=PROTEIN_COLUMNS, title='Protein Table',
                 index_field='index', go_to_fields=['Scan', 'accession'],
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
@@ -441,6 +574,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 on_select={'tag': None, 'aa': None, 'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
+            required=['protein_dfs', 'scan_table'],
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'tag_table':
@@ -464,15 +598,22 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         if tool == 'flashtnt':
             component = _component(
                 ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
-                ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+                ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings',
+                 'out_deconv_mzML'],
                 lambda: dict(
-                    data=insight_data.proteoform_sequences(fm, ds),
+                    # Without FLASHAnnotator fragments, the proteoform's scan
+                    # selects the ion series of its fragmentation method
+                    data=insight_data.with_fragmentation(
+                        insight_data.proteoform_sequences(fm, ds), _scan_methods(fm, ds), 'scan_idx'
+                    ),
                     filters={'protein': 'proteoform_index'},
                     mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
+                    fragmentation_column='fragmentation',
                     settings=fm.get_results(ds, ['settings'])['settings'],
                     entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
                     **SEQUENCE_VIEW_OPTIONS,
                 ),
+                required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
             )
             tag = _selected_tag(fm, ds, state_manager)
             # Tags FLASHTnT could not place on the proteoform have no positions
@@ -486,14 +627,19 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         if sequence is None:
             raise MissingResult('sequence')
         return _component(
-            ProteinSequenceView, f'{comp_name}-{tool}', fm, ds, ['sequence_view'],
+            ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
+            ['sequence_view', 'out_deconv_mzML'],
             lambda: dict(
-                data=insight_data.sequence_view_spectra(fm, ds),
+                # Each scan selects the ion series of its own fragmentation method
+                data=insight_data.with_fragmentation(
+                    insight_data.sequence_view_spectra(fm, ds), _scan_methods(fm, ds), 'index'
+                ),
                 filters={'scan': 'index'}, sequence=sequence,
                 mass_identifier='mass', aa_identifier='aa', sequence_identifier='sequence',
+                fragmentation_column='fragmentation',
                 **SEQUENCE_VIEW_OPTIONS,
             ),
-            extra=sequence,
+            extra=sequence, required=['sequence_view'],
         ), {}
 
     if comp_name == 'structure_view':
@@ -586,12 +732,72 @@ def _render_quant(file_manager, dataset_id, state_manager, key):
         traces(key=f'{key}_traces', state_manager=state_manager, height=800)
 
 
+# Run-level QC panels: (component, frame builder, sources, title, x label,
+# y label, mode, y axis range mode)
+RUN_QC_PLOTS = [
+    ('qc_qscore', qc_data.qscore_distribution, ['mass_table', 'scan_table'],
+     'QScore Distribution', 'QScore', 'Masses', 'lines', 'nonnegative'),
+    ('qc_charge', qc_data.charge_distribution, ['mass_table', 'scan_table'],
+     'Charge States', 'Charge', 'Masses', 'lines+markers', 'nonnegative'),
+    ('qc_mass', qc_data.mass_distribution, ['mass_table', 'scan_table'],
+     'Mass Distribution', 'Monoisotopic mass (Da)', 'Masses', 'lines', 'nonnegative'),
+    ('qc_masses_per_spectrum', qc_data.masses_per_spectrum, ['scan_table'],
+     'Masses per Spectrum', 'Retention time (s)', 'Masses', 'markers', 'nonnegative'),
+]
+ID_QC_PLOTS = [
+    ('qc_identifications', qc_data.identifications_over_time, ['protein_dfs', 'scan_table'],
+     'Identifications over Time', 'Retention time (s)', 'PrSMs per minute', 'lines+markers',
+     'nonnegative'),
+    ('qc_fragment_error', qc_data.fragment_error_over_time,
+     ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+     'Fragment Mass Error over Time', 'Retention time (s)', 'Median error (ppm)', 'markers',
+     'normal'),
+]
+
+
+def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
+    """A panel of run-level plots, two per row; plots whose results are
+    missing are left out."""
+    components = []
+    for name, builder, sources, title, x_label, y_label, mode, y_range in plots:
+        try:
+            components.append(_component(
+                SeriesPlot, f'{name}-{tool}', file_manager, dataset_id, sources,
+                lambda builder=builder, name=name, title=title, x_label=x_label,
+                y_label=y_label, mode=mode, y_range=y_range: dict(
+                    data=builder(file_manager, dataset_id),
+                    x_column='x', y_column='y', series_column='series',
+                    mode=mode, title=title, x_label=x_label, y_label=y_label,
+                    y_range_mode=y_range, svg_filename=f'FLASHViewer-{name}',
+                ),
+                required=[source for source in sources if source != 'settings'],
+            ))
+        except MissingResult:
+            continue
+    if not components:
+        st.info('This dataset has no data for the run QC plots.')
+        return
+    for row_start in range(0, len(components), 2):
+        columns = st.columns(2)
+        for offset, component in enumerate(components[row_start:row_start + 2]):
+            with columns[offset]:
+                component(
+                    key=f'{key}_{row_start + offset}', state_manager=state_manager, height=320,
+                )
+
+
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
     if comp_name == 'internal_fragment_map':
         st.info('The internal fragment map is not available yet.')
         return
     if comp_name == 'quant_visualization':
         _render_quant(file_manager, dataset_id, state_manager, key)
+        return
+    if comp_name == 'run_qc':
+        _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        return
+    if comp_name == 'id_qc':
+        _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
         return
     try:
         component, render_args = _build(comp_name, file_manager, dataset_id, tool, state_manager)
