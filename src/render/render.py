@@ -24,7 +24,7 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
-from src.render import insight_data, qc_data, validation_data
+from src.render import hierarchy_data, insight_data, qc_data, validation_data
 from src.render.fragmentation import mzml_scan_methods
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
@@ -210,6 +210,53 @@ RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
 # off (not in FLASHQuant, whose table did not follow its selection)
 SCROLL = 'top'
+# TopMSV-style identification levels: proteins, the proteoforms of a protein,
+# the PrSMs of a proteoform (src/render/hierarchy_data.py)
+_QVALUE = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 0, 'placeholders': {'NaN': '-'}}}
+# hierarchy_data turns FLASHTnT's -1 / 0 into nulls; show them as "-"
+_POSITION = {'formatter': 'fixed', 'formatterParams': {'minLength': 1000, 'placeholders': {'NaN': '-'}}}
+_MASS = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 4, 'placeholders': {'NaN': '-'}}}
+PROTEIN_GROUP_COLUMNS = [
+    {'title': '#', 'field': 'protein_group', 'sorter': 'number',
+     'headerTooltip': 'Proteins numbered by their best score.'},
+    {'title': 'Accession', 'field': 'accession'},
+    {'title': 'Description', 'field': 'description', 'responsive': 10},
+    {'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number',
+     'headerTooltip': 'Number of distinct proteoforms (ProForma strings) identified for the protein.'},
+    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number',
+     'headerTooltip': 'Number of spectra whose best hit is a proteoform of the protein.'},
+    {'title': 'Best score', 'field': 'best_score', 'sorter': 'number'},
+    {'title': 'Best q-value', 'field': 'best_qvalue', 'sorter': 'number', 'responsive': 6, **_QVALUE,
+     'headerTooltip': 'Lowest proteoform-level q-value of its PrSMs; "-" without a decoy search.'},
+]
+PROTEOFORM_COLUMNS = [
+    {'title': '#', 'field': 'proteoform_id', 'sorter': 'number',
+     'headerTooltip': 'Proteoforms numbered by protein, then by their best score.'},
+    {'title': 'Proteoform', 'field': 'proteoform', 'responsive': 0, 'maxWidth': 420, 'tooltip': True,
+     'headerTooltip': 'The proteoform in ProForma notation, as FLASHTnT reports it.'},
+    {'title': 'First residue', 'field': 'start', 'sorter': 'number', **_POSITION, 'responsive': 5,
+     'headerTooltip': 'First residue of the proteoform in the protein (1-based); "-" when the N-terminus was not determined.'},
+    {'title': 'Last residue', 'field': 'end', 'sorter': 'number', **_POSITION, 'responsive': 5,
+     'headerTooltip': 'Last residue of the proteoform in the protein (1-based); "-" when the C-terminus was not determined.'},
+    {'title': 'Mass', 'field': 'mass', 'sorter': 'number', **_MASS, 'responsive': 4,
+     'headerTooltip': 'Proteoform mass of its best PrSM.'},
+    {'title': 'Mods', 'field': 'modifications', 'sorter': 'number', 'responsive': 6},
+    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number'},
+    {'title': 'Best score', 'field': 'best_score', 'sorter': 'number'},
+    {'title': 'Best q-value', 'field': 'best_qvalue', 'sorter': 'number', 'responsive': 6, **_QVALUE},
+]
+PROTEOFORM_PRSM_COLUMNS = [
+    {'title': 'Scan No.', 'field': 'Scan', 'sorter': 'number'},
+    {'title': 'Retention time', 'field': 'RetentionTime', 'sorter': 'number', **_fixed()},
+    {'title': 'Precursor mass', 'field': 'PrecursorMass', 'sorter': 'number', 'formatter': 'fixed',
+     'formatterParams': {'precision': 4, 'minLength': 4, 'placeholders': {'-1': '-', '-1.0': '-'}}},
+    {'title': 'Proteoform mass', 'field': 'ProteoformMass', 'sorter': 'number', **_MASS, 'responsive': 5},
+    {'title': 'Matched fragments', 'field': 'MatchingFragments', 'sorter': 'number'},
+    {'title': 'Score', 'field': 'Score', 'sorter': 'number'},
+    {'title': 'Q-value', 'field': 'qvalue', 'sorter': 'number', 'responsive': 6, **_QVALUE},
+]
+_IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
+
 # FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
 TABLE_HEIGHT = 376
 
@@ -452,6 +499,49 @@ def _selected_tag(file_manager, dataset_id, state_manager):
     return rows.row(0, named=True) if rows.height else None
 
 
+def _hierarchy_table(comp_name, file_manager, dataset_id):
+    """One level of the protein → proteoform → PrSM tables. Selecting a
+    proteoform or PrSM selects its (best) PrSM in the other cells, as a
+    protein table row does."""
+    def hits():
+        return hierarchy_data.prsms(file_manager, dataset_id)
+    common = dict(
+        reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
+        pagination=False, float_precision='float64',
+    )
+    if comp_name == 'protein_group_table':
+        def build():
+            prsms = hits()
+            return dict(
+                data=hierarchy_data.protein_groups_from(prsms).lazy(),
+                column_definitions=PROTEIN_GROUP_COLUMNS,
+                title=hierarchy_data.protein_list_title(hierarchy_data.key_figures(prsms)),
+                index_field='protein_group', go_to_fields=['accession'],
+                interactivity={'protein_group': 'protein_group'}, **common,
+            )
+    elif comp_name == 'proteoform_table':
+        build = lambda: dict(
+            data=hierarchy_data.proteoforms_from(hits()).lazy(),
+            column_definitions=PROTEOFORM_COLUMNS, title='Proteoforms of the Protein',
+            index_field='proteoform_id', go_to_fields=['proteoform'],
+            filters={'protein_group': 'protein_group'},
+            interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx'},
+            on_select=_IDENTIFICATION_ON_SELECT, **common,
+        )
+    else:
+        build = lambda: dict(
+            data=hierarchy_data.prsm_rows_from(hits()).lazy(),
+            column_definitions=PROTEOFORM_PRSM_COLUMNS, title='PrSMs of the Proteoform',
+            index_field='index', go_to_fields=['Scan'],
+            filters={'proteoform': 'proteoform_id'},
+            interactivity={'protein': 'index', 'pscan': 'scan_idx'},
+            on_select=_IDENTIFICATION_ON_SELECT, **common,
+        )
+    return _component(
+        Table, comp_name, file_manager, dataset_id, ['protein_dfs', 'scan_table'], build,
+    )
+
+
 def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     """Insight component of a layout cell, and keyword arguments for rendering it."""
     fm, ds = file_manager, dataset_id
@@ -555,6 +645,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
 
     if comp_name in ('fdr_plot', 'id_fdr_plot'):
         return _fdr_plot(comp_name, fm, ds), {'height': 400}
+
+    if comp_name in ('protein_group_table', 'proteoform_table', 'proteoform_prsm_table'):
+        return _hierarchy_table(comp_name, fm, ds), {'height': TABLE_HEIGHT}
 
     if comp_name == 'protein_table':
         return _component(

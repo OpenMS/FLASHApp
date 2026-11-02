@@ -31,6 +31,9 @@ DECONV_SEQUENCE_COMPONENTS = [
 TNT_COMPONENTS = [
     {'name': 'protein_table', 'label': 'Protein table', 'group': 'Tables'},
     {'name': 'tag_table', 'label': 'Tag table', 'group': 'Tables', 'requires': 'protein_table'},
+    {'name': 'protein_group_table', 'label': 'Proteins', 'group': 'Tables'},
+    {'name': 'proteoform_table', 'label': 'Proteoforms of the protein', 'group': 'Tables', 'requires': 'protein_group_table'},
+    {'name': 'proteoform_prsm_table', 'label': 'PrSMs of the proteoform', 'group': 'Tables', 'requires': 'proteoform_table'},
     {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': 'protein_table'},
     {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': 'protein_table'},
     # Internal fragment map is disabled for FLASHTnT for now.
