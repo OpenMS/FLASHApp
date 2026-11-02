@@ -38,11 +38,21 @@ class FileManager:
         self,
         workflow_dir: Path,
         cache_path: Path = None,
+        results_dir: Path = None,
     ):
         """
         Initializes the FileManager object with a the current workflow results directory.
+
+        Args:
+            workflow_dir (Path): The workflow directory.
+            cache_path (Path, optional): The cache directory. Defaults to
+                ``<workflow_dir>/cache``.
+            results_dir (Path, optional): Where ``set_results_dir`` creates its
+                subdirectories. Defaults to ``<workflow_dir>/results``; a
+                multi-run workflow points it at the current run.
         """
         self.workflow_dir = workflow_dir
+        self.results_dir = Path(results_dir or Path(workflow_dir, "results"))
 
         # Setup Caching
         self.cache_path = cache_path if cache_path is not None else Path(workflow_dir, "cache")
@@ -226,10 +236,10 @@ class FileManager:
         if not name:
             name = self._generate_random_code(4)
             # make sure the subdirectory does not exist in results yet
-            while Path(self.workflow_dir, "results", name).exists():
+            while Path(self.results_dir, name).exists():
                 name = self._generate_random_code(4)
-        path = Path(self.workflow_dir, "results", name)
-        path.mkdir(exist_ok=True)
+        path = Path(self.results_dir, name)
+        path.mkdir(parents=True, exist_ok=True)
         return str(path)
     
     def _get_column_list(self, table_name: str) -> List[str]:
