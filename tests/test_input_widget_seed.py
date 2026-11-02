@@ -64,3 +64,23 @@ def test_user_changes_are_kept(tmp_path):
     at.button[0].click().run()
     assert at.checkbox[0].value is False
     assert at.multiselect[0].value == ["x"]
+
+
+def _stale_script():
+    from types import SimpleNamespace
+
+    from src.workflow.StreamlitUI import StreamlitUI
+
+    ui = object.__new__(StreamlitUI)
+    ui.params = {"files": ["a", "gone"]}
+    ui.parameter_manager = SimpleNamespace(param_prefix="p-", save_parameters=lambda: None)
+    ui._input_widget_impl(
+        "files", None, "files", None, "multiselect", ["a", "b"], None, None, 1, True, None
+    )
+
+
+def test_saved_value_no_longer_an_option_is_dropped():
+    at = AppTest.from_function(_stale_script)
+    at.run()
+    assert not at.exception
+    assert at.multiselect(key="p-files").value == ["a"]
