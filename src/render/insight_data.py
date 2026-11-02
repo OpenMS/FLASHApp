@@ -11,6 +11,7 @@ Kept free of Streamlit and openms-insight so it can be tested on its own.
 import polars as pl
 
 from src.render.compression import compute_compression_levels
+from src.render.fragment_ambiguity import settle
 from src.render.sequence_data_store import build_table
 
 # Size of the smallest heatmap level the parse stores (src/parse/deconv.py)
@@ -228,7 +229,7 @@ def proteoform_sequences(file_manager, dataset_id):
         pl.col('index').alias('scan_idx'), 'MonoMass', 'PrecursorMass'
     )
     return (
-        _generic_sequence_schema(sequences)
+        settle(_generic_sequence_schema(sequences))
         .with_columns(pl.col('proteoform_index').cast(pl.Int64))
         .join(proteoform_scans, on='proteoform_index', how='left', maintain_order='left')
         .join(spectrum, on='scan_idx', how='left', maintain_order='left')
