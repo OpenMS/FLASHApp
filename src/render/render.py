@@ -211,7 +211,7 @@ RECLICK = 'unhighlight'
 # off (not in FLASHQuant, whose table did not follow its selection)
 SCROLL = 'top'
 # FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
-# TopMSV's PrSM mass table: every deconvolved mass of the identified spectrum
+# PrSM mass table: every deconvolved mass of the identified spectrum
 # and the fragment ion it explains
 PRSM_MASS_COLUMNS = [
     {'title': 'Mass ID', 'field': 'mass_id', 'sorter': 'number',

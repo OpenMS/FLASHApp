@@ -1,9 +1,9 @@
 """Input frame of the PrSM mass table.
 
-TopMSV's PrSM page lists every deconvolved mass of the identified spectrum,
-with the fragment ion it explains (or none), the theoretical mass and the
-mass error, and filters the list to all, matched or not matched masses. This
-module builds that list for FLASHTnT results.
+Every deconvolved mass of the identified spectrum, with the fragment ion it
+explains (or none), the theoretical mass and the mass error, so the list can
+be filtered to all, matched or not matched masses. This module builds that
+list for FLASHTnT results.
 
 Masses come from the spectrum of each proteoform (the `sequence_view` and
 `mass_table` results); fragments are matched with the rule of the Sequence
@@ -151,7 +151,7 @@ def prsm_masses(file_manager, dataset_id):
     the fragment ions it matches (PRSM_MASS_SCHEMA).
 
     `mass_idx` is the mass's index in the spectrum, the value of the viewer's
-    `mass` selection; `mass_id` is the same, 1-based, as TopMSV shows it."""
+    `mass` selection; `mass_id` is the same, 1-based, as shown in the table."""
     tolerance, ion_types = _settings(file_manager, dataset_id)
     details = _mass_details(file_manager, dataset_id)
     sequences = insight_data.proteoform_sequences(file_manager, dataset_id).collect()
