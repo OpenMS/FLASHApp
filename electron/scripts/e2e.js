@@ -81,13 +81,14 @@ function makeHelpers(app, page, baseUrl, out) {
 
     // Open a page by its URL path ("FLASHDeconvWorkflow") or by a title from
     // the navigation ("Workflow"); a title shared by several sections needs
-    // the URL path.
-    async open(target) {
+    // the URL path. A page that does heavy work on its first draw can pass a
+    // longer { timeout } for settling.
+    async open(target, opts) {
       await expandNav(page);
       const link = page.locator(`[data-testid="stSidebarNav"] a[href$="/${target}"]`);
       if ((await link.count()) === 1) await link.click();
       else await page.locator('[data-testid="stSidebarNav"] a', { hasText: target }).first().click();
-      await settle(page);
+      await settle(page, opts);
     },
 
     async clickTab(name) {
@@ -162,6 +163,26 @@ function makeHelpers(app, page, baseUrl, out) {
   return t;
 }
 
+// Quits the app; kills it when it does not quit, so a stuck window cannot keep
+// the test (and the CI job) running until its timeout.
+async function close(app) {
+  const proc = app.process();
+  let timer;
+  const quit = app.close().then(() => true, () => true);
+  const late = new Promise((resolve) => (timer = setTimeout(resolve, 60000, false)));
+  const quitInTime = await Promise.race([quit, late]);
+  clearTimeout(timer);
+  if (!quitInTime) {
+    console.error("The app did not quit within 60s; killing it.");
+    // On Windows Playwright starts Electron through a shell, so kill the tree.
+    if (process.platform === "win32") {
+      require("child_process").spawnSync("taskkill", ["/pid", String(proc.pid), "/T", "/F"]);
+    } else {
+      proc.kill("SIGKILL");
+    }
+  }
+}
+
 // A long navigation is collapsed behind "View more"; links past it are only
 // in the page once it is expanded.
 async function expandNav(page) {
@@ -174,9 +195,11 @@ async function expandNav(page) {
 
 async function navTargets(page) {
   await expandNav(page);
+  // Pages an app hides from the menu (display: none) are opened from
+  // elsewhere, so only visible entries are targets.
   const hrefs = await page
     .locator('[data-testid="stSidebarNav"] a')
-    .evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+    .evaluateAll((as) => as.filter((a) => a.offsetParent !== null).map((a) => a.getAttribute("href")));
   return [...new Set(hrefs.map((h) => new URL(h, "http://x").pathname.replace(/^\//, "")))];
 }
 
@@ -219,7 +242,7 @@ async function main() {
       }
     }
   } finally {
-    await app.close().catch(() => {});
+    await close(app);
   }
   if (failed) throw new Error("one or more scenarios failed");
 }
