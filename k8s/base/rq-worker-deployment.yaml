@@ -30,6 +30,93 @@ spec:
               value: "redis://redis:6379/0"
             - name: WORKSPACES_DIR
               value: "/workspaces-streamlit-template"
+            # Downward API. The storage heartbeat is keyed per node
+            # (storage:ok:<node>) and the node registration alongside it
+            # (storage:node:<node>) is what makes a *missing* heartbeat
+            # readable, so a healthy node cannot mask a node whose mount has
+            # wedged - with one shared key the indicator would stay green
+            # straight through a real outage. Without this env var
+            # health.current_node_name() falls back to the pod hostname, which
+            # changes on every restart and keys the heartbeat per pod instead
+            # of per node.
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          # Readiness only, and deliberately no liveness counterpart: a
+          # liveness failure would SIGKILL the container mid-TOPP-job, and a
+          # restart cannot fix a wedged NFS mount - it would destroy hours of
+          # work while the fault persists. rq-worker sits behind no Service, so
+          # readiness has no traffic effect either way; it is purely an
+          # alertable signal, and it doubles as the writer of the sidebar's
+          # storage heartbeat (src/workflow/health.py).
+          #
+          # One process, not a shell pipeline, because the ordering inside it
+          # is the contract and belongs somewhere a test can drive it
+          # (tests/test_storage_health.py). `probe_storage()` registers the
+          # node, *then* writes to the volume, and publishes the heartbeat only
+          # if that write succeeded. Nothing here is wrapped in `|| true`: a
+          # `|| true` on the storage check would report Ready on a wedged mount
+          # and publish a green heartbeat with it, which is the whole failure
+          # this probe exists to catch.
+          #
+          # A write, not a `stat`: with default `actimeo` a stat can be answered
+          # from the client's attribute cache while the server is gone, which
+          # is a false green. A write always reaches the server, and it creates
+          # the sentinel on a fresh volume instead of failing forever on a file
+          # nothing else makes. The file is dot-named and not a directory, so
+          # clean-up-workspaces.py skips it twice over.
+          #
+          # The interpreter is named explicitly rather than activated: `conda
+          # activate` costs a few hundred ms of shell hooks on every probe, and
+          # this is the same env the container command activates one screen up.
+          #
+          # Timing, against the ~90s NFSv4 grace period a Ganesha restart
+          # imposes - all I/O blocks until it ends, so the numbers have to
+          # outlast it or every routine restart flaps the worker:
+          #   inner timeout 15s  - a cold interpreter plus `import redis` is
+          #                        ~200ms idle, but this pod is by design
+          #                        CPU-saturated running TOPP tools under a CFS
+          #                        quota, and the two Redis calls are bounded at
+          #                        health.REDIS_SOCKET_TIMEOUT (2s) each. The
+          #                        budget has to cover all of that *and* leave
+          #                        room for a slow-but-alive mount, or the probe
+          #                        reports a storage fault that is really a busy
+          #                        node.
+          #   timeoutSeconds 20  - kubelet's own bound, above the inner one so
+          #                        that a reachable-but-slow mount produces a
+          #                        clean exit 1 from `timeout`. On a genuinely
+          #                        wedged `hard` mount it is kubelet that ends
+          #                        the attempt, not `timeout`: the blocked write
+          #                        sits in uninterruptible sleep, TERM and KILL
+          #                        are both ignored, and `timeout` then blocks in
+          #                        wait() for a child that cannot die. The probe
+          #                        still fails, and the process stays until the
+          #                        mount recovers.
+          #   periodSeconds 30   - one attempt per 30s. Those unkillable
+          #                        processes accumulate one per period during an
+          #                        outage, so the cadence bounds the pile.
+          #   failureThreshold 5 - 4 x 30s + up to 20s = ~140s of continuous
+          #                        failure before NotReady, ~50s clear of the
+          #                        grace period.
+          # health.STORAGE_HEARTBEAT_TTL (120s) is 4 x periodSeconds, so the
+          # sidebar indicator goes red after three missed refreshes - still
+          # before the worker is marked NotReady. Degradation should be visible,
+          # not fatal.
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -u
+                  py=/root/miniforge3/envs/streamlit-env/bin/python
+                  exec timeout -k 3 15 "$py" -m src.workflow.health --probe
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 20
+            failureThreshold: 5
+            successThreshold: 1
           volumeMounts:
             - name: workspaces
               mountPath: /workspaces-streamlit-template

@@ -103,7 +103,9 @@ sync:
   - src/python-tools/*
   - example-data/*
   - assets/*
-  - k8s/overlays/*
+  - k8s/*
+  - .github/workflows/build-and-test.yml
+  - CLAUDE.md
   - src/Workflow.py
   - js-component/*
   - .gitmodules

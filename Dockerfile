@@ -24,6 +24,10 @@ ARG ASSET_NAME=OpenMS-App-Setup.exe
 
 USER root
 
+# Keep apt from stopping at interactive prompts: tzdata, pulled in by
+# later packages, otherwise waits for a timezone and the build hangs.
+ENV DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC
+
 # Install required Ubuntu packages.
 RUN apt-get -y update
 RUN apt-get install -y --no-install-recommends --no-install-suggests g++ autoconf automake patch libtool make git gpg wget ca-certificates curl jq libgtk2.0-dev openjdk-8-jdk cron cmake
@@ -199,14 +203,25 @@ ENV STREAMLIT_SERVER_COUNT=1
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+# Install the demo-seeding script run by the seed-demos initContainer
+# (k8s/base/streamlit-deployment.yaml). One copy of the logic, so what the
+# image ships is what tests/test_seed_demos.py executes.
+COPY docker/seed-demos.sh /app/docker/seed-demos.sh
+RUN chmod +x /app/docker/seed-demos.sh
+
 # Patch Analytics
 RUN mamba run -n streamlit-env python hooks/hook-analytics.py
 
 # Set Online Deployment
 RUN jq '.online_deployment = true' settings.json > tmp.json && mv tmp.json settings.json
 
-# Download the Windows installer of the release
-# Re-declare ARGs needed in this stage (ARGs don't persist across FROM)
+# Point the in-app mounted-drive browser at the conventional bind-mount path.
+# The browser only renders when this directory exists at runtime, i.e. when
+# the user starts the container with `-v /host/path:/mounted-data`.
+RUN jq '.local_data_dir = "/mounted-data"' settings.json > tmp.json && mv tmp.json settings.json
+
+# Download the Windows installer of the latest release, if it has one.
+# ARG declared here (not at the top) — otherwise the per-run token busts the cache.
 ARG GITHUB_TOKEN
 ARG GITHUB_USER=OpenMS
 ARG GITHUB_REPO=FLASHApp
