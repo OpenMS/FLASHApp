@@ -2252,45 +2252,25 @@ class StreamlitUI:
         if log_exists:
             # Static display after completion
             st.markdown(
-                f"**Elapsed {format_duration(now - state['started'])}** · "
-                f"step {len(state['steps'])}: **{step['tool']}**"
-                + ("" if step["ended"] is None else " finished")
+                f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
             )
-            if step["ended"] is None:
-                counts = file_counts(step)
-                if active and n > 1:
-                    which = ", ".join(str(i + 1) for i in active)
-                    where = (
-                        f"running file{'s' if len(active) > 1 else ''} {which} of {n}"
-                        f" · {counts[DONE]} done"
-                    )
-                else:
-                    where = f"{counts[DONE]} of {n} file{'s' if n > 1 else ''} done"
-                if counts[FAILED]:
-                    where += f" · :red[{counts[FAILED]} failed]"
-                threads = step.get("threads", 1)
-                parallel = step.get("parallel", 1)
-                text = (
-                    f"{where} · {format_duration(now - step['started'])} · "
-                    f"{threads} thread{'s' if threads > 1 else ''}"
-                    + (f" × {parallel} in parallel" if parallel > 1 else "")
-                )
-                st.progress(finished / n if n else 0.0, text=text)
-            if n > 1 or step["ended"] is not None:
-                lines = []
-                for f in files:
-                    if f["status"] == DONE:
-                        lines.append(f":green[:material/check_circle:] {f['name']} :gray[{format_duration(f['ended'] - f['started'])}]")
-                    elif f["status"] == FAILED:
-                        lines.append(f":red[:material/cancel:] {f['name']} :red[failed]")
-                    elif f["status"] == RUNNING:
-                        lines.append(f":blue[:material/progress_activity:] **{f['name']}** :gray[{format_duration(now - f['started'])}]")
-                    else:
-                        lines.append(f":gray[:material/radio_button_unchecked: {f['name']}]")
-                st.markdown("  \n".join(lines))
-            earlier = state["steps"][:-1]
-            if earlier:
-                st.caption("Done: " + " · ".join(self._step_summary(s) for s in earlier))
+            with open(log_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            content = "".join(lines)
+            outcome = classify_log_outcome(content)
+            if outcome == "finished":
+                st.success("**Workflow completed successfully.**")
+            elif outcome == "cancelled":
+                st.warning("**Workflow was cancelled.**")
+            else:
+                st.error("**Errors occurred, check log file.**")
+            self._show_run_summary(show_failures=outcome != "finished")
+            # Apply line limit to static display
+            if log_lines_count == "all":
+                display_lines = lines
+            else:
+                display_lines = lines[-st.session_state.log_lines_count:]
+            st.code("".join(display_lines), language="neon", line_numbers=False)
 
     @staticmethod
     def _step_summary(step: dict) -> str:
