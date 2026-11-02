@@ -15,7 +15,7 @@ commonLabels:
 images:
   - name: openms-streamlit
     newName: ghcr.io/openms/flashapp
-    newTag: latest
+    newTag: 1.2.0-full
 
 patches:
   - target:

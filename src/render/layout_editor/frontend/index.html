@@ -51,10 +51,11 @@
   @media (max-width: 640px) { .palette { position: static; } .palette .chips { flex-direction: row; flex-wrap: wrap; } }
   .palette.drop-over { outline: 2px dashed var(--danger); outline-offset: -4px; }
 
-  .chip { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--bg); border-radius: 7px; padding: 5px 8px; cursor: grab; touch-action: none; font-size: 14px; }
+  .chip { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--bg); border-radius: 7px; padding: 5px 8px; cursor: grab; touch-action: none; flex-wrap: wrap; font-size: 14px; }
   .chip:hover { border-color: var(--primary); }
   .chip .grip { color: var(--muted); font-size: 12px; letter-spacing: -2px; }
-  .chip .req { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .chip .lbl { flex: 1 1 0; min-width: 0; }
+  .chip .req { flex-basis: 100%; margin-left: 18px; font-size: 11px; color: var(--muted); }
   .chip.used { opacity: .45; }
 
   .experiments { display: grid; gap: 12px; }
@@ -131,9 +132,19 @@
 
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
   function label(name) { return byName[name] ? byName[name].label : name; }
+  // A component's requirement: one name, or a list of which one is enough
+  function reqs(name) {
+    var r = byName[name] ? byName[name].requires : null;
+    return !r ? [] : (Array.isArray(r) ? r : [r]);
+  }
+  function reqLabel(name) {
+    var c = byName[name];
+    return c && c.requires_label ? c.requires_label : reqs(name).map(label).join(' or ');
+  }
 
   function initDraft() {
-    var src = cfg.saved_layout ? cfg.saved_layout : [cfg.default_layout];
+    // start_layout: a default the user chose to start from, not yet saved
+    var src = cfg.start_layout ? cfg.start_layout : (cfg.saved_layout ? cfg.saved_layout : [cfg.default_layout]);
     draft = { layout: clone(src), sideBySide: !!cfg.side_by_side };
     active = 0;
   }
@@ -156,7 +167,7 @@
         row.forEach(function (name, c) {
           var why = '';
           if (!byName[name]) why = 'not available here';
-          else if (byName[name].requires && names.indexOf(byName[name].requires) < 0) why = 'needs ' + label(byName[name].requires);
+          else if (reqs(name).length && !reqs(name).some(function (r) { return names.indexOf(r) >= 0; })) why = 'needs ' + reqLabel(name);
           if (why) {
             out.cells[e + ',' + r + ',' + c] = why;
             if (!out.first) out.first = label(name) + ' in experiment ' + (e + 1) + ' ' + why;
@@ -234,8 +245,8 @@
         return h('div', { class: 'chip' + (used[c.name] ? ' used' : ''), 'data-drag': 'palette', 'data-name': c.name,
                           title: used[c.name] ? 'Already in experiment ' + (active + 1) : 'Drag or click to add' }, [
           h('span', { class: 'grip', text: '⋮⋮' }),
-          h('span', { text: c.label }),
-          c.requires ? h('span', { class: 'req', text: '+ ' + label(c.requires) }) : null
+          h('span', { class: 'lbl', text: c.label }),
+          c.requires ? h('span', { class: 'req', text: '+ ' + reqLabel(c.name) }) : null
         ]);
       })));
     });
@@ -262,7 +273,7 @@
           var name = row[c];
           rowEl.appendChild(h('div', { class: 'cell' + (why ? ' invalid' : ''), 'data-drag': 'cell', 'data-drop': 'cell', 'data-exp': e, 'data-row': r, 'data-col': c, title: 'Drag to move, drop on another component to swap' }, [
             h('div', { class: 'name', text: label(name) }),
-            why ? h('div', { class: 'sub bad', text: why }) : (byName[name] && byName[name].requires ? h('div', { class: 'sub', text: 'linked to ' + label(byName[name].requires) }) : null),
+            why ? h('div', { class: 'sub bad', text: why }) : (byName[name] && byName[name].requires ? h('div', { class: 'sub', text: 'linked to ' + reqLabel(name) }) : null),
             h('button', { class: 'x', title: 'Remove', 'data-remove': '1', onclick: (function (e, r, c) { return function () { removeAt(e, r, c); changed(); }; })(e, r, c) }, ['×'])
           ]));
         }

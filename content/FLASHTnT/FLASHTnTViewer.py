@@ -4,16 +4,22 @@ from pathlib import Path
 
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
+from src import sample_type
 from src.render.render import render_grid
+from src.render.layout_editor.catalog import TNT_DEFAULT_LAYOUTS
 
 
-DEFAULT_LAYOUT = [
-    ['protein_table'], 
-    ['sequence_view'], 
-    ['structure_view'],
-    ['tag_table'],
-    ['combined_spectrum']
-]
+def experiment_layout(saved_layout, dataset_id):
+    """The saved layout of an experiment, or the default for its sample type."""
+    if saved_layout is not None:
+        return saved_layout
+    kind = sample_type.of_result(file_manager, dataset_id) or sample_type.NATIVE
+    st.caption(
+        f"{kind} default layout: this experiment looks like a "
+        f"{'native or targeted run' if kind == sample_type.NATIVE else 'lysate LC-MS/MS run'}. "
+        "Arrange your own on the Layout Manager page."
+    )
+    return TNT_DEFAULT_LAYOUTS[kind]
 
 
 def select_experiment():
@@ -61,7 +67,8 @@ if file_manager.result_exists('flashtnt_layout', 'layout'):
     layout = layout['layout']
 
 else:
-    layout = [DEFAULT_LAYOUT]
+    # No saved layout: each experiment gets the default for its sample type
+    layout = [None]
     side_by_side = False
 
 ### if no input file is given, show blank page
@@ -86,7 +93,7 @@ if len(layout) == 2 and side_by_side:
             on_change=select_experiment
         )
         if 'selected_experiment0_tagger' in st.session_state:
-            render_grid(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'flashtnt', 'selected_experiment0_tagger')
+            render_grid(st.session_state.selected_experiment0_tagger, experiment_layout(layout[0], st.session_state.selected_experiment0_tagger), file_manager, 'flashtnt', 'selected_experiment0_tagger')
     with c2:
         st.selectbox(
             "choose experiment", display_names,
@@ -95,7 +102,7 @@ if len(layout) == 2 and side_by_side:
             on_change=select_experiment
         )
         if f"selected_experiment1_tagger" in st.session_state:
-            render_grid(st.session_state.selected_experiment1_tagger, layout[1], file_manager, 'flashtnt', 'selected_experiment1_tagger', 'flash_viewer_grid_1')
+            render_grid(st.session_state.selected_experiment1_tagger, experiment_layout(layout[1], st.session_state.selected_experiment1_tagger), file_manager, 'flashtnt', 'selected_experiment1_tagger', 'flash_viewer_grid_1')
 
 
 else:
@@ -108,7 +115,7 @@ else:
     )
 
     if 'selected_experiment0_tagger' in st.session_state:
-        render_grid(st.session_state.selected_experiment0_tagger, layout[0], file_manager, 'flashtnt', 'selected_experiment0_tagger')
+        render_grid(st.session_state.selected_experiment0_tagger, experiment_layout(layout[0], st.session_state.selected_experiment0_tagger), file_manager, 'flashtnt', 'selected_experiment0_tagger')
 
     ### for multiple experiments on one view
     if len(layout) > 1:
@@ -127,6 +134,6 @@ else:
 
             # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
             if f"selected_experiment{exp_index}_tagger" in st.session_state:
-                render_grid(st.session_state["selected_experiment%d_tagger" % exp_index], layout[exp_index], file_manager, 'flashtnt', f"selected_experiment{exp_index}_tagger", 'flash_viewer_grid_%d' % exp_index)
+                render_grid(st.session_state["selected_experiment%d_tagger" % exp_index], experiment_layout(exp_layout, st.session_state["selected_experiment%d_tagger" % exp_index]), file_manager, 'flashtnt', f"selected_experiment{exp_index}_tagger", 'flash_viewer_grid_%d' % exp_index)
 
 save_params(params)
