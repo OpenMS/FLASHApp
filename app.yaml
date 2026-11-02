@@ -105,6 +105,7 @@ sync:
   - assets/*
   - k8s/*
   - .github/workflows/build-and-test.yml
+  - .github/kind-config.yaml
   - CLAUDE.md
   - src/Workflow.py
   - js-component/*
