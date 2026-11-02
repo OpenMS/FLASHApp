@@ -216,45 +216,72 @@ _QVALUE = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength'
 # hierarchy_data turns FLASHTnT's -1 / 0 into nulls; show them as "-"
 _POSITION = {'formatter': 'fixed', 'formatterParams': {'minLength': 1000, 'placeholders': {'NaN': '-'}}}
 _MASS = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 4, 'placeholders': {'NaN': '-'}}}
+# The three tables are meant to sit side by side in one layout row, so each
+# shows only a few narrow columns; the rest start hidden (column chooser).
+_HIDDEN = {'visible': False}
 PROTEIN_GROUP_COLUMNS = [
-    {'title': '#', 'field': 'protein_group', 'sorter': 'number',
+    {'title': '#', 'field': 'protein_group', 'sorter': 'number', 'width': 44,
      'headerTooltip': 'Proteins numbered by their best score.'},
-    {'title': 'Accession', 'field': 'accession'},
-    {'title': 'Description', 'field': 'description', 'responsive': 10},
-    {'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number',
+    {'title': 'Accession', 'field': 'accession', 'widthGrow': 2, 'tooltip': True},
+    {'title': 'Description', 'field': 'description', **_HIDDEN},
+    {'title': 'Forms', 'field': 'proteoforms', 'sorter': 'number', 'minWidth': 92,
      'headerTooltip': 'Number of distinct proteoforms (ProForma strings) identified for the protein.'},
-    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number',
+    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'minWidth': 92,
      'headerTooltip': 'Number of spectra whose best hit is a proteoform of the protein.'},
-    {'title': 'Best score', 'field': 'best_score', 'sorter': 'number'},
-    {'title': 'Best q-value', 'field': 'best_qvalue', 'sorter': 'number', 'responsive': 6, **_QVALUE,
-     'headerTooltip': 'Lowest proteoform-level q-value of its PrSMs; "-" without a decoy search.'},
+    {'title': 'Score', 'field': 'best_score', 'sorter': 'number', 'minWidth': 92, **_HIDDEN,
+     'headerTooltip': 'Best score of its PrSMs.'},
+    {'title': 'q-value', 'field': 'best_qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
+     'headerTooltip': 'Lowest proteoform-level q-value of its PrSMs. Only PrSMs at q ≤ 0.01 are counted.'},
 ]
 PROTEOFORM_COLUMNS = [
-    {'title': '#', 'field': 'proteoform_id', 'sorter': 'number',
+    {'title': '#', 'field': 'proteoform_id', 'sorter': 'number', 'width': 44,
      'headerTooltip': 'Proteoforms numbered by protein, then by their best score.'},
-    {'title': 'Proteoform', 'field': 'proteoform', 'responsive': 0, 'maxWidth': 420, 'tooltip': True,
+    {'title': 'Proteoform', 'field': 'proteoform', 'widthGrow': 3, 'tooltip': True,
      'headerTooltip': 'The proteoform in ProForma notation, as FLASHTnT reports it.'},
-    {'title': 'First residue', 'field': 'start', 'sorter': 'number', **_POSITION, 'responsive': 5,
+    {'title': 'First residue', 'field': 'start', 'sorter': 'number', **_POSITION, **_HIDDEN,
      'headerTooltip': 'First residue of the proteoform in the protein (1-based); "-" when the N-terminus was not determined.'},
-    {'title': 'Last residue', 'field': 'end', 'sorter': 'number', **_POSITION, 'responsive': 5,
+    {'title': 'Last residue', 'field': 'end', 'sorter': 'number', **_POSITION, **_HIDDEN,
      'headerTooltip': 'Last residue of the proteoform in the protein (1-based); "-" when the C-terminus was not determined.'},
-    {'title': 'Mass', 'field': 'mass', 'sorter': 'number', **_MASS, 'responsive': 4,
+    {'title': 'Mass', 'field': 'mass', 'sorter': 'number', **_MASS, **_HIDDEN,
      'headerTooltip': 'Proteoform mass of its best PrSM.'},
-    {'title': 'Mods', 'field': 'modifications', 'sorter': 'number', 'responsive': 6},
-    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number'},
-    {'title': 'Best score', 'field': 'best_score', 'sorter': 'number'},
-    {'title': 'Best q-value', 'field': 'best_qvalue', 'sorter': 'number', 'responsive': 6, **_QVALUE},
+    {'title': 'Mods', 'field': 'modifications', 'sorter': 'number', **_HIDDEN},
+    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'minWidth': 92},
+    {'title': 'Score', 'field': 'best_score', 'sorter': 'number', **_HIDDEN,
+     'headerTooltip': 'Best score of its PrSMs.'},
+    {'title': 'q-value', 'field': 'best_qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
+     'headerTooltip': 'Lowest proteoform-level q-value of its PrSMs. Only PrSMs at q ≤ 0.01 are counted.'},
 ]
 PROTEOFORM_PRSM_COLUMNS = [
-    {'title': 'Scan No.', 'field': 'Scan', 'sorter': 'number'},
-    {'title': 'Retention time', 'field': 'RetentionTime', 'sorter': 'number', **_fixed()},
-    {'title': 'Precursor mass', 'field': 'PrecursorMass', 'sorter': 'number', 'formatter': 'fixed',
+    {'title': 'Scan', 'field': 'Scan', 'sorter': 'number', 'minWidth': 84},
+    {'title': 'RT', 'field': 'RetentionTime', 'sorter': 'number', **_fixed(), **_HIDDEN,
+     'headerTooltip': 'Retention time.'},
+    {'title': 'Precursor', 'field': 'PrecursorMass', 'sorter': 'number', 'minWidth': 110, **_HIDDEN,
+     'headerTooltip': 'Precursor mass.', 'formatter': 'fixed',
      'formatterParams': {'precision': 4, 'minLength': 4, 'placeholders': {'-1': '-', '-1.0': '-'}}},
-    {'title': 'Proteoform mass', 'field': 'ProteoformMass', 'sorter': 'number', **_MASS, 'responsive': 5},
-    {'title': 'Matched fragments', 'field': 'MatchingFragments', 'sorter': 'number'},
-    {'title': 'Score', 'field': 'Score', 'sorter': 'number'},
-    {'title': 'Q-value', 'field': 'qvalue', 'sorter': 'number', 'responsive': 6, **_QVALUE},
+    {'title': 'Proteoform mass', 'field': 'ProteoformMass', 'sorter': 'number', **_MASS, **_HIDDEN},
+    {'title': 'Fragments', 'field': 'MatchingFragments', 'sorter': 'number', 'minWidth': 112,
+     'headerTooltip': 'Number of matched fragments.'},
+    {'title': 'Score', 'field': 'Score', 'sorter': 'number', 'minWidth': 92},
+    {'title': 'q-value', 'field': 'qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
+     'headerTooltip': 'Proteoform-level q-value. Only PrSMs at q ≤ 0.01 are counted.'},
 ]
+
+
+def _hierarchy_columns(columns, with_qvalues):
+    """Without a decoy search there are no q-values, so their column is hidden."""
+    if with_qvalues:
+        return columns
+    return [
+        {**column, 'visible': False} if column['field'] in ('best_qvalue', 'qvalue') else column
+        for column in columns
+    ]
+
+
+# Rows of 33 px below the title bar and header; one table never exceeds TABLE_HEIGHT
+_HIERARCHY_CHROME = 100
+_HIERARCHY_ROW = 33
+
+
 _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 
 # FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
@@ -500,29 +527,32 @@ def _selected_tag(file_manager, dataset_id, state_manager):
 
 
 def _hierarchy_table(comp_name, file_manager, dataset_id):
-    """One level of the protein → proteoform → PrSM tables. Selecting a
-    proteoform or PrSM selects its (best) PrSM in the other cells, as a
-    protein table row does."""
-    def hits():
-        return hierarchy_data.prsms(file_manager, dataset_id)
+    """One level of the protein → proteoform → PrSM tables and its height.
+    Selecting a proteoform or PrSM selects its (best) PrSM in the other
+    cells, as a protein table row does. A table is as tall as the most rows
+    it can show (all proteins, the proteoforms of the protein with the most,
+    the PrSMs of the proteoform with the most), up to TABLE_HEIGHT."""
+    hits = hierarchy_data.prsms(file_manager, dataset_id)
+    with_qvalues = hierarchy_data.has_qvalues(hits)
     common = dict(
         reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
         pagination=False, float_precision='float64',
+        # Columns share the cell's width, so a narrow cell never scrolls sideways
+        layout='fitColumns',
     )
     if comp_name == 'protein_group_table':
-        def build():
-            prsms = hits()
-            return dict(
-                data=hierarchy_data.protein_groups_from(prsms).lazy(),
-                column_definitions=PROTEIN_GROUP_COLUMNS,
-                title=hierarchy_data.protein_list_title(hierarchy_data.key_figures(prsms)),
-                index_field='protein_group', go_to_fields=['accession'],
-                interactivity={'protein_group': 'protein_group'}, **common,
-            )
+        build = lambda: dict(
+            data=hierarchy_data.protein_groups_from(hits).lazy(),
+            column_definitions=_hierarchy_columns(PROTEIN_GROUP_COLUMNS, with_qvalues),
+            title=hierarchy_data.level_title('Proteins', hierarchy_data.key_figures(hits)['proteins']),
+            index_field='protein_group', go_to_fields=['accession'],
+            interactivity={'protein_group': 'protein_group'}, **common,
+        )
     elif comp_name == 'proteoform_table':
         build = lambda: dict(
-            data=hierarchy_data.proteoforms_from(hits()).lazy(),
-            column_definitions=PROTEOFORM_COLUMNS, title='Proteoforms of the Protein',
+            data=hierarchy_data.proteoforms_from(hits).lazy(),
+            column_definitions=_hierarchy_columns(PROTEOFORM_COLUMNS, with_qvalues),
+            title=hierarchy_data.level_title('Proteoforms', hierarchy_data.key_figures(hits)['proteoforms']),
             index_field='proteoform_id', go_to_fields=['proteoform'],
             filters={'protein_group': 'protein_group'},
             interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx'},
@@ -530,16 +560,20 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
         )
     else:
         build = lambda: dict(
-            data=hierarchy_data.prsm_rows_from(hits()).lazy(),
-            column_definitions=PROTEOFORM_PRSM_COLUMNS, title='PrSMs of the Proteoform',
+            data=hierarchy_data.prsm_rows_from(hits).lazy(),
+            column_definitions=_hierarchy_columns(PROTEOFORM_PRSM_COLUMNS, with_qvalues),
+            title=hierarchy_data.level_title('PrSMs', hierarchy_data.key_figures(hits)['prsms']),
             index_field='index', go_to_fields=['Scan'],
             filters={'proteoform': 'proteoform_id'},
             interactivity={'protein': 'index', 'pscan': 'scan_idx'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
-    return _component(
+    rows = hierarchy_data.most_rows(hits)[comp_name]
+    height = min(TABLE_HEIGHT, _HIERARCHY_CHROME + _HIERARCHY_ROW * max(rows, 1))
+    table = _component(
         Table, comp_name, file_manager, dataset_id, ['protein_dfs', 'scan_table'], build,
     )
+    return table, height
 
 
 def _build(comp_name, file_manager, dataset_id, tool, state_manager):
@@ -647,7 +681,8 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         return _fdr_plot(comp_name, fm, ds), {'height': 400}
 
     if comp_name in ('protein_group_table', 'proteoform_table', 'proteoform_prsm_table'):
-        return _hierarchy_table(comp_name, fm, ds), {'height': TABLE_HEIGHT}
+        table, height = _hierarchy_table(comp_name, fm, ds)
+        return table, {'height': height}
 
     if comp_name == 'protein_table':
         return _component(

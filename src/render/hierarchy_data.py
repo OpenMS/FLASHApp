@@ -156,13 +156,20 @@ def key_figures(hits):
     }
 
 
-def protein_list_title(figures):
-    def count(n, word):
-        return f"{n} {word}{'' if n == 1 else 's'}"
-    title = (
-        f"Proteins · {count(figures['proteins'], 'protein')}, "
-        f"{count(figures['proteoforms'], 'proteoform')}, {count(figures['prsms'], 'PrSM')}"
-    )
-    if figures['cutoff']:
-        title += f" at {figures['cutoff']}"
-    return title
+def most_rows(hits):
+    """The most rows each table can show at once: all proteins, the
+    proteoforms of the protein with the most, the PrSMs of the proteoform
+    with the most."""
+    if not hits.height:
+        return {'protein_group_table': 0, 'proteoform_table': 0, 'proteoform_prsm_table': 0}
+    return {
+        'protein_group_table': hits['protein_group'].n_unique(),
+        'proteoform_table': hits.group_by('protein_group')
+        .agg(pl.col('proteoform_id').n_unique())['proteoform_id'].max(),
+        'proteoform_prsm_table': hits.group_by('proteoform_id').len()['len'].max(),
+    }
+
+
+def level_title(name, count):
+    """Title of one level's table with its total, e.g. "Proteins (12)"."""
+    return f'{name} ({count})'

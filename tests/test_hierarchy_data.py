@@ -74,9 +74,7 @@ def test_qvalue_cutoff_and_key_figures():
     assert sorted(hits['Scan'].to_list()) == [10, 11, 13]
     figures = hierarchy_data.key_figures(hits)
     assert figures == {'proteins': 2, 'proteoforms': 2, 'prsms': 3, 'cutoff': 'q ≤ 0.01'}
-    assert hierarchy_data.protein_list_title(figures) == (
-        'Proteins · 2 proteins, 2 proteoforms, 3 PrSMs at q ≤ 0.01'
-    )
+    assert hierarchy_data.level_title('Proteins', figures['proteins']) == 'Proteins (2)'
 
 
 def test_without_qvalues_nothing_is_filtered():
@@ -84,6 +82,11 @@ def test_without_qvalues_nothing_is_filtered():
     assert hits.height == 5
     figures = hierarchy_data.key_figures(hits)
     assert figures['cutoff'] is None
-    assert hierarchy_data.protein_list_title(
-        {'proteins': 1, 'proteoforms': 1, 'prsms': 1, 'cutoff': None}
-    ) == 'Proteins · 1 protein, 1 proteoform, 1 PrSM'
+
+
+def test_most_rows_per_table():
+    hits = hierarchy_data.assign_groups(_hits())
+    assert hierarchy_data.most_rows(hits) == {
+        'protein_group_table': 2, 'proteoform_table': 2, 'proteoform_prsm_table': 2,
+    }
+    assert hierarchy_data.most_rows(hits.clear())['proteoform_table'] == 0
