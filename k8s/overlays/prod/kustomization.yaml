@@ -17,6 +17,9 @@ images:
     newName: ghcr.io/openms/flashapp
     newTag: 1.2.0-full
 
+# FLASHApp's own values. k8s/base and k8s/components are the template's and
+# arrive through the template sync; everything this app sets for itself is a
+# patch here (docs/kubernetes-deployment.md, "App values belong in the overlay").
 patches:
   - target:
       kind: IngressRoute
@@ -28,6 +31,20 @@ patches:
       - op: replace
         path: /spec/routes/0/services/0/name
         value: flashapp-streamlit
+      - op: replace
+        path: /spec/routes/1/match
+        value: (Host(`flashapp.webapps.openms.de`) || Host(`flashapp.webapps.openms.org`)) && PathPrefix(`/sync`)
+      - op: replace
+        path: /spec/routes/1/services/0/name
+        value: flashapp-sync
+  # The workspace share (deploy.k8s.storage in app.yaml).
+  - target:
+      kind: PersistentVolumeClaim
+      name: workspaces-manila-pvc
+    patch: |
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 300Gi
   - target:
       kind: Deployment
       name: streamlit
@@ -35,6 +52,19 @@ patches:
       - op: replace
         path: /spec/replicas
         value: 10
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "redis://flashapp-redis:6379/0"
+      # FLASHApp's Streamlit size, larger than the tier's 4Gi limit.
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: {memory: 512Mi, cpu: 500m}
+          limits: {memory: 10Gi, cpu: "4"}
+  - target:
+      kind: Deployment
+      name: sync
+    patch: |
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
         value: "redis://flashapp-redis:6379/0"
@@ -48,3 +78,10 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value
         value: "redis://flashapp-redis:6379/0"
+      # FLASHApp's worker size: five workers of up to 20Gi each, not the
+      # tier's single 180Gi worker.
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests: {memory: 2Gi, cpu: "2"}
+          limits: {memory: 20Gi, cpu: "4"}
