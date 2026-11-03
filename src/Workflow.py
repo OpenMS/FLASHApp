@@ -12,6 +12,7 @@ from src import sample_type
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
 from src.quant.run import CONSENSUS_EXCLUDE, compare_runs
+from src import flashida
 from src.workflow.WorkflowManager import WorkflowManager
 
 # Example inputs shipped with the default demo workspace.
@@ -515,6 +516,83 @@ class TopDownWorkflow(WorkflowManager):
 # The former workflows, for queued jobs and the workspace sync of older builds
 TagWorkflow = TopDownWorkflow
 DeconvWorkflow = TopDownWorkflow
+
+
+class IdaWorkflow(WorkflowManager):
+    """FLASHIda acquisition: waits for the raw files an acquisition writes and
+    starts FLASHIda (on the instrument PC) for each, with the method named in
+    the file name (<name>FLASHIda_<method>.raw -> <method>.json from the method
+    folder). Runs until stopped. Developer feature of the local app."""
+    share_cache = False
+    # Seconds between two looks at the raw folder
+    poll_interval = 1.0
+
+    def __init__(self) -> None:
+        super().__init__("FLASHIda", st.session_state["workspace"])
+        self.tool_name = 'FLASHIda'
+
+    def configure(self) -> None:
+        self.ui.input_widget(
+            key="executable", name="FLASHIda executable", default='',
+            widget_type="text", help="Path to Flash.exe on the instrument PC.",
+        )
+        self.ui.input_widget(
+            key="raw-files", name="Raw file folder", default='', widget_type="text",
+            help="Folder the acquisition writes its raw files to.",
+        )
+        self.ui.input_widget(
+            key="method-files", name="Method folder", default='', widget_type="text",
+            help="Folder with the <method>.json files named in the raw file names.",
+        )
+
+    def execution(self) -> bool:
+        params = self.parameter_manager.get_parameters_from_json()
+
+        exe = Path(str(params.get('executable') or '').strip())
+        if str(exe) in ('', '.'):
+            self.logger.log('Enter the path to the FLASHIda executable.')
+            return False
+        if exe.suffix.lower() != '.exe' or not exe.is_file():
+            self.logger.log(f"The FLASHIda executable '{exe}' is not an existing .exe file.")
+            return False
+
+        folders = {}
+        for key, label in (('method-files', 'Method folder'), ('raw-files', 'Raw file folder')):
+            folder = Path(str(params.get(key) or '').strip())
+            if str(folder) in ('', '.') or not folder.is_dir():
+                self.logger.log(f"{label} '{folder}' is not a folder.")
+                return False
+            folders[key] = folder
+
+        seen = flashida.find_raws(folders['raw-files'])
+        if seen:
+            self.logger.log('Ignoring the FLASHIda raw files already in the folder:')
+            for name, method in sorted(seen.items()):
+                self.logger.log(f"  {name} ({method}.json)")
+
+        self.logger.log('Waiting for new raw files...')
+        while True:
+            time.sleep(self.poll_interval)
+            for name, method in sorted(flashida.find_raws(folders['raw-files']).items()):
+                if name in seen:
+                    continue
+                seen[name] = method
+                self.logger.log(f"New raw file '{name}'.")
+                method_path = Path(folders['method-files'], f'{method}.json')
+                if not method_path.is_file():
+                    self.logger.log(f"Method '{method_path}' does not exist. Skipping this file.")
+                else:
+                    log_dir = flashida.method_log_dir(method_path, exe.parent)
+                    flashida.remember_log_folder(self.workflow_dir, log_dir)
+                    self.logger.log(
+                        f"Starting FLASHIda with method '{method_path.name}' "
+                        f"(logs in '{log_dir}')..."
+                    )
+                    self.executor.run_command(
+                        [exe, '-m', method_path, '-r', Path(folders['raw-files'], name)],
+                        cwd=exe.parent,
+                    )
+                self.logger.log('Waiting for new raw files...')
 
 
 class QuantWorkflow(WorkflowManager):
