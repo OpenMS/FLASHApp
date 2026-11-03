@@ -29,7 +29,6 @@ if __name__ == '__main__':
             st.Page(Path("content", "TopDown", "TopDownUpload.py"), title="Upload data", icon="📁"),
             st.Page(Path("content", "TopDown", "TopDownConfigure.py"), title="Describe experiment", icon="⚙️"),
             st.Page(Path("content", "TopDown", "TopDownRun.py"), title="Run analysis", icon="🚀"),
-            st.Page(Path("content", "TopDown", "TopDownSequenceInput.py"), title="Sequence Input", icon="🧵"),
             st.Page(Path("content", "TopDown", "TopDownViewer.py"), title="Viewer", icon="👀"),
             st.Page(Path("content", "TopDown", "TopDownDownload.py"), title=export, icon=export_icon),
         ],

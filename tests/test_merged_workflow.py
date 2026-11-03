@@ -102,14 +102,29 @@ def test_each_experiment_starts_from_the_default_of_its_run(tmp_path):
     from src.render.layout_editor.catalog import DECONV_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS
 
     file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
-    assert topdown_layout.rows(file_manager, False, None) == DECONV_DEFAULT_LAYOUT
+    # A run deconvolved only ends with the sequence view, which asks for a sequence
+    deconvolution = DECONV_DEFAULT_LAYOUT + [['sequence_view']]
+    assert topdown_layout.rows(file_manager, False, None) == deconvolution
     assert topdown_layout.rows(file_manager, True, 'Native') == TNT_DEFAULT_LAYOUTS['Native']
     assert topdown_layout.rows(file_manager, True, 'Lysate') == TNT_DEFAULT_LAYOUTS['Lysate']
     # A layout the former identification Viewer saved stays the default of identified runs
     file_manager.store_data('flashtnt_layout', 'layout', _layout([['protein_table']]))
     assert topdown_layout.rows(file_manager, True, 'Lysate') == [['protein_table']]
-    assert topdown_layout.rows(file_manager, False, None) == DECONV_DEFAULT_LAYOUT
+    assert topdown_layout.rows(file_manager, False, None) == deconvolution
     # A saved layout is shown for every run
     file_manager.store_data('topdown_layout', 'layout', _layout([['scan_table']]))
     assert topdown_layout.rows(file_manager, True, 'Native') == [['scan_table']]
     assert topdown_layout.rows(file_manager, False, None) == [['scan_table']]
+
+
+def test_sequence_input_saves_and_reads_back(tmp_path):
+    from src.render import sequence_input
+
+    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    assert sequence_input.saved(file_manager) is None
+    assert sequence_input.is_valid(' mkv laa\n') and sequence_input.is_valid('ACXD')
+    assert not sequence_input.is_valid('ACBD') and not sequence_input.is_valid('  ')
+    sequence_input.save(file_manager, ' mkv laa\n', ['Carbamidomethyl (C)'])
+    assert sequence_input.saved(file_manager) == ('MKVLAA', ['Carbamidomethyl (C)'])
+    sequence_input.clear(file_manager)
+    assert sequence_input.saved(file_manager) is None

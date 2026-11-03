@@ -26,7 +26,8 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import (
-    hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
+    hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, sequence_input,
+    validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
@@ -300,7 +301,7 @@ _HIERARCHY_ROW = 33
 _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 
 # Components with nothing to show for a run deconvolved only (the sequence
-# view then shows the Sequence Input sequence)
+# view then shows the sequence entered in the Viewer)
 IDENTIFICATION_ONLY = (
     {c['name'] for c in TNT_COMPONENTS} - {c['name'] for c in DECONV_COMPONENTS} - {'sequence_view'}
 )
@@ -620,7 +621,7 @@ def _proteins_with_characterization(file_manager, dataset_id):
 
 def _deconv_sequence(file_manager, state_manager):
     """Sequence data for the FLASHDeconv sequence view: the sequence the user
-    typed into the view, else the one saved on the Sequence Input page."""
+    typed into the view, else the one entered with the Viewer's Sequence button."""
     stored = None
     if file_manager.result_exists('sequence', 'sequence'):
         stored = file_manager.get_results('sequence', 'sequence')['sequence']
@@ -927,7 +928,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'sequence_view':
-        # The proteoform of an identified run, else the Sequence Input sequence
+        # The proteoform of an identified run, else the sequence entered in the Viewer
         if tool == 'flashtnt' or (tool == 'topdown' and fm.result_exists(ds, 'protein_dfs')):
             component = _component(
                 ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
@@ -1102,7 +1103,10 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
         component, render_args = _build(comp_name, file_manager, dataset_id, tool, state_manager)
     except MissingResult as e:
         if str(e) == 'sequence':
-            st.info('Enter a sequence on the Sequence Input page to show the sequence view.')
+            with st.container(border=True):
+                st.markdown('**Sequence view**')
+                st.caption('Enter the proteoform sequence to see which fragments of this run match it.')
+                sequence_input.button(file_manager, key=f'{key}_sequence', label='Enter sequence')
         elif str(e) == 'proteoform masses':
             st.info(
                 'No PrSM of this dataset has a proteoform or precursor mass, '

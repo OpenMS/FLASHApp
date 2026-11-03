@@ -40,7 +40,6 @@ wf.show_parameter_section()
 next_steps(
     'topdown',
     ('run', 'Start the analysis of the selected runs.'),
-    ('sequence', 'Optional: give a proteoform sequence to see its fragment coverage in the Viewer.'),
 )
 
 save_params(params)

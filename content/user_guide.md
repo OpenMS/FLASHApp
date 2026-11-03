@@ -86,7 +86,7 @@ Until you save your own layout, each run opens in the layout made for its analys
 
 | Run | What you see first |
 |---|---|
-| Deconvolved only | The masses over retention time (heatmap), the spectra with their masses, the raw and deconvolved spectrum and a 3D signal-to-noise view. |
+| Deconvolved only | The masses over retention time (heatmap), the spectra with their masses, the raw and deconvolved spectrum, a 3D signal-to-noise view and the sequence view for a sequence you enter. |
 | Identified, native or purified proteins | The identified proteins, the sequence with its fragments and modifications, the 3D structure, and the sequence tags behind each identification. |
 | Identified, lysate | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors and quality control of the identifications. |
 | Labelled with TMT or iTRAQ | The layout of its kind as above, with the **reporter ions** of every spectrum and of the selected spectrum, right below the table that selects the spectrum. |
@@ -103,7 +103,7 @@ Search the list in the Layout Manager by name, or expand its groups:
 - **Sequence**: *Sequence view* (fragments and modifications on the sequence, internal fragments as a purple strip), *Structure view (3D)* (the AlphaFold model, or a structure you upload, with the cleavage sites), *Internal fragment map*, *Fragment mass errors*.
 - **Quantification**: *Reporter ions per spectrum (TMT, iTRAQ)* and *Reporter ions of the selected spectrum*.
 
-The **Sequence view** of a run that was not identified shows the sequence you enter on **Sequence Input**.
+The **Sequence view** of a run that was not identified shows a sequence you enter yourself: press **Sequence** next to **Edit layout** (or **Enter sequence** in the view) and give the sequence and its fixed modifications.
 
 ---
 

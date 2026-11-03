@@ -28,16 +28,16 @@ def has_sequence(file_manager):
 
 def components(file_manager):
     """What Edit layout offers: every component of both kinds, plus the
-    sequence components of the Sequence Input page once a sequence is saved."""
+    sequence components that need a sequence of your own once one is saved."""
     if has_sequence(file_manager):
         return TOPDOWN_COMPONENTS + TOPDOWN_SEQUENCE_COMPONENTS
     return TOPDOWN_COMPONENTS
 
 
 def deconvolution_default(file_manager):
-    if has_sequence(file_manager):
-        return DECONV_DEFAULT_LAYOUT + [['sequence_view']]
-    return DECONV_DEFAULT_LAYOUT
+    # The sequence view shows the sequence entered with the Viewer's Sequence
+    # button, and offers that button until one is entered
+    return DECONV_DEFAULT_LAYOUT + [['sequence_view']]
 
 
 def saved(file_manager):
