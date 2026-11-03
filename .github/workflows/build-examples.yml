@@ -7,13 +7,20 @@ on:
 jobs:
   list:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: List MSV000091923
         run: |
-          for h in massive-ftp.ucsd.edu massive.ucsd.edu; do
-            echo "== $h"; curl -sS -m 120 --list-only "ftp://$h/v06/MSV000091923/" || true
-            curl -sS -m 120 --list-only "ftp://$h/MSV000091923/" || true
+          echo "== PROXI"
+          curl -sS -m 60 "https://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/datasets/MSV000091923" | head -c 6000 || true
+          echo
+          base="ftp://massive-ftp.ucsd.edu/v06/MSV000091923"
+          list() { timeout 60 curl -sS -m 50 --list-only "$1/" 2>&1 || true; }
+          for d1 in $(list "$base"); do
+            echo "== $d1"
+            for d2 in $(list "$base/$d1" | head -50); do
+              echo "  $d1/$d2"
+              case "$d2" in *.*) continue;; esac
+              for d3 in $(list "$base/$d1/$d2" | head -80); do echo "    $d1/$d2/$d3"; done
+            done
           done
-          wget -q -nH --spider -r -l 6 "ftp://massive-ftp.ucsd.edu/v06/MSV000091923/" -o spider.log || true
-          grep -o "ftp://[^ ]*" spider.log | sort -u | head -400
-          ls -R massive-ftp.ucsd.edu 2>/dev/null | head -400
