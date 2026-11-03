@@ -27,6 +27,7 @@ extends them along the proteins of the database.
 - **MS data**: one file per run, mzML, Thermo *.raw* or a Bruker timsTOF *.d*
   folder (vendor files are converted for you).
 - **Database** (optional): the protein sequences to search, FASTA or PEFF.
+  A UniProt proteome needs no upload: choose it on Describe experiment.
   Decoys are added when the FASTA file has none. Without a database the runs
   are deconvolved only.
 
@@ -41,7 +42,8 @@ Already ran the tools yourself? Add their output under **Tool results**.
   database describes (heavily modified proteins, antibodies, unknown samples):
   the masses are the result.
 - A reference proteome as FASTA comes from [UniProt](https://www.uniprot.org/proteomes):
-  search it by organism or taxonomy ID under **Database** and add it in one click.
+  pick *UniProt proteome* as the database on **Describe experiment** and search it by
+  organism or taxonomy ID there.
   Only proteins in the database can be identified.
 - To **compare runs** (which masses or proteoforms go up or down between
   conditions), upload every run of the experiment; you assign them to
