@@ -11,6 +11,7 @@ import hashlib
 import json
 import shutil
 import threading
+from functools import lru_cache
 from pathlib import Path
 
 import polars as pl
@@ -24,7 +25,9 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
-from src.render import hierarchy_data, insight_data, prsm_data, prsm_overview, qc_data, validation_data
+from src.render import (
+    hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
+)
 from src.render.fragmentation import mzml_scan_methods
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
@@ -230,6 +233,9 @@ HEATMAPS = {
 
 # Clicking the highlighted row of a table again only removes the highlight; the
 # selection stays (FLASHViewer's tables behaved so)
+# Selection the sequence view's dialog writes its fixed modifications to
+FIXED_MODS_IDENTIFIER = 'fixed_mods'
+
 RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
 # off (not in FLASHQuant, whose table did not follow its selection)
@@ -598,17 +604,26 @@ def _deconv_sequence(file_manager, state_manager):
     if stored is None:
         return None
     sequence = state_manager.get_selection('sequence') or stored['input_sequence']
-    return _sequence_data(
-        sequence, stored.get('fixed_mod_cysteine'), stored.get('fixed_mod_methionine')
-    )
+    mod_ids = _fixed_modification_ids(stored, state_manager)
+    return _sequence_data(sequence, tuple(mod_ids))
+
+
+def _fixed_modification_ids(stored, state_manager):
+    """The fixed modifications of the FLASHDeconv sequence view: those picked
+    in the view's "Change sequence" dialog, else those saved with the sequence."""
+    return modifications.fixed_ids(stored, state_manager.get_selection(FIXED_MODS_IDENTIFIER))
+
+
+@lru_cache(maxsize=1)
+def _modification_picker_library():
+    """The modification library as the sequence view's dialog takes it."""
+    return [{'id': e['id'], 'mass': e['mass'], 'site': e['site']} for e in modifications.library()]
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
-def _sequence_data(sequence, cysteine, methionine):
-    data = getFragmentDataFromSeq(
-        sequence,
-        fixed_mods={'fixed_mod_cysteine': cysteine, 'fixed_mod_methionine': methionine},
-    )
+def _sequence_data(sequence, mod_ids):
+    fixed_mods = {'fixed_modifications': list(mod_ids)}
+    data = getFragmentDataFromSeq(sequence, fixed_mods=fixed_mods)
     # Plain floats: the sequence is part of the component configuration
     return json.loads(json.dumps(data, default=float))
 
@@ -893,7 +908,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         sequence = _deconv_sequence(fm, state_manager)
         if sequence is None:
             raise MissingResult('sequence')
-        return _component(
+        component = _component(
             ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
             ['sequence_view', 'out_deconv_mzML'],
             lambda: dict(
@@ -907,7 +922,15 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 **SEQUENCE_VIEW_OPTIONS,
             ),
             extra=sequence, required=['sequence_view'],
-        ), {}
+        )
+        # The "Change sequence" dialog also picks the fixed modifications
+        if hasattr(component, 'set_modification_picker'):
+            stored = fm.get_results('sequence', 'sequence')['sequence']
+            mod_ids = _fixed_modification_ids(stored, state_manager)
+            component.set_modification_picker(
+                _modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids
+            )
+        return component, {}
 
     if comp_name == 'structure_view':
         component = _component(
