@@ -150,3 +150,7 @@ timsrust_pyo3==0.4.1
 
 # Reads app.yaml, the app spec (utils/app_spec.py)
 pyyaml>=6.0
+
+# The sample PCA of the run comparisons (openms-insight PCAPlot, installed
+# with --no-deps, so its dependencies are listed here)
+scikit-learn>=1.0

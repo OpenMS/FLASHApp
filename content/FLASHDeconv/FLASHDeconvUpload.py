@@ -5,54 +5,59 @@ import streamlit as st
 
 from pathlib import Path
 
-from src.parse.tnt import parseTnT
+from src.Workflow import DeconvWorkflow
 from src.parse.deconv import parseDeconv
-from src.Workflow import TagWorkflow
 from src.common.common import page_setup, save_params, local_folder_files
+from src.common.guide import next_steps, page_intro
 
 
 params = page_setup()
 
-wf = TagWorkflow()
+wf = DeconvWorkflow()
 
-st.title('FLASHTnT - Tag and Extend')
+st.title('Upload your data')
+page_intro(
+    """
+FLASHDeconv turns the peaks of your spectra into the neutral masses of the
+proteoforms behind them. Upload one **MS data** file per run: mzML, Thermo
+*.raw* or a Bruker timsTOF *.d* folder (vendor files are converted for you).
 
-t = st.tabs(["📁 **File Upload**", "⚙️ **Configure**", "🚀 **Run**", "💡 **Manual Result Upload**"])
+No data at hand? An example run is used when nothing is uploaded. Already ran
+FLASHDeconv yourself? Add its output under **FLASHDeconv results** to view it.
+""",
+    background="""
+- **mzML** is the open file format for raw MS data. Other vendor formats convert
+  to it with [ProteoWizard msConvert](https://proteowizard.sourceforge.io/)
+  (keep *peak picking* on).
+- To **compare runs** (which masses go up or down between conditions), upload
+  every run of the experiment here; you assign them to conditions on the next page.
+""",
+    background_title='Input files explained',
+)
+
+t = st.tabs(["📁 **MS data**", "💡 **FLASHDeconv results**"])
 with t[0]:
     wf.show_file_upload_section()
-
+    next_steps(
+        'flashdeconv',
+        ('configure', 'Choose the runs, their conditions and the deconvolution settings.'),
+    )
 with t[1]:
-    wf.show_parameter_section()
 
-with t[2]:
-    wf.show_execution_section()
-with t[3]:
-
-    # (file name suffix, name tag, prefix the tools use in their own output)
+    # (file name suffix, name tag, prefix FLASHDeconv uses in its own output)
     UPLOAD_FILE_TYPES = (
         ('deconv.mzML', 'out_deconv_mzML', 'out'),
         ('annotated.mzML', 'anno_annotated_mzML', 'anno'),
-        ('tags.tsv', 'tags_tsv', ''),
-        ('tagged.tsv', 'tags_tsv', ''),
-        ('protein.tsv', 'protein_tsv', ''),
-        # optional FLASHAnnotator output (-out, -out_annotation of the workflow)
-        ('annotated.tsv', 'annotated_tsv', ''),
-        ('fragments.tsv', 'fragments_tsv', ''),
-    )
-
-    REQUIRED_FILES = (
-        ('deconvolved mzML', 'out_deconv_mzML'),
-        ('annotated mzML', 'anno_annotated_mzML'),
-        ('tags.tsv', 'tags_tsv'),
-        ('protein.tsv', 'protein_tsv'),
+        ('spec1.tsv', 'spec1_tsv', ''),
+        ('spec2.tsv', 'spec2_tsv', ''),
     )
 
     def process_uploaded_files(uploaded_files):
 
-        # FLASHDeconv and FLASHTnT name their output files 'out_deconv.mzML',
-        # 'anno_annotated.mzML', 'tags.tsv' and 'protein.tsv', so the part in
-        # front of the suffix is not an experiment name: file those under a
-        # common dataset, otherwise the files of a run never meet.
+        # FLASHDeconv names its output files 'out_deconv.mzML' and
+        # 'anno_annotated.mzML', so the part in front of the suffix ('out'
+        # and 'anno') is not an experiment name: file those under a common
+        # dataset, otherwise the two halves of a run never meet.
         default_dataset = time.strftime('uploaded_%Y%m%d-%H%M%S')
 
         # Store all uploaded files
@@ -69,66 +74,45 @@ with t[3]:
                 st.warning(f'Invalid file : {file.name}')
 
         # Get the unparsed files
-        input_files = set(wf.file_manager.get_results_list(
-            ['out_deconv_mzML', 'anno_annotated_mzML', 'tags_tsv', 'protein_tsv']
-        ))
-        parsed_files = set(wf.file_manager.get_results_list(
-            ['deconv_dfs', 'anno_dfs', 'tag_dfs', 'protein_dfs']
-        ))
+        input_files = set(wf.file_manager.get_results_list(['out_deconv_mzML', 'anno_annotated_mzML']))
+        parsed_files = set(wf.file_manager.get_results_list(['deconv_dfs', 'anno_dfs']))
         unparsed_files = input_files - parsed_files
 
         # Process unparsed datasets
         for unparsed_dataset in unparsed_files:
             results = wf.file_manager.get_results(
                 unparsed_dataset, 
-                ['out_deconv_mzML', 'anno_annotated_mzML', 'tags_tsv', 'protein_tsv'],
-                partial=True
+                ['out_deconv_mzML', 'anno_annotated_mzML', 
+                 'spec1_tsv', 'spec2_tsv'],
+                 partial=True
             )
-            missing = [n for n, tag in REQUIRED_FILES if tag not in results]
-            if missing:
+            if not ('out_deconv_mzML' in results and 'anno_annotated_mzML' in results):
                 st.warning(
-                    f"Experiment '{unparsed_dataset}' is missing the "
-                    f"{', '.join(missing)} file(s)."
+                    f"Experiment '{unparsed_dataset}' needs both the "
+                    "deconvolved and the annotated mzML file."
                 )
                 continue
 
             with st.spinner(f"Processing '{unparsed_dataset}'..."):
-                # The tags are matched against the deconvolved masses, so the
-                # mzML files have to be parsed first
-                if not wf.file_manager.result_exists(
-                    unparsed_dataset, 'deconv_tolerance'
-                ):
-                    parseDeconv(
-                        wf.file_manager, unparsed_dataset,
-                        results['out_deconv_mzML'], results['anno_annotated_mzML'],
-                        logger=wf.logger
-                    )
-                annotation = wf.file_manager.get_results(
-                    unparsed_dataset, ['annotated_tsv', 'fragments_tsv'], partial=True
-                )
-                parseTnT(
+                parseDeconv(
                     wf.file_manager, unparsed_dataset,
                     results['out_deconv_mzML'], results['anno_annotated_mzML'],
-                    results['tags_tsv'], results['protein_tsv'],
-                    annotation_tsv=annotation.get('fragments_tsv'),
-                    annotated_protein_tsv=annotation.get('annotated_tsv'),
+                    results.get('spec1_tsv'), results.get('spec2_tsv'),
                     logger=wf.logger
                 )
 
-    # Upload files via upload widget
-    st.subheader("**Upload FLASHDeconv & FLASHTnT output files (anno_annotated.mzML, out_deconv.mzML, tags.tsv & protein.tsv; optionally FLASHAnnotator's annotated.tsv & fragments.tsv)**")
-    # Display info how to upload files
+    st.subheader(r"**Upload FLASHDeconv output files (\*_annotated.mzML & \*_deconv.mzML) or spec1/2 TSV files (Qscore Density Plot only)**")
     st.info(
         """
-    **💡 How to upload files**
-    
-    {step1}
-    {step2} to use them in the viewer
-    
-    Select data for analysis from the uploaded files shown below.
-    
-    **💡 Make sure that the same number of deconvolved and annotated mzML and FLASHTagger output files files are uploaded!**
-    """.format(
+        **💡 How to upload files**
+
+        {step1}
+        {step2} to use them in the workflows
+
+        Select data for analysis from the uploaded files shown below.
+
+        **💡 Make sure that the same number of deconvolved and annotated mzML files are uploaded!**
+        """.format(
         step1="1. Enter the folder with the files (or pick it with 📁)" if st.session_state.location == "local"
         else "1. Browse files on your computer or drag and drops files",
         step2="2. Click the **Add files from folder** button" if st.session_state.location == "local"
@@ -138,35 +122,34 @@ with t[3]:
     if st.session_state.location == "local":
         # A local install reads the files from a folder instead of uploading them.
         local_files = local_folder_files(
-            "tnt-results", "FLASHDeconv & FLASHTnT output files",
+            "deconv-results", "FLASHDeconv output files",
             tuple(suffix for suffix, _, _ in UPLOAD_FILE_TYPES),
         )
         if local_files:
             process_uploaded_files(local_files)
             st.success("Successfully added files!")
     else:
-        with st.form('input_mzML', clear_on_submit=True):
-            uploaded_file = st.file_uploader(
-                "FLASHDeconv & FLASHTagger output files", accept_multiple_files=True, type=["mzML", "tsv"]
+        with st.form('input_files', clear_on_submit=True):
+            uploaded_files = st.file_uploader(
+                "FLASHDeconv output mzML files or TSV files", accept_multiple_files=True, type=["mzML", "tsv"]
             )
             _, c2, _ = st.columns(3)
-            # User needs to click button to upload selected files
             if c2.form_submit_button("Add files to workspace", type="primary"):
-                if uploaded_file:
+                if uploaded_files:
                     # A list of files is required, since online allows only single upload, create a list
-                    if type(uploaded_file) != list:
-                        uploaded_file = [uploaded_file]
+                    if type(uploaded_files) != list:
+                        uploaded_files = [uploaded_files]
 
                     # opening file dialog and closing without choosing a file results in None upload
-                    process_uploaded_files(uploaded_file)
+                    process_uploaded_files(uploaded_files)
                     st.success("Successfully added uploaded files!")
                 else:
                     st.warning("Upload some files before adding them.")
 
     # File Upload Table
     experiments = (
-        set(wf.file_manager.get_results_list(['tags_tsv']))
-        | set(wf.file_manager.get_results_list(['protein_tsv']))
+        set(wf.file_manager.get_results_list(['spec1_tsv']))
+        | set(wf.file_manager.get_results_list(['spec2_tsv']))
         | set(wf.file_manager.get_results_list(['out_deconv_mzML']))
         | set(wf.file_manager.get_results_list(['anno_annotated_mzML']))
     )
@@ -174,8 +157,8 @@ with t[3]:
         'Experiment Name' : [],
         'Deconvolved Files' : [],
         'Annotated Files' : [],
-        'Protein Files' : [],
-        'Tag Files' : [],
+        '(MS1 TSV Files)' : [],
+        '(MS2 TSV Files)' : [],
     }
     for experiment in experiments:
         table['Experiment Name'].append(experiment)
@@ -190,20 +173,19 @@ with t[3]:
         else:
             table['Annotated Files'].append(False)
 
-        if wf.file_manager.result_exists(experiment, 'protein_tsv'):
-            table['Protein Files'].append(True)
+        if wf.file_manager.result_exists(experiment, 'spec1_tsv'):
+            table['(MS1 TSV Files)'].append(True)
         else:
-            table['Protein Files'].append(False)
-
-        if wf.file_manager.result_exists(experiment, 'tags_tsv'):
-            table['Tag Files'].append(True)
+            table['(MS1 TSV Files)'].append(False)
+        if wf.file_manager.result_exists(experiment, 'spec2_tsv'):
+            table['(MS2 TSV Files)'].append(True)
         else:
-            table['Tag Files'].append(False)
+            table['(MS2 TSV Files)'].append(False)
 
     st.markdown('**Uploaded experiments in current workspace**')
     st.dataframe(pd.DataFrame(table))
 
-   # Remove files
+    # Remove files
     with st.expander("🗑️ Remove mzML files"):
         to_remove = st.multiselect(
             "select files", options=experiments

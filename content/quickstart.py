@@ -526,7 +526,7 @@ def render_workflow_selection():
             "⚡️",
             "Deconvolution",
             "FLASHDeconv",
-            "content/FLASHDeconv/FLASHDeconvWorkflow.py"
+            "content/FLASHDeconv/FLASHDeconvUpload.py"
         )
     
     with col2:
@@ -534,7 +534,7 @@ def render_workflow_selection():
             "🧨",
             "Identification",
             "FLASHTnT",
-            "content/FLASHTnT/FLASHTnTWorkflow.py"
+            "content/FLASHTnT/FLASHTnTUpload.py"
         )
     
     with col3:

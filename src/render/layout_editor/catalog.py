@@ -73,6 +73,19 @@ TNT_LYSATE_LAYOUT = [
 TNT_DEFAULT_LAYOUT = TNT_NATIVE_LAYOUT
 TNT_DEFAULT_LAYOUTS = {'Native': TNT_NATIVE_LAYOUT, 'Lysate': TNT_LYSATE_LAYOUT}
 
+# A comparison of runs (Viewer entry "Comparison"): one grid, built from these
+QUANT_COMPONENTS = [
+    {'name': 'quant_summary', 'label': 'Comparison summary', 'group': 'Quantification'},
+    {'name': 'quant_table', 'label': 'Comparison table', 'group': 'Quantification'},
+    {'name': 'quant_volcano', 'label': 'Volcano plot', 'group': 'Quantification'},
+    {'name': 'quant_profile', 'label': 'Abundance per run', 'group': 'Quantification', 'requires': ('quant_table', 'quant_volcano'), 'requires_label': 'the comparison table or the volcano plot'},
+    {'name': 'quant_runs', 'label': 'Selected entry per run', 'group': 'Quantification', 'requires': ('quant_table', 'quant_volcano'), 'requires_label': 'the comparison table or the volcano plot'},
+    {'name': 'quant_pca', 'label': 'Sample similarity (PCA)', 'group': 'Quantification'},
+    {'name': 'quant_heatmap', 'label': 'Clustered heatmap', 'group': 'Quantification'},
+    {'name': 'quant_diagnostics', 'label': 'Comparison diagnostics', 'group': 'Quality control'},
+]
+QUANT_DEFAULT_LAYOUT = [['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca']]
+
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3
 

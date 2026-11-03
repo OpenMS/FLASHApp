@@ -11,6 +11,7 @@ from os.path import join, splitext, basename, exists, dirname
 from src import sample_type
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
+from src.quant.run import CONSENSUS_EXCLUDE, compare_runs
 from src.workflow.WorkflowManager import WorkflowManager
 
 # Example inputs shipped with the default demo workspace.
@@ -33,7 +34,7 @@ EXAMPLE_DATA = [
 # explicit "false".
 # Most FLASHTnT switches are "true"/"false" string parameters, but the ones
 # below are flags: "-native true" aborts FLASHTnT ("Trailing text argument").
-FLASHDECONV_FLAGS = ['keep_empty_out', 'write_detail']
+FLASHDECONV_FLAGS = ['keep_empty_out', 'write_detail', 'quant']
 FLASHTNT_FLAGS = [
     'only_single_hit', 'discard_underdetermined', 'keep_decoy',
     'protein_level_only', 'native', 'decoy_precursor', 'learn_var_mod_penalty',
@@ -85,6 +86,66 @@ TAG_COLUMNS = [
 ]
 
 
+# Widget of the Samples and groups tab that switches the comparison on
+COMPARE_KEY = 'compare-runs'
+COMPARE_HELP = (
+    'Link the masses of the selected runs and compare their abundances between conditions. '
+    'FLASHDeconv then also quantifies every mass from its raw signal (-quant), and '
+    'FLASHQuantConsensus links the runs. The comparison opens in the Viewer as '
+    '"Comparison: ..." in the experiment selector. Needs at least two runs.'
+)
+
+
+def samples_and_groups(workflow, what):
+    """Tab 1 of a workflow's configuration: compare the runs or not, and the
+    condition of each run. `what` names what is compared (masses, proteoforms)."""
+    workflow.ui.input_widget(
+        COMPARE_KEY, name='Compare the runs', widget_type='checkbox', default=False,
+        help=COMPARE_HELP, reactive=True,
+    )
+    compare = st.session_state.get(
+        f'{workflow.parameter_manager.param_prefix}{COMPARE_KEY}', workflow.params.get(COMPARE_KEY, False)
+    )
+    if compare:
+        st.caption(
+            f'Give each run its condition (for example *control* and *treated*). The comparison '
+            f'tests which {what} differ between two conditions; at least three runs, '
+            'ideally two or more per condition. You can still change the conditions later in '
+            'the Viewer with **Edit comparison**.'
+        )
+    else:
+        st.caption(f'Switch on **Compare the runs** to see which {what} go up or down between conditions.')
+    workflow.ui.experimental_design('mzML-files', name='Samples')
+    return compare
+
+
+def comparison_settings(workflow, compare):
+    """Last tab of a workflow's configuration: how the runs are linked."""
+    if not compare:
+        st.info('Switch on **Compare the runs** in the first tab to link and compare the runs.')
+        return
+    st.caption(
+        'FLASHQuantConsensus links the features of the runs by mass and retention time and '
+        'fills a run where a feature was not detected from its signal there (match between runs).'
+    )
+    workflow.ui.input_TOPP(
+        'FLASHQuantConsensus', exclude_parameters=CONSENSUS_EXCLUDE,
+        display_subsections=True, display_tool_name=False,
+    )
+
+
+def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None):
+    """The comparison after the per-run loop, when switched on. False on failure."""
+    if not workflow.params.get(COMPARE_KEY, False):
+        return True
+    if len(dataset_ids) < 2:
+        workflow.logger.log('Compare the runs needs at least two runs: no comparison made.')
+        return True
+    return compare_runs(
+        workflow, tool, dataset_ids, mzmls, workflow.params.get('mzML-files', []), prsm_key=prsm_key,
+    ) is not None
+
+
 def empty_tsv(path, header):
     """Write a header-only tsv (a tool that found nothing may skip its output)."""
     with open(path, 'w') as f:
@@ -110,7 +171,7 @@ class TagWorkflow(WorkflowManager):
 
     @st.fragment
     def configure(self) -> None:
-        # Input File Selection (reactive: the recommendation below follows it)
+        # Input File Selection (reactive: the recommendation and the samples follow it)
         self.ui.select_input_file("mzML-files", multiple=True, reactive=True)
         self._recommend_sample_type()
         self.ui.select_input_file("fasta-file", multiple=False)
@@ -121,11 +182,14 @@ class TagWorkflow(WorkflowManager):
             help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
         )
 
-        # Create tabs for different analysis steps
-        t = st.tabs(
-            ["**FLASHDeconv**", "**FLASHTnT**", "**FLASHAnnotator**"]
-        )
+        # One tab per analysis step, in the order they run
+        t = st.tabs([
+            "**1 · Samples and groups**", "**2 · Deconvolution**", "**3 · Identification**",
+            "**4 · Fragment annotation**", "**5 · Comparison**",
+        ])
         with t[0]:
+            compare = samples_and_groups(self, 'proteoforms')
+        with t[1]:
             # FLASHDeconv Configuration
             self.ui.input_TOPP(
                 'FLASHDeconv',
@@ -134,13 +198,14 @@ class TagWorkflow(WorkflowManager):
                     'write_detail', 'report_FDR', 'quant_method',
                     'mass_error_ppm', 'min_sample_rate', 'min_trace_length',
                     'max_trace_length', 'min_cos', 'type', 'isotope_correction',
-                    'reporter_mz_tol', 'only_fully_quantified'
+                    'reporter_mz_tol', 'only_fully_quantified',
+                    'quant',  # on with Compare the runs
                 ],
                 display_subsections=True,
                 display_tool_name=False,
                 flag_parameters=FLASHDECONV_FLAGS,
             )
-        with t[1]:
+        with t[2]:
             # FLASHTnT Configuration
             self.ui.input_TOPP(
                 'FLASHTnT',
@@ -152,7 +217,7 @@ class TagWorkflow(WorkflowManager):
                 custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
                 flag_parameters=FLASHTNT_FLAGS,
             )
-        with t[2]:
+        with t[3]:
             # FLASHAnnotator Configuration (ion types follow FLASHTnT)
             self.ui.input_TOPP(
                 'FLASHAnnotator',
@@ -161,6 +226,8 @@ class TagWorkflow(WorkflowManager):
                 display_tool_name=False,
                 flag_parameters=FLASHANNOTATOR_FLAGS,
             )
+        with t[4]:
+            comparison_settings(self, compare)
 
 
     def _recommend_sample_type(self) -> None:
@@ -227,6 +294,8 @@ class TagWorkflow(WorkflowManager):
         # Make sure output directory exists
         base_path = dirname(self.workflow_dir)
         
+        compare = self.params.get(COMPARE_KEY, False)
+        dataset_ids = []
         errors = []
         # Process files in sequence
         for in_mzml in in_mzmls:
@@ -311,6 +380,7 @@ class TagWorkflow(WorkflowManager):
                         'out_feature1' : [out_feature1],
                         'out_feature2' : [out_feature2],
                     },
+                    custom_params={'quant': True} if compare else {},
                 ):
                     raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
 
@@ -426,12 +496,13 @@ class TagWorkflow(WorkflowManager):
 
                 # Remove temporary folder
                 rmtree(folder_path)
+                dataset_ids.append(dataset_id)
             except Exception as e:
                 errors.append(e)
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
 
-        return True
+        return run_comparison(self, 'flashtnt', dataset_ids, in_mzmls, prsm_key='prsms_tsv')
 
 
 class DeconvWorkflow(WorkflowManager):
@@ -448,15 +519,22 @@ class DeconvWorkflow(WorkflowManager):
                               fallback=EXAMPLE_DATA)
 
 
+    @st.fragment
     def configure(self) -> None:
-        # Input File Selection
-        self.ui.select_input_file("mzML-files", multiple=True)
+        # Input File Selection (reactive: the samples follow it)
+        self.ui.select_input_file("mzML-files", multiple=True, reactive=True)
 
-        # FLASHDeconv Configuration
-        self.ui.input_TOPP(
-            'FLASHDeconv', exclude_parameters = ['ida_log'], display_subsections=True,
-            flag_parameters=FLASHDECONV_FLAGS,
-        )
+        t = st.tabs(["**1 · Samples and groups**", "**2 · Deconvolution**", "**3 · Comparison**"])
+        with t[0]:
+            compare = samples_and_groups(self, 'masses')
+        with t[1]:
+            # FLASHDeconv Configuration (-quant follows Compare the runs)
+            self.ui.input_TOPP(
+                'FLASHDeconv', exclude_parameters = ['ida_log', 'quant'], display_subsections=True,
+                display_tool_name=False, flag_parameters=FLASHDECONV_FLAGS,
+            )
+        with t[2]:
+            comparison_settings(self, compare)
 
 
     def execution(self) -> bool:
@@ -474,6 +552,8 @@ class DeconvWorkflow(WorkflowManager):
         # Define output directory
         base_path = dirname(self.workflow_dir)
 
+        compare = self.params.get(COMPARE_KEY, False)
+        dataset_ids = []
         errors = []
         # Process files in sequence
         for in_mzml in in_mzmls:
@@ -523,6 +603,7 @@ class DeconvWorkflow(WorkflowManager):
                         'out_feature1' : [out_feature1],
                         'out_feature2' : [out_feature2],
                     },
+                    custom_params={'quant': True} if compare else {},
                 ):
                     raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
 
@@ -568,13 +649,14 @@ class DeconvWorkflow(WorkflowManager):
 
                 # Remove temporary folder
                 rmtree(folder_path)
-                
+                dataset_ids.append(dataset_id)
+
             except Exception as e:
                 errors.append(e)
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
 
-        return True
+        return run_comparison(self, 'flashdeconv', dataset_ids, in_mzmls)
 
 
 class QuantWorkflow(WorkflowManager):

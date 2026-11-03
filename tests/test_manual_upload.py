@@ -28,7 +28,7 @@ import pytest
 from src.workflow.FileManager import FileManager
 
 
-# content/FLASHDeconv/FLASHDeconvWorkflow.py :: UPLOAD_FILE_TYPES
+# content/FLASHDeconv/FLASHDeconvUpload.py :: UPLOAD_FILE_TYPES
 UPLOAD_FILE_TYPES = (
     ('deconv.mzML', 'out_deconv_mzML', 'out'),
     ('annotated.mzML', 'anno_annotated_mzML', 'anno'),
@@ -36,7 +36,7 @@ UPLOAD_FILE_TYPES = (
     ('spec2.tsv', 'spec2_tsv', ''),
 )
 
-# content/FLASHTnT/FLASHTnTWorkflow.py :: UPLOAD_FILE_TYPES
+# content/FLASHTnT/FLASHTnTUpload.py :: UPLOAD_FILE_TYPES
 TNT_UPLOAD_FILE_TYPES = (
     ('deconv.mzML', 'out_deconv_mzML', 'out'),
     ('annotated.mzML', 'anno_annotated_mzML', 'anno'),

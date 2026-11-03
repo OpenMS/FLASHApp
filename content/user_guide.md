@@ -6,8 +6,8 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 
 ## **1️⃣ Uploading MS Data**
 
-1. Navigate to **FLASHDeconv > Workflow** in the sidebar.
-2. Click **"File Upload"** to upload your `.mzML` file.
+1. Navigate to **FLASHDeconv > Upload data** in the sidebar.
+2. In the **"MS data"** tab, upload your `.mzML` files (one per run; Thermo `.raw` and Bruker `.d` are converted for you).
 3. **Two options to add files:**
    - **Drag and Drop** your file into the upload box.
    - **Browse Files** to manually select the `.mzML` file.
@@ -20,14 +20,15 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 
 ## **2️⃣ Configuring Parameters**
 
-1. Click the **"Configure"** tab.
-2. Select your uploaded **mzML file** (should appear in the file list).
-3. Adjust **parameters**:
+1. Navigate to **FLASHDeconv > Describe experiment**.
+2. Select your uploaded **mzML files** (they appear in the file list).
+3. In **1 · Samples and groups**, switch on **Compare the runs** to compare runs between conditions, and give each run its condition (see *Comparing runs* below).
+4. Adjust **parameters** in **2 · Deconvolution**:
    - Set **threads** (recommended: 8).
    - Choose **General Settings** (e.g., `keep_empty_out`, `write_detail`).
    - Configure **FD settings** like `report_FDR`, `merging_method`, `min_mass`, `max_mass`, `min_charge`.
    - Adjust **SD settings** for deconvolution accuracy.
-4. If you want to know more about each parameter go to this link: https://openms.de/FLASHDeconv
+5. If you want to know more about each parameter go to this link: https://openms.de/FLASHDeconv
 
  
 ![Configure Parameters](/static/images/flashdeconv_configure.png)
@@ -36,7 +37,7 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 
 ## **3️⃣ Running the Workflow**
 
-1. Click on the **"Run"** tab.
+1. Navigate to **FLASHDeconv > Run analysis**.
 2. Set **log details** to `minimal` (or another level as needed).
 3. Click **"Start Workflow"** to begin the deconvolution process.
 4. Monitor the **log output** to track progress.
@@ -57,7 +58,7 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 
 ## **5️⃣ Manual Result Upload**
 
-1. Click on the **"Manual Result Upload"** tab.
+1. On **Upload data**, click the **"FLASHDeconv results"** tab.
 2. Upload FLASHDeconv output files (`*_annotated.mzML` & `*_deconv.mzML`) or TSV files for ECDF Plot.
 3. Browse files or **drag and drop** them into the upload section.
 4. Click **"Add files to workspace"** to finalize.
@@ -124,12 +125,36 @@ The **Layout Manager** allows users to customize the experiment display settings
 
 
 
+## **🔟 Comparing runs**
+
+FLASHDeconv and FLASHTnT can compare runs measured under different conditions
+(for example control and treated):
+
+1. On **Describe experiment**, switch on **Compare the runs** in **1 · Samples and groups** and give
+   each run its condition in the **Samples** table. At least three runs are needed, ideally two or
+   more per condition.
+2. **Run analysis** then quantifies every mass from its raw signal (FLASHDeconv `-quant`) and links
+   the runs with **FLASHQuantConsensus**: features are matched by mass and retention time, and a run
+   where a feature was not detected is filled from its signal there (match between runs). For
+   FLASHTnT, the PrSMs of the runs say which proteoform each linked feature is, so the runs are
+   compared by feature, proteoform and protein.
+3. In the **Viewer**, the experiment selector lists the result as **Comparison: N runs (date)**.
+   Selecting it shows the comparison components: summary, comparison table, volcano plot, abundance
+   profile across the runs, the runs of the selected entry with their detection status, sample PCA,
+   heatmap and quality control.
+4. **Edit comparison** sets the condition of each run, the level compared (features, proteoforms or
+   proteins) and the analysis settings (fold-change and adjusted p-value cutoffs, filtering,
+   imputation, normalization and test). **Edit layout** arranges the comparison components, in the
+   same window as the layout of a run.
+
+---
+
 # **FLASHTnT Guide**
 
 ## **1️⃣ Uploading MS Data & Database**
 
-1. Navigate to **FLASHTnT > Workflow** in the sidebar.
-2. Click **"File Upload"** to upload your `.mzML` file.
+1. Navigate to **FLASHTnT > Upload data** in the sidebar.
+2. In the **"MS data and database"** tab, upload your `.mzML` files (one per run).
 
 ![Download Results](/static/images/flashTnT_upload.png)
 
@@ -140,10 +165,10 @@ The **Layout Manager** allows users to customize the experiment display settings
 ![Download Results](/static/images/flashTnT_databaseupload.png)
 ---
 ## **2️⃣ Configuring Parameters**
-1. Click the **"Configure"** tab.
-2. Select your uploaded **mzML file**.
+1. Navigate to **FLASHTnT > Describe experiment**.
+2. Select your uploaded **mzML files**.
 3. Choose the **database** file.
-4. There are three sub-tabs for configuring parameters: **FLASHDeconv**, **FLASHTnT** and **FLASHAnnotator**.
+4. The tabs follow the steps of the analysis: **1 · Samples and groups** (compare the runs or not, and the condition of each run), **2 · Deconvolution** (FLASHDeconv), **3 · Identification** (FLASHTnT), **4 · Fragment annotation** (FLASHAnnotator) and **5 · Comparison** (how the runs are linked).
 5. Adjust FLASHTnT parameters:
 Adjust **general settings** such as:
    - **FDR settings** (pro_fdr, protein_fdr) – Proteoform- and protein-level FDR thresholds (e.g., 0.01).
@@ -164,7 +189,7 @@ Adjust **general settings** such as:
 
 ## **3️⃣ Running the Workflow**
 
-1. Click on the **"Run"** tab.
+1. Navigate to **FLASHTnT > Run analysis**.
 2. Click **"Start Workflow"** to begin.
 3. Monitor the progress in the log output.
 

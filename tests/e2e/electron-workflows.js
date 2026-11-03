@@ -7,11 +7,11 @@ const RUN_TIMEOUT = 45 * 60 * 1000;
 const VIEW_TIMEOUT = 3 * 60 * 1000;
 
 async function runWorkflow(t, workflowPage, inputs) {
-  await t.open(workflowPage);
-  await t.clickTab("Configure");
+  // One page per step: Upload data, Describe experiment, Run analysis
+  await t.open(`${workflowPage}Configure`);
   for (const [label, file] of inputs) await t.choose(label, file);
   await t.shot(`${workflowPage}-configured`);
-  await t.clickTab("Run");
+  await t.open(`${workflowPage}Run`);
   // No settle() here: while the workflow runs, the status fragment reruns the
   // page, which can keep it from going quiet for 120 s. waitForText waits.
   await t.page.getByRole("button", { name: "Start Workflow" }).first().click();
@@ -55,10 +55,10 @@ async function checkViewer(t, viewerPage, experiment, extraSelector) {
 }
 
 module.exports = async (t) => {
-  await runWorkflow(t, "FLASHDeconvWorkflow", [["mzML-files", "example_fd.mzML"]]);
+  await runWorkflow(t, "FLASHDeconv", [["mzML-files", "example_fd.mzML"]]);
   await checkViewer(t, "FLASHDeconvViewer", "example_fd");
 
-  await runWorkflow(t, "FLASHTnTWorkflow", [["mzML-files", "GapA_5458mz_HCD.mzML"]]);
+  await runWorkflow(t, "FLASHTnT", [["mzML-files", "GapA_5458mz_HCD.mzML"]]);
   const log = await t.page.locator("body").innerText();
   if (!log.includes("FLASHAnnotator")) throw new Error("FLASHTnT run did not reach FLASHAnnotator");
   await checkViewer(t, "FLASHTnTViewer", "GapA_5458mz_HCD");

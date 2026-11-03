@@ -69,11 +69,15 @@ results:
 pages:
 - content/quickstart.py
 - content/user_guide.py
-- content/FLASHDeconv/FLASHDeconvWorkflow.py
+- content/FLASHDeconv/FLASHDeconvUpload.py
+- content/FLASHDeconv/FLASHDeconvConfigure.py
+- content/FLASHDeconv/FLASHDeconvRun.py
 - content/FLASHDeconv/FLASHDeconvSequenceInput.py
 - content/FLASHDeconv/FLASHDeconvViewer.py
 - content/FLASHDeconv/FLASHDeconvDownload.py
-- content/FLASHTnT/FLASHTnTWorkflow.py
+- content/FLASHTnT/FLASHTnTUpload.py
+- content/FLASHTnT/FLASHTnTConfigure.py
+- content/FLASHTnT/FLASHTnTRun.py
 - content/FLASHTnT/FLASHTnTViewer.py
 - content/FLASHTnT/FLASHTnTDownload.py
 - content/FLASHQuant/FLASHQuantFileUpload.py

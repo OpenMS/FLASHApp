@@ -6,6 +6,7 @@ from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src.render.render import render_grid
 from src.render.layout_editor.dialogs import layout_button
+from src.render import quant_view
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                   ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
@@ -19,21 +20,26 @@ def select_experiment():
         st.session_state.selected_experiment0 = display_name_to_id[st.session_state.selected_experiment_dropdown]
     if len(layout) > 1:
         for exp_index in range(1, len(layout)):
-            if st.session_state[f'selected_experiment_dropdown_{exp_index}'] is None:
+            # Not drawn while a comparison is shown
+            if st.session_state.get(f'selected_experiment_dropdown_{exp_index}') is None:
                 continue
             st.session_state[f"selected_experiment{exp_index}"] = display_name_to_id[st.session_state[f'selected_experiment_dropdown_{exp_index}']]
 
-def validate_selected_index(file_manager, selected_experiment):
-    results = file_manager.get_results_list(['deconv_dfs', 'anno_dfs'])
+def validate_selected_index(file_manager, selected_experiment, names=None):
+    """Index of the stored selection in the selector (`names`, default every
+    entry), or None after dropping a selection that no longer exists."""
+    names = display_names if names is None else names
     if selected_experiment in st.session_state:
-        if st.session_state[selected_experiment] in results:
-            # Map experiment ID to display name for the dropdown index
-            exp_id = st.session_state[selected_experiment]
-            display_name = file_manager.get_display_name(exp_id)
-            return display_name_to_index[display_name]
-        else:
-            del st.session_state[selected_experiment]
+        display_name = display_id_to_name.get(st.session_state[selected_experiment])
+        if display_name in names:
+            return names.index(display_name)
+        del st.session_state[selected_experiment]
     return None
+
+
+def comparison_selected():
+    """True while the first selector shows a comparison of runs."""
+    return st.session_state.get('selected_experiment0') in comparison_ids
 
 # page initialization
 params = page_setup()
@@ -68,19 +74,22 @@ else:
     side_by_side = False
 
 ### if no input file is given, show blank page
-if len(results) == 0:
+comparison_names = quant_view.comparison_names(file_manager, 'flashdeconv')
+comparison_ids = set(comparison_names.values())
+
+if len(results) == 0 and not comparison_names:
     layout_button(file_manager, 'flashdeconv')
     st.error('No results to show yet. Please run a workflow first!')
     st.stop()
 
-# Create display names and mappings
-display_names = [file_manager.get_display_name(exp_id) for exp_id in results]
+# Create display names and mappings: the runs, then the comparisons of runs
+run_names = [file_manager.get_display_name(exp_id) for exp_id in results]
+display_names = run_names + list(comparison_names)
 display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id in results}
-display_name_to_index = {n : i for i, n in enumerate(display_names)}
-# Keep backward compatibility mapping for experiment IDs
-name_to_index = {n : i for i, n in enumerate(results)}
+display_name_to_id.update(comparison_names)
+display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items()}
 
-if len(layout) == 2 and side_by_side:
+if len(layout) == 2 and side_by_side and not comparison_selected():
     c1, c2 = st.columns(2)
     with c1:
         st.selectbox(
@@ -97,9 +106,9 @@ if len(layout) == 2 and side_by_side:
     with c2:
         with st.container(horizontal=True, vertical_alignment='bottom'):
             st.selectbox(
-                "choose experiment", display_names,
+                "choose experiment", run_names,
                 key=f'selected_experiment_dropdown_1',
-                index=validate_selected_index(file_manager, 'selected_experiment1'),
+                index=validate_selected_index(file_manager, 'selected_experiment1', run_names),
                 on_change=select_experiment
             )
             layout_button(file_manager, 'flashdeconv')
@@ -120,17 +129,23 @@ else:
             index=validate_selected_index(file_manager, 'selected_experiment0'),
             on_change=select_experiment
         )
-        layout_button(file_manager, 'flashdeconv')
+        if comparison_selected():
+            quant_view.buttons(file_manager, st.session_state.selected_experiment0, 'flashdeconv')
+        else:
+            layout_button(file_manager, 'flashdeconv')
 
+    if comparison_selected():
+        # A comparison spans its runs, so it fills the page on its own
+        quant_view.render(file_manager, st.session_state.selected_experiment0, 'flashdeconv')
 
-    if 'selected_experiment0' in st.session_state:
+    elif 'selected_experiment0' in st.session_state:
         render_grid(
             st.session_state.selected_experiment0, layout[0], file_manager, 
             'flashdeconv', 'selected_experiment0'
         )
 
     ### for multiple experiments on one view
-    if len(layout) > 1:
+    if len(layout) > 1 and not comparison_selected():
 
         for exp_index, exp_layout in enumerate(layout):
             if exp_index == 0: continue  # skip the first experiment
@@ -138,9 +153,9 @@ else:
             st.divider()  # horizontal line
 
             st.selectbox(
-                "choose experiment", display_names,
+                "choose experiment", run_names,
                 key=f'selected_experiment_dropdown_{exp_index}',
-                index=validate_selected_index(file_manager, f'selected_experiment{exp_index}'),
+                index=validate_selected_index(file_manager, f'selected_experiment{exp_index}', run_names),
                 on_change=select_experiment
             )
             # if #experiment input files are less than #layouts, all the pre-selection will be the first experiment
