@@ -17,4 +17,4 @@ spec:
     requests:
       # Counted against the project's Manila quota, shared by every app.
       # Manila grows a share in place: raise this and let Argo CD apply it.
-      storage: 500Gi
+      storage: 300Gi
