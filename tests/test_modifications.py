@@ -44,6 +44,16 @@ def test_legacy_names_map_to_library_ids():
     assert modifications.legacy_ids('No modification', 'unknown') == []
 
 
+def test_fixed_ids_prefers_the_dialog_pick_then_saved_then_legacy():
+    stored = {'fixed_modifications': ['Carbamidomethyl (C)'], 'fixed_mod_cysteine': None}
+    assert modifications.fixed_ids(stored) == ['Carbamidomethyl (C)']
+    assert modifications.fixed_ids(stored, ['Oxidation (M)', 'Nope (C)']) == ['Oxidation (M)']
+    # an empty pick removes every fixed modification
+    assert modifications.fixed_ids(stored, []) == []
+    legacy = {'fixed_mod_cysteine': 'Carbamidomethyl (+57)', 'fixed_mod_methionine': None}
+    assert modifications.fixed_ids(legacy) == ['Carbamidomethyl (C)']
+
+
 def test_apply_fixed_residue_and_terminal_mods():
     protein = AASequence.fromString('MCKCSM')
     protein, residues, applied = modifications.apply_fixed(

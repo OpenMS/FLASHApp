@@ -130,6 +130,19 @@ def legacy_ids(fixed_mod_cysteine=None, fixed_mod_methionine=None):
     return ids
 
 
+def fixed_ids(stored, picked=None):
+    """Fixed modification ids for a saved sequence (the Sequence Input page's
+    record): ``picked`` (ids chosen in the sequence view's dialog, unknown ones
+    dropped) when not None, else the saved ids, else those of the Cys/Met
+    names saved before the library."""
+    if picked is not None:
+        return [m for m in picked if by_id(m) is not None]
+    saved = stored.get('fixed_modifications')
+    if saved is not None:
+        return list(saved)
+    return legacy_ids(stored.get('fixed_mod_cysteine'), stored.get('fixed_mod_methionine'))
+
+
 def sites_in(sequence, entry):
     """0-based residue indices of ``sequence`` (a plain one-letter string) that
     ``entry`` modifies; for a terminal modification the terminal residue."""
