@@ -48,8 +48,6 @@ if __name__ == '__main__':
         pages["🧠 FLASHIda"] = [
             st.Page(Path("content", "FLASHIda", "FLASHIdaAcquisition.py"), title="Acquisition", icon="⚙️"),
             st.Page(Path("content", "FLASHIda", "FLASHIdaViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHIda", "FLASHIdaSimulator.py"), title="Simulator", icon="🧪"),
-            st.Page(Path("content", "FLASHIda", "FLASHIdaSimulatorViewer.py"), title="Simulator Viewer", icon="📈"),
         ]
 
     pg = st.navigation(pages, expanded=True)
