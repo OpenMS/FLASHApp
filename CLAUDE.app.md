@@ -26,7 +26,7 @@ pytest tests/test_selection_clear.py::test_name -v      # single test
 pylint $(git ls-files '*.py') --errors-only --disable=C0103,C0114,C0301,C0411,W0212,W0631,W0602,W1514,W2402,E0401,E1101,F0001,R1732
 
 # Docker (full image with OpenMS + TOPP tools + openms-insight built from source)
-docker build -f Dockerfile --no-cache -t flashapp:latest --build-arg GITHUB_TOKEN=<gh-token> .
+docker build -f Dockerfile --no-cache -t flashapp:latest --secret id=github_token,env=GITHUB_TOKEN .
 docker run -p 8501:8501 flashapp:latest          # → http://localhost:8501
 # Dockerfile.arm is the linux/arm64 variant (swaps miniforge installer to aarch64).
 ```
