@@ -6,6 +6,15 @@ metadata:
     component: rq-worker
 spec:
   replicas: 1
+  # maxSurge 0: the worker is sized to most of a memory-tier node, so a surge
+  # replica stays Pending next to the old one ("Insufficient cpu") and the
+  # rollout runs into its progress deadline. Stop the old worker first, then
+  # start the new one (same setting as the streamlit-template, #399).
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       component: rq-worker
@@ -127,7 +136,7 @@ spec:
       volumes:
         - name: workspaces
           persistentVolumeClaim:
-            claimName: workspaces-pvc
+            claimName: workspaces-manila-pvc
         - name: config
           configMap:
             name: streamlit-config

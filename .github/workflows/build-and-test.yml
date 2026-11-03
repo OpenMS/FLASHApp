@@ -639,7 +639,10 @@ jobs:
           kubectl kustomize k8s/overlays/prod/ | \
             yq 'select(.kind != "IngressRoute")' | \
             sed -E 's|imagePullPolicy: (IfNotPresent\|Always)|imagePullPolicy: Never|g' | \
-            sed 's|storageClassName: cinder-csi|storageClassName: standard|g' > /tmp/manifests.yaml
+            sed -e 's|storageClassName: openms-manila-nfs|storageClassName: standard|g' -e 's|ReadWriteMany|ReadWriteOnce|g' > /tmp/manifests.yaml
+          # The shared namespace is managed by the streamlit-template's
+          # deployment, not by this app's manifests, so create it here.
+          kubectl create namespace openms --dry-run=client -o yaml | kubectl apply -f -
           for i in 1 2 3 4 5; do
             if kubectl apply -f /tmp/manifests.yaml; then
               echo "Deploy succeeded on attempt $i"
@@ -780,7 +783,10 @@ jobs:
         run: |
           kubectl kustomize k8s/overlays/prod/ | \
             sed -E 's|imagePullPolicy: (IfNotPresent\|Always)|imagePullPolicy: Never|g' | \
-            sed 's|storageClassName: cinder-csi|storageClassName: standard|g' > /tmp/manifests.yaml
+            sed -e 's|storageClassName: openms-manila-nfs|storageClassName: standard|g' -e 's|ReadWriteMany|ReadWriteOnce|g' > /tmp/manifests.yaml
+          # The shared namespace is managed by the streamlit-template's
+          # deployment, not by this app's manifests, so create it here.
+          kubectl create namespace openms --dry-run=client -o yaml | kubectl apply -f -
           for i in 1 2 3 4 5; do
             if kubectl apply -f /tmp/manifests.yaml; then
               echo "Deploy succeeded on attempt $i"
