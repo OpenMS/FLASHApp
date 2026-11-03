@@ -24,7 +24,7 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
-from src.render import hierarchy_data, insight_data, prsm_data, qc_data, validation_data
+from src.render import hierarchy_data, insight_data, prsm_data, prsm_overview, qc_data, validation_data
 from src.render.fragmentation import mzml_scan_methods
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
@@ -65,6 +65,11 @@ def _fixed(precision=4):
 _DASH_FOR_MISSING = {'formatter': 'fixed', 'formatterParams': {'placeholders': {'-1': '-', 'NaN': ''}, 'minLength': 1000}}
 _BLANK_FOR_MISSING = {'formatter': 'fixed', 'formatterParams': {'placeholders': {'NaN': ''}, 'minLength': 1000}}
 
+# Masses in Da; FLASHTnT's undetermined values arrive as nulls and show "-"
+_MASS = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 4, 'placeholders': {'NaN': '-'}}}
+# A column that starts hidden; the column chooser shows it
+_HIDDEN = {'visible': False}
+
 SCAN_COLUMNS = [
     {'title': 'Index', 'field': 'index', 'sorter': 'number',
      'headerTooltip': 'The sequential index of the spectrum in the dataset.'},
@@ -103,11 +108,21 @@ MASS_COLUMNS = [
      'headerTooltip': 'The quality score indicating the confidence of the mass detection (higher is better).'},
 ]
 
+# The protein table shows the essential columns; the rest start hidden (column
+# chooser) and all of them appear in a row's overview (the button at the
+# start of each row), in this order.
 PROTEIN_COLUMNS = [
     {'title': 'Scan No.', 'field': 'Scan', 'sorter': 'number',
      'headerTooltip': 'The identifier of the mass spectrometry scan associated with the identified proteoform.'},
     {'title': 'Accession', 'field': 'accession',
      'headerTooltip': 'The unique identifier for the protein in the reference database.'},
+    {'title': 'Description', 'field': 'description', **_HIDDEN},
+    {'title': 'Proteoform', 'field': 'Proforma', 'tooltip': True, **_HIDDEN,
+     'headerTooltip': 'The proteoform in ProForma notation.'},
+    {'title': 'Residues', 'field': 'residues', **_HIDDEN,
+     'headerTooltip': 'First and last residue of the proteoform in the protein and the protein length; "?" for a terminus that was not determined.'},
+    {'title': 'Length', 'field': 'length', 'sorter': 'number', **_HIDDEN,
+     'headerTooltip': 'The total number of amino acids in the matched protein.'},
     {'title': 'Characterization', 'field': 'Characterization', 'sorter': 'string',
      'formatter': 'badge', 'formatterParams': {'colorMap': {
          'Characterized': '#2E7D32', 'Partial': '#F9A825', 'Ambiguous': '#C62828',
@@ -119,20 +134,28 @@ PROTEIN_COLUMNS = [
          'by fragments. Ambiguous: less than 10% of the bonds explained. Partial: '
          'anything in between.'
      )},
-    {'title': 'Description', 'field': 'description', 'responsive': 10},
-    {'title': 'Length', 'field': 'length', 'responsive': 6, 'sorter': 'number',
-     'headerTooltip': 'The total number of amino acids in the matched protein.'},
-    {'title': 'Mass', 'field': 'ProteoformMass', 'responsive': 8, 'sorter': 'number', **_DASH_FOR_MISSING,
+    {'title': 'Retention time (s)', 'field': 'RetentionTime', 'sorter': 'number', **_fixed(), **_HIDDEN},
+    {'title': 'Precursor m/z', 'field': 'precursor_mz', 'sorter': 'number', **_HIDDEN, **_MASS},
+    {'title': 'Precursor charge', 'field': 'precursor_charge', 'sorter': 'number', **_HIDDEN},
+    {'title': 'Precursor mass', 'field': 'precursor_mass', 'sorter': 'number', **_HIDDEN, **_MASS,
+     'headerTooltip': 'Monoisotopic precursor mass in Daltons.'},
+    {'title': 'Mass', 'field': 'ProteoformMass', 'sorter': 'number', **_DASH_FOR_MISSING, **_HIDDEN,
      'headerTooltip': 'The calculated mass of the proteoform in Daltons.'},
-    {'title': 'Cleavages (%)', 'field': 'Cleavages', 'sorter': 'number', 'responsive': 7,
-     'headerTooltip': 'Bonds of the proteoform explained by matched terminal fragments, in %.'},
-    {'title': 'Localized Mods', 'field': 'LocalizedMods', 'sorter': 'string', 'responsive': 7,
-     'headerTooltip': 'Modifications (mass shifts) localized to a single residue, of all modifications.'},
+    {'title': 'Δ mass', 'field': 'delta_mass', 'sorter': 'number', **_HIDDEN, **_MASS,
+     'headerTooltip': 'Precursor mass minus proteoform mass, in Daltons.'},
     {'title': 'No. of Matched Fragments', 'field': 'MatchingFragments', 'sorter': 'number',
      'headerTooltip': 'The number of fragment ions that match the protein sequence.'},
-    {'title': 'No. of Modifications', 'field': 'ModCount', 'sorter': 'number',
+    {'title': 'Coverage (%)', 'field': 'Coverage(%)', 'sorter': 'number', **_HIDDEN,
+     'headerTooltip': 'Residues of the protein covered by the proteoform, in %.'},
+    {'title': 'Cleavages (%)', 'field': 'Cleavages', 'sorter': 'number', **_HIDDEN,
+     'headerTooltip': 'Bonds of the proteoform explained by matched terminal fragments, in %.'},
+    {'title': 'No. of Modifications', 'field': 'ModCount', 'sorter': 'number', **_HIDDEN,
      'headerTooltip': 'The number of modifications identified in the protein.'},
-    {'title': 'No. of Tags', 'field': 'TagCount', 'sorter': 'number',
+    {'title': 'Localized Mods', 'field': 'LocalizedMods', 'sorter': 'string', **_HIDDEN,
+     'headerTooltip': 'Modifications (mass shifts) localized to a single residue, of all modifications.'},
+    {'title': 'Modification sites', 'field': 'modification_sites', 'tooltip': True, **_HIDDEN,
+     'headerTooltip': 'Mass shift and residue of each modification, or the residue range of one that was not localized.'},
+    {'title': 'No. of Tags', 'field': 'TagCount', 'sorter': 'number', **_HIDDEN,
      'headerTooltip': 'The number of sequence tags associated with the proteoform match.'},
     {'title': 'Score', 'field': 'Score', 'sorter': 'number',
      'headerTooltip': 'A score indicating the confidence of the protein match (higher is better).'},
@@ -216,10 +239,8 @@ SCROLL = 'top'
 _QVALUE = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 0, 'placeholders': {'NaN': '-'}}}
 # hierarchy_data turns FLASHTnT's -1 / 0 into nulls; show them as "-"
 _POSITION = {'formatter': 'fixed', 'formatterParams': {'minLength': 1000, 'placeholders': {'NaN': '-'}}}
-_MASS = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 4, 'placeholders': {'NaN': '-'}}}
 # The three tables are meant to sit side by side in one layout row, so each
 # shows only a few narrow columns; the rest start hidden (column chooser).
-_HIDDEN = {'visible': False}
 PROTEIN_GROUP_COLUMNS = [
     {'title': '#', 'field': 'protein_group', 'sorter': 'number', 'width': 44,
      'headerTooltip': 'Proteins numbered by their best score.'},
@@ -779,10 +800,14 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name == 'protein_table':
         return _component(
             Table, comp_name, fm, ds,
-            ['protein_dfs', 'scan_table', 'sequence_data', 'sequence_view', 'settings'],
+            ['protein_dfs', 'scan_table', 'sequence_data', 'sequence_view', 'settings', 'spec2_tsv'],
             lambda: dict(
-                data=_proteins_with_characterization(fm, ds),
+                data=_proteins_with_characterization(fm, ds).join(
+                    prsm_overview.protein_overview(fm, ds), on='index', how='left', maintain_order='left',
+                ),
                 column_definitions=PROTEIN_COLUMNS, title='Protein Table',
+                # A button per row opens the whole row, hidden columns included
+                row_overview="Scan {Scan}: {accession}",
                 index_field='index', go_to_fields=['Scan', 'accession'],
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 toggle_filters=[{
