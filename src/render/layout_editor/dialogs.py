@@ -55,8 +55,8 @@ def _dialog(file_manager):
     file_manager = _own_file_manager(file_manager)
     components = topdown_layout.components(file_manager)
     note = '' if topdown_layout.has_sequence(file_manager) else (
-        " For a run deconvolved only, the sequence view shows a sequence you enter "
-        "in the view itself."
+        " For a run deconvolved only, add the **Sequence view** and set a "
+        "sequence there with **Change sequence**."
     )
     st.caption(
         _HELP + " Until a layout is saved, each experiment starts from the default "

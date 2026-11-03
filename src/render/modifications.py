@@ -4,8 +4,7 @@ ModificationsDB holds the Unimod modifications (glycans such as
 ``Hex(5)HexNAc(4) (N)`` among them). This module lists and searches them by
 site and applies a set of fixed modifications to an ``AASequence``: a residue
 modification to every residue of its kind, a terminal one to the proteoform's
-terminus. It is Streamlit-free, so the Viewer's sequence window and the viewer's
-sequence data share it.
+terminus. It is Streamlit-free.
 """
 
 from functools import lru_cache
@@ -131,7 +130,7 @@ def legacy_ids(fixed_mod_cysteine=None, fixed_mod_methionine=None):
 
 
 def fixed_ids(stored, picked=None):
-    """Fixed modification ids for a saved sequence (the sequence window's
+    """Fixed modification ids for a saved sequence (the former Sequence Input page's
     record): ``picked`` (ids chosen in the sequence view's dialog, unknown ones
     dropped) when not None, else the saved ids, else those of the Cys/Met
     names saved before the library."""
