@@ -33,11 +33,6 @@ if __name__ == '__main__':
             st.Page(Path("content", "TopDown", "TopDownViewer.py"), title="Viewer", icon="👀"),
             st.Page(Path("content", "TopDown", "TopDownDownload.py"), title=export, icon=export_icon),
         ],
-        "📊 FLASHQuant" : [
-            st.Page(Path("content", "FLASHQuant", "FLASHQuantFileUpload.py"), title="File Upload", icon="📂"),
-            st.Page(Path("content", "FLASHQuant", "FLASHQuantViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHQuant", "FLASHQuantCompare.py"), title="Compare Runs", icon="⚖️"),
-        ],
     }
 
     # FLASHIda: developer feature of the local app (⚙️ Settings → Developer password)

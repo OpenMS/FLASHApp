@@ -224,7 +224,7 @@ jobs:
         # electron-builder's version: the release tag, else settings.json's.
         RELEASE_TAG="${RELEASE_TAG:-$(jq -r .version settings.json)}" electron/scripts/package.sh \
           "-c.extraMetadata.desktopName=flashapp.desktop" \
-          "-c.linux.synopsis=Visualization of top-down proteomics results from FLASHDeconv, FLASHTnT and FLASHQuant"
+          "-c.linux.synopsis=Visualization of top-down proteomics results from FLASHDeconv and FLASHTnT"
 
     - name: Install the app
       # Silent install (Windows), mounted dmg with signature checks (macOS),

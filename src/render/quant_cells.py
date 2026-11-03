@@ -21,13 +21,32 @@ from src.common.common import show_fig
 from src.parse import differential as diff
 from src.quant.session import LEVEL_NAMES, RESULTS, STATUS_LABELS
 from src.render import insight_data
-from src.render.compare import (
-    CONDITION_COLORS, FC_CUTOFF, P_CUTOFF, _FC, _P, comparison_groups, condition_colors,
-)
 from src.render.postprocessing_plots import (
     imputed_value_preview, missingness_vs_intensity, pvalue_histogram, sample_distributions,
 )
 from src.render.render import RECLICK, MissingResult, _component, _fixed
+
+
+CONDITION_COLORS = ['#3366CC', '#DC3912', '#FF9900', '#109618', '#990099', '#0099C6']
+
+# OpenDDA's cut-offs for calling a change
+FC_CUTOFF = 1.0
+P_CUTOFF = 0.05
+
+_P = {'formatter': 'scientific', 'formatterParams': {'precision': 3}}
+_FC = {'formatter': 'signed', 'formatterParams': {'precision': 2}}
+
+
+def comparison_groups(conditions):
+    """(reference, compared): a positive log2FC means higher in the compared
+    condition (openms_insight subtracts the first condition's mean from the
+    last one's, in sorted order)."""
+    names = sorted(set(conditions))
+    return (names[0], names[-1]) if len(names) >= 2 else None
+
+
+def condition_colors(names):
+    return {name: CONDITION_COLORS[i % len(CONDITION_COLORS)] for i, name in enumerate(sorted(names))}
 
 STATUS_COLORS = {
     'detected': '#2E7D32', 'transferred, identified': '#1565C0',

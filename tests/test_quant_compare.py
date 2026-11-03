@@ -1,4 +1,4 @@
-"""Linking FLASHQuant runs and testing conditions (src/parse/quant_compare.py)."""
+"""Linking runs and testing conditions (src/parse/quant_compare.py)."""
 
 import numpy as np
 import polars as pl

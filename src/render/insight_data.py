@@ -260,43 +260,6 @@ def _generic_sequence_schema(lf):
     return lf
 
 
-def _split_numbers(column):
-    return pl.col(column).str.split(',').list.eval(
-        pl.element().str.strip_chars().cast(pl.Float64, strict=False)
-    )
-
-
-def quant_traces(file_manager, dataset_id):
-    """Mass traces of every feature group: one row per trace with list columns
-    of m/z, retention time and intensity."""
-    lf = scan(file_manager, dataset_id, 'quant_dfs').select(
-        'FeatureGroupIndex', 'Charges', 'MZs', 'RTs', 'Intensities'
-    )
-    return (
-        lf.with_columns(pl.int_ranges(0, pl.col('Charges').list.len()).alias('trace'))
-        .explode(['Charges', 'MZs', 'RTs', 'Intensities', 'trace'])
-        .drop_nulls('trace')
-        .select(
-            pl.col('FeatureGroupIndex').cast(pl.Int64),
-            pl.col('trace').cast(pl.Int64),
-            pl.col('Charges').cast(pl.Int64).alias('charge'),
-            _split_numbers('MZs').alias('mz'),
-            _split_numbers('RTs').alias('rt'),
-            _split_numbers('Intensities').alias('intensity'),
-        )
-        # Legend in charge order, as FLASHViewer lists it
-        .sort(['FeatureGroupIndex', 'charge', 'trace'])
-    )
-
-
-def quant_table(file_manager, dataset_id):
-    """Feature groups (list columns dropped: the table shows scalars)."""
-    lf = scan(file_manager, dataset_id, 'quant_dfs')
-    return lf.select(
-        [c for c, t in lf.collect_schema().items() if not isinstance(t, pl.List)]
-    )
-
-
 def with_fragmentation(lf, methods, on):
     """Add a 'fragmentation' column to `lf`: the method of the spectrum whose
     index is in column `on`, from `methods` (one entry per spectrum index,

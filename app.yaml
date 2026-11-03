@@ -10,7 +10,7 @@ app:
   slug: flashapp
   name: FLASHApp
   description: 'Top-down proteomics: FLASHDeconv deconvolution, FLASHTnT tag-based identification and
-    FLASHQuant quantification, with a configurable linked viewer.'
+    label-free or TMT/iTRAQ quantification, with a configurable linked viewer.'
   repository: OpenMS/FLASHApp
   domain: top-down-proteomics
   image: ghcr.io/openms/flashapp
@@ -47,18 +47,11 @@ workflows:
     optional: true
   - tool: FLASHQuantConsensus
     optional: true
-- name: FLASHQuant
-  class: src/Workflow.py:QuantWorkflow
-  steps: []
 results:
 - role: custom
   workflow: FLASHTnT
   title: Viewer (Vue grid)
   page: content/TopDown/TopDownViewer.py
-- role: custom
-  workflow: FLASHQuant
-  title: Viewer
-  page: content/FLASHQuant/FLASHQuantViewer.py
 pages:
 - content/quickstart.py
 - content/user_guide.py
@@ -68,8 +61,6 @@ pages:
 - content/TopDown/TopDownSequenceInput.py
 - content/TopDown/TopDownViewer.py
 - content/TopDown/TopDownDownload.py
-- content/FLASHQuant/FLASHQuantFileUpload.py
-- content/FLASHQuant/FLASHQuantViewer.py
 deploy:
   k8s:
     enabled: true

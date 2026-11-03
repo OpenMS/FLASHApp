@@ -2,8 +2,7 @@
 // bundled example data inside the Electron window, deconvolution only
 // (FLASHDeconv) and with identification (DecoyDatabase -> FLASHDeconv ->
 // FLASHTnT -> FLASHAnnotator), then opens the Viewer on each run and checks
-// that the Vue component draws its plots and tables. FLASHQuant is view-only,
-// so its Viewer is checked on the example workspace.
+// that the Vue component draws its plots and tables.
 const RUN_TIMEOUT = 45 * 60 * 1000;
 const VIEW_TIMEOUT = 3 * 60 * 1000;
 
@@ -73,6 +72,4 @@ module.exports = async (t) => {
   const log = await t.page.locator("body").innerText();
   if (!log.includes("FLASHAnnotator")) throw new Error("The identification did not reach FLASHAnnotator");
   await checkViewer(t, "TopDownViewer", "GapA_5458mz_HCD");
-
-  await checkViewer(t, "FLASHQuantViewer", null);
 };

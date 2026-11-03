@@ -1,4 +1,4 @@
-"""Compare FLASHQuant results of several runs.
+"""Compare the quantities of several runs.
 
 Two steps, both free of Streamlit so they can run anywhere:
 

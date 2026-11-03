@@ -45,7 +45,7 @@ def _code_version():
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
         hierarchy_data.__file__, prsm_data.__file__,
-        str(Path(__file__).with_name('compare.py')),
+        str(Path(__file__).with_name('quant_cells.py')),
     ):
         try:
             digest.update(Path(module).read_bytes())
@@ -190,21 +190,6 @@ TAG_COLUMNS = [
      'headerTooltip': 'Delta mass is the difference between the tag flanking mass and the (partial) proteoform mass, from its terminal to the tag boundary.'},
 ]
 
-QUANT_COLUMNS = [
-    {'title': 'Index', 'field': 'FeatureGroupIndex', 'sorter': 'number'},
-    {'title': 'Monoisotopic Mass', 'field': 'MonoisotopicMass', 'sorter': 'number'},
-    {'title': 'Average Mass', 'field': 'AverageMass', 'sorter': 'number'},
-    {'title': 'Start Retention Time (FWHM)', 'field': 'StartRetentionTime(FWHM)', 'sorter': 'number'},
-    {'title': 'End Retention Time (FWHM)', 'field': 'EndRetentionTime(FWHM)', 'sorter': 'number'},
-    {'title': 'Feature Group Quantity', 'field': 'FeatureGroupQuantity', 'sorter': 'number'},
-    # Twice, as in FLASHViewer (the second one is the first in the collapsed details)
-    {'title': 'Feature Group Quantity', 'field': 'FeatureGroupQuantity', 'sorter': 'number'},
-    {'title': 'Min Charge', 'field': 'MinCharge', 'sorter': 'number'},
-    {'title': 'Max Charge', 'field': 'MaxCharge', 'sorter': 'number'},
-    {'title': 'Most Abundant Charge', 'field': 'MostAbundantFeatureCharge', 'sorter': 'number'},
-    {'title': 'Isotope Cosine Score', 'field': 'IsotopeCosineScore', 'sorter': 'number'},
-]
-
 # Columns of the FLASHDeconv spectrum caches (see src/parse/masstable.py)
 SPECTRUM_COLUMNS = dict(
     mass_column='MonoMass', mass_intensity_column='SumIntensity',
@@ -239,7 +224,7 @@ FIXED_MODS_IDENTIFIER = 'fixed_mods'
 
 RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
-# off (not in FLASHQuant, whose table did not follow its selection)
+# off
 SCROLL = 'top'
 # Identification levels: proteins, the proteoforms of a protein,
 # the PrSMs of a proteoform (src/render/hierarchy_data.py)
@@ -956,9 +941,6 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         component.on_structure_action(structure_action_handler(structure_dir(fm)))
         return component, {}
 
-    if comp_name == 'quant_visualization':
-        return None, {}
-
     raise ValueError(f'Unknown viewer component {comp_name!r}')
 
 
@@ -987,51 +969,6 @@ def _structure(file_manager, dataset_id, protein_index):
     return structure
 
 
-def _render_quant(file_manager, dataset_id, state_manager, key):
-    table = _component(
-        Table, 'quant_table', file_manager, dataset_id, ['quant_dfs'],
-        lambda: dict(
-            data=insight_data.quant_table(file_manager, dataset_id),
-            column_definitions=QUANT_COLUMNS, title='Feature groups',
-            index_field='FeatureGroupIndex', interactivity={'feature_group': 'FeatureGroupIndex'},
-            go_to_fields=[], reclick=RECLICK, reset_sort=True, pagination=False, float_precision='float64',
-        ),
-    )
-    traces = _component(
-        Plot3D, 'quant_traces', file_manager, dataset_id, ['quant_dfs'],
-        lambda: dict(
-            data=insight_data.quant_traces(file_manager, dataset_id),
-            filters={'feature_group': 'FeatureGroupIndex'},
-            x_column='mz', y_column='rt', z_column='intensity', mode='lines',
-            trace_column='trace', series_column='charge', series_name_template='Charge: {}',
-            color='#3366CC', title='Feature group signals',
-            x_label='m/z', y_label='retention time', z_label='intensity',
-            # FLASHViewer's plot: plain title, no border, Plotly's PNG download
-            title_bold=False, border=False, export_format='png',
-        ),
-    )
-    # FLASHViewer drew the table and the plot in one 1184 px panel: the table 4 px
-    # from its edges, the plot 16 px from the left, 90% wide, overlapping the
-    # table's last 12 px
-    panel = f'{key}_panel'
-    with st.container(key=panel):
-        st.markdown(
-            f'''<style>
-            .st-key-{panel} {{ gap: 0; }}
-            .st-key-{panel} > div:nth-child(1) {{ display: none; }}
-            .st-key-{panel} > div:nth-child(2) {{ margin: 4px 4px 0; width: calc(100% - 8px); }}
-            .st-key-{panel} > div:nth-child(3) {{
-                margin: -20px 0 16px 16px; width: calc((100% - 32px) * 0.9); z-index: 1;
-            }}
-            </style>''',
-            unsafe_allow_html=True,
-        )
-        table(key=f'{key}_table', state_manager=state_manager, height=TABLE_HEIGHT)
-        traces(key=f'{key}_traces', state_manager=state_manager, height=800)
-
-
-# Run-level QC panels: (component, frame builder, sources, title, x label,
-# y label, mode, y axis range mode)
 RUN_QC_PLOTS = [
     ('qc_qscore', qc_data.qscore_distribution, ['mass_table', 'scan_table'],
      'QScore Distribution', 'QScore', 'Masses', 'lines', 'nonnegative'),
@@ -1093,9 +1030,6 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
         return
     if comp_name == 'internal_fragment_map':
         st.info('The internal fragment map is not available yet.')
-        return
-    if comp_name == 'quant_visualization':
-        _render_quant(file_manager, dataset_id, state_manager, key)
         return
     if comp_name == 'run_qc':
         _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)

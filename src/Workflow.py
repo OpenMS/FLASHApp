@@ -593,12 +593,3 @@ class IdaWorkflow(WorkflowManager):
                         cwd=exe.parent,
                     )
                 self.logger.log('Waiting for new raw files...')
-
-
-class QuantWorkflow(WorkflowManager):
-    share_cache = False
-
-    def __init__(self) -> None:
-        # Initialize the parent class with the workflow name.
-        super().__init__("FLASHQuant", st.session_state["workspace"])
-        self.tool_name = 'FLASHQuantViewer'

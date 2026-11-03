@@ -520,22 +520,14 @@ def render_workflow_selection():
     
     # Main workflow selection buttons with centered, compact layout
     # Use spacing columns to center buttons and prevent wide-screen spreading
-    spacer1, col1, col2, spacer2 = st.columns([1, 3, 3, 1], gap="small")
-    
+    spacer1, col1, spacer2 = st.columns([2, 3, 2], gap="small")
+
     with col1:
         create_navigation_button(
             "⚡️",
             "Top-down analysis",
-            "FLASHDeconv & FLASHTnT",
+            "Deconvolution, identification and quantification",
             "content/TopDown/TopDownUpload.py"
-        )
-    
-    with col2:
-        create_navigation_button(
-            "📊",
-            "Quantification",
-            "FLASHQuant",
-            "content/FLASHQuant/FLASHQuantFileUpload.py"
         )
 
 def render_whats_new():
@@ -560,7 +552,6 @@ def render_whats_new():
                         <ul>
                             <li>Ion series follow each scan's fragmentation method (ETD, EThcD, UVPD), with a tolerance in Da.</li>
                             <li>The protein table shows characterization, cleavages and localized modifications.</li>
-                            <li>FLASHQuant compares runs side by side.</li>
                         </ul>
                     </div>
                 </div>
