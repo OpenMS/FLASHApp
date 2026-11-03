@@ -72,10 +72,9 @@ else:
     layout = [None]
     side_by_side = False
 
-layout_button(file_manager, 'flashtnt')
-
 ### if no input file is given, show blank page
 if len(results) == 0:
+    layout_button(file_manager, 'flashtnt')
     st.error('No results to show yet. Please run a workflow first!')
     st.stop()
 
@@ -98,24 +97,28 @@ if len(layout) == 2 and side_by_side:
         if 'selected_experiment0_tagger' in st.session_state:
             render_grid(st.session_state.selected_experiment0_tagger, experiment_layout(layout[0], st.session_state.selected_experiment0_tagger), file_manager, 'flashtnt', 'selected_experiment0_tagger')
     with c2:
-        st.selectbox(
-            "choose experiment", display_names,
-            key=f'selected_experiment_dropdown_1_tagger',
-            index=validate_selected_index(file_manager, 'selected_experiment1_tagger'),
-            on_change=select_experiment
-        )
+        with st.container(horizontal=True, vertical_alignment='bottom'):
+            st.selectbox(
+                "choose experiment", display_names,
+                key=f'selected_experiment_dropdown_1_tagger',
+                index=validate_selected_index(file_manager, 'selected_experiment1_tagger'),
+                on_change=select_experiment
+            )
+            layout_button(file_manager, 'flashtnt')
         if f"selected_experiment1_tagger" in st.session_state:
             render_grid(st.session_state.selected_experiment1_tagger, experiment_layout(layout[1], st.session_state.selected_experiment1_tagger), file_manager, 'flashtnt', 'selected_experiment1_tagger', 'flash_viewer_grid_1')
 
 
 else:
     ### for only single experiment on one view
-    st.selectbox(
-        "choose experiment", display_names,
-        key="selected_experiment_dropdown_tagger",
-        index=validate_selected_index(file_manager, 'selected_experiment0_tagger'),
-        on_change=select_experiment
-    )
+    with st.container(horizontal=True, vertical_alignment='bottom'):
+        st.selectbox(
+            "choose experiment", display_names,
+            key="selected_experiment_dropdown_tagger",
+            index=validate_selected_index(file_manager, 'selected_experiment0_tagger'),
+            on_change=select_experiment
+        )
+        layout_button(file_manager, 'flashtnt')
 
     if 'selected_experiment0_tagger' in st.session_state:
         render_grid(st.session_state.selected_experiment0_tagger, experiment_layout(layout[0], st.session_state.selected_experiment0_tagger), file_manager, 'flashtnt', 'selected_experiment0_tagger')

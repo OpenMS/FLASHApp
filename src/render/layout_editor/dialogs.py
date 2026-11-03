@@ -1,6 +1,7 @@
 """The Layout Manager as a window on the Viewer pages.
 
-``layout_button()`` draws an "Edit layout" button; pressing it opens the
+``layout_button()`` draws an "Edit layout" button (the Viewers put it right of
+the experiment selector); pressing it opens the
 drag-and-drop editor in a dialog over the Viewer. Saving or resetting reruns
 the page, which closes the dialog and shows the new layout.
 """
@@ -92,8 +93,7 @@ def _tnt_dialog(file_manager):
 def layout_button(file_manager, tool):
     """Draw the "Edit layout" button of a Viewer; ``tool`` is 'flashdeconv' or 'flashtnt'."""
     dialog = _deconv_dialog if tool == 'flashdeconv' else _tnt_dialog
-    with st.container(horizontal=True, horizontal_alignment='right'):
-        if st.button('Edit layout', icon=':material/dashboard_customize:',
-                     key=f'{tool}_edit_layout',
-                     help='Choose and arrange the components shown on this page'):
-            dialog(file_manager)
+    if st.button('Edit layout', icon=':material/dashboard_customize:',
+                 key=f'{tool}_edit_layout', width='content',
+                 help='Choose and arrange the components shown on this page'):
+        dialog(file_manager)

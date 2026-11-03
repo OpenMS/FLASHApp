@@ -67,10 +67,9 @@ else:
     layout = [DEFAULT_LAYOUT]
     side_by_side = False
 
-layout_button(file_manager, 'flashdeconv')
-
 ### if no input file is given, show blank page
 if len(results) == 0:
+    layout_button(file_manager, 'flashdeconv')
     st.error('No results to show yet. Please run a workflow first!')
     st.stop()
 
@@ -96,12 +95,14 @@ if len(layout) == 2 and side_by_side:
                 'flashdeconv', "selected_experiment0", 'flash_viewer_grid_0'
             )
     with c2:
-        st.selectbox(
-            "choose experiment", display_names,
-            key=f'selected_experiment_dropdown_1',
-            index=validate_selected_index(file_manager, 'selected_experiment1'),
-            on_change=select_experiment
-        )
+        with st.container(horizontal=True, vertical_alignment='bottom'):
+            st.selectbox(
+                "choose experiment", display_names,
+                key=f'selected_experiment_dropdown_1',
+                index=validate_selected_index(file_manager, 'selected_experiment1'),
+                on_change=select_experiment
+            )
+            layout_button(file_manager, 'flashdeconv')
         if f"selected_experiment1" in st.session_state:
             with st.spinner('Loading component...'):
                 render_grid(
@@ -112,12 +113,14 @@ if len(layout) == 2 and side_by_side:
 
 else:
     ### for only single experiment on one view
-    st.selectbox(
-        "choose experiment", display_names,
-        key="selected_experiment_dropdown",
-        index=validate_selected_index(file_manager, 'selected_experiment0'),
-        on_change=select_experiment
-    )
+    with st.container(horizontal=True, vertical_alignment='bottom'):
+        st.selectbox(
+            "choose experiment", display_names,
+            key="selected_experiment_dropdown",
+            index=validate_selected_index(file_manager, 'selected_experiment0'),
+            on_change=select_experiment
+        )
+        layout_button(file_manager, 'flashdeconv')
 
 
     if 'selected_experiment0' in st.session_state:
