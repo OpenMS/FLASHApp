@@ -11,16 +11,15 @@ jobs:
     steps:
       - name: List MSV000091923
         run: |
-          echo "== PROXI"
-          curl -sS -m 60 "https://massive.ucsd.edu/ProteoSAFe/proxi/v0.1/datasets/MSV000091923" | head -c 6000 || true
+          echo "== GNPS2 dataset cache"
+          curl -sS -m 120 "https://datasetcache.gnps2.org/datasette/database/filename.csv?_stream=on&_size=max&dataset__exact=MSV000091923" | cut -c1-300 | head -300 || true
+          echo "== MassIVE file listing"
+          curl -sS -m 120 "https://massive.ucsd.edu/ProteoSAFe/QueryDatasetFiles?dataset=MSV000091923" | head -c 3000 || true
           echo
-          base="ftp://massive-ftp.ucsd.edu/v06/MSV000091923"
-          list() { timeout 60 curl -sS -m 50 --list-only "$1/" 2>&1 || true; }
-          for d1 in $(list "$base"); do
-            echo "== $d1"
-            for d2 in $(list "$base/$d1" | head -50); do
-              echo "  $d1/$d2"
-              case "$d2" in *.*) continue;; esac
-              for d3 in $(list "$base/$d1/$d2" | head -80); do echo "    $d1/$d2/$d3"; done
-            done
+          for path in "" raw peak sequence other; do
+            echo "== ftp v05 /$path"
+            timeout 90 curl -sS -m 80 --list-only "ftp://massive.ucsd.edu/v05/MSV000091923/$path/" 2>&1 | head -100 || true
           done
+          echo "== wget"
+          timeout 120 wget -nv --no-remove-listing -O /dev/null "ftp://massive.ucsd.edu/v05/MSV000091923/" 2>&1 | tail -5 || true
+          cat .listing 2>/dev/null | head -50 || true
