@@ -96,9 +96,8 @@ def test_tags_get_scan_index(tnt):
     assert tags['scan_idx'].null_count() == 0
 
 
-def test_proteoform_sequences_from_pickled_results(tnt):
-    # The demo results predate the parquet sequence store
-    assert insight_data.result_path(tnt, TNT_DATASET, 'sequence_data').suffix == '.gz'
+def test_proteoform_sequences(tnt):
+    assert insight_data.result_path(tnt, TNT_DATASET, 'sequence_data').suffix == '.pq'
     rows = insight_data.proteoform_sequences(tnt, TNT_DATASET).collect()
     assert rows.height == insight_data.scan(tnt, TNT_DATASET, 'protein_dfs').collect().height
     row = rows.row(0, named=True)

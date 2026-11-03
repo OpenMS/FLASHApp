@@ -113,9 +113,11 @@ def test_fragment_errors_on_demo(tnt):
     errors = validation_data.fragment_errors(tnt, TNT_DATASET).collect()
     assert errors.height > 0
     assert set(errors.columns) == set(validation_data.FRAGMENT_ERROR_SCHEMA)
-    # Matched within the FLASHTnT tolerance of the demo (5 ppm)
-    assert errors['ppm_error'].abs().max() <= 5.0 + 1e-6
-    assert set(errors['ion_type'].unique()) <= {'b', 'c', 'y', 'z'}
+    # The demo's fragments come from FLASHAnnotator, matched within its
+    # tolerance (10 ppm), internal fragments included
+    assert errors['ppm_error'].abs().max() <= 10.0 + 1e-6
+    assert set(errors['ion_type'].unique()) <= {'b', 'c', 'y', 'z', 'internal'}
+    assert {'b', 'y'} <= set(errors['ion_type'].unique())
 
 
 def test_isotope_envelopes_on_demo(fd):
@@ -185,13 +187,11 @@ def test_characterize_levels():
 
 def test_characterization_on_demo(tnt):
     table = validation_data.characterization(tnt, TNT_DATASET).collect()
-    assert table.height == 17
-    assert set(table['Characterization']) <= {'Characterized', 'Partial', 'Ambiguous'}
-    # The best hit of the demo (AQPZ, score 505) is identified but carries an
-    # unlocalized mass shift
-    best = table.filter(pl.col('proteoform_index') == 9).row(0, named=True)
-    assert best['Characterization'] == 'Partial'
-    assert best['LocalizedMods'] == '0/1'
+    # The demo (GapA) has one proteoform, identified without a mass shift
+    assert table.height == 1
+    best = table.row(0, named=True)
+    assert best['Characterization'] == 'Characterized'
+    assert best['LocalizedMods'] == '-'
     assert best['Cleavages'] > 25
 
 
@@ -227,8 +227,11 @@ def test_run_qc_on_demo(fd):
 
 def test_id_qc_on_demo(tnt):
     ids = qc_data.identifications_over_time(tnt, TNT_DATASET).collect()
-    # One spectrum, one best hit; the demo has no q-values
-    assert ids.to_dicts() == [{'series': 'Best hit per spectrum', 'x': 30.0, 'y': 1.0}]
+    # One spectrum, one best hit, within 1% FDR
+    assert ids.to_dicts() == [
+        {'series': 'Best hit per spectrum', 'x': 30.0, 'y': 1.0},
+        {'series': 'q ≤ 0.01', 'x': 30.0, 'y': 1.0},
+    ]
     errors = qc_data.fragment_error_over_time(tnt, TNT_DATASET).collect()
     assert errors.height == 1
     assert abs(errors['y'][0]) < 5
