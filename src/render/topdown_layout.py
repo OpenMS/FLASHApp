@@ -14,6 +14,10 @@ from src.render.layout_editor.catalog import (
 )
 
 LAYOUT_DATASET = 'topdown_layout'
+# A run quantified with isobaric labels: its reporter ions, shown below the
+# first component that selects a spectrum
+REPORTER_ROW = ('reporter_table', 'reporter_ions')
+REPORTER_AFTER = ('proteoform_prsm_table', 'protein_table', 'scan_table')
 # The layouts the two former Viewers saved, by "the run is identified"
 LEGACY_LAYOUT_DATASET = {True: 'flashtnt_layout', False: 'layout'}
 
@@ -46,22 +50,40 @@ def has_legacy(file_manager, identified):
     return get_saved_layout(file_manager, LEGACY_LAYOUT_DATASET[identified]) is not None
 
 
-def default_rows(file_manager, identified, sample_type, index=0):
+def with_reporters(rows, after):
+    """`rows` with the reporter ion row inserted after the first row holding
+    one of `after` (a scan-selecting component), else at the end."""
+    rows = [list(row) for row in rows]
+    if any(name in row for row in rows for name in REPORTER_ROW):
+        return rows
+    for i, row in enumerate(rows):
+        if any(name in row for name in after):
+            return rows[:i + 1] + [list(REPORTER_ROW)] + rows[i + 1:]
+    return rows + [list(REPORTER_ROW)]
+
+
+def default_rows(file_manager, identified, sample_type, index=0, labelled=False):
     """Rows of experiment ``index`` without a saved layout: the former
-    Viewer's saved layout of the run's kind, else the built-in default."""
+    Viewer's saved layout of the run's kind, else the built-in default of the
+    analysis (deconvolution, native or lysate identification), with the
+    reporter ions of a run quantified with isobaric labels."""
     legacy = get_saved_layout(file_manager, LEGACY_LAYOUT_DATASET[identified])
     if legacy:
         experiments = legacy[0]
-        return experiments[index] if index < len(experiments) else experiments[0]
-    if identified:
-        return TNT_DEFAULT_LAYOUTS[sample_type]
-    return deconvolution_default(file_manager)
+        rows = experiments[index] if index < len(experiments) else experiments[0]
+    elif identified:
+        rows = TNT_DEFAULT_LAYOUTS[sample_type]
+    else:
+        rows = deconvolution_default(file_manager)
+    if labelled:
+        rows = with_reporters(rows, REPORTER_AFTER)
+    return rows
 
 
-def rows(file_manager, identified, sample_type, index=0):
+def rows(file_manager, identified, sample_type, index=0, labelled=False):
     """Rows experiment ``index`` shows."""
     layout = saved(file_manager)
     if layout:
         experiments = layout[0]
         return experiments[index] if index < len(experiments) else experiments[0]
-    return default_rows(file_manager, identified, sample_type, index)
+    return default_rows(file_manager, identified, sample_type, index, labelled)

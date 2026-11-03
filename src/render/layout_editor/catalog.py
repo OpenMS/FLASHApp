@@ -63,6 +63,13 @@ _SELECTS_SCAN = ['scan_table', 'protein_table', 'proteoform_table', 'proteoform_
 _SELECTS_SCAN_LABEL = 'the scan table or an identification table'
 
 
+# Isobaric labels (TMT, iTRAQ): the reporter ions FLASHDeconv measured in a run
+ISOBARIC_COMPONENTS = [
+    {'name': 'reporter_table', 'label': 'Reporter ions per spectrum (TMT, iTRAQ)', 'group': 'Quantification'},
+    {'name': 'reporter_ions', 'label': 'Reporter ions of the selected spectrum', 'group': 'Quantification'},
+]
+
+
 def _combined():
     by_name = {}
     for component in DECONV_COMPONENTS + TNT_COMPONENTS:
@@ -74,9 +81,11 @@ def _combined():
         requires=_SELECTED_PROTEOFORM + ['mass_table'],
         requires_label='a protein or proteoform table, or the mass table',
     )
+    by_name.update({c['name']: dict(c) for c in ISOBARIC_COMPONENTS})
+    by_name['reporter_ions'].update(requires=_SELECTS_SCAN + ['reporter_table'], requires_label=_SELECTS_SCAN_LABEL + ' or the reporter ion table')
     by_name['fdr_plot']['label'] = 'Score distribution plot (masses)'
     by_name['id_fdr_plot']['label'] = 'Score distribution plot (identifications)'
-    groups = ['Heatmaps', 'Tables', 'Spectra & plots', 'Sequence', 'Validation', 'Quality control']
+    groups = ['Heatmaps', 'Tables', 'Spectra & plots', 'Sequence', 'Quantification', 'Validation', 'Quality control']
     return sorted(by_name.values(), key=lambda c: groups.index(c['group']))
 
 

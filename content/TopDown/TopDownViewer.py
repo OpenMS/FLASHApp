@@ -14,7 +14,7 @@ from pathlib import Path
 
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
-from src import sample_type
+from src import analysis, sample_type
 from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.dialogs import layout_button
@@ -30,18 +30,21 @@ def selection_key(index):
 def experiment_layout(index, dataset_id):
     """The rows experiment `index` shows: the saved layout, else the default of its run."""
     identified = dataset_id in identified_runs
+    labelled = dataset_id in labelled_runs
     kind = (sample_type.of_result(file_manager, dataset_id) or sample_type.NATIVE) if identified else None
     if topdown_layout.saved(file_manager) is None:
         if topdown_layout.has_legacy(file_manager, identified):
             name = 'identified runs' if identified else 'deconvolved runs'
             text = f"The layout saved earlier for {name}."
         elif identified:
-            run = 'native or targeted run' if kind == sample_type.NATIVE else 'lysate LC-MS/MS run'
-            text = f"{kind} default layout: this run was searched as a {run}."
+            sample = analysis.SAMPLE_LABELS[kind].lower()
+            text = f"Default layout for {sample}, as this run was searched."
         else:
-            text = "Deconvolution default layout: this run was deconvolved only."
+            text = "Default layout for a run deconvolved only."
+        if labelled:
+            text += " The reporter ions of its labels are shown below the spectra it selects."
         st.caption(text + " Press **Edit layout** to arrange your own.")
-    return topdown_layout.rows(file_manager, identified, kind, index)
+    return topdown_layout.rows(file_manager, identified, kind, index, labelled)
 
 
 def select_experiment(index):
@@ -105,6 +108,7 @@ quant_view.migrate_layout(file_manager)
 # Every deconvolved run, of which some were identified, then the comparisons
 results = file_manager.get_results_list(['threedim_SN_plot'])
 identified_runs = set(file_manager.get_results_list(['protein_dfs']))
+labelled_runs = set(file_manager.get_results_list(['isobaric_dfs']))
 comparison_names = quant_view.comparison_names(file_manager)
 comparison_ids = set(comparison_names.values())
 

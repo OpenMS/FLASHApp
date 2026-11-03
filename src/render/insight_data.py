@@ -275,3 +275,35 @@ def sequence_view_spectra(file_manager, dataset_id):
     """Deconvolved masses and precursor mass per spectrum, for matching a
     user-given sequence (FLASHDeconv)."""
     return spectra(file_manager, dataset_id, 'sequence_view')
+
+
+def reporter_table(file_manager, dataset_id):
+    """The reporter ions of every fragmentation spectrum (FLASHDeconv
+    -out_quant) with scan_idx and, for an identified run, the protein of the
+    spectrum's best PrSM (`Identified`)."""
+    lf = _scan_index_of(file_manager, dataset_id, scan(file_manager, dataset_id, 'isobaric_dfs'))
+    if result_path(file_manager, dataset_id, 'protein_dfs') is not None:
+        best = (
+            proteins(file_manager, dataset_id).filter(pl.col('is_best') & pl.col('Scan').is_not_null())
+            .select(pl.col('Scan').cast(pl.Int64), pl.col('accession').cast(pl.Utf8).alias('Identified'))
+            .unique('Scan', keep='first')
+        )
+        lf = lf.join(best, on='Scan', how='left', maintain_order='left')
+    else:
+        lf = lf.with_columns(pl.lit(None, pl.Utf8).alias('Identified'))
+    return lf.filter(pl.col('scan_idx').is_not_null())
+
+
+def reporter_ions(file_manager, dataset_id, channels, mzs):
+    """One row per spectrum and label: scan_idx, the label's reporter m/z, its
+    intensity and the label name (for the stick plot of the selected spectrum)."""
+    lf = reporter_table(file_manager, dataset_id)
+    parts = [
+        lf.select(
+            'scan_idx', pl.lit(mz).alias('mz'),
+            pl.col(name).fill_nan(None).fill_null(0.0).alias('intensity'),
+            pl.lit(name).alias('label'),
+        )
+        for name, mz in zip(channels, mzs)
+    ]
+    return pl.concat(parts).sort('scan_idx', 'mz')

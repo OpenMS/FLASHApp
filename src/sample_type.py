@@ -131,6 +131,11 @@ def recommend(paths, converted_dir=None, counter=count_spectra):
     return Recommendation(sample_type, runs, unreadable)
 
 
+def is_on(value):
+    """A flag parameter's value as stored: True, or the ini's text 'true'."""
+    return value is True or str(value).strip().lower() == 'true'
+
+
 def of_result(file_manager, dataset_id):
     """Sample type a FLASHTnT result was run for: NATIVE when it was searched
     with -native (the Native preset), LYSATE when it was searched without (the
@@ -140,7 +145,7 @@ def of_result(file_manager, dataset_id):
         settings = file_manager.get_results(dataset_id, ['FTnT_parameters'])['FTnT_parameters']
         # Only settings that differ from FLASHTnT's defaults are recorded
         if isinstance(settings, dict):
-            return NATIVE if settings.get('native') else LYSATE
+            return NATIVE if is_on(settings.get('native')) else LYSATE
     path = file_manager.get_result_path(dataset_id, 'scan_table')
     if path is None:
         return None

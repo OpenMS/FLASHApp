@@ -12,17 +12,19 @@ wf = TopDownWorkflow()
 st.title('Describe your experiment')
 page_intro(
     """
-For most experiments only a few things need your attention:
+Tell FLASHApp what your experiment is in the **Your analysis** box below:
 
-1. **MS data** (below): the runs to analyse.
-2. **Identify proteoforms** (below): on to search the runs against a protein database, off to
-   deconvolve them only (MS1-only or intact-mass runs, or no database for the sample).
-3. **Sample type** (buttons below, when identifying): native or targeted runs, or lysate LC-MS/MS.
-   A recommendation follows the selected runs.
-4. **Samples and groups** (first tab): whether to compare the runs, and the condition of each run.
+1. **MS data**: the runs to analyse.
+2. **Identify proteoforms**: on to search the runs against a protein database, off to find the
+   masses only (MS1-only or intact-mass runs, or no database for the sample).
+3. **Sample** (when identifying): native or purified proteins, or a cell lysate. A recommendation
+   follows the selected runs.
+4. **Quantification**: none, **label-free** (each sample is its own run) or **isobaric labels**
+   (TMT or iTRAQ samples pooled into one run).
 
-Everything else starts at values that suit a typical experiment and is saved as you go.
-Switch on **Show advanced parameters** only if you need to change a specific setting.
+The box then says in one paragraph what will run. **Samples and groups** (first tab) gives each run,
+or each label, its condition. Everything else starts at values that suit a typical experiment and is
+saved as you go. Switch on **Show advanced parameters** only if you need to change a specific setting.
 """,
     background="""
 - **Deconvolution** turns the m/z peaks of a spectrum, which carry many charges and isotopes
@@ -33,14 +35,18 @@ Switch on **Show advanced parameters** only if you need to change a specific set
   matches), with q-values from decoy proteins.
 - A **feature** is one mass followed over the retention time of a run; its **abundance** is
   the area of its raw signal.
-- **Comparing runs** links the features of the runs by mass and retention time, fills a run
-  where a feature was not detected from its signal there (*match between runs*) and tests which
+- **Label-free quantification** links the features of the runs by mass and retention time, fills
+  a run where a feature was not detected from its signal there (*match between runs*) and tests which
   masses differ between two conditions. With identification on, the PrSMs of the runs say which
   proteoform each linked feature is, so proteoforms and proteins are compared too.
+- **Isobaric labels** (TMT, iTRAQ) give each sample a tag of the same mass that breaks into a
+  reporter ion of its own mass on fragmentation (HCD). The reporter ions of a spectrum give the
+  abundance of its precursor in every sample at once.
 """,
     background_title='Terms explained',
 )
 
+wf.analysis_section()
 wf.show_parameter_section()
 
 next_steps(

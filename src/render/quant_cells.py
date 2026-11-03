@@ -88,6 +88,11 @@ def _change(compared, fc, padj):
     )
 
 
+def _sample(session):
+    """'Sample' for labelled samples (TMT, iTRAQ), else 'Run'."""
+    return session.sample_noun.capitalize()
+
+
 def _table_columns(session, runs):
     level = session.level
     noun = _noun(session).capitalize()
@@ -140,7 +145,7 @@ def build_summary(session, state_manager, key, height=None):
     down = significant.filter(pl.col('log2FC') <= -fc).height
     with st.container(key=f'{key}_summary', border=True):
         metrics = st.columns(4)
-        metrics[0].metric('Runs compared', len(session.conditions()))
+        metrics[0].metric(f'{_sample(session)}s compared', len(session.conditions()))
         metrics[1].metric(f'{_noun(session, True).capitalize()} tested', f'{tested.height:,}',
                           help=f'Of {statistics.height:,}; the others were removed by the filter.')
         metrics[2].metric(f'Higher in {compared}', f'{up:,}')
@@ -173,7 +178,7 @@ def build_table(session, state_manager, key, height):
         _sources(session, 'statistics') + [f'quant_{session.level}', f'quant_{session.level}_annotations'],
         lambda: dict(
             data=_comparison_table(session), column_definitions=_table_columns(session, runs),
-            title=f'{LEVEL_NAMES[session.level]} of the compared runs', index_field='ConsensusIndex',
+            title=f'{LEVEL_NAMES[session.level]} of the compared {_sample(session).lower()}s', index_field='ConsensusIndex',
             interactivity={'consensus': 'ConsensusIndex'}, go_to_fields=['Proteoform'],
             reclick=RECLICK,
         ),
@@ -201,7 +206,7 @@ def build_volcano(session, state_manager, key, height):
 
 
 def build_profile(session, state_manager, key, height):
-    """The selected entity's normalized abundance in every run, by condition."""
+    """The selected entity's normalized abundance in every run (sample), by condition."""
     if not _ready(session):
         return
     colors = condition_colors(set(session.conditions().values()))
@@ -216,7 +221,7 @@ def build_profile(session, state_manager, key, height):
             filters={'consensus': 'ConsensusIndex'},
             x_column='Run', y_column='Abundance', series_column='Condition',
             series_colors=colors, mode='markers', y_range_mode='normal', hover_column='Hover',
-            title='Abundance per run', x_label='Run',
+            title=f'Abundance per {_sample(session).lower()}', x_label=_sample(session),
             y_label=f"Abundance ({settings['postproc-transform']}, normalized)",
         ),
     )(key=key, state_manager=state_manager, height=height)
@@ -252,7 +257,7 @@ def build_runs(session, state_manager, key, height):
         lambda: dict(
             data=_runs_frame(session),
             column_definitions=[
-                {'title': 'Run', 'field': 'Run', 'sorter': 'string'},
+                {'title': _sample(session), 'field': 'Run', 'sorter': 'string'},
                 {'title': 'Condition', 'field': 'Condition', 'sorter': 'string'},
                 {'title': 'Abundance', 'field': 'Abundance', 'sorter': 'number',
                  'formatter': 'scientific', 'formatterParams': {'precision': 3},
@@ -262,7 +267,7 @@ def build_runs(session, state_manager, key, height):
                 {'title': 'Match score', 'field': 'MatchScore', 'sorter': 'number', **_fixed(3)},
                 {'title': 'Match q-value', 'field': 'MatchQvalue', 'sorter': 'number', **_P},
             ],
-            title=f'Selected {_noun(session)} per run', index_field='RowIndex',
+            title=f'Selected {_noun(session)} per {_sample(session).lower()}', index_field='RowIndex',
             filters={'consensus': 'ConsensusIndex'}, go_to_fields=[], reclick=RECLICK, pagination=False,
         ),
     )(key=key, state_manager=state_manager, height=height)
@@ -281,7 +286,7 @@ def build_pca(session, state_manager, key, height):
     conditions = session.conditions()
     runs = list(conditions)
     if len(runs) < 3:
-        st.info('PCA needs at least three runs.')
+        st.info(f'PCA needs at least three {_sample(session).lower()}s with a condition.')
         return
     colors = condition_colors(set(conditions.values()))
     wide = session.result('normalized_wide').select('Proteoform', *runs).collect()
@@ -318,7 +323,7 @@ def build_heatmap(session, state_manager, key, height):
         lambda: dict(
             data=session.result('zscores'), id_col='Proteoform', metadata=_metadata(conditions),
             title=f'Most significant {_noun(session, True)} (z-scores, clustered)',
-            x_label='Runs', y_label=LEVEL_NAMES[session.level],
+            x_label=f'{_sample(session)}s', y_label=LEVEL_NAMES[session.level],
             colorscale=[[0, '#6699E0'], [0.5, '#FFFFFF'], [1, '#E06666']],
             reversescale=False, intensity_label='Z-score', group_colors=colors,
         ),
@@ -380,12 +385,12 @@ def settings_form(session, container=None):
     of a comparison. Returns True when they were saved."""
     used = session.settings
     with container if container is not None else st.container():
-        st.markdown('**Runs and conditions**')
-        st.caption('Runs with the same condition are replicates. A run without a condition is left out.')
+        st.markdown(f'**{_sample(session)}s and conditions**')
+        st.caption(f'{_sample(session)}s with the same condition are replicates. A {_sample(session).lower()} without a condition is left out.')
         design = st.data_editor(
             session.design().to_pandas(),
             column_config={
-                'sample': st.column_config.TextColumn('Run', disabled=True),
+                'sample': st.column_config.TextColumn(_sample(session), disabled=True),
                 'condition': st.column_config.TextColumn('Condition'),
                 'replicate': st.column_config.NumberColumn('Replicate', min_value=1, step=1),
             },

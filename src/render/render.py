@@ -20,7 +20,7 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 import openms_insight
 from openms_insight import (
-    DeconvolvedSpectrum, Heatmap, MirrorPlot, Plot3D, ProteinSequenceView,
+    DeconvolvedSpectrum, Heatmap, LinePlot, MirrorPlot, Plot3D, ProteinSequenceView,
     ProteinStructureView, SeriesPlot, StateManager, Table, defer_reruns,
 )
 from openms_insight.core.cache import CacheMissError
@@ -29,7 +29,8 @@ from src.render import (
     hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
-from src.render.layout_editor.catalog import DECONV_COMPONENTS, TNT_COMPONENTS
+from src.quant import isobaric
+from src.render.layout_editor.catalog import DECONV_COMPONENTS, ISOBARIC_COMPONENTS, TNT_COMPONENTS
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -303,6 +304,36 @@ _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 IDENTIFICATION_ONLY = (
     {c['name'] for c in TNT_COMPONENTS} - {c['name'] for c in DECONV_COMPONENTS} - {'sequence_view'}
 )
+
+ISOBARIC_ONLY = {c['name'] for c in ISOBARIC_COMPONENTS}
+
+
+def _plex(fm, ds):
+    """The labels a run was quantified with: (plex, channel names)."""
+    info = fm.get_results(ds, ['isobaric_plex'])['isobaric_plex'] if fm.result_exists(ds, 'isobaric_plex') else {}
+    plex = info.get('plex', isobaric.DEFAULT_PLEX)
+    return plex, info.get('channels') or isobaric.channel_names(plex)
+
+
+def _reporter_columns(channels):
+    columns = [
+        {'title': 'Scan', 'field': 'Scan', 'sorter': 'number'},
+        {'title': 'RT (min)', 'field': 'RT', 'sorter': 'number', **_fixed(2)},
+        {'title': 'Precursor mass', 'field': 'PrecursorMass', 'sorter': 'number', **_fixed(2),
+         'headerTooltip': 'Monoisotopic mass of the precursor (FLASHDeconv), in Daltons.'},
+        {'title': 'Charge', 'field': 'Charge', 'sorter': 'number'},
+        {'title': 'Identified as', 'field': 'Identified', 'sorter': 'string',
+         'headerTooltip': 'The protein of the best PrSM of the spectrum (FLASHTnT).'},
+        {'title': 'Labels found', 'field': 'QuantifiedChannels', 'sorter': 'number',
+         'headerTooltip': 'How many labels have a reporter ion in the spectrum.'},
+    ]
+    columns += [
+        {'title': name, 'field': name, 'sorter': 'number', 'formatter': 'scientific', 'formatterParams': {'precision': 2},
+         'headerTooltip': f'Reporter ion intensity of label {name}, corrected for isotope impurities.'}
+        for name in channels
+    ]
+    return columns
+
 
 # FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
 # PrSM mass table: every deconvolved mass of the identified spectrum
@@ -712,6 +743,33 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             ),
         ), {'height': TABLE_HEIGHT}
 
+    if comp_name == 'reporter_table':
+        plex, channels = _plex(fm, ds)
+        return _component(
+            Table, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
+            lambda: dict(
+                data=insight_data.reporter_table(fm, ds),
+                column_definitions=_reporter_columns(channels),
+                title=f'Reporter ions per spectrum ({isobaric.label(plex)})',
+                index_field='scan_idx', go_to_fields=['Scan'], interactivity={'scan': 'scan_idx'},
+                reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
+            ),
+            required=['isobaric_dfs', 'scan_table'],
+        ), {'height': TABLE_HEIGHT}
+
+    if comp_name == 'reporter_ions':
+        plex, channels = _plex(fm, ds)
+        mzs = dict(isobaric.PLEXES.get(plex, ('', []))[1])
+        return _component(
+            LinePlot, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
+            lambda: dict(
+                data=insight_data.reporter_ions(fm, ds, channels, [mzs.get(c, 0.0) for c in channels]),
+                filters={'scan': 'scan_idx'}, x_column='mz', y_column='intensity',
+                annotation_column='label', title='Reporter ions of the selected spectrum',
+                x_label='m/z', y_label='Intensity',
+            ),
+        ), {}
+
     if comp_name == 'mass_table':
         return _component(
             Table, comp_name, fm, ds, ['mass_table'],
@@ -1027,6 +1085,9 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
         and not file_manager.result_exists(dataset_id, 'protein_dfs')
     ):
         st.info('This run was deconvolved only. Run it with **Identify proteoforms** on to fill this view.')
+        return
+    if comp_name in ISOBARIC_ONLY and not file_manager.result_exists(dataset_id, 'isobaric_dfs'):
+        st.info('This run has no reporter ions. Run it with **Quantification: Isobaric labels** to fill this view.')
         return
     if comp_name == 'internal_fragment_map':
         st.info('The internal fragment map is not available yet.')

@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
         ],
         # One workflow: FLASHDeconv for every run, FLASHTnT when a database is given
-        "⚡️ FLASHDeconv + TnT" : [
+        "⚡️ Top-down analysis" : [
             st.Page(Path("content", "TopDown", "TopDownUpload.py"), title="Upload data", icon="📁"),
             st.Page(Path("content", "TopDown", "TopDownConfigure.py"), title="Describe experiment", icon="⚙️"),
             st.Page(Path("content", "TopDown", "TopDownRun.py"), title="Run analysis", icon="🚀"),

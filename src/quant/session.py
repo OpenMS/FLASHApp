@@ -50,10 +50,12 @@ def comparisons(file_manager, tool=None):
     ]
 
 
-def store(file_manager, dataset_id, levels, runs, design, sources, tool):
+def store(file_manager, dataset_id, levels, runs, design, sources, tool, extra=None):
     """Store a comparison of `tool` ('flashdeconv' or 'flashtnt'): the
     contract tables, the design (sample -> (condition, replicate)) and
-    default settings."""
+    default settings. `runs` are the compared samples: the runs of a
+    label-free comparison, the labelled samples of an isobaric one (`extra`
+    then says kind 'isobaric', the plex, its channels and the fractions)."""
     for level, (long, annotations) in levels.items():
         file_manager.store_data(dataset_id, f'quant_{level}', long)
         file_manager.store_data(dataset_id, f'quant_{level}_annotations', annotations)
@@ -62,7 +64,8 @@ def store(file_manager, dataset_id, levels, runs, design, sources, tool):
         'level': 'proteoform' if 'proteoform' in levels else 'feature',
     })
     file_manager.store_data(
-        dataset_id, 'quant_manifest', {**contract.manifest(levels, sources), 'runs': runs, 'tool': tool},
+        dataset_id, 'quant_manifest',
+        {**contract.manifest(levels, sources), 'runs': runs, 'tool': tool, **(extra or {})},
     )
 
 
@@ -92,6 +95,15 @@ class QuantSession:
         return self.file_manager.result_exists(self.dataset_id, name)
 
     # -- what is stored -------------------------------------------------
+    @property
+    def isobaric(self):
+        """True for a comparison of labelled samples (TMT, iTRAQ)."""
+        return self.manifest.get('kind') == 'isobaric'
+
+    @property
+    def sample_noun(self):
+        return 'sample' if self.isobaric else 'run'
+
     @property
     def levels(self):
         return list(self.manifest['levels'])

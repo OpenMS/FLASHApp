@@ -8,10 +8,13 @@ from os import makedirs, listdir
 from shutil import copyfile, rmtree
 from os.path import join, splitext, basename, exists, dirname
 
-from src import sample_type
+import polars as pl
+
+from src import analysis, sample_type
+from src.quant import isobaric
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
-from src.quant.run import CONSENSUS_EXCLUDE, compare_runs
+from src.quant.run import CONSENSUS_EXCLUDE, compare_isobaric, compare_runs
 from src import flashida
 from src.workflow.WorkflowManager import WorkflowManager
 
@@ -87,44 +90,60 @@ TAG_COLUMNS = [
 ]
 
 
-# Widget of the Samples and groups tab that switches the comparison on
-COMPARE_KEY = 'compare-runs'
-COMPARE_HELP = (
-    'Link the masses of the selected runs and compare their abundances between conditions. '
-    'FLASHDeconv then also quantifies every mass from its raw signal (-quant), and '
-    'FLASHQuantConsensus links the runs. The comparison opens in the Viewer as '
-    '"Comparison: ..." in the experiment selector. Needs at least two runs.'
-)
+def _no_preset_buttons(*args, **kwargs):
+    return None
 
 
-def samples_and_groups(workflow, what):
-    """Tab 1 of a workflow's configuration: compare the runs or not, and the
-    condition of each run. `what` names what is compared (masses, proteoforms)."""
-    workflow.ui.input_widget(
-        COMPARE_KEY, name='Compare the runs', widget_type='checkbox', default=False,
-        help=COMPARE_HELP, reactive=True,
-    )
-    compare = st.session_state.get(
-        f'{workflow.parameter_manager.param_prefix}{COMPARE_KEY}', workflow.params.get(COMPARE_KEY, False)
-    )
-    if compare:
+def samples_and_groups(workflow, quant, identify):
+    """Tab 1 of the configuration: which sample is which. Label-free: the
+    condition of each run. Isobaric: the sample and condition of each label."""
+    if quant == analysis.LABEL_FREE:
+        what = 'proteoforms' if identify else 'masses'
         st.caption(
             f'Give each run its condition (for example *control* and *treated*). The comparison '
             f'tests which {what} differ between two conditions; at least three runs, '
             'ideally two or more per condition. You can still change the conditions later in '
             'the Viewer with **Edit comparison**.'
         )
+        workflow.ui.experimental_design('mzML-files', name='Samples')
+    elif quant == analysis.ISOBARIC:
+        isobaric_samples(workflow)
     else:
-        st.caption(f'Switch on **Compare the runs** to see which {what} go up or down between conditions.')
-    workflow.ui.experimental_design('mzML-files', name='Samples')
-    return compare
+        st.caption(
+            'Choose a quantification above to compare samples: **Label-free** when each sample '
+            'is its own run, **Isobaric labels** when the samples were labelled and pooled.'
+        )
 
 
-def comparison_settings(workflow, compare):
-    """Last tab of a workflow's configuration: how the runs are linked."""
-    if not compare:
-        st.info('Switch on **Compare the runs** in the first tab to link and compare the runs.')
-        return
+def isobaric_samples(workflow):
+    """The sample and condition of each label (channel) of the chosen plex."""
+    plex = analysis.plex(workflow.current_params())
+    channels = isobaric.load_channels(workflow.workflow_dir, plex)
+    st.caption(
+        f'Each label of the {isobaric.label(plex)} is one sample. Name the samples and give each '
+        'its condition (for example *control* and *treated*); labels with the same condition are '
+        'replicates, a label without a condition is left out of the test. The selected runs count '
+        'as fractions of the same labelled samples. You can still change the conditions later in '
+        'the Viewer with **Edit comparison**.'
+    )
+    edited = st.data_editor(
+        channels.to_pandas(),
+        column_config={
+            'channel': st.column_config.TextColumn('Label', disabled=True),
+            'sample': st.column_config.TextColumn('Sample'),
+            'condition': st.column_config.TextColumn('Condition'),
+        },
+        hide_index=True, use_container_width=True, num_rows='fixed',
+        key=f'isobaric_channels_{plex}',
+    )
+    saved = isobaric.save_channels(workflow.workflow_dir, pl.from_pandas(edited), plex)
+    conditions = {c for c in saved['condition'] if c}
+    if len(conditions) < 2:
+        st.info('Give at least two conditions to test which proteoforms change.', icon='💡')
+
+
+def comparison_settings(workflow):
+    """The label-free comparison's tab: how the runs are linked."""
     st.caption(
         'FLASHQuantConsensus links the features of the runs by mass and retention time and '
         'fills a run where a feature was not detected from its signal there (match between runs).'
@@ -136,11 +155,11 @@ def comparison_settings(workflow, compare):
 
 
 def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None):
-    """The comparison after the per-run loop, when switched on. False on failure."""
-    if not workflow.params.get(COMPARE_KEY, False):
+    """The label-free comparison after the per-run loop. False on failure."""
+    if analysis.quantification(workflow.params) != analysis.LABEL_FREE:
         return True
     if len(dataset_ids) < 2:
-        workflow.logger.log('Compare the runs needs at least two runs: no comparison made.')
+        workflow.logger.log('Label-free quantification needs at least two runs: no comparison made.')
         return True
     return compare_runs(
         workflow, tool, dataset_ids, mzmls, workflow.params.get('mzML-files', []), prsm_key=prsm_key,
@@ -152,19 +171,17 @@ def empty_tsv(path, header):
     with open(path, 'w') as f:
         f.write('\t'.join(header) + '\n')
 
-# Switches the identification on (Describe experiment): FLASHTnT searches the
-# deconvolved spectra against a protein database. Off, a run stops after
-# FLASHDeconv, as for MS1-only data, intact masses or a sample without database.
-IDENTIFY_KEY = 'identify'
+IDENTIFY_KEY = analysis.IDENTIFY_KEY
+COMPARE_KEY = analysis.COMPARE_KEY
 IDENTIFY_HELP = (
-    'Search the deconvolved spectra against a protein database (FLASHTnT), so that masses '
-    'become proteoforms and proteins. Needs fragmentation spectra and a database. Switch it '
-    'off for MS1-only or intact-mass runs, or when no database fits the sample: the runs are '
-    'then deconvolved only, and a comparison of runs compares masses.'
+    'Search the fragmentation spectra against a protein database (FLASHTnT), so that masses '
+    'become proteoforms and proteins. Needs MS/MS spectra and a database (FASTA). Switch it '
+    'off for MS1-only or intact-mass runs, or when no database fits the sample.'
 )
 
 # FLASHDeconv parameters the workflow sets itself
-FLASHDECONV_EXCLUDE = ['ida_log', 'quant']  # -quant follows Compare the runs
+# -quant follows label-free quantification, -iq:type the label choice
+FLASHDECONV_EXCLUDE = ['ida_log', 'quant', 'iq:type']
 
 # FLASHDeconv's outputs: (parameter, file name in the run's folder)
 FLASHDECONV_OUTPUTS = [
@@ -223,6 +240,10 @@ class TopDownWorkflow(WorkflowManager):
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
         self.tool_name = 'FLASHTaggerViewer'
         adopt_legacy_inputs(st.session_state["workspace"], self.workflow_dir)
+        # The Native and Lysate presets are applied by the Sample choice of
+        # Your analysis, not by buttons of their own
+        # (a module-level function: the workflow object is pickled for its run)
+        self.ui.preset_buttons = _no_preset_buttons
 
     def upload(self) -> None:
         t = st.tabs(["MS data", "Database (for identification)"])
@@ -236,43 +257,125 @@ class TopDownWorkflow(WorkflowManager):
             self.ui.upload_widget(key="fasta-file", name="Database", file_types=DATABASE_TYPES,
                                   fallback='example-data/workspaces/default/flashtnt/input-files/fasta-file/example_database.fasta')
 
+    def current_params(self) -> dict:
+        """The parameters with the values the widgets hold in this rerun
+        (self.params is stale within a fragment rerun)."""
+        prefix = self.parameter_manager.param_prefix
+        current = dict(self.params)
+        current.update({k[len(prefix):]: v for k, v in st.session_state.items() if k.startswith(prefix)})
+        return current
+
     def identifying(self) -> bool:
         """Whether the runs are searched (the reactive widget's current value)."""
-        return bool(st.session_state.get(
-            f'{self.parameter_manager.param_prefix}{IDENTIFY_KEY}', self.params.get(IDENTIFY_KEY, True)
-        ))
+        return bool(self.current_params().get(IDENTIFY_KEY, True))
+
+    def _choice(self, key, options, labels, default, label, help=None, selectbox=False):
+        """A segmented choice (or a selectbox) stored as the workflow parameter `key`."""
+        widget = f'{self.parameter_manager.param_prefix}{key}'
+        if st.session_state.get(widget) not in options:
+            stored = self.params.get(key, default)
+            st.session_state[widget] = stored if stored in options else default
+        if selectbox:
+            st.selectbox(label, options, format_func=lambda o: labels[o], key=widget, help=help)
+        else:
+            st.segmented_control(label, options, format_func=lambda o: labels[o], key=widget, help=help,
+                                 on_change=self._keep_choice, args=(widget, default))
+        self.parameter_manager.save_parameters()
+        return st.session_state[widget]
+
+    @staticmethod
+    def _keep_choice(widget, default):
+        # A click on the chosen option clears a segmented control: keep a choice
+        if st.session_state.get(widget) is None:
+            st.session_state[widget] = default
+
+    def _current_sample_type(self):
+        native_key = f"{self.parameter_manager.topp_param_prefix}FLASHTnT:1:native"
+        if native_key in st.session_state:
+            native = st.session_state[native_key]
+        else:
+            # Fresh from params.json: a preset applied in this rerun is not in self.params
+            native = self.parameter_manager.get_parameters_from_json().get("FLASHTnT", {}).get("native", False)
+        # The checkbox of a flag holds the ini's text, 'true' or 'false'
+        return sample_type.NATIVE if sample_type.is_on(native) else sample_type.LYSATE
+
+    def _sample_type_choice(self, current):
+        """Native or lysate sample: picking one applies its settings (presets.json)."""
+        key = 'topdown_sample_type'
+        st.session_state[key] = current
+        st.segmented_control(
+            'Sample', list(analysis.SAMPLE_LABELS), format_func=lambda o: analysis.SAMPLE_LABELS[o],
+            key=key, on_change=self._apply_sample_type, args=(key, current),
+            help=' '.join(f'**{analysis.SAMPLE_LABELS[t]}**: {h}' for t, h in analysis.SAMPLE_HELP.items()),
+        )
+        st.caption(analysis.SAMPLE_HELP[current])
+
+    def _apply_sample_type(self, key, current):
+        chosen = st.session_state.get(key)
+        if chosen and chosen != current:
+            self.ui._apply_preset_callback(chosen)
+
+    def analysis_section(self) -> None:
+        """Your analysis: the runs, whether and how they are identified and
+        quantified, and what a start will do. Drawn above the parameters, not
+        in a fragment: the tabs of configure() follow these choices."""
+        with st.container(border=True):
+            st.markdown('##### Your analysis')
+            # reactive: drawn in the page itself, so a change reruns the page
+            self.ui.select_input_file("mzML-files", name='MS data', multiple=True, reactive=True)
+            self.ui.input_widget(
+                IDENTIFY_KEY, name='Identify proteoforms', widget_type='checkbox', default=True,
+                help=IDENTIFY_HELP, reactive=True,
+            )
+            identify = self.identifying()
+            current_sample = self._current_sample_type()
+            if identify:
+                self.ui.select_input_file("fasta-file", name='Protein database', multiple=False, reactive=True)
+                self._sample_type_choice(current_sample)
+                self._recommend_sample_type(current_sample)
+            else:
+                st.caption('The runs are deconvolved only: no database is needed.')
+
+            quant = self._choice(
+                analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
+                analysis.quantification(self.params), 'Quantification',
+                help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
+            )
+            st.caption(analysis.QUANT_HELP[quant])
+            if quant == analysis.ISOBARIC:
+                self._choice(
+                    analysis.PLEX_KEY, list(isobaric.PLEXES), {p: isobaric.label(p) for p in isobaric.PLEXES},
+                    isobaric.DEFAULT_PLEX, 'Labels', selectbox=True,
+                    help='The isobaric labelling reagent of the samples (FLASHDeconv -iq:type).',
+                )
+
+            params = self.current_params()
+            selected = params.get('mzML-files') or []
+            selected = [selected] if isinstance(selected, str) else selected
+            database = params.get('fasta-file')
+            st.info(analysis.summary(
+                len(selected), identify, current_sample, database if isinstance(database, str) else None,
+                quant, analysis.plex(params),
+            ), icon='🧭')
 
     @st.fragment
     def configure(self) -> None:
-        # Input File Selection (reactive: the recommendation and the samples follow it)
-        self.ui.select_input_file("mzML-files", multiple=True, reactive=True)
-        self.ui.input_widget(
-            IDENTIFY_KEY, name='Identify proteoforms', widget_type='checkbox', default=True,
-            help=IDENTIFY_HELP, reactive=True,
-        )
-        identify = self.identifying()
-        if identify:
-            self._recommend_sample_type()
-            self.ui.select_input_file("fasta-file", multiple=False)
-            # Decoy database size toggle
-            self.ui.input_widget(
-                'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
-                help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
-            )
-        else:
-            st.caption('The runs are deconvolved only: no database is needed.')
-
+        params = self.current_params()
+        identify = bool(params.get(IDENTIFY_KEY, True))
+        quant = analysis.quantification(params)
         # One tab per analysis step, in the order they run
         steps = ["Samples and groups", "Deconvolution"]
         if identify:
             steps += ["Identification", "Fragment annotation"]
-        steps += ["Comparison"]
+        if quant == analysis.LABEL_FREE:
+            steps += ["Linking runs"]
         t = st.tabs([f"**{i} · {step}**" for i, step in enumerate(steps, start=1)])
         with t[0]:
-            compare = samples_and_groups(self, 'proteoforms' if identify else 'masses')
+            samples_and_groups(self, quant, identify)
         with t[1]:
+            exclude = FLASHDECONV_EXCLUDE + ([] if quant == analysis.ISOBARIC else ['iq:'])
             self.ui.input_TOPP(
-                'FLASHDeconv', exclude_parameters=FLASHDECONV_EXCLUDE, display_subsections=True,
+                'FLASHDeconv', exclude_parameters=exclude, display_subsections=True,
                 display_tool_name=False, flag_parameters=FLASHDECONV_FLAGS,
             )
         if identify:
@@ -287,6 +390,11 @@ class TopDownWorkflow(WorkflowManager):
                     custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
                     flag_parameters=FLASHTNT_FLAGS,
                 )
+                # Decoy database size (set with the sample type)
+                self.ui.input_widget(
+                    'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
+                    help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
+                )
             with t[3]:
                 # FLASHAnnotator Configuration (ion types follow FLASHTnT)
                 self.ui.input_TOPP(
@@ -296,12 +404,13 @@ class TopDownWorkflow(WorkflowManager):
                     display_tool_name=False,
                     flag_parameters=FLASHANNOTATOR_FLAGS,
                 )
-        with t[-1]:
-            comparison_settings(self, compare)
+        if quant == analysis.LABEL_FREE:
+            with t[-1]:
+                comparison_settings(self)
 
-    def _recommend_sample_type(self) -> None:
-        """Recommend the Native or Lysate preset for the selected files, and
-        offer to apply it when the current settings differ."""
+    def _recommend_sample_type(self, current) -> None:
+        """Recommend native or lysate settings for the selected files, and
+        offer to apply them when the current ones differ."""
         selected = st.session_state.get(
             f"{self.parameter_manager.param_prefix}mzML-files", self.params.get("mzML-files")
         )
@@ -320,23 +429,17 @@ class TopDownWorkflow(WorkflowManager):
             if recommendation.runs:
                 st.warning(recommendation.reason(), icon="⚠️")
             return
-        native_key = f"{self.parameter_manager.topp_param_prefix}FLASHTnT:1:native"
-        if native_key in st.session_state:
-            native = st.session_state[native_key]
-        else:
-            # Fresh from params.json: a preset applied in this rerun is not in self.params
-            native = self.parameter_manager.get_parameters_from_json().get("FLASHTnT", {}).get("native", False)
-        current = sample_type.NATIVE if native else sample_type.LYSATE
-        text = f"**Recommended: {recommendation.sample_type} settings.** {recommendation.reason()}"
+        label = analysis.SAMPLE_LABELS[recommendation.sample_type].lower()
+        text = f"**These runs look like {label}.** {recommendation.reason()}"
         if recommendation.unreadable:
             text += " Files not yet converted to mzML are not counted."
         if current == recommendation.sample_type:
-            st.success(text + " The current settings match.", icon="✅")
+            st.success(text, icon="✅")
             return
         c1, c2 = st.columns([4, 1], vertical_alignment="center")
-        c1.info(text + f" The current settings are for {current.lower()} samples.", icon="💡")
+        c1.info(text, icon="💡")
         c2.button(
-            f"Use {recommendation.sample_type} settings",
+            f"Use {recommendation.sample_type.lower()} settings",
             key="apply_recommended_sample_type",
             on_click=self.ui._apply_preset_callback,
             args=(recommendation.sample_type,),
@@ -437,6 +540,18 @@ class TopDownWorkflow(WorkflowManager):
             logger=self.logger
         )
 
+    def _parse_isobaric(self, dataset_id, plex):
+        """The reporter ions of every fragmentation spectrum, for the Viewer."""
+        stored = self.file_manager.get_results(dataset_id, ['quant_tsv'], partial=True).get('quant_tsv')
+        frame = isobaric.read_quant(stored, plex)
+        if frame.is_empty():
+            self.logger.log(
+                f'No {isobaric.label(plex)} reporter ions were found in {dataset_id}. Check the labels and '
+                'that the fragmentation spectra cover the reporter region (HCD).'
+            )
+        self.file_manager.store_data(dataset_id, 'isobaric_dfs', frame)
+        self.file_manager.store_data(dataset_id, 'isobaric_plex', {'plex': plex, 'channels': isobaric.channel_names(plex)})
+
     def execution(self) -> bool:
         # Get input files
         try:
@@ -460,7 +575,13 @@ class TopDownWorkflow(WorkflowManager):
             return False
 
         base_path = dirname(self.workflow_dir)
-        compare = self.params.get(COMPARE_KEY, False)
+        quant = analysis.quantification(self.params)
+        plex = analysis.plex(self.params)
+        # -quant follows label-free quantification, -iq:type the labels
+        deconv_params = {'iq:type': plex if quant == analysis.ISOBARIC else 'none'}
+        if quant == analysis.LABEL_FREE:
+            deconv_params['quant'] = True
+        self.logger.log(f'Analysis: {analysis.name(identify, quant, plex)}.')
         dataset_ids = []
         errors = []
         # Process files in sequence
@@ -481,7 +602,7 @@ class TopDownWorkflow(WorkflowManager):
                 io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
                 if not self.executor.run_topp(
                     'FLASHDeconv', input_output=io,
-                    custom_params={'quant': True} if compare else {},
+                    custom_params=deconv_params,
                 ):
                     raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
 
@@ -499,6 +620,8 @@ class TopDownWorkflow(WorkflowManager):
                 if identify:
                     self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
                 self._parse(dataset_id, identify)
+                if quant == analysis.ISOBARIC:
+                    self._parse_isobaric(dataset_id, plex)
 
                 # Remove temporary folder
                 rmtree(folder_path)
@@ -508,9 +631,12 @@ class TopDownWorkflow(WorkflowManager):
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
 
+        tool = 'flashtnt' if identify else 'flashdeconv'
+        if quant == analysis.ISOBARIC:
+            return compare_isobaric(self, tool, dataset_ids, plex) is not None
         if identify:
-            return run_comparison(self, 'flashtnt', dataset_ids, in_mzmls, prsm_key='prsms_tsv')
-        return run_comparison(self, 'flashdeconv', dataset_ids, in_mzmls)
+            return run_comparison(self, tool, dataset_ids, in_mzmls, prsm_key='prsms_tsv')
+        return run_comparison(self, tool, dataset_ids, in_mzmls)
 
 
 # The former workflows, for queued jobs and the workspace sync of older builds

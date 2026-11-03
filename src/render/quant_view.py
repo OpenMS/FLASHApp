@@ -11,6 +11,7 @@ conditions of the runs and the analysis settings.
 import streamlit as st
 from openms_insight import StateManager, defer_reruns
 
+from src.quant import isobaric
 from src.quant.session import LEVEL_NAMES, QuantSession, comparisons
 from src.render import quant_cells
 from src.render.layout_editor import get_saved_layout, layout_editor
@@ -41,7 +42,11 @@ def comparison_names(file_manager, tool=None):
         manifest = file_manager.get_results(dataset_id, ['quant_manifest'])['quant_manifest']
         stamp = dataset_id.rsplit('_', 1)[-1]
         when = f'{stamp[:4]}-{stamp[4:6]}-{stamp[6:8]} {stamp[9:11]}:{stamp[11:13]}' if len(stamp) >= 13 else stamp
-        names[f"Comparison: {len(manifest['runs'])} runs ({when})"] = dataset_id
+        if manifest.get('kind') == 'isobaric':
+            what = f"{isobaric.label(manifest.get('plex', ''))}, {len(manifest['runs'])} samples"
+        else:
+            what = f"{len(manifest['runs'])} runs"
+        names[f"Comparison: {what} ({when})"] = dataset_id
     return names
 
 
@@ -72,7 +77,7 @@ def _layout_dialog(file_manager):
 def _comparison_dialog(file_manager, dataset_id):
     session = QuantSession(_own_file_manager(file_manager), dataset_id)
     st.caption(
-        'Which runs belong to which condition, which level to compare and how. '
+        'Which runs (or labelled samples) belong to which condition, which level to compare and how. '
         'The defaults suit most experiments; **Apply** recomputes the comparison.'
     )
     if quant_cells.settings_form(session):
@@ -96,7 +101,13 @@ def render(file_manager, dataset_id):
     level = session.level
     if len(session.levels) == 1 and tool == 'flashtnt':
         st.caption('No PrSM identified a compared feature, so only features can be compared.')
-    st.caption(f'Comparing **{LEVEL_NAMES[level].lower()}** of {len(session.runs)} runs. '
+    if session.isobaric:
+        fractions = len(session.manifest.get('fractions', []))
+        compared = (f"{len(session.runs)} {isobaric.label(session.manifest.get('plex', ''))} samples"
+                    + (f' over {fractions} runs' if fractions > 1 else ''))
+    else:
+        compared = f'{len(session.runs)} runs'
+    st.caption(f'Comparing **{LEVEL_NAMES[level].lower()}** of {compared}. '
                'Switch the level and set the conditions with **Edit comparison**.')
     # Selections are per comparison and level: an index means another entry on another level
     state_manager = StateManager(session_key=f'flash_quant_state_{tool}_{dataset_id}_{level}')

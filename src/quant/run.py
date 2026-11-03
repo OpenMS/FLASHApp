@@ -12,7 +12,7 @@ from shutil import rmtree
 from os.path import basename, join, splitext
 from pathlib import Path
 
-from src.quant import contract, session
+from src.quant import contract, isobaric, session
 from src.workflow import ExperimentalDesign
 
 TOOL = 'FLASHQuantConsensus'
@@ -87,4 +87,33 @@ def compare_runs(workflow, tool, dataset_ids, mzmls, selected_files, prsm_key=No
         {'runs': list(dataset_ids), 'tool': TOOL}, tool,
     )
     rmtree(folder, ignore_errors=True)
+    return dataset_id
+
+
+def compare_isobaric(workflow, tool, dataset_ids, plex):
+    """Store the comparison of the labelled samples of the runs `dataset_ids`
+    (fractions of one labelled set): the reporter ions of every spectrum
+    (stored by the workflow as `isobaric_dfs`), with the PrSMs of an
+    identified run. Returns the comparison's dataset id, or None when no
+    spectrum carried reporter ions."""
+    file_manager, logger = workflow.file_manager, workflow.logger
+    channels = isobaric.load_channels(workflow.workflow_dir, plex)
+    runs = []
+    for dataset_id in dataset_ids:
+        quant = file_manager.get_results(dataset_id, ['isobaric_dfs'], use_polars=True)['isobaric_dfs'].collect()
+        prsm_path = file_manager.get_results(dataset_id, ['prsms_tsv'], partial=True).get('prsms_tsv')
+        runs.append((dataset_id, quant, isobaric.read_prsms(prsm_path) if prsm_path else None))
+    logger.log(f'-> Comparing the {len(channels)} labelled samples ({isobaric.label(plex)})...')
+    levels = isobaric.build(runs, channels)
+    if not levels:
+        logger.log('No spectrum carried reporter ions with a precursor mass: no comparison made.')
+        return None
+    dataset_id = f"comparison_{time.strftime('%Y%m%d-%H%M%S')}"
+    samples = list(channels['sample'])
+    session.store(
+        file_manager, dataset_id, levels, samples, isobaric.design(channels),
+        {'runs': list(dataset_ids), 'tool': 'FLASHDeconv', 'plex': plex}, tool,
+        extra={'kind': 'isobaric', 'plex': plex, 'fractions': list(dataset_ids),
+               'channels': list(channels['channel'])},
+    )
     return dataset_id

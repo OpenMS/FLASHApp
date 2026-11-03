@@ -39,9 +39,14 @@ def _start_from(name):
     st.session_state[revision] = st.session_state.get(revision, 0) + 1
 
 
-def _defaults(file_manager):
+def _defaults(file_manager, labelled=False):
     defaults = {DECONVOLUTION: topdown_layout.deconvolution_default(file_manager)}
     defaults.update(TNT_DEFAULT_LAYOUTS)
+    if labelled:
+        defaults = {
+            name: topdown_layout.with_reporters(rows, topdown_layout.REPORTER_AFTER)
+            for name, rows in defaults.items()
+        }
     return defaults
 
 
@@ -56,9 +61,14 @@ def _dialog(file_manager):
     st.caption(
         _HELP + " Until a layout is saved, each experiment starts from the default "
         "of its run: **Deconvolution** for a run deconvolved only, **Native** or "
-        "**Lysate** for an identified run, as it was searched." + note + " Start from any of them:"
+        "**Lysate** for an identified run, as it was searched, each with the reporter "
+        "ions of a run with isobaric labels." + note + " Start from any of them:"
     )
-    defaults = _defaults(file_manager)
+    labelled = st.toggle(
+        'With reporter ions (TMT, iTRAQ)', key='topdown_layout_start_labelled',
+        value=bool(file_manager.get_results_list(['isobaric_dfs'])),
+    )
+    defaults = _defaults(file_manager, labelled)
     with st.container(horizontal=True):
         for name in defaults:
             st.button(f'{name} default', key=f'topdown_layout_start_{name}',
