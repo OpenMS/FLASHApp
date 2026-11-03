@@ -202,6 +202,7 @@ def build_volcano(session, state_manager, key, height):
             # A box or lasso, or All changed / Higher / Lower, picks entries
             # for the GO enrichment cell
             multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
+            selection_presets=True,
             preset_labels={'up': f'Higher in {compared}', 'down': f'Lower in {compared}'},
             title=f'{compared} vs. {reference}',
             up_color='#E74C3C', down_color='#3498DB', ns_color='#95A5A6',

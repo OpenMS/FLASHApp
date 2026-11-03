@@ -108,10 +108,10 @@ Search the list in the Layout Manager by name, or expand its groups:
 
 The GO enrichment component tests which Gene Ontology terms (biological process, cellular component, molecular function) are over-represented in the proteins you select, against all proteins identified in the run. Select several at once:
 
-- tick rows in the *Proteins*, *Proteoforms*, *PrSMs* or *Protein table* (the box in the header ticks every row shown; Shift-click ticks a range),
-- or choose **Select (box)** or **Select (lasso)** above the *Proteoform heatmap* and drag over it. Shift adds to the selection, Alt removes from it.
+- in the *Proteins*, *Proteoforms*, *PrSMs* or *Protein table*, turn on the check boxes with the check mark button of the table's toolbar and tick rows (the box in the header ticks every row shown; Shift-click ticks a range),
+- or pick box or lasso select in the mode bar of the *Proteoform heatmap* and drag over it. Shift adds to the selection.
 
-Every component marks the selected proteins, and **Clear selection** starts over. The GO terms of each protein are looked up once at MyGene.info by its UniProt accession (this needs a network connection) and kept in the workspace. The test is a one-sided Fisher's exact test, adjusted for the number of terms (Benjamini-Hochberg).
+Every component marks the selected proteins, and **Clear selection** (in the GO component, or the eraser in a plot's mode bar) starts over. The bar chart shows the most significant terms; how many is set next to the category. The GO terms of each protein are looked up once at MyGene.info by its UniProt accession (this needs a network connection) and kept in the workspace. The test is a one-sided Fisher's exact test, adjusted for the number of terms (Benjamini-Hochberg).
 
 The **Sequence view** of a run that was not identified shows the sequence you enter on **Sequence Input**.
 
@@ -121,7 +121,7 @@ The **Sequence view** of a run that was not identified shows the sequence you en
 
 With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date). Selecting it shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap, quality control and the GO enrichment of the entries you select.
 
-To test GO terms, select entries in the volcano plot (drag a box or lasso, or press **All changed**, **Higher in …** or **Lower in …**), tick rows in the comparison table, or select rows on the clustered heatmap. The background is every protein of the entries tested.
+To test GO terms, select entries in the volcano plot (press **All changed**, **Higher in …** or **Lower in …**, or use box or lasso select in its mode bar), tick rows in the comparison table after turning its check boxes on, or select rows on the clustered heatmap with box or lasso select. The background is every protein of the entries tested.
 
 **Edit comparison** changes the conditions, the level compared (features, proteoforms or proteins; the latter two need identification) and the statistics (fold-change and adjusted p-value cutoffs, filtering, imputation, normalization, test). The comparison is recomputed in seconds; nothing is run again.
 

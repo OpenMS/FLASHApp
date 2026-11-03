@@ -21,20 +21,22 @@ from openms_insight.core.cache import CacheMissError
 from src.common.common import show_fig
 from src.render import go_terms
 
-# Terms in the bar chart
+# Terms the bar chart can show
+TERM_COUNTS = [10, 15, 20, 30, 50]
 TOP_TERMS = 15
 # Results kept per session (one per selection)
 _RESULTS_KEPT = 8
 
 RUN_HINT = (
-    'Select proteins to test their GO terms: tick them in the protein, proteoform or '
-    'PrSM tables (the box in the header ticks every row shown, Shift-click ticks a range), '
-    'or drag a box or lasso on the proteoform heatmap after choosing **Select** in its toolbar.'
+    'Select proteins to test their GO terms: use box or lasso select in the mode bar of the '
+    'proteoform heatmap (Shift adds), or turn on the check boxes of the protein, proteoform or '
+    'PrSM table with its check mark button and tick rows.'
 )
 COMPARISON_HINT = (
-    'Select {nouns} to test their GO terms: drag a box or lasso on the volcano plot, or use '
-    'its **All changed**, **Higher** and **Lower** buttons; tick rows in the comparison table; '
-    'or select rows on the clustered heatmap. Shift adds to the selection.'
+    'Select {nouns} to test their GO terms: use **All changed**, **Higher** or **Lower** above '
+    'the volcano plot, or box or lasso select in the mode bar of the volcano plot or the clustered '
+    'heatmap (Shift adds); or turn on the check boxes of the comparison table with its check mark '
+    'button and tick rows.'
 )
 
 TERM_COLUMNS = [
@@ -78,8 +80,8 @@ def _result(file_manager, selected, background):
     return digest, store[digest]
 
 
-def _bar_chart(table, category):
-    top = table.sort_values('p_adj').head(TOP_TERMS).iloc[::-1]
+def _bar_chart(table, category, count):
+    top = table.sort_values('p_adj').head(count).iloc[::-1]
     score = -np.log10(top['p_adj'].clip(lower=1e-300))
     fig = go.Figure(go.Bar(
         x=score, y=top['GO_Term'], orientation='h',
@@ -141,10 +143,17 @@ def _render(file_manager, scope, state_manager, identifier, selected, background
     if not result['fg_count']:
         st.info('None of the selected proteins has a GO annotation at MyGene.info.')
         return
-    category = st.segmented_control(
-        'GO category', list(go_terms.CATEGORIES), default='BP', key=f'{key}_category',
-        format_func=go_terms.CATEGORIES.get, label_visibility='collapsed',
-    ) or 'BP'
+    pick, size = st.columns([4, 1], vertical_alignment='bottom')
+    with pick:
+        category = st.segmented_control(
+            'GO category', list(go_terms.CATEGORIES), default='BP', key=f'{key}_category',
+            format_func=go_terms.CATEGORIES.get, label_visibility='collapsed',
+        ) or 'BP'
+    with size:
+        count = st.selectbox(
+            'Terms in the chart', TERM_COUNTS, index=TERM_COUNTS.index(TOP_TERMS), key=f'{key}_count',
+            help='How many of the most significant terms the bar chart shows. The table lists all of them.',
+        )
     table = result['categories'][category]
     st.caption(
         f"{result['fg_count']} of {result['fg_total']} selected and {result['bg_count']} of "
@@ -154,7 +163,7 @@ def _render(file_manager, scope, state_manager, identifier, selected, background
     if table is None or not len(table):
         st.info(f'The selected proteins have no {go_terms.CATEGORIES[category].lower()} terms.')
         return
-    show_fig(_bar_chart(table, category), f'GO-{category}-{scope}')
+    show_fig(_bar_chart(table, category, count), f'GO-{category}-{scope}')
     _term_table(file_manager, scope, digest, category, go_terms.term_frame(table, labels))(
         key=f'{key}_terms_{category}', state_manager=state_manager, height=360,
     )
