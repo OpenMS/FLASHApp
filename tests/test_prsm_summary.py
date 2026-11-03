@@ -1,5 +1,6 @@
 """The PrSM summary rows (src/render/prsm_summary.py)."""
 
+import shutil
 from pathlib import Path
 
 import polars as pl
@@ -89,10 +90,15 @@ DEMO = Path('example-data/workspaces/default/flashtnt/cache')
 
 
 @pytest.mark.skipif(not DEMO.exists(), reason='demo workspace not present')
-def test_demo_workspace():
+def test_demo_workspace(tmp_path):
     from src.workflow.FileManager import FileManager
 
-    file_manager = FileManager(DEMO.parent, DEMO)
+    # A copy of the cache index, so the demo workspace is not touched
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    shutil.copy(DEMO / 'cache.db', cache / 'cache.db')
+    (cache / 'files').symlink_to(DEMO.resolve() / 'files')
+    file_manager = FileManager(cache, cache)
     datasets = file_manager.get_results_list(['protein_dfs'])
     assert datasets
     for dataset_id in datasets:
