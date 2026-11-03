@@ -19,6 +19,7 @@ from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.dialogs import layout_button
 from src.render import quant_view
+from src.render.tool_results import tool_results_button
 
 TOOL = 'topdown'
 
@@ -113,8 +114,10 @@ comparison_names = quant_view.comparison_names(file_manager)
 comparison_ids = set(comparison_names.values())
 
 if len(results) == 0 and not comparison_names:
-    layout_button(file_manager)
-    st.error('No results to show yet. Please run a workflow first!')
+    with st.container(horizontal=True):
+        layout_button(file_manager)
+        tool_results_button()
+    st.error('No results to show yet. Run the analysis first, or add the output of the tools with **Add tool results**.')
     st.stop()
 
 run_names = [file_manager.get_display_name(exp_id) for exp_id in results]
@@ -126,7 +129,12 @@ display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items(
 # The saved layout sets the number of experiments (and side by side); without
 # one, a single experiment
 experiments, side_by_side = topdown_layout.saved(file_manager) or ([None], False)
-edit_layout = lambda: layout_button(file_manager)
+
+
+def edit_layout():
+    layout_button(file_manager)
+    tool_results_button()
+
 
 if comparison_selected():
     selector(0, display_names, lambda: quant_view.buttons(file_manager, st.session_state[selection_key(0)]))

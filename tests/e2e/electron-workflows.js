@@ -16,7 +16,7 @@ async function setCheckbox(t, label, checked) {
 }
 
 async function runWorkflow(t, workflowPage, inputs, identify) {
-  // One page per step: Upload data, Describe experiment, Run analysis
+  // One page per step: Describe experiment (with the files), Run analysis
   await t.open(`${workflowPage}Configure`);
   for (const [label, file] of inputs) await t.choose(label, file);
   await setCheckbox(t, "Identify proteoforms", identify);
