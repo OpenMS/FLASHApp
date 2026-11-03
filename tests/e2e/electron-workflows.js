@@ -65,10 +65,10 @@ async function checkViewer(t, viewerPage, experiment, extraSelector) {
 }
 
 module.exports = async (t) => {
-  await runWorkflow(t, "TopDown", [["mzML-files", "example_fd.mzML"]], false);
+  await runWorkflow(t, "TopDown", [["MS data", "example_fd.mzML"]], false);
   await checkViewer(t, "TopDownViewer", "example_fd");
 
-  await runWorkflow(t, "TopDown", [["mzML-files", "GapA_5458mz_HCD.mzML"]], true);
+  await runWorkflow(t, "TopDown", [["MS data", "GapA_5458mz_HCD.mzML"]], true);
   const log = await t.page.locator("body").innerText();
   if (!log.includes("FLASHAnnotator")) throw new Error("The identification did not reach FLASHAnnotator");
   await checkViewer(t, "TopDownViewer", "GapA_5458mz_HCD");
