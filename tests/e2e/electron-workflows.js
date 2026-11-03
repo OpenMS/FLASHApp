@@ -9,8 +9,9 @@ const VIEW_TIMEOUT = 3 * 60 * 1000;
 async function setCheckbox(t, label, checked) {
   const box = t.page.getByRole("checkbox", { name: label }).first();
   if ((await box.isChecked()) !== checked) {
-    // Streamlit hides the input itself behind its styled box
-    await box.click({ force: true });
+    // Streamlit draws the input at 0x0 behind its styled box, so even a forced
+    // click on it fails ("outside of the viewport"); click its label instead.
+    await box.locator("xpath=ancestor::label[1]").click();
     await t.settle();
   }
 }
