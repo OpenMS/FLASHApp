@@ -40,7 +40,8 @@ Already ran the tools yourself? Add their output under **Tool results**.
 - **Deconvolution only** suits MS1-only or intact-mass runs, and samples no
   database describes (heavily modified proteins, antibodies, unknown samples):
   the masses are the result.
-- A reference proteome as FASTA comes from [UniProt](https://www.uniprot.org/proteomes).
+- A reference proteome as FASTA comes from [UniProt](https://www.uniprot.org/proteomes):
+  search it by organism or taxonomy ID under **Database** and add it in one click.
   Only proteins in the database can be identified.
 - To **compare runs** (which masses or proteoforms go up or down between
   conditions), upload every run of the experiment; you assign them to

@@ -237,6 +237,8 @@ class TopDownWorkflow(WorkflowManager):
             )
             self.ui.upload_widget(key="fasta-file", name="Database", file_types=DATABASE_TYPES,
                                   fallback='example-data/workspaces/default/flashtnt/input-files/fasta-file/example_database.fasta')
+            st.divider()
+            self.ui.uniprot_proteome_download("fasta-file")
 
     def current_params(self) -> dict:
         """The parameters with the values the widgets hold in this rerun
