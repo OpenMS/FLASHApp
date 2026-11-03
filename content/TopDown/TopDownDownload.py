@@ -26,7 +26,8 @@ targets = [
     'out_tsv', 'spec1_tsv', 'spec2_tsv', 'spec3_tsv', 'spec4_tsv', 'quant_tsv', 
     'toppic_ms1_msalign', 'toppic_ms1_feature', 'toppic_ms2_msalign', 
     'toppic_ms2_feature', 'out_deconv_mzML', 'anno_annotated_mzML', 
-    'FD_parameters_json'
+    'FD_parameters_json', 'FTnT_parameters_json', 'tags_tsv', 'protein_tsv',
+    'prsms_tsv', 'annotated_tsv', 'fragments_tsv',
 ]
 experiments = file_manager.get_results_list(targets, partial=True)
 

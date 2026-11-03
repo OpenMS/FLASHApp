@@ -25,14 +25,16 @@ def get_saved_layout(file_manager, dataset_id):
     return saved['layout'], saved['side_by_side']
 
 
-def layout_editor(file_manager, dataset_id, components, default_layout, key, start_layout=None):
+def layout_editor(file_manager, dataset_id, components, default_layout, key, start_layout=None,
+                  max_experiments=MAX_EXPERIMENTS):
     """Render the editor and persist the layout it submits.
 
     The saved format is unchanged from the previous Layout Manager:
     ``{'layout': [[[name, ...], ...], ...], 'side_by_side': bool}`` under
     ``file_manager.store_data(dataset_id, 'layout', ...)``.
 
-    ``start_layout`` (experiments -> rows -> names) replaces the editor's
+    ``max_experiments`` caps the experiments of the layout (a comparison has
+    one). ``start_layout`` (experiments -> rows -> names) replaces the editor's
     draft when given, without saving it; bump the revision with it.
 
     Returns True in the rerun that stored or removed the layout, so a caller
@@ -73,7 +75,7 @@ def layout_editor(file_manager, dataset_id, components, default_layout, key, sta
         saved_layout=saved[0] if saved else None,
         start_layout=start_layout,
         side_by_side=saved[1] if saved else False,
-        max_experiments=MAX_EXPERIMENTS,
+        max_experiments=max_experiments,
         max_columns=MAX_COLUMNS,
         revision=st.session_state[revision_key],
         server_error=error,

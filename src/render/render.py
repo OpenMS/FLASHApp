@@ -20,7 +20,7 @@ from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 import openms_insight
 from openms_insight import (
-    DeconvolvedSpectrum, Heatmap, MirrorPlot, Plot3D, ProteinSequenceView,
+    DeconvolvedSpectrum, Heatmap, LinePlot, MirrorPlot, Plot3D, ProteinSequenceView,
     ProteinStructureView, SeriesPlot, StateManager, Table, defer_reruns,
 )
 from openms_insight.core.cache import CacheMissError
@@ -29,6 +29,8 @@ from src.render import (
     hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
+from src.quant import isobaric
+from src.render.layout_editor.catalog import DECONV_COMPONENTS, ISOBARIC_COMPONENTS, TNT_COMPONENTS
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -44,7 +46,7 @@ def _code_version():
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
         hierarchy_data.__file__, prsm_data.__file__,
-        str(Path(__file__).with_name('compare.py')),
+        str(Path(__file__).with_name('quant_cells.py')),
     ):
         try:
             digest.update(Path(module).read_bytes())
@@ -189,21 +191,6 @@ TAG_COLUMNS = [
      'headerTooltip': 'Delta mass is the difference between the tag flanking mass and the (partial) proteoform mass, from its terminal to the tag boundary.'},
 ]
 
-QUANT_COLUMNS = [
-    {'title': 'Index', 'field': 'FeatureGroupIndex', 'sorter': 'number'},
-    {'title': 'Monoisotopic Mass', 'field': 'MonoisotopicMass', 'sorter': 'number'},
-    {'title': 'Average Mass', 'field': 'AverageMass', 'sorter': 'number'},
-    {'title': 'Start Retention Time (FWHM)', 'field': 'StartRetentionTime(FWHM)', 'sorter': 'number'},
-    {'title': 'End Retention Time (FWHM)', 'field': 'EndRetentionTime(FWHM)', 'sorter': 'number'},
-    {'title': 'Feature Group Quantity', 'field': 'FeatureGroupQuantity', 'sorter': 'number'},
-    # Twice, as in FLASHViewer (the second one is the first in the collapsed details)
-    {'title': 'Feature Group Quantity', 'field': 'FeatureGroupQuantity', 'sorter': 'number'},
-    {'title': 'Min Charge', 'field': 'MinCharge', 'sorter': 'number'},
-    {'title': 'Max Charge', 'field': 'MaxCharge', 'sorter': 'number'},
-    {'title': 'Most Abundant Charge', 'field': 'MostAbundantFeatureCharge', 'sorter': 'number'},
-    {'title': 'Isotope Cosine Score', 'field': 'IsotopeCosineScore', 'sorter': 'number'},
-]
-
 # Columns of the FLASHDeconv spectrum caches (see src/parse/masstable.py)
 SPECTRUM_COLUMNS = dict(
     mass_column='MonoMass', mass_intensity_column='SumIntensity',
@@ -238,7 +225,7 @@ FIXED_MODS_IDENTIFIER = 'fixed_mods'
 
 RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
-# off (not in FLASHQuant, whose table did not follow its selection)
+# off
 SCROLL = 'top'
 # Identification levels: proteins, the proteoforms of a protein,
 # the PrSMs of a proteoform (src/render/hierarchy_data.py)
@@ -311,6 +298,42 @@ _HIERARCHY_ROW = 33
 
 
 _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
+
+# Components with nothing to show for a run deconvolved only (the sequence
+# view then shows the Sequence Input sequence)
+IDENTIFICATION_ONLY = (
+    {c['name'] for c in TNT_COMPONENTS} - {c['name'] for c in DECONV_COMPONENTS} - {'sequence_view'}
+)
+
+ISOBARIC_ONLY = {c['name'] for c in ISOBARIC_COMPONENTS}
+
+
+def _plex(fm, ds):
+    """The labels a run was quantified with: (plex, channel names)."""
+    info = fm.get_results(ds, ['isobaric_plex'])['isobaric_plex'] if fm.result_exists(ds, 'isobaric_plex') else {}
+    plex = info.get('plex', isobaric.DEFAULT_PLEX)
+    return plex, info.get('channels') or isobaric.channel_names(plex)
+
+
+def _reporter_columns(channels):
+    columns = [
+        {'title': 'Scan', 'field': 'Scan', 'sorter': 'number'},
+        {'title': 'RT (min)', 'field': 'RT', 'sorter': 'number', **_fixed(2)},
+        {'title': 'Precursor mass', 'field': 'PrecursorMass', 'sorter': 'number', **_fixed(2),
+         'headerTooltip': 'Monoisotopic mass of the precursor (FLASHDeconv), in Daltons.'},
+        {'title': 'Charge', 'field': 'Charge', 'sorter': 'number'},
+        {'title': 'Identified as', 'field': 'Identified', 'sorter': 'string',
+         'headerTooltip': 'The protein of the best PrSM of the spectrum (FLASHTnT).'},
+        {'title': 'Labels found', 'field': 'QuantifiedChannels', 'sorter': 'number',
+         'headerTooltip': 'How many labels have a reporter ion in the spectrum.'},
+    ]
+    columns += [
+        {'title': name, 'field': name, 'sorter': 'number', 'formatter': 'scientific', 'formatterParams': {'precision': 2},
+         'headerTooltip': f'Reporter ion intensity of label {name}, corrected for isotope impurities.'}
+        for name in channels
+    ]
+    return columns
+
 
 # FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
 # PrSM mass table: every deconvolved mass of the identified spectrum
@@ -439,7 +462,7 @@ def _proteoform_heatmap(comp_name, file_manager, dataset_id):
             data=points.lazy(),
             x_column='rt', y_column='mass', intensity_column='score',
             interactivity={
-                'protein': 'index', 'pscan': 'scan_idx',
+                'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx',
                 'proteoform': 'proteoform_id', 'protein_group': 'protein_group',
             },
             on_select=_IDENTIFICATION_ON_SELECT,
@@ -675,7 +698,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             title=hierarchy_data.level_title('Proteoforms', hierarchy_data.key_figures(hits)['proteoforms']),
             index_field='proteoform_id', go_to_fields=['proteoform'],
             filters={'protein_group': 'protein_group'},
-            interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx'},
+            interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     else:
@@ -685,7 +708,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             title=hierarchy_data.level_title('PrSMs', hierarchy_data.key_figures(hits)['prsms']),
             index_field='index', go_to_fields=['Scan'],
             filters={'proteoform': 'proteoform_id'},
-            interactivity={'protein': 'index', 'pscan': 'scan_idx'},
+            interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     # All three are as tall as the one with the most rows, so that tables
@@ -719,6 +742,33 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
         ), {'height': TABLE_HEIGHT}
+
+    if comp_name == 'reporter_table':
+        plex, channels = _plex(fm, ds)
+        return _component(
+            Table, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
+            lambda: dict(
+                data=insight_data.reporter_table(fm, ds),
+                column_definitions=_reporter_columns(channels),
+                title=f'Reporter ions per spectrum ({isobaric.label(plex)})',
+                index_field='scan_idx', go_to_fields=['Scan'], interactivity={'scan': 'scan_idx'},
+                reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
+            ),
+            required=['isobaric_dfs', 'scan_table'],
+        ), {'height': TABLE_HEIGHT}
+
+    if comp_name == 'reporter_ions':
+        plex, channels = _plex(fm, ds)
+        mzs = dict(isobaric.PLEXES.get(plex, ('', []))[1])
+        return _component(
+            LinePlot, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
+            lambda: dict(
+                data=insight_data.reporter_ions(fm, ds, channels, [mzs.get(c, 0.0) for c in channels]),
+                filters={'scan': 'scan_idx'}, x_column='mz', y_column='intensity',
+                annotation_column='label', title='Reporter ions of the selected spectrum',
+                x_label='m/z', y_label='Intensity',
+            ),
+        ), {}
 
     if comp_name == 'mass_table':
         return _component(
@@ -830,7 +880,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     # FLASHViewer's checkbox colour
                     'color': '#6200EE',
                 }],
-                interactivity={'protein': 'index', 'pscan': 'scan_idx'},
+                interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
                 on_select={'tag': None, 'aa': None, 'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
@@ -869,7 +919,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 ),
                 column_definitions=TAG_COLUMNS, title='Tag Table',
                 index_field='TagIndex', go_to_fields=['Scan', 'StartPos', 'EndPos', 'TagSequence'],
-                filters={'pscan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
+                filters={'scan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
                 interactivity={'tag': 'TagIndex'}, on_select={'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
                 reset_sort_on=['protein'], pagination=False, float_precision='float64',
@@ -877,7 +927,8 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'sequence_view':
-        if tool == 'flashtnt':
+        # The proteoform of an identified run, else the Sequence Input sequence
+        if tool == 'flashtnt' or (tool == 'topdown' and fm.result_exists(ds, 'protein_dfs')):
             component = _component(
                 ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
                 ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings',
@@ -948,9 +999,6 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         component.on_structure_action(structure_action_handler(structure_dir(fm)))
         return component, {}
 
-    if comp_name == 'quant_visualization':
-        return None, {}
-
     raise ValueError(f'Unknown viewer component {comp_name!r}')
 
 
@@ -979,51 +1027,6 @@ def _structure(file_manager, dataset_id, protein_index):
     return structure
 
 
-def _render_quant(file_manager, dataset_id, state_manager, key):
-    table = _component(
-        Table, 'quant_table', file_manager, dataset_id, ['quant_dfs'],
-        lambda: dict(
-            data=insight_data.quant_table(file_manager, dataset_id),
-            column_definitions=QUANT_COLUMNS, title='Feature groups',
-            index_field='FeatureGroupIndex', interactivity={'feature_group': 'FeatureGroupIndex'},
-            go_to_fields=[], reclick=RECLICK, reset_sort=True, pagination=False, float_precision='float64',
-        ),
-    )
-    traces = _component(
-        Plot3D, 'quant_traces', file_manager, dataset_id, ['quant_dfs'],
-        lambda: dict(
-            data=insight_data.quant_traces(file_manager, dataset_id),
-            filters={'feature_group': 'FeatureGroupIndex'},
-            x_column='mz', y_column='rt', z_column='intensity', mode='lines',
-            trace_column='trace', series_column='charge', series_name_template='Charge: {}',
-            color='#3366CC', title='Feature group signals',
-            x_label='m/z', y_label='retention time', z_label='intensity',
-            # FLASHViewer's plot: plain title, no border, Plotly's PNG download
-            title_bold=False, border=False, export_format='png',
-        ),
-    )
-    # FLASHViewer drew the table and the plot in one 1184 px panel: the table 4 px
-    # from its edges, the plot 16 px from the left, 90% wide, overlapping the
-    # table's last 12 px
-    panel = f'{key}_panel'
-    with st.container(key=panel):
-        st.markdown(
-            f'''<style>
-            .st-key-{panel} {{ gap: 0; }}
-            .st-key-{panel} > div:nth-child(1) {{ display: none; }}
-            .st-key-{panel} > div:nth-child(2) {{ margin: 4px 4px 0; width: calc(100% - 8px); }}
-            .st-key-{panel} > div:nth-child(3) {{
-                margin: -20px 0 16px 16px; width: calc((100% - 32px) * 0.9); z-index: 1;
-            }}
-            </style>''',
-            unsafe_allow_html=True,
-        )
-        table(key=f'{key}_table', state_manager=state_manager, height=TABLE_HEIGHT)
-        traces(key=f'{key}_traces', state_manager=state_manager, height=800)
-
-
-# Run-level QC panels: (component, frame builder, sources, title, x label,
-# y label, mode, y axis range mode)
 RUN_QC_PLOTS = [
     ('qc_qscore', qc_data.qscore_distribution, ['mass_table', 'scan_table'],
      'QScore Distribution', 'QScore', 'Masses', 'lines', 'nonnegative'),
@@ -1077,11 +1080,17 @@ def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
 
 
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
+    if (
+        tool == 'topdown' and comp_name in IDENTIFICATION_ONLY
+        and not file_manager.result_exists(dataset_id, 'protein_dfs')
+    ):
+        st.info('This run was deconvolved only. Run it with **Identify proteoforms** on to fill this view.')
+        return
+    if comp_name in ISOBARIC_ONLY and not file_manager.result_exists(dataset_id, 'isobaric_dfs'):
+        st.info('This run has no reporter ions. Run it with **Quantification: Isobaric labels** to fill this view.')
+        return
     if comp_name == 'internal_fragment_map':
         st.info('The internal fragment map is not available yet.')
-        return
-    if comp_name == 'quant_visualization':
-        _render_quant(file_manager, dataset_id, state_manager, key)
         return
     if comp_name == 'run_qc':
         _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)

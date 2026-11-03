@@ -10,7 +10,7 @@ app:
   slug: flashapp
   name: FLASHApp
   description: 'Top-down proteomics: FLASHDeconv deconvolution, FLASHTnT tag-based identification and
-    FLASHQuant quantification, with a configurable linked viewer.'
+    label-free or TMT/iTRAQ quantification, with a configurable linked viewer.'
   repository: OpenMS/FLASHApp
   domain: top-down-proteomics
   image: ghcr.io/openms/flashapp
@@ -29,55 +29,38 @@ inputs:
     multiple: false
     description: Protein database for FLASHTnT.
 workflows:
-- name: FLASHDeconv
-  class: src/Workflow.py:DeconvWorkflow
-  inputs:
-  - mzML-files
-  steps:
-  - tool: FLASHDeconv
-    in: mzML-files
 - name: FLASHTnT
-  class: src/Workflow.py:TagWorkflow
+  class: src/Workflow.py:TopDownWorkflow
   inputs:
   - mzML-files
   - fasta-file
   steps:
   - tool: DecoyDatabase
     in: fasta-file
+    optional: true
   - tool: FLASHDeconv
     in: mzML-files
   - tool: FLASHTnT
     in: FLASHDeconv
+    optional: true
   - tool: FLASHAnnotator
     optional: true
-- name: FLASHQuant
-  class: src/Workflow.py:QuantWorkflow
-  steps: []
+  - tool: FLASHQuantConsensus
+    optional: true
 results:
-- role: custom
-  workflow: FLASHDeconv
-  title: Viewer (Vue grid)
-  page: content/FLASHDeconv/FLASHDeconvViewer.py
 - role: custom
   workflow: FLASHTnT
   title: Viewer (Vue grid)
-  page: content/FLASHTnT/FLASHTnTViewer.py
-- role: custom
-  workflow: FLASHQuant
-  title: Viewer
-  page: content/FLASHQuant/FLASHQuantViewer.py
+  page: content/TopDown/TopDownViewer.py
 pages:
 - content/quickstart.py
 - content/user_guide.py
-- content/FLASHDeconv/FLASHDeconvWorkflow.py
-- content/FLASHDeconv/FLASHDeconvSequenceInput.py
-- content/FLASHDeconv/FLASHDeconvViewer.py
-- content/FLASHDeconv/FLASHDeconvDownload.py
-- content/FLASHTnT/FLASHTnTWorkflow.py
-- content/FLASHTnT/FLASHTnTViewer.py
-- content/FLASHTnT/FLASHTnTDownload.py
-- content/FLASHQuant/FLASHQuantFileUpload.py
-- content/FLASHQuant/FLASHQuantViewer.py
+- content/TopDown/TopDownUpload.py
+- content/TopDown/TopDownConfigure.py
+- content/TopDown/TopDownRun.py
+- content/TopDown/TopDownSequenceInput.py
+- content/TopDown/TopDownViewer.py
+- content/TopDown/TopDownDownload.py
 deploy:
   k8s:
     enabled: true

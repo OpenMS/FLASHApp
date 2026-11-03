@@ -1,17 +1,27 @@
-// FLASHApp scenario for electron/scripts/e2e.js: runs FLASHDeconv and FLASHTnT
-// (DecoyDatabase -> FLASHDeconv -> FLASHTnT -> FLASHAnnotator) on the bundled
-// example data inside the Electron window, then opens each Viewer and checks
-// that the Vue component draws its plots and tables. FLASHQuant is view-only,
-// so its Viewer is checked on the example workspace.
+// FLASHApp scenario for electron/scripts/e2e.js: runs the workflow twice on the
+// bundled example data inside the Electron window, deconvolution only
+// (FLASHDeconv) and with identification (DecoyDatabase -> FLASHDeconv ->
+// FLASHTnT -> FLASHAnnotator), then opens the Viewer on each run and checks
+// that the Vue component draws its plots and tables.
 const RUN_TIMEOUT = 45 * 60 * 1000;
 const VIEW_TIMEOUT = 3 * 60 * 1000;
 
-async function runWorkflow(t, workflowPage, inputs) {
-  await t.open(workflowPage);
-  await t.clickTab("Configure");
+async function setCheckbox(t, label, checked) {
+  const box = t.page.getByRole("checkbox", { name: label }).first();
+  if ((await box.isChecked()) !== checked) {
+    // Streamlit hides the input itself behind its styled box
+    await box.click({ force: true });
+    await t.settle();
+  }
+}
+
+async function runWorkflow(t, workflowPage, inputs, identify) {
+  // One page per step: Upload data, Describe experiment, Run analysis
+  await t.open(`${workflowPage}Configure`);
   for (const [label, file] of inputs) await t.choose(label, file);
-  await t.shot(`${workflowPage}-configured`);
-  await t.clickTab("Run");
+  await setCheckbox(t, "Identify proteoforms", identify);
+  await t.shot(`${workflowPage}-${identify ? "identify" : "deconvolve"}-configured`);
+  await t.open(`${workflowPage}Run`);
   // No settle() here: while the workflow runs, the status fragment reruns the
   // page, which can keep it from going quiet for 120 s. waitForText waits.
   await t.page.getByRole("button", { name: "Start Workflow" }).first().click();
@@ -19,7 +29,7 @@ async function runWorkflow(t, workflowPage, inputs) {
     timeout: RUN_TIMEOUT,
     failOn: ["Errors occurred, check log file."],
   });
-  await t.shot(`${workflowPage}-finished`);
+  await t.shot(`${workflowPage}-${identify ? "identify" : "deconvolve"}-finished`);
 }
 
 async function checkViewer(t, viewerPage, experiment, extraSelector) {
@@ -55,13 +65,11 @@ async function checkViewer(t, viewerPage, experiment, extraSelector) {
 }
 
 module.exports = async (t) => {
-  await runWorkflow(t, "FLASHDeconvWorkflow", [["mzML-files", "example_fd.mzML"]]);
-  await checkViewer(t, "FLASHDeconvViewer", "example_fd");
+  await runWorkflow(t, "TopDown", [["MS data", "example_fd.mzML"]], false);
+  await checkViewer(t, "TopDownViewer", "example_fd");
 
-  await runWorkflow(t, "FLASHTnTWorkflow", [["mzML-files", "GapA_5458mz_HCD.mzML"]]);
+  await runWorkflow(t, "TopDown", [["MS data", "GapA_5458mz_HCD.mzML"]], true);
   const log = await t.page.locator("body").innerText();
-  if (!log.includes("FLASHAnnotator")) throw new Error("FLASHTnT run did not reach FLASHAnnotator");
-  await checkViewer(t, "FLASHTnTViewer", "GapA_5458mz_HCD");
-
-  await checkViewer(t, "FLASHQuantViewer", null);
+  if (!log.includes("FLASHAnnotator")) throw new Error("The identification did not reach FLASHAnnotator");
+  await checkViewer(t, "TopDownViewer", "GapA_5458mz_HCD");
 };

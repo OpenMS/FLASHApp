@@ -85,5 +85,14 @@ def test_of_result(tmp_path):
     # Searched with -native: native, whatever the spectra
     assert sample_type.of_result(_Results({'native': True}, path), 'd') == NATIVE
     pl.DataFrame({'MSLevel': [2]}).write_parquet(path)
+    # Searched without -native: run as a lysate, whatever the spectra
+    assert sample_type.of_result(_Results({}, path), 'd') == LYSATE
+    # No parameters (a manual upload): from the spectra
     assert sample_type.of_result(_Results(None, path), 'd') == NATIVE
     assert sample_type.of_result(_Results(None, None), 'd') is None
+
+
+def test_a_flag_stored_as_text_is_read_as_its_value():
+    from src.sample_type import is_on
+    assert is_on(True) and is_on('true') and is_on('True')
+    assert not is_on('false') and not is_on(False) and not is_on(None) and not is_on('')

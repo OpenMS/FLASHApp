@@ -8,9 +8,14 @@ from os import makedirs, listdir
 from shutil import copyfile, rmtree
 from os.path import join, splitext, basename, exists, dirname
 
-from src import sample_type
+import polars as pl
+
+from src import analysis, sample_type
+from src.quant import isobaric
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
+from src.quant.run import CONSENSUS_EXCLUDE, compare_isobaric, compare_runs
+from src import flashida
 from src.workflow.WorkflowManager import WorkflowManager
 
 # Example inputs shipped with the default demo workspace.
@@ -33,7 +38,7 @@ EXAMPLE_DATA = [
 # explicit "false".
 # Most FLASHTnT switches are "true"/"false" string parameters, but the ones
 # below are flags: "-native true" aborts FLASHTnT ("Trailing text argument").
-FLASHDECONV_FLAGS = ['keep_empty_out', 'write_detail']
+FLASHDECONV_FLAGS = ['keep_empty_out', 'write_detail', 'quant']
 FLASHTNT_FLAGS = [
     'only_single_hit', 'discard_underdetermined', 'keep_decoy',
     'protein_level_only', 'native', 'decoy_precursor', 'learn_var_mod_penalty',
@@ -85,87 +90,304 @@ TAG_COLUMNS = [
 ]
 
 
+def _no_preset_buttons(*args, **kwargs):
+    return None
+
+
+def samples_and_groups(workflow, quant, identify):
+    """Tab 1 of the configuration: which sample is which. Label-free: the
+    condition of each run. Isobaric: the sample and condition of each label."""
+    if quant == analysis.LABEL_FREE:
+        st.caption('The condition of each run, e.g. *control* and *treated*.')
+        workflow.ui.experimental_design('mzML-files', name='Samples')
+    elif quant == analysis.ISOBARIC:
+        isobaric_samples(workflow)
+    else:
+        st.caption('No quantification chosen: nothing to describe here.')
+
+
+def isobaric_samples(workflow):
+    """The sample and condition of each label (channel) of the chosen plex."""
+    plex = analysis.plex(workflow.current_params())
+    channels = isobaric.load_channels(workflow.workflow_dir, plex)
+    st.caption('The sample and condition of each label. A label without a condition is not tested.')
+    edited = st.data_editor(
+        channels.to_pandas(),
+        column_config={
+            'channel': st.column_config.TextColumn('Label', disabled=True),
+            'sample': st.column_config.TextColumn('Sample'),
+            'condition': st.column_config.TextColumn('Condition'),
+        },
+        hide_index=True, use_container_width=True, num_rows='fixed',
+        key=f'isobaric_channels_{plex}',
+    )
+    saved = isobaric.save_channels(workflow.workflow_dir, pl.from_pandas(edited), plex)
+    conditions = {c for c in saved['condition'] if c}
+    if len(conditions) < 2:
+        st.info('Give at least two conditions.', icon='💡')
+
+
+def comparison_settings(workflow):
+    """The label-free comparison's tab: how the runs are linked."""
+    workflow.ui.input_TOPP(
+        'FLASHQuantConsensus', exclude_parameters=CONSENSUS_EXCLUDE,
+        display_subsections=True, display_tool_name=False,
+    )
+
+
+def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None):
+    """The label-free comparison after the per-run loop. False on failure."""
+    if analysis.quantification(workflow.params) != analysis.LABEL_FREE:
+        return True
+    if len(dataset_ids) < 2:
+        workflow.logger.log('Label-free quantification needs at least two runs: no comparison made.')
+        return True
+    return compare_runs(
+        workflow, tool, dataset_ids, mzmls, workflow.params.get('mzML-files', []), prsm_key=prsm_key,
+    ) is not None
+
+
 def empty_tsv(path, header):
     """Write a header-only tsv (a tool that found nothing may skip its output)."""
     with open(path, 'w') as f:
         f.write('\t'.join(header) + '\n')
 
-class TagWorkflow(WorkflowManager):
+IDENTIFY_KEY = analysis.IDENTIFY_KEY
+COMPARE_KEY = analysis.COMPARE_KEY
+IDENTIFY_HELP = (
+    'Search the fragmentation spectra against a protein database (FLASHTnT), so that masses '
+    'become proteoforms and proteins. Needs MS/MS spectra and a database (FASTA). Switch it '
+    'off for MS1-only or intact-mass runs, or when no database fits the sample.'
+)
+
+# FLASHDeconv parameters the workflow sets itself
+# -quant follows label-free quantification, -iq:type the label choice
+FLASHDECONV_EXCLUDE = ['ida_log', 'quant', 'iq:type']
+
+# FLASHDeconv's outputs: (parameter, file name in the run's folder)
+FLASHDECONV_OUTPUTS = [
+    ('out', 'out.tsv'), ('out_spec1', 'spec1.tsv'), ('out_spec2', 'spec2.tsv'),
+    ('out_spec3', 'spec3.tsv'), ('out_spec4', 'spec4.tsv'), ('out_mzml', 'out_deconv.mzML'),
+    ('out_quant', 'quant.tsv'), ('out_annotated_mzml', 'anno_annotated.mzML'),
+    ('out_msalign1', 'toppic_ms1.msalign'), ('out_msalign2', 'toppic_ms2.msalign'),
+    ('out_feature1', 'toppic_ms1.feature'), ('out_feature2', 'toppic_ms2.feature'),
+]
+
+# Where the deconvolution-only workflow kept its uploads before the two were merged
+LEGACY_DECONV_INPUTS = Path('flashdeconv', 'input-files', 'mzML-files')
+_ADOPTED_MARKER = '.adopted-flashdeconv-inputs'
+
+
+def adopt_legacy_inputs(workspace, workflow_dir):
+    """List the MS data uploaded to the former FLASHDeconv workflow among the
+    merged workflow's MS data, once, by reference (external_files.txt), so a
+    workspace keeps its runs without copying them."""
+    legacy = Path(workspace, LEGACY_DECONV_INPUTS)
+    target = Path(workflow_dir, 'input-files', 'mzML-files')
+    marker = Path(workflow_dir, _ADOPTED_MARKER)
+    if marker.exists() or not legacy.is_dir():
+        return []
+    paths = [p.resolve() for p in legacy.iterdir() if p.name != 'external_files.txt']
+    listed = Path(legacy, 'external_files.txt')
+    if listed.exists():
+        paths += [Path(line) for line in listed.read_text().splitlines() if line.strip()]
+    target.mkdir(parents=True, exist_ok=True)
+    external = Path(target, 'external_files.txt')
+    present = {p.name for p in target.iterdir() if p.name != 'external_files.txt'}
+    if external.exists():
+        present |= {Path(line).name for line in external.read_text().splitlines() if line.strip()}
+    adopted = [p for p in paths if p.name not in present]
+    if adopted:
+        with open(external, 'a') as f:
+            for p in adopted:
+                f.write(f'{p}\n')
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text('\n'.join(str(p) for p in adopted))
+    return adopted
+
+
+class TopDownWorkflow(WorkflowManager):
+    """Deconvolution (FLASHDeconv) of every run and, with a protein database,
+    identification (FLASHTnT and FLASHAnnotator); optionally the comparison of
+    the runs (FLASHQuantConsensus).
+
+    It keeps the former FLASHTnT workflow's folder and name, so its
+    parameters, uploads and presets carry over; the uploads of the former
+    FLASHDeconv workflow are adopted on first use.
+    """
     share_cache = True
 
     def __init__(self) -> None:
-        # Initialize the parent class with the workflow name.
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
         self.tool_name = 'FLASHTaggerViewer'
+        adopt_legacy_inputs(st.session_state["workspace"], self.workflow_dir)
+        # The Native and Lysate presets are applied by the Sample choice of
+        # Your analysis, not by buttons of their own
+        # (a module-level function: the workflow object is pickled for its run)
+        self.ui.preset_buttons = _no_preset_buttons
 
-
-    def upload(self)-> None:
-        t = st.tabs(["MS data", "Database"])
+    def upload(self) -> None:
+        t = st.tabs(["MS data", "Database (for identification)"])
         with t[0]:
-            self.ui.upload_widget(key="mzML-files", name="MS data", file_types=MS_DATA_TYPES, fallback=TNT_EXAMPLE_DATA)
+            self.ui.upload_widget(key="mzML-files", name="MS data", file_types=MS_DATA_TYPES, fallback=EXAMPLE_DATA)
         with t[1]:
+            st.caption(
+                'Only needed to identify proteoforms. Without a database the runs are '
+                'deconvolved only (switch off **Identify proteoforms** on Describe experiment).'
+            )
             self.ui.upload_widget(key="fasta-file", name="Database", file_types=DATABASE_TYPES,
                                   fallback='example-data/workspaces/default/flashtnt/input-files/fasta-file/example_database.fasta')
 
+    def current_params(self) -> dict:
+        """The parameters with the values the widgets hold in this rerun
+        (self.params is stale within a fragment rerun)."""
+        prefix = self.parameter_manager.param_prefix
+        current = dict(self.params)
+        current.update({k[len(prefix):]: v for k, v in st.session_state.items() if k.startswith(prefix)})
+        return current
+
+    def identifying(self) -> bool:
+        """Whether the runs are searched (the reactive widget's current value)."""
+        return bool(self.current_params().get(IDENTIFY_KEY, True))
+
+    def _choice(self, key, options, labels, default, label, help=None, selectbox=False):
+        """A segmented choice (or a selectbox) stored as the workflow parameter `key`."""
+        widget = f'{self.parameter_manager.param_prefix}{key}'
+        if st.session_state.get(widget) not in options:
+            stored = self.params.get(key, default)
+            st.session_state[widget] = stored if stored in options else default
+        if selectbox:
+            st.selectbox(label, options, format_func=lambda o: labels[o], key=widget, help=help)
+        else:
+            st.segmented_control(label, options, format_func=lambda o: labels[o], key=widget, help=help,
+                                 on_change=self._keep_choice, args=(widget, default))
+        self.parameter_manager.save_parameters()
+        return st.session_state[widget]
+
+    @staticmethod
+    def _keep_choice(widget, default):
+        # A click on the chosen option clears a segmented control: keep a choice
+        if st.session_state.get(widget) is None:
+            st.session_state[widget] = default
+
+    def _current_sample_type(self):
+        native_key = f"{self.parameter_manager.topp_param_prefix}FLASHTnT:1:native"
+        if native_key in st.session_state:
+            native = st.session_state[native_key]
+        else:
+            # Fresh from params.json: a preset applied in this rerun is not in self.params
+            native = self.parameter_manager.get_parameters_from_json().get("FLASHTnT", {}).get("native", False)
+        # The checkbox of a flag holds the ini's text, 'true' or 'false'
+        return sample_type.NATIVE if sample_type.is_on(native) else sample_type.LYSATE
+
+    def _sample_type_choice(self, current):
+        """Native or lysate sample: picking one applies its settings (presets.json)."""
+        key = 'topdown_sample_type'
+        st.session_state[key] = current
+        st.segmented_control(
+            'Sample', list(analysis.SAMPLE_LABELS), format_func=lambda o: analysis.SAMPLE_LABELS[o],
+            key=key, on_change=self._apply_sample_type, args=(key, current),
+            help=' '.join(f'**{analysis.SAMPLE_LABELS[t]}**: {h}' for t, h in analysis.SAMPLE_HELP.items()),
+        )
+
+    def _apply_sample_type(self, key, current):
+        chosen = st.session_state.get(key)
+        if chosen and chosen != current:
+            self.ui._apply_preset_callback(chosen)
+
+    def analysis_section(self) -> None:
+        """Your analysis: the runs, whether and how they are identified and
+        quantified, and what a start will do. Drawn above the parameters, not
+        in a fragment: the tabs of configure() follow these choices."""
+        with st.container(border=True):
+            st.markdown('##### Your analysis')
+            # reactive: drawn in the page itself, so a change reruns the page
+            self.ui.select_input_file("mzML-files", name='MS data', multiple=True, reactive=True)
+            self.ui.input_widget(
+                IDENTIFY_KEY, name='Identify proteoforms', widget_type='checkbox', default=True,
+                help=IDENTIFY_HELP, reactive=True,
+            )
+            identify = self.identifying()
+            current_sample = self._current_sample_type()
+            if identify:
+                self.ui.select_input_file("fasta-file", name='Protein database', multiple=False, reactive=True)
+                self._sample_type_choice(current_sample)
+                self._recommend_sample_type(current_sample)
+
+            quant = self._choice(
+                analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
+                analysis.quantification(self.params), 'Quantification',
+                help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
+            )
+            if quant == analysis.ISOBARIC:
+                self._choice(
+                    analysis.PLEX_KEY, list(isobaric.PLEXES), {p: isobaric.label(p) for p in isobaric.PLEXES},
+                    isobaric.DEFAULT_PLEX, 'Labels', selectbox=True,
+                    help='The isobaric labelling reagent of the samples (FLASHDeconv -iq:type).',
+                )
+
+            params = self.current_params()
+            selected = params.get('mzML-files') or []
+            selected = [selected] if isinstance(selected, str) else selected
+            database = params.get('fasta-file')
+            st.info(analysis.summary(
+                len(selected), identify, current_sample, database if isinstance(database, str) else None,
+                quant, analysis.plex(params),
+            ), icon='🧭')
 
     @st.fragment
     def configure(self) -> None:
-        # Input File Selection (reactive: the recommendation below follows it)
-        self.ui.select_input_file("mzML-files", multiple=True, reactive=True)
-        self._recommend_sample_type()
-        self.ui.select_input_file("fasta-file", multiple=False)
-
-        # Decoy database size toggle
-        self.ui.input_widget(
-            'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
-            help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
-        )
-
-        # Create tabs for different analysis steps
-        t = st.tabs(
-            ["**FLASHDeconv**", "**FLASHTnT**", "**FLASHAnnotator**"]
-        )
+        params = self.current_params()
+        identify = bool(params.get(IDENTIFY_KEY, True))
+        quant = analysis.quantification(params)
+        # One tab per analysis step, in the order they run
+        steps = ["Samples and groups", "Deconvolution"]
+        if identify:
+            steps += ["Identification", "Fragment annotation"]
+        if quant == analysis.LABEL_FREE:
+            steps += ["Linking runs"]
+        t = st.tabs([f"**{i} · {step}**" for i, step in enumerate(steps, start=1)])
         with t[0]:
-            # FLASHDeconv Configuration
-            self.ui.input_TOPP(
-                'FLASHDeconv',
-                exclude_parameters = [
-                    'ida_log',
-                    'write_detail', 'report_FDR', 'quant_method',
-                    'mass_error_ppm', 'min_sample_rate', 'min_trace_length',
-                    'max_trace_length', 'min_cos', 'type', 'isotope_correction',
-                    'reporter_mz_tol', 'only_fully_quantified'
-                ],
-                display_subsections=True,
-                display_tool_name=False,
-                flag_parameters=FLASHDECONV_FLAGS,
-            )
+            samples_and_groups(self, quant, identify)
         with t[1]:
-            # FLASHTnT Configuration
+            exclude = FLASHDECONV_EXCLUDE + ([] if quant == analysis.ISOBARIC else ['iq:'])
             self.ui.input_TOPP(
-                'FLASHTnT',
-                # fd: holds FLASHDeconv's parameters for a raw -in; the workflow
-                # runs FLASHDeconv itself and passes its deconvolved mzML.
-                exclude_parameters=['fd:'],
-                display_subsections=True,
-                display_tool_name=False,
-                custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
-                flag_parameters=FLASHTNT_FLAGS,
+                'FLASHDeconv', exclude_parameters=exclude, display_subsections=True,
+                display_tool_name=False, flag_parameters=FLASHDECONV_FLAGS,
             )
-        with t[2]:
-            # FLASHAnnotator Configuration (ion types follow FLASHTnT)
-            self.ui.input_TOPP(
-                'FLASHAnnotator',
-                exclude_parameters=['ion_type'],
-                display_subsections=True,
-                display_tool_name=False,
-                flag_parameters=FLASHANNOTATOR_FLAGS,
-            )
+        if identify:
+            with t[2]:
+                self.ui.input_TOPP(
+                    'FLASHTnT',
+                    # fd: holds FLASHDeconv's parameters for a raw -in; the workflow
+                    # runs FLASHDeconv itself and passes its deconvolved mzML.
+                    exclude_parameters=['fd:'],
+                    display_subsections=True,
+                    display_tool_name=False,
+                    custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
+                    flag_parameters=FLASHTNT_FLAGS,
+                )
+                # Decoy database size (set with the sample type)
+                self.ui.input_widget(
+                    'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
+                    help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
+                )
+            with t[3]:
+                # FLASHAnnotator Configuration (ion types follow FLASHTnT)
+                self.ui.input_TOPP(
+                    'FLASHAnnotator',
+                    exclude_parameters=['ion_type'],
+                    display_subsections=True,
+                    display_tool_name=False,
+                    flag_parameters=FLASHANNOTATOR_FLAGS,
+                )
+        if quant == analysis.LABEL_FREE:
+            with t[-1]:
+                comparison_settings(self)
 
-
-    def _recommend_sample_type(self) -> None:
-        """Recommend the Native or Lysate preset for the selected files, and
-        offer to apply it when the current settings differ."""
+    def _recommend_sample_type(self, current) -> None:
+        """Recommend native or lysate settings for the selected files, and
+        offer to apply them when the current ones differ."""
         selected = st.session_state.get(
             f"{self.parameter_manager.param_prefix}mzML-files", self.params.get("mzML-files")
         )
@@ -184,403 +406,293 @@ class TagWorkflow(WorkflowManager):
             if recommendation.runs:
                 st.warning(recommendation.reason(), icon="⚠️")
             return
-        native_key = f"{self.parameter_manager.topp_param_prefix}FLASHTnT:1:native"
-        if native_key in st.session_state:
-            native = st.session_state[native_key]
-        else:
-            # Fresh from params.json: a preset applied in this rerun is not in self.params
-            native = self.parameter_manager.get_parameters_from_json().get("FLASHTnT", {}).get("native", False)
-        current = sample_type.NATIVE if native else sample_type.LYSATE
-        text = f"**Recommended: {recommendation.sample_type} settings.** {recommendation.reason()}"
+        label = analysis.SAMPLE_LABELS[recommendation.sample_type].lower()
+        text = f"**These runs look like {label}.** {recommendation.reason()}"
         if recommendation.unreadable:
             text += " Files not yet converted to mzML are not counted."
         if current == recommendation.sample_type:
-            st.success(text + " The current settings match.", icon="✅")
+            st.success(text, icon="✅")
             return
         c1, c2 = st.columns([4, 1], vertical_alignment="center")
-        c1.info(text + f" The current settings are for {current.lower()} samples.", icon="💡")
+        c1.info(text, icon="💡")
         c2.button(
-            f"Use {recommendation.sample_type} settings",
+            f"Use {recommendation.sample_type.lower()} settings",
             key="apply_recommended_sample_type",
             on_click=self.ui._apply_preset_callback,
             args=(recommendation.sample_type,),
             use_container_width=True,
         )
 
-    def execution(self) -> bool:
-        # Get input files
-        try:      
-            in_mzmls = self.file_manager.get_files(self.params["mzML-files"])
-        except ValueError:
-            self.logger.log('Please select at least one mzML file.')  
-            return False
-        # Thermo .raw / Bruker .d input becomes mzML here; mzML passes through.
-        in_mzmls = self.executor.convert_to_mzml(in_mzmls)
-        if in_mzmls is None:
-            return False
-        try: 
-            database = self.file_manager.get_files(self.params["fasta-file"])
-        except ValueError:
-            self.logger.log('Please select a database.')  
-            return False
-        
-        # Make sure output directory exists
-        base_path = dirname(self.workflow_dir)
-        
-        errors = []
-        # Process files in sequence
-        for in_mzml in in_mzmls:
-            try:            
-                # Generate output folder
-                current_base = splitext(basename(in_mzml))[0]
-                current_time = time.strftime("%Y%m%d-%H%M%S")
-                dataset_id = '%s_%s'%(current_base, current_time)
-                folder_path = join(base_path, 'FLASHTaggerOutput', '%s_%s'%(current_base, current_time))
-                if exists(folder_path):
-                    rmtree(folder_path)
-                makedirs(folder_path)
+    def _store_parameters(self, dataset_id, folder_path, tool, name):
+        """Store the parameters `tool` ran with, as data and as a json file."""
+        settings = self.executor.parameter_manager.get_parameters_from_json().get(tool, {})
+        self.file_manager.store_data(dataset_id, name, settings)
+        json_file = Path(folder_path, f'{name}.json')
+        with open(json_file, 'w') as f:
+            json.dump(settings, f)
+        self.file_manager.store_file(dataset_id, f'{name}_json', json_file, file_name=f'{name}.json')
 
-                self.logger.log(f'Processing {current_base}:')
+    def _database(self, database, out_db, current_base):
+        """FLASHTnT needs decoys: a FASTA file without them gets shuffled
+        decoys, a PEFF file gets them from FLASHTnT itself."""
+        if database.lower().endswith('.peff') or has_decoys(database):
+            copyfile(database, out_db)
+            return
+        # If few proteins are present increase decoy size
+        few = self.executor.parameter_manager.get_parameters_from_json().get('few_proteins', True)
+        ratio = 10 if few else 1
+        self.logger.log(f"-> Creating decoy database with target:decoy ratio 1:{ratio}...")
+        if not self.executor.run_topp(
+            'DecoyDatabase',
+            {'in': [database], 'out': [out_db]},
+            custom_params={'method': 'shuffle', 'shuffle_decoy_ratio': ratio, 'enzyme': 'no cleavage'},
+        ):
+            raise RuntimeError(f'DecoyDatabase failed for {current_base}.')
 
-                # Define output files
-                out_tsv = join(folder_path, f'out.tsv')
-                out_deconv = join(folder_path, f'out_deconv.mzML')
-                out_anno = join(folder_path, f'anno_annotated.mzML')
-                out_spec1 = join(folder_path, f'spec1.tsv')
-                out_spec2 = join(folder_path, f'spec2.tsv')
-                out_spec3 = join(folder_path, f'spec3.tsv')
-                out_spec4 = join(folder_path, f'spec4.tsv')
-                out_quant = join(folder_path, f'quant.tsv')
-                out_msalign1 = join(folder_path, f'toppic_ms1.msalign')
-                out_msalign2 = join(folder_path, f'toppic_ms2.msalign')
-                out_feature1 = join(folder_path, f'toppic_ms1.feature')
-                out_feature2 = join(folder_path, f'toppic_ms2.feature')
+    def _identify(self, in_mzml, folder_path, database, current_base):
+        """FLASHTnT and FLASHAnnotator on one deconvolved run."""
+        out_deconv = join(folder_path, 'out_deconv.mzML')
+        out_db = join(folder_path, 'database' + splitext(database)[1])
+        out_tag = join(folder_path, 'tags.tsv')
+        out_protein = join(folder_path, 'protein.tsv')
+        self._database(database, out_db, current_base)
 
-                out_prsm = join(folder_path, f'prsms.tsv')
-                out_db = join(folder_path, f'database' + splitext(database[0])[1])
-                out_tag = join(folder_path, f'tags.tsv')
-                out_protein = join(folder_path, f'protein.tsv')
-                out_annotated = join(folder_path, f'annotated.tsv')
-                out_annotation = join(folder_path, f'fragments.tsv')
+        self.logger.log("-> Running FLASHTnT...")
+        # The raw mzML lets FLASHTnT score every PrSM on the raw spectrum before the FDR
+        if not self.executor.run_topp(
+            'FLASHTnT',
+            input_output={
+                'in': [out_deconv], 'in_raw': [in_mzml], 'db': [out_db],
+                'out_tag': [out_tag], 'out_pro': [out_protein],
+                'out_prsm': [join(folder_path, 'prsms.tsv')],
+            },
+        ):
+            raise RuntimeError(f'FLASHTnT failed for {current_base}.')
 
-                # FLASHTnT needs decoys: a FASTA file without them gets shuffled
-                # decoys, a PEFF file gets them from FLASHTnT itself.
-                if database[0].lower().endswith('.peff') or has_decoys(database[0]):
-                    copyfile(database[0], out_db)
-                else:
-                    # If few proteins are present increase decoy size
-                    if self.executor.parameter_manager.get_parameters_from_json().get('few_proteins', True):
-                        ratio = 10
-                    else:
-                        ratio = 1
+        # A spectrum without identifications can leave the tables unwritten
+        if not exists(out_protein):
+            self.logger.log(f'FLASHTnT reported no proteoforms for {current_base}.')
+            empty_tsv(out_protein, PROTEOFORM_COLUMNS)
+        if not exists(out_tag):
+            empty_tsv(out_tag, TAG_COLUMNS)
 
-                    self.logger.log(f"-> Creating decoy database with target:decoy ratio 1:{ratio}...")
+        self.logger.log("-> Running FLASHAnnotator...")
+        # FLASHAnnotator on the proteoforms: the fragment envelopes it accepts
+        # are the fragment ion annotations. Its ion types follow FLASHTnT.
+        ion_types = self.executor.parameter_manager.get_merged_params('FLASHTnT').get('ion_type', ['b', 'y'])
+        if isinstance(ion_types, str):
+            ion_types = ion_types.split('\n')
+        if not self.executor.run_topp(
+            'FLASHAnnotator',
+            input_output={
+                'in': [in_mzml], 'in_prsm': [out_protein],
+                'out': [join(folder_path, 'annotated.tsv')],
+                'out_annotation': [join(folder_path, 'fragments.tsv')],
+            },
+            custom_params={'ion_type': ion_types},
+        ):
+            raise RuntimeError(f'FLASHAnnotator failed for {current_base}.')
 
-                    # Run decoy database
-                    if not self.executor.run_topp(
-                        'DecoyDatabase',
-                        {
-                            'in' : [database[0]],
-                            'out' : [out_db],
-                        },
-                        custom_params = {
-                            'method' : 'shuffle',
-                            'shuffle_decoy_ratio' : ratio,
-                            'enzyme' : 'no cleavage',
-                        }
-                    ):
-                        raise RuntimeError(f'DecoyDatabase failed for {current_base}.')
-
-                self.logger.log(f"-> Running FLASHDeconv...")
-
-                # Run FLASHDeconv (1/3)
-                if not self.executor.run_topp(
-                    'FLASHDeconv',
-                    input_output={
-                        'in' : [in_mzml],
-                        'out' : [out_tsv],
-                        'out_spec1' : [out_spec1],
-                        'out_spec2' : [out_spec2],
-                        'out_spec3' : [out_spec3],
-                        'out_spec4' : [out_spec4],
-                        'out_mzml' : [out_deconv],
-                        'out_quant' : [out_quant],
-                        'out_annotated_mzml' : [out_anno],
-                        'out_msalign1' : [out_msalign1],
-                        'out_msalign2' : [out_msalign2],
-                        'out_feature1' : [out_feature1],
-                        'out_feature2' : [out_feature2],
-                    },
-                ):
-                    raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
-
-                self.logger.log(f"-> Running FLASHTnT...")
-
-                # Run FLASHTnT (2/3): the raw mzML lets it score every PrSM on
-                # the raw spectrum before the FDR
-                if not self.executor.run_topp(
-                    'FLASHTnT',
-                    input_output={
-                        'in' : [out_deconv],
-                        'in_raw' : [in_mzml],
-                        'db' : [out_db],
-                        'out_tag' :  [out_tag],
-                        'out_pro' :  [out_protein],
-                        'out_prsm' : [out_prsm]
-                    },
-                ):
-                    raise RuntimeError(f'FLASHTnT failed for {current_base}.')
-
-                # A spectrum without identifications can leave the tables unwritten
-                tnt_params = self.executor.parameter_manager.get_merged_params('FLASHTnT')
-                if not exists(out_protein):
-                    self.logger.log(f'FLASHTnT reported no proteoforms for {current_base}.')
-                    empty_tsv(out_protein, PROTEOFORM_COLUMNS)
-                if not exists(out_tag):
-                    empty_tsv(out_tag, TAG_COLUMNS)
-
-                self.logger.log(f"-> Running FLASHAnnotator...")
-
-                # Run FLASHAnnotator (3/3) on the proteoforms: the fragment
-                # envelopes it accepts are the fragment ion annotations.
-                ion_types = tnt_params.get('ion_type', ['b', 'y'])
-                if isinstance(ion_types, str):
-                    ion_types = ion_types.split('\n')
-                if not self.executor.run_topp(
-                    'FLASHAnnotator',
-                    input_output={
-                        'in' : [in_mzml],
-                        'in_prsm' : [out_protein],
-                        'out' : [out_annotated],
-                        'out_annotation' : [out_annotation],
-                    },
-                    custom_params={'ion_type' : ion_types},
-                ):
-                    raise RuntimeError(f'FLASHAnnotator failed for {current_base}.')
-
-                self.logger.log(f"-> Processing Results...")
-
-                # Store all files
-                for file in listdir(folder_path):
-                    self.file_manager.store_file(
-                        dataset_id, str(file).replace('.', '_'), 
-                        Path(folder_path, file), file_name=file
-                    )
-                # Store Settings
-                FDsettings = self.executor.parameter_manager.get_parameters_from_json()['FLASHDeconv']
-                self.file_manager.store_data(
-                    dataset_id, 'FD_parameters', FDsettings
-                )
-                json_file = Path(folder_path, 'FD_parameters.json')
-                with open(json_file, 'w') as f:
-                    json.dump(FDsettings, f)
-                self.file_manager.store_file(
-                    dataset_id, 'FD_parameters_json', json_file, 
-                    file_name='FD_parameters.json'
-                )
-                FTnTsettings = self.executor.parameter_manager.get_parameters_from_json()['FLASHTnT']
-                self.file_manager.store_data(
-                    dataset_id, 'FTnT_parameters', FTnTsettings
-                )
-                json_file = Path(folder_path, 'FTnT_parameters.json')
-                with open(json_file, 'w') as f:
-                    json.dump(FTnTsettings, f)
-                self.file_manager.store_file(
-                    dataset_id, 'FTnT_parameters_json', json_file, 
-                    file_name='FTnT_parameters.json'
-                )
-                # Fetch results
-                results = self.file_manager.get_results(
-                    dataset_id, [
-                        'out_deconv_mzML', 'anno_annotated_mzML',
-                        'tags_tsv', 'protein_tsv'
-                    ]
-                )
-                out_tsv_ms1 = None
-                if self.file_manager.result_exists(dataset_id, 'spec1_tsv'):
-                    out_tsv_ms1 = self.file_manager.get_results(
-                        dataset_id, ['spec1_tsv']
-                    )['spec1_tsv']
-                out_tsv_ms2 = None
-                if self.file_manager.result_exists(dataset_id, 'spec2_tsv'):
-                    out_tsv_ms2 = self.file_manager.get_results(
-                        dataset_id, ['spec2_tsv']
-                    )['spec2_tsv']
-                # Parse data
-                parseDeconv(
-                    self.file_manager, dataset_id,
-                    results['out_deconv_mzML'], results['anno_annotated_mzML'], 
-                    out_tsv_ms1, out_tsv_ms2, logger=self.logger
-                )
-                annotation = self.file_manager.get_results(
-                    dataset_id, ['annotated_tsv', 'fragments_tsv'], partial=True
-                )
-                parseTnT(
-                    self.file_manager, dataset_id,
-                    results['out_deconv_mzML'], results['anno_annotated_mzML'],
-                    results['tags_tsv'], results['protein_tsv'],
-                    annotation_tsv=annotation.get('fragments_tsv'),
-                    annotated_protein_tsv=annotation.get('annotated_tsv'),
-                    logger=self.logger
-                )
-
-                # Remove temporary folder
-                rmtree(folder_path)
-            except Exception as e:
-                errors.append(e)
-        if errors:
-            raise ExceptionGroup("Errors during processing", errors)
-
-        return True
-
-
-class DeconvWorkflow(WorkflowManager):
-    share_cache = True
-
-    def __init__(self) -> None:
-        # Initialize the parent class with the workflow name.
-        super().__init__("FLASHDeconv", st.session_state["workspace"], share_cache=True)
-        self.tool_name = 'FLASHDeconvViewer'
-
-
-    def upload(self)-> None:
-        self.ui.upload_widget(key="mzML-files", name="MS data", file_types=MS_DATA_TYPES,
-                              fallback=EXAMPLE_DATA)
-
-
-    def configure(self) -> None:
-        # Input File Selection
-        self.ui.select_input_file("mzML-files", multiple=True)
-
-        # FLASHDeconv Configuration
-        self.ui.input_TOPP(
-            'FLASHDeconv', exclude_parameters = ['ida_log'], display_subsections=True,
-            flag_parameters=FLASHDECONV_FLAGS,
+    def _parse(self, dataset_id, identify):
+        """Turn the stored outputs of a run into the Viewer's tables."""
+        results = self.file_manager.get_results(dataset_id, ['out_deconv_mzML', 'anno_annotated_mzML'])
+        spectra = self.file_manager.get_results(dataset_id, ['spec1_tsv', 'spec2_tsv'], partial=True)
+        parseDeconv(
+            self.file_manager, dataset_id,
+            results['out_deconv_mzML'], results['anno_annotated_mzML'],
+            spectra.get('spec1_tsv'), spectra.get('spec2_tsv'), logger=self.logger
+        )
+        if not identify:
+            return
+        tnt = self.file_manager.get_results(dataset_id, ['tags_tsv', 'protein_tsv'])
+        annotation = self.file_manager.get_results(
+            dataset_id, ['annotated_tsv', 'fragments_tsv'], partial=True
+        )
+        parseTnT(
+            self.file_manager, dataset_id,
+            results['out_deconv_mzML'], results['anno_annotated_mzML'],
+            tnt['tags_tsv'], tnt['protein_tsv'],
+            annotation_tsv=annotation.get('fragments_tsv'),
+            annotated_protein_tsv=annotation.get('annotated_tsv'),
+            logger=self.logger
         )
 
+    def _parse_isobaric(self, dataset_id, plex):
+        """The reporter ions of every fragmentation spectrum, for the Viewer."""
+        stored = self.file_manager.get_results(dataset_id, ['quant_tsv'], partial=True).get('quant_tsv')
+        frame = isobaric.read_quant(stored, plex)
+        if frame.is_empty():
+            self.logger.log(
+                f'No {isobaric.label(plex)} reporter ions were found in {dataset_id}. Check the labels and '
+                'that the fragmentation spectra cover the reporter region (HCD).'
+            )
+        self.file_manager.store_data(dataset_id, 'isobaric_dfs', frame)
+        self.file_manager.store_data(dataset_id, 'isobaric_plex', {'plex': plex, 'channels': isobaric.channel_names(plex)})
 
     def execution(self) -> bool:
         # Get input files
         try:
             in_mzmls = self.file_manager.get_files(self.params["mzML-files"])
         except ValueError:
-            self.logger.log('Please select at least one mzML file.')  
+            self.logger.log('Please select at least one mzML file.')
             return False
+        identify = self.params.get(IDENTIFY_KEY, True)
+        database = None
+        if identify:
+            try:
+                database = self.file_manager.get_files(self.params["fasta-file"])[0]
+            except (KeyError, ValueError):
+                self.logger.log(
+                    'Please select a database, or switch off Identify proteoforms to deconvolve only.'
+                )
+                return False
         # Thermo .raw / Bruker .d input becomes mzML here; mzML passes through.
         in_mzmls = self.executor.convert_to_mzml(in_mzmls)
         if in_mzmls is None:
             return False
-        
-        # Define output directory
-        base_path = dirname(self.workflow_dir)
 
+        base_path = dirname(self.workflow_dir)
+        quant = analysis.quantification(self.params)
+        plex = analysis.plex(self.params)
+        # -quant follows label-free quantification, -iq:type the labels
+        deconv_params = {'iq:type': plex if quant == analysis.ISOBARIC else 'none'}
+        if quant == analysis.LABEL_FREE:
+            deconv_params['quant'] = True
+        self.logger.log(f'Analysis: {analysis.name(identify, quant, plex)}.')
+        dataset_ids = []
         errors = []
         # Process files in sequence
         for in_mzml in in_mzmls:
             try:
-                # Generate temporary output folder
+                # Generate a temporary output folder
                 current_base = splitext(basename(in_mzml))[0]
                 current_time = time.strftime("%Y%m%d-%H%M%S")
-                dataset_id = '%s_%s'%(current_base, current_time)
-                folder_path = join(base_path, 'FLASHDeconvOutput', '%s_%s'%(current_base, current_time))
+                dataset_id = '%s_%s' % (current_base, current_time)
+                folder_path = join(base_path, 'FLASHAppOutput', dataset_id)
                 if exists(folder_path):
                     rmtree(folder_path)
                 makedirs(folder_path)
 
                 self.logger.log(f'Processing {current_base}:')
-
-                # Define output files
-                out_tsv = join(folder_path, f'out.tsv')
-                out_deconv = join(folder_path, f'out_deconv.mzML')
-                out_anno = join(folder_path, f'anno_annotated.mzML')
-                out_spec1 = join(folder_path, f'spec1.tsv')
-                out_spec2 = join(folder_path, f'spec2.tsv')
-                out_spec3 = join(folder_path, f'spec3.tsv')
-                out_spec4 = join(folder_path, f'spec4.tsv')
-                out_quant = join(folder_path, f'quant.tsv')
-                out_msalign1 = join(folder_path, f'toppic_ms1.msalign')
-                out_msalign2 = join(folder_path, f'toppic_ms2.msalign')
-                out_feature1 = join(folder_path, f'toppic_ms1.feature')
-                out_feature2 = join(folder_path, f'toppic_ms2.feature')
-
-                self.logger.log(f"-> Running FLASHDeconv...")
-
-                # Run FLASHDeconv
+                self.logger.log("-> Running FLASHDeconv...")
+                io = {'in': [in_mzml]}
+                io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
                 if not self.executor.run_topp(
-                    'FLASHDeconv',
-                    input_output={
-                        'in' : [in_mzml],
-                        'out' : [out_tsv],
-                        'out_spec1' : [out_spec1],
-                        'out_spec2' : [out_spec2],
-                        'out_spec3' : [out_spec3],
-                        'out_spec4' : [out_spec4],
-                        'out_mzml' : [out_deconv],
-                        'out_quant' : [out_quant],
-                        'out_annotated_mzml' : [out_anno],
-                        'out_msalign1' : [out_msalign1],
-                        'out_msalign2' : [out_msalign2],
-                        'out_feature1' : [out_feature1],
-                        'out_feature2' : [out_feature2],
-                    },
+                    'FLASHDeconv', input_output=io,
+                    custom_params=deconv_params,
                 ):
                     raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
 
-                self.logger.log(f"-> Processing Results...")
+                if identify:
+                    self._identify(in_mzml, folder_path, database, current_base)
 
+                self.logger.log("-> Processing Results...")
                 # Store all files
                 for file in listdir(folder_path):
                     self.file_manager.store_file(
-                        dataset_id, str(file).replace('.', '_'), 
+                        dataset_id, str(file).replace('.', '_'),
                         Path(folder_path, file), file_name=file
                     )
-                results = self.file_manager.get_results(
-                    dataset_id, 
-                    ['out_deconv_mzML', 'anno_annotated_mzML']
-                )
-                out_tsv_ms1 = None
-                if self.file_manager.result_exists(dataset_id, 'spec1_tsv'):
-                    out_tsv_ms1 = self.file_manager.get_results(
-                        dataset_id, ['spec1_tsv']
-                    )['spec1_tsv']
-                out_tsv_ms2 = None
-                if self.file_manager.result_exists(dataset_id, 'spec2_tsv'):
-                    out_tsv_ms2 = self.file_manager.get_results(
-                        dataset_id, ['spec2_tsv']
-                    )['spec2_tsv']
-                parseDeconv(
-                    self.file_manager, dataset_id,
-                    results['out_deconv_mzML'], results['anno_annotated_mzML'], 
-                    out_tsv_ms1, out_tsv_ms2, logger=self.logger
-                )
-                
-                FDsettings = self.executor.parameter_manager.get_parameters_from_json()['FLASHDeconv']
-                self.file_manager.store_data(
-                    dataset_id, 'FD_parameters', FDsettings
-                )
-                json_file = Path(folder_path, 'FD_parameters.json')
-                with open(json_file, 'w') as f:
-                    json.dump(FDsettings, f)
-                self.file_manager.store_file(
-                    dataset_id, 'FD_parameters_json', json_file, 
-                    file_name='FD_parameters.json'
-                )
+                self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters')
+                if identify:
+                    self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
+                self._parse(dataset_id, identify)
+                if quant == analysis.ISOBARIC:
+                    self._parse_isobaric(dataset_id, plex)
 
                 # Remove temporary folder
                 rmtree(folder_path)
-                
+                dataset_ids.append(dataset_id)
             except Exception as e:
                 errors.append(e)
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
 
-        return True
+        tool = 'flashtnt' if identify else 'flashdeconv'
+        if quant == analysis.ISOBARIC:
+            return compare_isobaric(self, tool, dataset_ids, plex) is not None
+        if identify:
+            return run_comparison(self, tool, dataset_ids, in_mzmls, prsm_key='prsms_tsv')
+        return run_comparison(self, tool, dataset_ids, in_mzmls)
 
 
-class QuantWorkflow(WorkflowManager):
+# The former workflows, for queued jobs and the workspace sync of older builds
+TagWorkflow = TopDownWorkflow
+DeconvWorkflow = TopDownWorkflow
+
+
+class IdaWorkflow(WorkflowManager):
+    """FLASHIda acquisition: waits for the raw files an acquisition writes and
+    starts FLASHIda (on the instrument PC) for each, with the method named in
+    the file name (<name>FLASHIda_<method>.raw -> <method>.json from the method
+    folder). Runs until stopped. Developer feature of the local app."""
     share_cache = False
+    # Seconds between two looks at the raw folder
+    poll_interval = 1.0
 
     def __init__(self) -> None:
-        # Initialize the parent class with the workflow name.
-        super().__init__("FLASHQuant", st.session_state["workspace"])
-        self.tool_name = 'FLASHQuantViewer'
+        super().__init__("FLASHIda", st.session_state["workspace"])
+        self.tool_name = 'FLASHIda'
+
+    def configure(self) -> None:
+        self.ui.input_widget(
+            key="executable", name="FLASHIda executable", default='',
+            widget_type="text", help="Path to Flash.exe on the instrument PC.",
+        )
+        self.ui.input_widget(
+            key="raw-files", name="Raw file folder", default='', widget_type="text",
+            help="Folder the acquisition writes its raw files to.",
+        )
+        self.ui.input_widget(
+            key="method-files", name="Method folder", default='', widget_type="text",
+            help="Folder with the <method>.json files named in the raw file names.",
+        )
+
+    def execution(self) -> bool:
+        params = self.parameter_manager.get_parameters_from_json()
+
+        exe = Path(str(params.get('executable') or '').strip())
+        if str(exe) in ('', '.'):
+            self.logger.log('Enter the path to the FLASHIda executable.')
+            return False
+        if exe.suffix.lower() != '.exe' or not exe.is_file():
+            self.logger.log(f"The FLASHIda executable '{exe}' is not an existing .exe file.")
+            return False
+
+        folders = {}
+        for key, label in (('method-files', 'Method folder'), ('raw-files', 'Raw file folder')):
+            folder = Path(str(params.get(key) or '').strip())
+            if str(folder) in ('', '.') or not folder.is_dir():
+                self.logger.log(f"{label} '{folder}' is not a folder.")
+                return False
+            folders[key] = folder
+
+        seen = flashida.find_raws(folders['raw-files'])
+        if seen:
+            self.logger.log('Ignoring the FLASHIda raw files already in the folder:')
+            for name, method in sorted(seen.items()):
+                self.logger.log(f"  {name} ({method}.json)")
+
+        self.logger.log('Waiting for new raw files...')
+        while True:
+            time.sleep(self.poll_interval)
+            for name, method in sorted(flashida.find_raws(folders['raw-files']).items()):
+                if name in seen:
+                    continue
+                seen[name] = method
+                self.logger.log(f"New raw file '{name}'.")
+                method_path = Path(folders['method-files'], f'{method}.json')
+                if not method_path.is_file():
+                    self.logger.log(f"Method '{method_path}' does not exist. Skipping this file.")
+                else:
+                    log_dir = flashida.method_log_dir(method_path, exe.parent)
+                    flashida.remember_log_folder(self.workflow_dir, log_dir)
+                    self.logger.log(
+                        f"Starting FLASHIda with method '{method_path.name}' "
+                        f"(logs in '{log_dir}')..."
+                    )
+                    self.executor.run_command(
+                        [exe, '-m', method_path, '-r', Path(folders['raw-files'], name)],
+                        cwd=exe.parent,
+                    )
+                self.logger.log('Waiting for new raw files...')
