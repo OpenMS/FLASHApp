@@ -103,7 +103,7 @@ Search the list in the Layout Manager by name, or expand its groups:
 - **Sequence**: *Sequence view* (fragments and modifications on the sequence, internal fragments as a purple strip), *Structure view (3D)* (the AlphaFold model, or a structure you upload, with the cleavage sites), *Internal fragment map*, *Fragment mass errors*.
 - **Quantification**: *Reporter ions per spectrum (TMT, iTRAQ)* and *Reporter ions of the selected spectrum*.
 
-The **Sequence view** of a run that was not identified shows a sequence you enter yourself: press **Sequence** next to **Edit layout** (or **Enter sequence** in the view) and give the sequence and its fixed modifications.
+The **Sequence view** of a run that was not identified shows a sequence you enter yourself: press **Enter sequence** in the view (later **Change sequence**) and give the sequence and its fixed modifications.
 
 ---
 

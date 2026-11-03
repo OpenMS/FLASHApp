@@ -18,7 +18,6 @@ from src import analysis, sample_type
 from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.dialogs import layout_button
-from src.render import sequence_input
 from src.render import quant_view
 
 TOOL = 'topdown'
@@ -127,13 +126,7 @@ display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items(
 # The saved layout sets the number of experiments (and side by side); without
 # one, a single experiment
 experiments, side_by_side = topdown_layout.saved(file_manager) or ([None], False)
-
-
-def edit_layout():
-    # The sequence of the sequence view for runs that were not identified
-    sequence_input.button(file_manager)
-    layout_button(file_manager)
-
+edit_layout = lambda: layout_button(file_manager)
 
 if comparison_selected():
     selector(0, display_names, lambda: quant_view.buttons(file_manager, st.session_state[selection_key(0)]))
