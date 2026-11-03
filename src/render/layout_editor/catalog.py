@@ -51,6 +51,7 @@ TNT_COMPONENTS = [
     {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
     {'name': 'id_qc', 'label': 'Identification QC (IDs and fragment error over time)', 'group': 'Quality control'},
+    {'name': 'proteoform_heatmap', 'label': 'Proteoform heatmap (PrSMs by RT and mass)', 'group': 'Heatmaps'},
     {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
 ]
@@ -64,6 +65,7 @@ DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
 TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['structure_view'], ['tag_table'], ['combined_spectrum']]
 TNT_LYSATE_LAYOUT = [
     ['protein_group_table', 'proteoform_table', 'proteoform_prsm_table'],
+    ['proteoform_heatmap'],
     ['sequence_view'],
     ['fragment_error_plot', 'precursor_xic'],
     ['id_fdr_plot', 'id_qc'],
