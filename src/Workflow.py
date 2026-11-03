@@ -98,8 +98,9 @@ def samples_and_groups(workflow, quant, identify):
     """Tab 1 of the configuration: which sample is which. Label-free: the
     condition of each run. Isobaric: the sample and condition of each label."""
     if quant == analysis.LABEL_FREE:
-        st.caption('The condition of each run, e.g. *control* and *treated*.')
-        workflow.ui.experimental_design('mzML-files', name='Samples')
+        st.caption('The condition of each run, e.g. *control* and *treated*. Runs sorted into folders '
+                   'on Upload data take the folder as their condition.')
+        workflow.ui.experimental_design('mzML-files', name='Samples', suggest=True)
     elif quant == analysis.ISOBARIC:
         isobaric_samples(workflow)
     else:
@@ -229,7 +230,8 @@ class TopDownWorkflow(WorkflowManager):
     def upload(self) -> None:
         t = st.tabs(["MS data", "Database (for identification)"])
         with t[0]:
-            self.ui.upload_widget(key="mzML-files", name="MS data", file_types=MS_DATA_TYPES, fallback=EXAMPLE_DATA)
+            self.ui.upload_widget(key="mzML-files", name="MS data", file_types=MS_DATA_TYPES, fallback=EXAMPLE_DATA,
+                                  suggest_folders=True)
         with t[1]:
             st.caption(
                 'Only needed to identify proteoforms. Without a database the runs are '
