@@ -7,8 +7,14 @@ Top-down analysis on the example inputs exactly as the Run page does
 shared cache (example-data/workspaces/default/cache), under a fixed dataset id
 and a display name that says what the example shows.
 
-It needs the TOPP tools (FLASHDeconv, DecoyDatabase, FLASHTnT, FLASHAnnotator)
-on PATH, so run it inside the FLASHApp image from the repository root:
+The label-free example uses four runs of the FLASHQuant SpikeIn dataset
+(MassIVE MSV000091923 / PXD042169: the six-protein mix spiked into an E. coli
+lysate at relative amounts 1 (A) and 1/10 (F), two replicates each). A missing
+input is downloaded from MassIVE and cut to a short retention-time window with
+FileFilter, so the repository stays small.
+
+It needs the TOPP tools (FileFilter, FLASHDeconv, DecoyDatabase, FLASHTnT,
+FLASHAnnotator, FLASHQuantConsensus) on PATH, so run it inside the FLASHApp image from the repository root:
 
     docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/openms/flashapp:latest \
         mamba run -n streamlit-env python example-data/build_examples.py
@@ -16,6 +22,8 @@ on PATH, so run it inside the FLASHApp image from the repository root:
 
 import json
 import shutil
+import subprocess
+import urllib.request
 import sqlite3
 import sys
 import tempfile
@@ -30,20 +38,50 @@ DEMO = REPO / 'example-data' / 'workspaces' / 'default'
 INPUTS = DEMO / 'flashtnt' / 'input-files'
 DATABASE = INPUTS / 'fasta-file' / 'example_database.fasta'
 
-# dataset id: (input file, display name, analysis parameters)
-EXAMPLES = {
-    'example_deconvolution': (
-        'Deconvolution-only_ProteinMix_LC-MS.mzML',
-        'Example: deconvolution only (protein mix, LC-MS)',
-        {'identify': False, 'quantification': 'none'},
-    ),
-    'example_native_identified': (
-        'Native-identified_GapA_HCD.mzML',
-        'Example: native, identified (GapA)',
-        # The Native preset (presets.json)
-        {'identify': True, 'quantification': 'none', 'FLASHTnT': {'native': True}, 'few_proteins': True},
-    ),
+MASSIVE = 'https://massive.ucsd.edu/ProteoSAFe/DownloadResultFile?forceDownload=true&file=f.MSV000091923/peak/'
+# Retention time window kept of the SpikeIn runs (seconds): spike-in proteins
+# and E. coli background elute here
+SPIKEIN_RT = (3960, 4200)
+# Example input -> run of MSV000091923 it is cut from
+SOURCES = {
+    'Label-free_SpikeIn-1x_R1.mzML': '20220414_Ecoli_ProtMix_A_R1.mzML',
+    'Label-free_SpikeIn-1x_R2.mzML': '20220414_Ecoli_ProtMix_A_R2.mzML',
+    'Label-free_SpikeIn-0.1x_R1.mzML': '20220414_Ecoli_ProtMix_F_R1.mzML',
+    'Label-free_SpikeIn-0.1x_R2.mzML': '20220414_Ecoli_ProtMix_F_R2.mzML',
 }
+
+# Each example: the input files, its analysis parameters, and the dataset id
+# and display name of every result it stores (one per run, then the
+# comparison of a label-free example).
+EXAMPLES = [
+    {
+        'files': ['Deconvolution-only_ProteinMix_LC-MS.mzML'],
+        'params': {'identify': False, 'quantification': 'none'},
+        'runs': [('example_deconvolution', 'Example: deconvolution only (protein mix, LC-MS)')],
+    },
+    {
+        'files': ['Native-identified_GapA_HCD.mzML'],
+        # The Native preset (presets.json)
+        'params': {'identify': True, 'quantification': 'none', 'FLASHTnT': {'native': True}, 'few_proteins': True},
+        'runs': [('example_native_identified', 'Example: native, identified (GapA)')],
+    },
+    {
+        'files': list(SOURCES),
+        # The Lysate preset (presets.json)
+        'params': {'identify': True, 'quantification': 'label-free', 'FLASHTnT': {'native': False},
+                   'few_proteins': False},
+        'conditions': ['Spike-in 1x', 'Spike-in 1x', 'Spike-in 0.1x', 'Spike-in 0.1x'],
+        'replicates': [1, 2, 1, 2],
+        # The first run is the lysate example; the others are there for the comparison
+        'runs': [
+            ('example_lysate_identified', 'Example: lysate, identified (E. coli + spike-in)'),
+            ('example_label_free_1x_r2', 'Example: label-free run (spike-in 1x, R2)'),
+            ('example_label_free_01x_r1', 'Example: label-free run (spike-in 0.1x, R1)'),
+            ('example_label_free_01x_r2', 'Example: label-free run (spike-in 0.1x, R2)'),
+        ],
+        'comparison': ('example_label_free', 'Example: label-free comparison (spike-in 1x vs 0.1x)'),
+    },
+]
 
 # Valueless switches, as the Configure page records them (_flag_params)
 FLAGS = {
@@ -51,31 +89,72 @@ FLAGS = {
 }
 
 
-def run(dataset_id, file_name, params, workspace):
-    """Run one example in `workspace` and return the dataset id it was stored under."""
-    from src.workflow.tasks import execute_workflow
+def fetch(name):
+    """Download the SpikeIn run behind example input `name` and keep SPIKEIN_RT."""
+    target = INPUTS / 'mzML-files' / name
+    if target.exists():
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        full = Path(tmp, SOURCES[name])
+        print(f'Downloading {SOURCES[name]}', flush=True)
+        with urllib.request.urlopen(MASSIVE + SOURCES[name]) as response, open(full, 'wb') as out:
+            shutil.copyfileobj(response, out)
+        subprocess.run(
+            ['FileFilter', '-in', str(full), '-out', str(target), '-rt', f'{SPIKEIN_RT[0]}:{SPIKEIN_RT[1]}'],
+            check=True,
+        )
+    print(f'{name}: {target.stat().st_size / 1e6:.1f} MB', flush=True)
+
+
+def run(example, workspace):
+    """Run one example in `workspace`; return the stored run ids (in the order
+    of its files) and the comparison id (None without one)."""
+    from src.workflow import ExperimentalDesign
     from src.workflow.FileManager import FileManager
+    from src.workflow.tasks import execute_workflow
 
     workflow_dir = workspace / 'flashtnt'
     shutil.rmtree(workflow_dir, ignore_errors=True)
     workflow_dir.mkdir(parents=True)
-    params = dict(params, **{'mzML-files': [str(INPUTS / 'mzML-files' / file_name)], '_flag_params': FLAGS})
+    files = [str(INPUTS / 'mzML-files' / name) for name in example['files']]
+    params = dict(example['params'], **{'mzML-files': files, '_flag_params': FLAGS})
     if params.get('identify'):
-        params['fasta-file'] = str(DATABASE)
+        params['fasta-file'] = str(example.get('database', DATABASE))
     (workflow_dir / 'params.json').write_text(json.dumps(params, indent=4))
+    if 'conditions' in example:
+        design = ExperimentalDesign.default_design(files)
+        design['condition'] = example['conditions']
+        design['replicate'] = example['replicates']
+        ExperimentalDesign.save_design(workflow_dir, design, files)
 
     cache = workspace / 'cache'
-    before = set(FileManager(workflow_dir, cache).get_results_list(['threedim_SN_plot']))
+
+    def stored():
+        file_manager = FileManager(workflow_dir, cache)
+        return (set(file_manager.get_results_list(['threedim_SN_plot'])),
+                set(file_manager.get_results_list(['quant_manifest'])))
+
+    runs_before, comparisons_before = stored()
     try:
         execute_workflow(str(workflow_dir), 'TopDownWorkflow', 'src.Workflow')
     except Exception:
         print((workflow_dir / 'logs' / 'all.log').read_text())
         raise
-    stored = set(FileManager(workflow_dir, cache).get_results_list(['threedim_SN_plot'])) - before
-    if len(stored) != 1:
+    runs_after, comparisons_after = stored()
+    new_runs, new_comparisons = runs_after - runs_before, comparisons_after - comparisons_before
+    run_ids = []
+    for name in example['files']:
+        stem = Path(name).stem
+        found = [d for d in new_runs if d.rsplit('_', 1)[0] == stem]
+        if len(found) != 1:
+            print((workflow_dir / 'logs' / 'all.log').read_text())
+            raise SystemExit(f'{name}: expected one new result, found {sorted(new_runs)}')
+        run_ids.append(found[0])
+    expected = 1 if 'comparison' in example else 0
+    if len(new_comparisons) != expected:
         print((workflow_dir / 'logs' / 'all.log').read_text())
-        raise SystemExit(f'{dataset_id}: expected one new result, found {sorted(stored)}')
-    return stored.pop()
+        raise SystemExit(f'expected {expected} new comparison, found {sorted(new_comparisons)}')
+    return run_ids, (new_comparisons.pop() if new_comparisons else None)
 
 
 def rename(cache, old_id, new_id, display_name):
@@ -107,19 +186,39 @@ def rename(cache, old_id, new_id, display_name):
 
 
 def main():
+    from src.workflow.FileManager import FileManager
+
+    kept = []
     with tempfile.TemporaryDirectory() as tmp:
         workspace = Path(tmp, 'workspace')
-        for dataset_id, (file_name, display_name, params) in EXAMPLES.items():
-            print(f'== {display_name}', flush=True)
-            stored = run(dataset_id, file_name, params, workspace)
-            rename(workspace / 'cache', stored, dataset_id, display_name)
+        cache = workspace / 'cache'
+        for example in EXAMPLES:
+            for name in example['files']:
+                if name in SOURCES:
+                    fetch(name)
+            print(f"== {', '.join(name for _, name in example['runs'])}", flush=True)
+            run_ids, comparison = run(example, workspace)
+            renamed = {}
+            for old_id, (new_id, display_name) in zip(run_ids, example['runs']):
+                rename(cache, old_id, new_id, display_name)
+                renamed[old_id] = new_id
+            kept += [new_id for new_id, _ in example['runs']]
+            if comparison is not None:
+                new_id, display_name = example['comparison']
+                rename(cache, comparison, new_id, display_name)
+                # The comparison names its runs by dataset id
+                file_manager = FileManager(workspace / 'flashtnt', cache)
+                manifest = file_manager.get_results(new_id, ['quant_manifest'])['quant_manifest']
+                manifest['runs'] = [renamed.get(d, d) for d in manifest['runs']]
+                file_manager.store_data(new_id, 'quant_manifest', manifest)
+                kept.append(new_id)
         target = DEMO / 'cache'
         shutil.rmtree(target, ignore_errors=True)
         target.mkdir()
-        shutil.copy(workspace / 'cache' / 'cache.db', target / 'cache.db')
-        for dataset_id in EXAMPLES:
-            shutil.copytree(workspace / 'cache' / 'files' / dataset_id, target / 'files' / dataset_id)
-    print(f'Stored {len(EXAMPLES)} examples in {target.relative_to(REPO)}')
+        shutil.copy(cache / 'cache.db', target / 'cache.db')
+        for dataset_id in kept:
+            shutil.copytree(cache / 'files' / dataset_id, target / 'files' / dataset_id)
+    print(f'Stored {len(kept)} example results in {target.relative_to(REPO)}')
 
 
 if __name__ == '__main__':

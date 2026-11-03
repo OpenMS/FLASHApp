@@ -1,25 +1,31 @@
-# Temporary: looks up the FLASHQuant dataset. Removed before merge.
+# Temporary: builds the demo workspace's example results with the TOPP tools
+# of the FLASHApp image and commits them to this branch. Removed before merge.
 name: Build example results
 on:
   push:
     branches: [claude/project-thread-bz4izy]
-    paths: [.github/workflows/build-examples.yml]
+    paths: [example-data/build_examples.py, .github/workflows/build-examples.yml]
+permissions:
+  contents: write
 jobs:
-  list:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 300
+    container: ghcr.io/openms/flashapp:latest
     steps:
-      - name: List MSV000091923
+      - uses: actions/checkout@v4
+      - name: Build examples
         run: |
-          echo "== GNPS2 dataset cache"
-          curl -sS -m 120 "https://datasetcache.gnps2.org/datasette/database/filename.csv?_stream=on&_size=max&dataset__exact=MSV000091923" | cut -c1-300 | head -300 || true
-          echo "== MassIVE file listing"
-          curl -sS -m 120 "https://massive.ucsd.edu/ProteoSAFe/QueryDatasetFiles?dataset=MSV000091923" | head -c 3000 || true
-          echo
-          for path in "" raw peak sequence other; do
-            echo "== ftp v05 /$path"
-            timeout 90 curl -sS -m 80 --list-only "ftp://massive.ucsd.edu/v05/MSV000091923/$path/" 2>&1 | head -100 || true
-          done
-          echo "== wget"
-          timeout 120 wget -nv --no-remove-listing -O /dev/null "ftp://massive.ucsd.edu/v05/MSV000091923/" 2>&1 | tail -5 || true
-          cat .listing 2>/dev/null | head -50 || true
+          export PATH=/openms/bin:$PATH
+          FLASHDeconv --help 2>&1 | head -3 || true
+          /root/miniforge3/envs/streamlit-env/bin/python example-data/build_examples.py
+          du -sh example-data/workspaces/default/cache example-data/workspaces/default/cache/files/* example-data/workspaces/default/flashtnt/input-files/mzML-files/*
+      - name: Commit results
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add example-data/workspaces/default/cache example-data/workspaces/default/flashtnt/input-files/mzML-files
+          git commit -m "Add the lysate and label-free examples (FLASHQuant SpikeIn runs)"
+          git pull --rebase origin claude/project-thread-bz4izy
+          git push
