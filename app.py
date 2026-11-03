@@ -24,25 +24,23 @@ if __name__ == '__main__':
             st.Page(Path("content", "user_guide.py"), title="User Guide", icon="📖"),
 
         ],
-        "⚡️ FLASHDeconv" : [
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvWorkflow.py"), title="Workflow", icon="⚙️"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvSequenceInput.py"), title="Sequence Input", icon="🧵"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvLayoutManager.py"), title="Layout Manager", icon="📝️"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvDownload.py"), title=export, icon=export_icon),
-        ],
-        "🧨 FLASHTnT": [
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTWorkflow.py"), title="Workflow", icon="⚙️"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTLayoutManager.py"), title="Layout Manager", icon="📝️"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTDownload.py"), title=export, icon=export_icon),
-        ],
-        "📊 FLASHQuant" : [
-            st.Page(Path("content", "FLASHQuant", "FLASHQuantFileUpload.py"), title="File Upload", icon="📂"),
-            st.Page(Path("content", "FLASHQuant", "FLASHQuantViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHQuant", "FLASHQuantCompare.py"), title="Compare Runs", icon="⚖️"),
+        # One workflow: FLASHDeconv for every run, FLASHTnT when a database is given
+        "⚡️ Top-down analysis" : [
+            st.Page(Path("content", "TopDown", "TopDownUpload.py"), title="Upload data", icon="📁"),
+            st.Page(Path("content", "TopDown", "TopDownConfigure.py"), title="Describe experiment", icon="⚙️"),
+            st.Page(Path("content", "TopDown", "TopDownRun.py"), title="Run analysis", icon="🚀"),
+            st.Page(Path("content", "TopDown", "TopDownViewer.py"), title="Viewer", icon="👀"),
+            st.Page(Path("content", "TopDown", "TopDownDownload.py"), title=export, icon=export_icon),
         ],
     }
+
+    # FLASHIda: developer feature of the local app (⚙️ Settings → Developer password)
+    from src import flashida
+    if flashida.available():
+        pages["🧠 FLASHIda"] = [
+            st.Page(Path("content", "FLASHIda", "FLASHIdaAcquisition.py"), title="Acquisition", icon="⚙️"),
+            st.Page(Path("content", "FLASHIda", "FLASHIdaViewer.py"), title="Viewer", icon="👀"),
+        ]
 
     pg = st.navigation(pages, expanded=True)
     pg.run()

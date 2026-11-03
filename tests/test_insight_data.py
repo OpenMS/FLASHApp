@@ -42,11 +42,6 @@ def tnt(tmp_path):
     return _file_manager(tmp_path, 'flashtnt')
 
 
-@pytest.fixture
-def quant(tmp_path):
-    return _file_manager(tmp_path, 'flashquant')
-
-
 def test_mass_table_has_one_row_per_mass(fd):
     masses = insight_data.mass_table(fd, FD_DATASET).collect()
     per_scan = insight_data.scan(fd, FD_DATASET, 'mass_table').collect()
@@ -112,17 +107,6 @@ def test_proteoform_sequences_from_pickled_results(tnt):
     # Named as Insight's ProteinSequenceView reads them
     assert {'start_position', 'end_position', 'observed_mass'} <= set(rows.columns)
     assert not {'proteoform_start', 'proteoform_end', 'computed_mass'} & set(rows.columns)
-
-
-def test_quant_traces(quant):
-    traces = insight_data.quant_traces(quant, 'example').collect()
-    raw = insight_data.scan(quant, 'example', 'quant_dfs').collect()
-    assert traces.height == raw['Charges'].list.len().sum()
-    first = traces.filter((pl.col('FeatureGroupIndex') == raw['FeatureGroupIndex'][0]) & (pl.col('trace') == 0))
-    assert first['charge'][0] == raw['Charges'][0][0]
-    assert first['mz'][0].to_list() == pytest.approx([float(v) for v in raw['MZs'][0][0].split(',')])
-    table = insight_data.quant_table(quant, 'example').collect()
-    assert 'Charges' not in table.columns and table.height == raw.height
 
 
 def test_annotation_summary_fields_renamed():

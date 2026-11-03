@@ -1,289 +1,141 @@
-# **FLASHDeconv & FLASHTnT User Guide**
+# **Top-down analysis in four steps**
 
-Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step-by-step walkthrough on using **FLASHDeconv** and **FLASHTnT**, from uploading data to processing and viewing results.
+FLASHApp turns top-down MS data into proteoform masses, identifications and, if you like, a comparison of your samples. Every analysis follows the same four pages under **Top-down analysis** in the sidebar:
 
----
+1. **Upload data**: your MS runs and, to identify proteoforms, a protein database.
+2. **Describe experiment**: what you want to learn, in the **Your analysis** box.
+3. **Run analysis**: one click, then follow the progress.
+4. **Viewer**: every run, and every comparison of samples, laid out for the analysis you chose.
 
-## **1️⃣ Uploading MS Data**
+The short videos below walk through each step with example data. No knowledge of the tools behind FLASHApp is needed to follow them.
 
-1. Navigate to **FLASHDeconv > Workflow** in the sidebar.
-2. Click **"File Upload"** to upload your `.mzML` file.
-3. **Two options to add files:**
-   - **Drag and Drop** your file into the upload box.
-   - **Browse Files** to manually select the `.mzML` file.
-4. Click **"Add MS Data"** to confirm the upload.
-
-![Upload](/static/images/flashdeconv_upload.png)
-
+@video guide-1-start.mp4 | Start an analysis: upload your runs and describe the experiment
 
 ---
 
-## **2️⃣ Configuring Parameters**
+## **Which analysis do I need?**
 
-1. Click the **"Configure"** tab.
-2. Select your uploaded **mzML file** (should appear in the file list).
-3. Adjust **parameters**:
-   - Set **threads** (recommended: 8).
-   - Choose **General Settings** (e.g., `keep_empty_out`, `write_detail`).
-   - Configure **FD settings** like `report_FDR`, `merging_method`, `min_mass`, `max_mass`, `min_charge`.
-   - Adjust **SD settings** for deconvolution accuracy.
-4. If you want to know more about each parameter go to this link: https://openms.de/FLASHDeconv
+Three questions decide the analysis. You answer them in the **Your analysis** box on **Describe experiment**.
 
- 
-![Configure Parameters](/static/images/flashdeconv_configure.png)
+| Question | Answer | What FLASHApp does |
+|---|---|---|
+| Do you want to know **which proteins and proteoforms** are in the sample? | **Identify proteoforms** on | Searches every run against your protein database. Off: the masses are found, nothing is identified (intact-mass or MS1-only runs, or no database). |
+| What kind of **sample** is it? (only with identification) | **Native or purified proteins** | Settings for a few proteins per sample: native MS, a purified protein, targeted runs. |
+| | **Cell lysate or complex mixture** | Settings for many proteins separated by LC before MS/MS. |
+| Do you want to **compare samples**? | **None** | Every run is looked at on its own. |
+| | **Label-free: compare runs** | Each sample is its own run. Runs are linked by mass and retention time and compared between conditions. Needs at least two runs, ideally three or more per condition. |
+| | **Isobaric labels (TMT, iTRAQ)** | The samples were labelled and pooled. The reporter ion of each label gives its sample's abundance. Several runs of one pool count as fractions. |
 
----
+That gives six analyses, plus the sample type whenever proteoforms are identified:
 
-## **3️⃣ Running the Workflow**
+| Analysis | Identify | Quantification |
+|---|---|---|
+| Deconvolution only | off | None |
+| Deconvolution + label-free quantification | off | Label-free |
+| Deconvolution + TMT/iTRAQ quantification | off | Isobaric labels |
+| Deconvolution + identification (native or lysate) | on | None |
+| Deconvolution + identification + label-free quantification | on | Label-free |
+| Deconvolution + identification + TMT/iTRAQ quantification | on | Isobaric labels |
 
-1. Click on the **"Run"** tab.
-2. Set **log details** to `minimal` (or another level as needed).
-3. Click **"Start Workflow"** to begin the deconvolution process.
-4. Monitor the **log output** to track progress.
+Under the box, a short summary (🧭) says in plain words what the next start will do. Read it before you go on.
 
-  
-![Run Workflow](/static/images/flashdeconv_run.png)
-
----
-
-## **4️⃣ Viewing Results**
-
-1. Once the workflow is finished, check the **log messages**.
-2. Navigate to the **"Viewer"** tab in the sidebar to analyze the deconvoluted data.
-3. If needed, **download results** by clicking **"Download Files"**.
-   (Will be explained later in step 7 and 8 in this guide)
+**Not sure whether your runs are native or lysate?** Once you select the MS data, FLASHApp looks at the runs (how many MS1 spectra, how they were acquired) and says which settings fit. A button applies them.
 
 ---
 
-## **5️⃣ Manual Result Upload**
+## **1️⃣ Upload data**
 
-1. Click on the **"Manual Result Upload"** tab.
-2. Upload FLASHDeconv output files (`*_annotated.mzML` & `*_deconv.mzML`) or TSV files for ECDF Plot.
-3. Browse files or **drag and drop** them into the upload section.
-4. Click **"Add files to workspace"** to finalize.
-
-
-![Manual Upload](/static/images/flashdeconv_manual_upload.png)
+1. Open **Top-down analysis › Upload data**.
+2. In **MS data**, drag your files into the box or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
+3. In **Protein database**, add a **FASTA** or **PEFF** file to identify proteoforms. FLASHApp adds the decoy sequences it needs to estimate the false discovery rate.
+4. **Example data** loads a small data set to try everything out. **Tool results** takes files a FLASHDeconv or FLASHTnT run produced elsewhere.
 
 ---
 
-## **6️⃣ Using Example Data**
+## **2️⃣ Describe experiment**
 
-1. Click the **"Example Data"** tab.
-2. Click **"Load Example Data"** to use the preloaded dataset.
-3. The example data will appear in the uploaded experiments table.
+1. Open **Top-down analysis › Describe experiment**.
+2. In **Your analysis**, pick the MS data, switch **Identify proteoforms** on or off, pick the database and the **Sample** type, and choose the **Quantification** (see the table above).
+3. The numbered tabs below follow the steps of the analysis. You rarely need more than the first:
+   - **1 · Samples and groups**: which sample belongs to which condition (see below).
+   - **2 · Deconvolution**, **3 · Identification**, **4 · Fragment annotation**: the settings of each tool. The sample type already sets them; change them only if you know why. **Show advanced parameters** shows every setting.
+   - **5 · Linking runs** (label-free only): how runs are matched by mass and retention time.
 
- 
-![Example Data](/static/images/flashdeconv_example_data.png)
+### Samples and groups
 
----
-
-## **7️⃣ Layout Manager**
-
-The **Layout Manager** allows users to customize the experiment display settings.
-
-1. Select the **number of experiments** to view at once.
-2. Click **"Select..."** to choose components to add:
-   - **MS1 raw heatmap** - 2D heatmap of raw MS signals with m/z (y-axis), retention time (x-axis), and intensity as color gradient.
-   - **MS1 deconvolved heatmap** - Displays raw MS signals as a 2D heatmap with monoisotopic mass (y-axis), retention time (x-axis), and intensity as a color gradient.
-   - **Scan table** - Lists scan details (e.g., number, retention time, precursor mass). 
-   - **Deconvolved spectrum** - Plots deconvolved spectrum for a scan (summed intensity vs. monoisotopic mass).
-   - **Raw spectrum** - Plots raw spectrum for a scan(intensity vs m/z).
-   - **Mass table** - Display deconvolved masses for a selected scan with properties.
-   - **3D S/N plot** - Visualizes S/N ratio of deconvolved masses in 3D.
-   - **Isotope envelope fit** - The observed isotope envelope of the selected mass (all charges summed; the precursor of a fragmentation spectrum while no mass is selected) mirrored against the averagine envelope. A shifted apex points to a wrong monoisotopic mass.
-   - **Precursor XIC by charge** - The precursor mass of the selected fragmentation spectrum traced over the MS1 spectra, one line per charge plus their sum.
-   - **Run QC** - Optional (add it in the Layout Manager). Distributions over the whole run, per MS level: QScores, charge states and masses of the deconvolved masses, and the number of masses per spectrum over retention time. A failed acquisition or poor deconvolution shows here before the identifications are read.
-3. Click **Save** to apply changes.
-
-
-![Layout Manager](/static/images/flashdeconv_layout_manager.png)
+- **Label-free**: one row per run. Give each run its **condition** (for example *Control* and *Treated*) and, if they exist, its replicate and fraction. A sample sheet (design.tsv or SDRF) can be imported instead.
+- **Isobaric labels**: choose the **Labels** (TMT 6-, 10-, 11-plex, TMTpro 16-, 18-plex, iTRAQ 4-, 8-plex). The table then lists one row per label channel: give each channel its **sample** name and its **condition**. Every channel needs a condition to be compared; a channel you leave empty is shown but not tested.
 
 ---
 
-## **8️⃣ Viewing Results in FLASHViewer**
+## **3️⃣ Run analysis**
 
-1. Navigate to the **Viewer** tab.
-2. Choose an experiment from the dropdown.
-3. View the selected one from Layout manager: scan table, mass table, annotated spectrum, and deconvolved spectrum etc.
-
-![FLASHViewer](/static/images/flashdeconv_viewer.png)
+1. Open **Top-down analysis › Run analysis**. The box at the top repeats the analysis you chose.
+2. Press **Start Workflow**. The log shows each run as it is processed. You can close the page and come back with the same workspace.
+3. When it finishes, open the **Viewer**.
 
 ---
 
-## **9️⃣ Downloading Results**
+## **4️⃣ Viewer**
 
-1. Navigate to the **Download** tab.
-2. Locate the experiment you want to download.
-3. Click **"Prepare Download"** to generate the downloadable files.
-4. To delete an experiment, click the **trash icon** next to the experiment name.
+The Viewer shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows.
 
-![Download Results](/static/images/flashdeconv_download.png)
+@video guide-2-viewer.mp4 | Explore a run in the Viewer and arrange your own layout
 
----
+Until you save your own layout, each run opens in the layout made for its analysis:
 
+| Run | What you see first |
+|---|---|
+| Deconvolved only | The masses over retention time (heatmap), the spectra with their masses, the raw and deconvolved spectrum and a 3D signal-to-noise view. |
+| Identified, native or purified proteins | The identified proteins, the sequence with its fragments and modifications, the 3D structure, and the sequence tags behind each identification. |
+| Identified, lysate | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors and quality control of the identifications. |
+| Labelled with TMT or iTRAQ | The layout of its kind as above, with the **reporter ions** of every spectrum and of the selected spectrum, right below the table that selects the spectrum. |
 
+**Edit layout** opens the Layout Manager: drag components into the grid, choose how many runs to show at once, and **Save**. **Reset** goes back to the defaults above. A saved layout is used for every run of the workspace.
 
-# **FLASHTnT Guide**
+### Components
 
-## **1️⃣ Uploading MS Data & Database**
+Search the list in the Layout Manager by name, or expand its groups:
 
-1. Navigate to **FLASHTnT > Workflow** in the sidebar.
-2. Click **"File Upload"** to upload your `.mzML` file.
+- **Heatmaps**: *MS1 raw heatmap* (m/z over retention time) and *MS1 deconvolved heatmap* (mass over retention time).
+- **Tables**: *Scan table* (every spectrum), *Mass table* (the masses of the selected spectrum), *Protein table* (identified proteins, with a **Characterization** badge: *Characterized* when both ends are known, every modification is placed on one residue and at least 25% of the bonds are covered by fragments; *Ambiguous* below 10%; *Partial* in between), *Proteoforms*, *PrSMs*, *Tag table*.
+- **Spectra & plots**: *Raw spectrum*, *Deconvolved spectrum*, *Isotope envelope fit* (observed against expected isotope pattern: a shifted top points to a wrong monoisotopic mass), *Precursor XIC by charge*, *3D S/N plot*, *Run QC*.
+- **Sequence**: *Sequence view* (fragments and modifications on the sequence, internal fragments as a purple strip), *Structure view (3D)* (the AlphaFold model, or a structure you upload, with the cleavage sites), *Internal fragment map*, *Fragment mass errors*.
+- **Quantification**: *Reporter ions per spectrum (TMT, iTRAQ)* and *Reporter ions of the selected spectrum*.
 
-![Download Results](/static/images/flashTnT_upload.png)
-
-3. Click the **"Database"** tab to upload the protein database (**FASTA** or **PEFF**). FLASHTnT estimates its FDR from decoys: a FASTA file without `DECOY_` entries gets shuffled decoys added automatically, a PEFF file gets its decoys from FLASHTnT.
-4. Click **"Add Database"** to confirm the upload.
-
-
-![Download Results](/static/images/flashTnT_databaseupload.png)
----
-## **2️⃣ Configuring Parameters**
-1. Click the **"Configure"** tab.
-2. Select your uploaded **mzML file**.
-3. Choose the **database** file.
-4. There are three sub-tabs for configuring parameters: **FLASHDeconv**, **FLASHTnT** and **FLASHAnnotator**.
-5. Adjust FLASHTnT parameters:
-Adjust **general settings** such as:
-   - **FDR settings** (pro_fdr, protein_fdr) – Proteoform- and protein-level FDR thresholds (e.g., 0.01).
-   - **Ion types** (ion_type) – Ion series to consider (e.g., b, y; c, z for ETD/ECD). FLASHAnnotator uses the same ion types.
-   - **Modifications** (var_mod, fixed_mod, max_blind_mod_count) – Variable, fixed and blind (unknown) modifications.
-   - **Native mode** (native) – For native and targeted top-down data (one or a few spectra, often several proteins per spectrum).
-6. FLASHAnnotator annotates each reported proteoform on its raw MS2 spectrum (fragment isotope envelopes at every charge, including internal fragments) and scores it. Its fragment envelopes are the fragment ions shown in the Sequence View.
-
-   
-5. Click **Save** to apply settings.
-
-
-![Download Results](/static/images/flashtnt_configure.png)
-![Download Results](/static/images/flashTnT_configure2.png)
-
+The **Sequence view** of a run that was not identified shows a sequence you set in the view itself with **Change sequence** (the DNA icon above the sequence); it is saved for the workspace.
 
 ---
 
-## **3️⃣ Running the Workflow**
+## **5️⃣ Comparing samples**
 
-1. Click on the **"Run"** tab.
-2. Click **"Start Workflow"** to begin.
-3. Monitor the progress in the log output.
+With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date). Selecting it shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap and quality control.
 
-![Download Results](/static/images/flashtnt_run.png)
+**Edit comparison** changes the conditions, the level compared (features, proteoforms or proteins; the latter two need identification) and the statistics (fold-change and adjusted p-value cutoffs, filtering, imputation, normalization, test). The comparison is recomputed in seconds; nothing is run again.
 
----
+@video guide-3-label-free.mp4 | Compare conditions without labels: one run per sample
 
-## **4️⃣ Layout Manager**
+@video guide-4-tmt.mp4 | Compare TMT-labelled samples: reporter ions and the comparison
 
-1. Navigate to Layout Manager.
-2. Select how many experiments to display simultaneously (e.g., 1–5).
-3. Choose **components** to add for each experiment:
-- **Protein Table** – Lists proteins identified by FLASHTnT, including accession, modifications, and score. The **Characterization** badge tells how completely the fragments pin down each proteoform: *Characterized* (green) when both termini are determined, every mass shift is localized to one residue and at least 25% of the bonds are explained by fragments; *Ambiguous* (red) below 10%; *Partial* (amber) in between. **Cleavages (%)** and **Localized Mods** give the numbers behind it.
-- **Sequence View** – Annotates tags, PTMs, and fragments. Visualizes FLASHTnT results; for FLASHDeconv data must be user-supplied. For FLASHTnT the fragment ions are FLASHAnnotator's raw-spectrum annotation: terminal fragments are marked on the residues, internal fragments as a purple depth strip and brackets on the residues and as an internal fragment track below the sequence (one bar per piece, packed into lanes, colored by ion type, shaded by intensity). Click a bar or residue to select the fragment in the table and highlight its residues.
-- **Structure View (3D)** – Part of the default layout. Shows the 3D structure of the selected protein, with the fragmentation points marked in the Sequence View's colors: one residue per terminal ion, where it ends (a/x green, b/y blue, c/z red), and, when FLASHAnnotator reports internal ions, both cleavage sites of each (purple). Modified residues carry the Sequence View's dotted pattern, and termini cleaved off the proteoform are not shown. For proteins with a UniProt accession the AlphaFold DB model is downloaded once and kept in the workspace. The upload button in the viewer stores a PDB or mmCIF file for the selected protein in the workspace too and shows it instead (needed offline and for proteins without a UniProt accession); the delete button goes back to the stored AlphaFold DB model. The database sequence is aligned to the structure, so experimental structures with their own residue numbering work too. Clicking a residue selects it in the Sequence View and Tag Table, and the other way round. Selecting a fragment in the Sequence View (table row, residue or internal fragment bar) colours the residues it covers, labels where it was cleaved (one residue for a terminal ion, both ends for an internal ion), fades the rest of the protein and fits the view to the fragment.
-- **Internal Fragment Map** – Shows internal fragment ions from the selected scan
-- **Tag Table** – Lists sequence tags with corresponding information.
-- **Spectrum View** – Shows the annotated spectrum with matched peaks.
-- **Fragment Mass Errors** – Optional (add it in the Layout Manager). The mass error (ppm) of every matched fragment of the selected proteoform against its mass, colored by ion type (FLASHAnnotator's envelopes when present, else the fragments matched within the FLASHTnT tolerance). Errors should scatter around zero; a drift or a group of outliers points to a calibration problem or a wrong assignment. Clicking a point selects the residue next to the fragment's bond.
-- **Isotope Envelope Fit** – Optional (add it in the Layout Manager). The observed isotope envelope of the precursor (or of the mass selected in a spectrum) mirrored against the averagine envelope.
-- **Identification QC** – Optional (add it in the Layout Manager). Proteoform-spectrum matches per minute of retention time (all best hits, and those within 1% q-value when FLASHTnT estimated q-values), and the median fragment mass error of every best hit over retention time, where a trend shows calibration drift.
-- **Precursor XIC by Charge** – The precursor mass of the selected proteoform's spectrum traced over the MS1 spectra, one line per charge plus their sum. Empty when the input has no MS1 spectra.
+**How the numbers come about**
 
-![Download Results](/static/images/layoutmanager_tnt.png)
+- **Label-free**: the abundance of a mass is the area of its signal in each run. Runs are matched by mass and retention time; where a mass was not detected, its signal there is read (match between runs). With identification, each linked mass gets the proteoform the run identified.
+- **Isobaric labels**: the abundance in a sample is the reporter ion intensity of its channel in the fragmentation spectra, summed over the spectra of the same mass (and over the fractions). With identification, spectra are summed per proteoform and protein (at 1% false discovery rate).
 
 ---
 
-## **5️⃣ Viewer**
+## **6️⃣ Download results**
 
-1. Choose the experiment.
-2. View the selected one from Layout manager.
-
-![Download Results](/static/images/FlashTnT_Viewer.png)
+**Download** lists every run. **Prepare Download** packs its result files (deconvolved spectra, identifications, quantification tables); the trash icon deletes a run from the workspace.
 
 ---
 
-## **6️⃣ Manual Result Upload & Example Data**
+## **Words used in FLASHApp**
 
-1. Click **"Manual Result Upload"** to upload manually processed data.
-2. Click **"Example Data"** to load a sample dataset.
-
-![Download Results](/static/images/manual_result_upload.png)
-
----
-
-## **7️⃣ Downloading Results**
-
-1. Navigate to the **Download** tab.
-2. Locate the experiment you want to download.
-3. Click **"Prepare Download"** to generate the downloadable files.
-4. To delete an experiment, click the **trash icon** next to the experiment name.
- 
-![Download Results](/static/images/download_tnt.png)
-
----
-
-
-# **FLASHQuant Guide**
-
-## **1️⃣ Uploading Results**
-
-Upload FLASHQuant output (`*.fdq.tsv` with its mass traces) on **FLASHQuant > File Upload**, one result per run. The **Viewer** shows the feature groups of one run and their mass traces.
-
-## **2️⃣ Comparing Runs**
-
-**FLASHQuant > Compare Runs** compares the proteoform abundances of several runs.
-
-1. Tick the runs to compare and give each one its **condition** (for example `control` and `treated`). Runs with the same condition are replicates; runs without a condition are linked but not tested.
-2. Set the **mass tolerance** (ppm) and **retention time tolerance** (s) for linking, and in how many of a condition's runs a proteoform must be quantified to be tested.
-3. Click **Compare runs**. The feature groups of the runs are linked by monoisotopic mass and apex retention time with OpenMS's FeatureLinkerUnlabeledKD algorithm, which also corrects retention time shifts between runs. Abundances are log2 transformed, median normalized, missing values imputed with the smallest value of the proteoform, and compared with a moderated t-test (two conditions) or F-test (more), Benjamini-Hochberg adjusted.
-
-The page then shows:
-- **Volcano plot** (two conditions) – log2 fold change against adjusted p-value, with adjustable thresholds.
-- **Abundance per run** – the normalized abundance of the selected proteoform in every run, coloured by condition.
-- **Linked proteoforms** – every linked proteoform with the number of runs it was found in and its test result.
-- **Feature groups per run** – the feature groups linked into the selected proteoform; their index finds them in the Viewer.
-- **Clustered heatmap** – z-scores of the 50 most significant proteoforms, with runs and proteoforms clustered.
-
-Clicking a point in the volcano plot or a row in the table selects the proteoform in the other views.
-
----
-
-## **📖 Need Help?**
-
-If you have any questions or need assistance, feel free to contact our support team.
-
-### **FLASHApp Support Contacts:**
-- **Tom Müller**: [tom.mueller@uni-tuebingen.de](mailto:tom.mueller@uni-tuebingen.de)
-
----
-
-## **📚 Relevant Publications**
-For more information about the research behind FLASHDeconv & FLASHTnT, refer to the following publications:
-
-- **Müller, T. D., Kim, J., Almaguer, A., Feroz, A., Kim, J., Walter, A., Jung, W., Kohlbacher, O., & Jeong, K.** (2025).  
-  *FLASHApp: Interactive Data Analysis and Visualization for Top-Down Proteomics.*  
-  **Proteomics, 25(24), 15-21**  
-  📄 [Read the paper](https://doi.org/10.1002/pmic.70042)
-
-- **Jeong, K., Kim, J., Gaikwad, M., Hidayah, S. N., Heikaus, L., Schlüter, H., & Kohlbacher, O.** (2020).  
-  *FLASHDeconv: Ultrafast, high-quality feature deconvolution for top-down proteomics.*  
-  **Cell Systems, 10(2), 213-218.e6**  
-  📄 [Read the paper](https://doi.org/10.1016/j.cels.2020.01.003)
-
-- **Müller, T. D., Siraj, A., Walter, A., Kim, J., Wein, S., von Kleist, J., Feroz, A., Pilz, M., Jeong, K., Sing, J. C., Charkow, J., Röst, H. L., & Sachsenberg, T.** (2024, November 20).  
-  *OpenMS webapps: Building user-friendly solutions for MS analysis.*  
-  📄 [Read the paper](https://pubs.acs.org/doi/10.1021/acs.jproteome.4c00872)
-
-- **Pfeuffer, J., et al.** (2024).  
-  *OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data.*  
-  **Nature Methods, 21(3), 365-367**  
-  📄 [Read the paper](https://doi.org/10.1038/s41592-024-02197-7)
----
-
-🚀 **You're now ready to use FLASHDeconv & FLASHTnT!**
-
-
-
-
-
-
-
+- **Deconvolution**: turning the many charge states and isotope peaks of a protein in a spectrum into one neutral mass.
+- **Proteoform**: one exact molecular form of a protein, with its modifications and cleavages.
+- **PrSM**: a proteoform-spectrum match, one spectrum explained by one proteoform.
+- **q-value / FDR**: the expected share of wrong identifications. 1% is the usual cutoff.
+- **Sequence tag**: a short run of amino acids read directly from the fragment masses, used to find the protein in the database.
+- **Reporter ion**: the small ion each isobaric label releases on fragmentation; its intensity is the sample's abundance.
+- **Feature**: a mass followed over retention time (label-free), or the spectra of one mass (labelled).

@@ -10,6 +10,7 @@ resources:
   - streamlit-secrets.yaml
   - streamlit-deployment.yaml
   - streamlit-service.yaml
+  - sync-deployment.yaml
   - rq-worker-deployment.yaml
   - ingress.yaml
   - traefik-ingressroute.yaml

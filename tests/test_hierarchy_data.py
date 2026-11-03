@@ -90,3 +90,41 @@ def test_most_rows_per_table():
         'protein_group_table': 2, 'proteoform_table': 2, 'proteoform_prsm_table': 2,
     }
     assert hierarchy_data.most_rows(hits.clear())['proteoform_table'] == 0
+
+
+def test_proteoform_map_one_point_per_prsm():
+    hits = hierarchy_data.assign_groups(_hits())
+    points = hierarchy_data.proteoform_map_from(hits)
+    assert points.height == hits.height
+    assert set(points.columns) >= {
+        'rt', 'mass', 'score', 'index', 'scan_idx', 'proteoform_id', 'protein_group', 'label',
+    }
+    best = points.filter(pl.col('index') == 3).row(0, named=True)
+    # The point carries the ids the hierarchy tables select by
+    assert (best['protein_group'], best['score'], best['scan_idx']) == (1, 50.0, 13)
+    assert best['label'] == 'P2 · MKLV<br>Scan 13'
+
+
+def test_proteoform_map_mass_falls_back_to_precursor_mass():
+    hits = hierarchy_data.assign_groups(_hits().with_columns(
+        pl.Series('ProteoformMass', [1000.0, -1.0, -1.0, 2000.0, -1.0]),
+        pl.Series('PrecursorMass', [1001.0, 1101.0, -1.0, 2001.0, 0.0]),
+    ))
+    points = hierarchy_data.proteoform_map_from(hits)
+    masses = dict(zip(points['index'].to_list(), points['mass'].to_list()))
+    # FLASHTnT's proteoform mass first, else the precursor mass; neither: no point
+    assert masses == {0: 1000.0, 1: 1101.0, 3: 2000.0}
+
+
+def test_proteoform_map_shortens_long_proteoforms():
+    long_form = 'A' * 100
+    hits = hierarchy_data.assign_groups(_hits().with_columns(
+        pl.Series('Proforma', [long_form] * 5)
+    ))
+    label = hierarchy_data.proteoform_map_from(hits)['label'][0]
+    assert label.startswith('P2 · ' + 'A' * 39 + '…<br>')
+
+
+def test_proteoform_map_empty():
+    hits = hierarchy_data.assign_groups(_hits()).clear()
+    assert hierarchy_data.proteoform_map_from(hits).height == 0

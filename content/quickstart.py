@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 
 from src.common.common import page_setup, themed_asset, v_space
@@ -375,7 +376,7 @@ def create_navigation_button(emoji, title, subtitle, page_path):
     """Create a functional workflow button that navigates to the specified page."""
     
     # Create unique key for this button
-    button_key = f"{title.lower().replace(' ', '_')}_nav_btn"
+    button_key = f"{re.sub(r'[^a-z0-9]+', '_', title.lower())}_nav_btn"
     
     # Create the button with custom styling applied via CSS classes
     button_label = f"{emoji} {title}"
@@ -519,30 +520,14 @@ def render_workflow_selection():
     
     # Main workflow selection buttons with centered, compact layout
     # Use spacing columns to center buttons and prevent wide-screen spreading
-    spacer1, col1, col2, col3, spacer2 = st.columns([1, 2, 2, 2, 1], gap="small")
-    
+    spacer1, col1, spacer2 = st.columns([2, 3, 2], gap="small")
+
     with col1:
         create_navigation_button(
             "⚡️",
-            "Deconvolution",
-            "FLASHDeconv",
-            "content/FLASHDeconv/FLASHDeconvWorkflow.py"
-        )
-    
-    with col2:
-        create_navigation_button(
-            "🧨",
-            "Identification",
-            "FLASHTnT",
-            "content/FLASHTnT/FLASHTnTWorkflow.py"
-        )
-    
-    with col3:
-        create_navigation_button(
-            "📊",
-            "Quantification",
-            "FLASHQuant",
-            "content/FLASHQuant/FLASHQuantFileUpload.py"
+            "Top-down analysis",
+            "Deconvolution, identification and quantification",
+            "content/TopDown/TopDownUpload.py"
         )
 
 def render_whats_new():
@@ -567,7 +552,6 @@ def render_whats_new():
                         <ul>
                             <li>Ion series follow each scan's fragmentation method (ETD, EThcD, UVPD), with a tolerance in Da.</li>
                             <li>The protein table shows characterization, cleavages and localized modifications.</li>
-                            <li>FLASHQuant compares runs side by side.</li>
                         </ul>
                     </div>
                 </div>

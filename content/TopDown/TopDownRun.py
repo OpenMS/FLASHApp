@@ -1,0 +1,39 @@
+import streamlit as st
+
+from src import analysis
+from src.Workflow import TopDownWorkflow
+from src.common.common import page_setup, save_params
+from src.common.guide import next_steps, page_intro
+
+
+params = page_setup()
+
+wf = TopDownWorkflow()
+
+st.title('Run the analysis')
+page_intro(
+    "Start the analysis and follow its progress. Every selected run is deconvolved and, with "
+    "**Identify proteoforms** on, searched in turn; with a **Quantification** chosen on Describe experiment, "
+    "the samples are then compared. You can close this page and come back later with the same workspace.\n\n"
+    "Each run is kept as an experiment of the **Viewer**, and a comparison as an entry "
+    "**Comparison: ...** in its experiment selector."
+)
+
+wf_params = wf.parameter_manager.get_parameters_from_json()
+selected = wf_params.get('mzML-files') or []
+selected = [selected] if isinstance(selected, str) else selected
+identify = bool(wf_params.get(analysis.IDENTIFY_KEY, True))
+st.info(
+    f"**{analysis.name(identify, analysis.quantification(wf_params), analysis.plex(wf_params))}** "
+    f"of {len(selected)} run{'s' if len(selected) != 1 else ''}. Change it on **Describe experiment**.",
+    icon='🧭',
+)
+
+wf.show_execution_section()
+
+next_steps(
+    'topdown',
+    ('viewer', 'Look at each run, or pick a comparison of runs in the experiment selector.'),
+)
+
+save_params(params)

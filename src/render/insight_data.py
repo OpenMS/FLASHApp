@@ -260,43 +260,6 @@ def _generic_sequence_schema(lf):
     return lf
 
 
-def _split_numbers(column):
-    return pl.col(column).str.split(',').list.eval(
-        pl.element().str.strip_chars().cast(pl.Float64, strict=False)
-    )
-
-
-def quant_traces(file_manager, dataset_id):
-    """Mass traces of every feature group: one row per trace with list columns
-    of m/z, retention time and intensity."""
-    lf = scan(file_manager, dataset_id, 'quant_dfs').select(
-        'FeatureGroupIndex', 'Charges', 'MZs', 'RTs', 'Intensities'
-    )
-    return (
-        lf.with_columns(pl.int_ranges(0, pl.col('Charges').list.len()).alias('trace'))
-        .explode(['Charges', 'MZs', 'RTs', 'Intensities', 'trace'])
-        .drop_nulls('trace')
-        .select(
-            pl.col('FeatureGroupIndex').cast(pl.Int64),
-            pl.col('trace').cast(pl.Int64),
-            pl.col('Charges').cast(pl.Int64).alias('charge'),
-            _split_numbers('MZs').alias('mz'),
-            _split_numbers('RTs').alias('rt'),
-            _split_numbers('Intensities').alias('intensity'),
-        )
-        # Legend in charge order, as FLASHViewer lists it
-        .sort(['FeatureGroupIndex', 'charge', 'trace'])
-    )
-
-
-def quant_table(file_manager, dataset_id):
-    """Feature groups (list columns dropped: the table shows scalars)."""
-    lf = scan(file_manager, dataset_id, 'quant_dfs')
-    return lf.select(
-        [c for c, t in lf.collect_schema().items() if not isinstance(t, pl.List)]
-    )
-
-
 def with_fragmentation(lf, methods, on):
     """Add a 'fragmentation' column to `lf`: the method of the spectrum whose
     index is in column `on`, from `methods` (one entry per spectrum index,
@@ -312,3 +275,35 @@ def sequence_view_spectra(file_manager, dataset_id):
     """Deconvolved masses and precursor mass per spectrum, for matching a
     user-given sequence (FLASHDeconv)."""
     return spectra(file_manager, dataset_id, 'sequence_view')
+
+
+def reporter_table(file_manager, dataset_id):
+    """The reporter ions of every fragmentation spectrum (FLASHDeconv
+    -out_quant) with scan_idx and, for an identified run, the protein of the
+    spectrum's best PrSM (`Identified`)."""
+    lf = _scan_index_of(file_manager, dataset_id, scan(file_manager, dataset_id, 'isobaric_dfs'))
+    if result_path(file_manager, dataset_id, 'protein_dfs') is not None:
+        best = (
+            proteins(file_manager, dataset_id).filter(pl.col('is_best') & pl.col('Scan').is_not_null())
+            .select(pl.col('Scan').cast(pl.Int64), pl.col('accession').cast(pl.Utf8).alias('Identified'))
+            .unique('Scan', keep='first')
+        )
+        lf = lf.join(best, on='Scan', how='left', maintain_order='left')
+    else:
+        lf = lf.with_columns(pl.lit(None, pl.Utf8).alias('Identified'))
+    return lf.filter(pl.col('scan_idx').is_not_null())
+
+
+def reporter_ions(file_manager, dataset_id, channels, mzs):
+    """One row per spectrum and label: scan_idx, the label's reporter m/z, its
+    intensity and the label name (for the stick plot of the selected spectrum)."""
+    lf = reporter_table(file_manager, dataset_id)
+    parts = [
+        lf.select(
+            'scan_idx', pl.lit(mz).alias('mz'),
+            pl.col(name).fill_nan(None).fill_null(0.0).alias('intensity'),
+            pl.lit(name).alias('label'),
+        )
+        for name, mz in zip(channels, mzs)
+    ]
+    return pl.concat(parts).sort('scan_idx', 'mz')
