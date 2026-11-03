@@ -1,23 +1,21 @@
-"""The Layout Manager as a window on the Viewer pages.
+"""The Layout Manager as a window on the Viewer.
 
-``layout_button()`` draws an "Edit layout" button (the Viewers put it right of
-the experiment selector); pressing it opens the
-drag-and-drop editor in a dialog over the Viewer. Saving or resetting reruns
-the page, which closes the dialog and shows the new layout.
+``layout_button()`` draws an "Edit layout" button (the Viewer puts it right of
+the experiment selector); pressing it opens the drag-and-drop editor in a
+dialog over the Viewer. Saving or resetting reruns the page, which closes the
+dialog and shows the new layout.
 """
 
 import streamlit as st
 
 from src.workflow.FileManager import FileManager
+from src.render import topdown_layout
 from src.render.layout_editor import layout_editor
-from src.render.layout_editor.catalog import (
-    DECONV_COMPONENTS, DECONV_SEQUENCE_COMPONENTS, DECONV_DEFAULT_LAYOUT,
-    TNT_COMPONENTS, TNT_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS,
-)
+from src.render.layout_editor.catalog import TNT_DEFAULT_LAYOUTS
 
-DECONV_EDITOR_KEY = 'deconv_layout_editor'
-TNT_EDITOR_KEY = 'tnt_layout_editor'
-_TNT_START_KEY = 'tnt_layout_start'
+EDITOR_KEY = 'topdown_layout_editor'
+_START_KEY = 'topdown_layout_start'
+DECONVOLUTION = 'Deconvolution'
 
 _HELP = (
     "Drag components into the grid (up to 3 per row), add experiments to "
@@ -34,66 +32,53 @@ def _own_file_manager(file_manager):
     return FileManager(file_manager.workflow_dir, file_manager.cache_path)
 
 
-def deconv_components(file_manager):
-    """Components and default layout offered for FLASHDeconv results."""
-    components = DECONV_COMPONENTS
-    default_layout = DECONV_DEFAULT_LAYOUT
-    # "Sequence view" and "Internal fragment map" need a submitted sequence
-    if file_manager.result_exists('sequence', 'sequence'):
-        components = components + DECONV_SEQUENCE_COMPONENTS
-        default_layout = default_layout + [['sequence_view']]
-    return components, default_layout
-
-
-@st.dialog("Edit layout", width="large")
-def _deconv_dialog(file_manager):
-    file_manager = _own_file_manager(file_manager)
-    components, default_layout = deconv_components(file_manager)
-    note = '' if len(components) > len(DECONV_COMPONENTS) else (
-        " Submit a sequence on the **Sequence Input** page to unlock the "
-        "sequence components."
-    )
-    st.caption(_HELP + note)
-    if layout_editor(file_manager, 'layout', components, default_layout, key=DECONV_EDITOR_KEY):
-        st.rerun()
-
-
-def _tnt_start_from(sample_type):
+def _start_from(name):
     """Put a default layout into the editor as an unsaved draft."""
-    st.session_state[_TNT_START_KEY] = sample_type
-    revision = f'{TNT_EDITOR_KEY}_revision'
+    st.session_state[_START_KEY] = name
+    revision = f'{EDITOR_KEY}_revision'
     st.session_state[revision] = st.session_state.get(revision, 0) + 1
 
 
+def _defaults(file_manager):
+    defaults = {DECONVOLUTION: topdown_layout.deconvolution_default(file_manager)}
+    defaults.update(TNT_DEFAULT_LAYOUTS)
+    return defaults
+
+
 @st.dialog("Edit layout", width="large")
-def _tnt_dialog(file_manager):
+def _dialog(file_manager):
     file_manager = _own_file_manager(file_manager)
-    st.caption(
-        _HELP + " Without a saved layout, the Viewer shows the **Native** default "
-        "for native or targeted runs (few spectra) and the **Lysate** default for "
-        "LC-MS/MS runs of a lysate, chosen per experiment. Start from either:"
+    components = topdown_layout.components(file_manager)
+    note = '' if topdown_layout.has_sequence(file_manager) else (
+        " Submit a sequence on the **Sequence Input** page to show a sequence "
+        "of your own with a run deconvolved only."
     )
+    st.caption(
+        _HELP + " Until a layout is saved, each experiment starts from the default "
+        "of its run: **Deconvolution** for a run deconvolved only, **Native** or "
+        "**Lysate** for an identified run, as it was searched." + note + " Start from any of them:"
+    )
+    defaults = _defaults(file_manager)
     with st.container(horizontal=True):
-        for sample_type in TNT_DEFAULT_LAYOUTS:
-            st.button(f'{sample_type} default', key=f'tnt_layout_start_{sample_type}',
-                      on_click=_tnt_start_from, args=(sample_type,))
+        for name in defaults:
+            st.button(f'{name} default', key=f'topdown_layout_start_{name}',
+                      on_click=_start_from, args=(name,))
 
     # A save or reset ends the started draft
-    submitted = st.session_state.get(TNT_EDITOR_KEY)
-    if submitted and submitted.get('nonce') != st.session_state.get(f'{TNT_EDITOR_KEY}_handled'):
-        st.session_state.pop(_TNT_START_KEY, None)
-    start = st.session_state.get(_TNT_START_KEY)
+    submitted = st.session_state.get(EDITOR_KEY)
+    if submitted and submitted.get('nonce') != st.session_state.get(f'{EDITOR_KEY}_handled'):
+        st.session_state.pop(_START_KEY, None)
+    start = st.session_state.get(_START_KEY)
 
-    if layout_editor(file_manager, 'flashtnt_layout', TNT_COMPONENTS, TNT_DEFAULT_LAYOUT,
-                     key=TNT_EDITOR_KEY,
-                     start_layout=[TNT_DEFAULT_LAYOUTS[start]] if start else None):
+    if layout_editor(file_manager, topdown_layout.LAYOUT_DATASET, components,
+                     defaults[DECONVOLUTION], key=EDITOR_KEY,
+                     start_layout=[defaults[start]] if start in defaults else None):
         st.rerun()
 
 
-def layout_button(file_manager, tool):
-    """Draw the "Edit layout" button of a Viewer; ``tool`` is 'flashdeconv' or 'flashtnt'."""
-    dialog = _deconv_dialog if tool == 'flashdeconv' else _tnt_dialog
+def layout_button(file_manager):
+    """Draw the "Edit layout" button of the Viewer."""
     if st.button('Edit layout', icon=':material/dashboard_customize:',
-                 key=f'{tool}_edit_layout', width='content',
+                 key='topdown_edit_layout', width='content',
                  help='Choose and arrange the components shown on this page'):
-        dialog(file_manager)
+        _dialog(file_manager)

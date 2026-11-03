@@ -110,7 +110,7 @@ The **Layout Manager** allows users to customize the experiment display settings
 1. Navigate to the **Viewer** tab.
 2. Choose an experiment from the dropdown.
 3. View the selected one from Layout manager: scan table, mass table, annotated spectrum, and deconvolved spectrum etc.
-4. An identified run opens on its identifications. **Show: Deconvolution**, next to the experiment selector, shows its deconvolved masses instead. Each of the two views has its own layout.
+4. Deconvolution and identification components share one view and one layout: a protein, proteoform or PrSM you select also selects its spectrum in the scan table, the spectra and the mass table. Until you save a layout with **Edit layout**, each experiment starts from the default of its run: the deconvolution default for a run deconvolved only, the Native or Lysate default for an identified run, as it was searched.
 
 ![FLASHViewer](/static/images/flashdeconv_viewer.png)
 
@@ -223,7 +223,7 @@ Adjust **general settings** such as:
 
 ## **5️⃣ Viewer**
 
-1. Choose the experiment. An identified run shows these components; **Show: Deconvolution** switches to its deconvolved masses.
+1. Choose the experiment. An identified run starts from these components; add the deconvolution components with **Edit layout**.
 2. View the selected one from Layout manager.
 
 ![Download Results](/static/images/FlashTnT_Viewer.png)

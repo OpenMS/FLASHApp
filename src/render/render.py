@@ -26,6 +26,7 @@ from openms_insight.core.cache import CacheMissError
 
 from src.render import hierarchy_data, insight_data, prsm_data, prsm_overview, qc_data, validation_data
 from src.render.fragmentation import mzml_scan_methods
+from src.render.layout_editor.catalog import DECONV_COMPONENTS, TNT_COMPONENTS
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -306,6 +307,12 @@ _HIERARCHY_ROW = 33
 
 _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 
+# Components with nothing to show for a run deconvolved only (the sequence
+# view then shows the Sequence Input sequence)
+IDENTIFICATION_ONLY = (
+    {c['name'] for c in TNT_COMPONENTS} - {c['name'] for c in DECONV_COMPONENTS} - {'sequence_view'}
+)
+
 # FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
 # PrSM mass table: every deconvolved mass of the identified spectrum
 # and the fragment ion it explains
@@ -433,7 +440,7 @@ def _proteoform_heatmap(comp_name, file_manager, dataset_id):
             data=points.lazy(),
             x_column='rt', y_column='mass', intensity_column='score',
             interactivity={
-                'protein': 'index', 'pscan': 'scan_idx',
+                'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx',
                 'proteoform': 'proteoform_id', 'protein_group': 'protein_group',
             },
             on_select=_IDENTIFICATION_ON_SELECT,
@@ -660,7 +667,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             title=hierarchy_data.level_title('Proteoforms', hierarchy_data.key_figures(hits)['proteoforms']),
             index_field='proteoform_id', go_to_fields=['proteoform'],
             filters={'protein_group': 'protein_group'},
-            interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx'},
+            interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     else:
@@ -670,7 +677,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             title=hierarchy_data.level_title('PrSMs', hierarchy_data.key_figures(hits)['prsms']),
             index_field='index', go_to_fields=['Scan'],
             filters={'proteoform': 'proteoform_id'},
-            interactivity={'protein': 'index', 'pscan': 'scan_idx'},
+            interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     # All three are as tall as the one with the most rows, so that tables
@@ -815,7 +822,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     # FLASHViewer's checkbox colour
                     'color': '#6200EE',
                 }],
-                interactivity={'protein': 'index', 'pscan': 'scan_idx'},
+                interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
                 on_select={'tag': None, 'aa': None, 'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
@@ -854,7 +861,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 ),
                 column_definitions=TAG_COLUMNS, title='Tag Table',
                 index_field='TagIndex', go_to_fields=['Scan', 'StartPos', 'EndPos', 'TagSequence'],
-                filters={'pscan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
+                filters={'scan': 'scan_idx'}, range_filters={'aa': ['StartPos', 'EndPos']},
                 interactivity={'tag': 'TagIndex'}, on_select={'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
                 reset_sort_on=['protein'], pagination=False, float_precision='float64',
@@ -862,7 +869,8 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'sequence_view':
-        if tool == 'flashtnt':
+        # The proteoform of an identified run, else the Sequence Input sequence
+        if tool == 'flashtnt' or (tool == 'topdown' and fm.result_exists(ds, 'protein_dfs')):
             component = _component(
                 ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
                 ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings',
@@ -1054,6 +1062,12 @@ def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
 
 
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
+    if (
+        tool == 'topdown' and comp_name in IDENTIFICATION_ONLY
+        and not file_manager.result_exists(dataset_id, 'protein_dfs')
+    ):
+        st.info('This run was deconvolved only. Run it with **Identify proteoforms** on to fill this view.')
+        return
     if comp_name == 'internal_fragment_map':
         st.info('The internal fragment map is not available yet.')
         return

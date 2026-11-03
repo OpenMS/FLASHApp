@@ -74,3 +74,37 @@ def test_saved_comparison_layout_wins(tmp_path):
     quant_view.migrate_layout(file_manager)
     assert quant_view.layout(file_manager) == [['quant_volcano']]
     assert not file_manager.result_exists('flashtnt_quant_layout', 'layout')
+
+
+def test_one_catalog_holds_both_kinds():
+    from src.render.layout_editor.catalog import (
+        DECONV_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS, TOPDOWN_COMPONENTS, TOPDOWN_SEQUENCE_COMPONENTS,
+        requirements, validate_layout,
+    )
+    catalog = TOPDOWN_COMPONENTS + TOPDOWN_SEQUENCE_COMPONENTS
+    names = [c['name'] for c in catalog]
+    assert len(names) == len(set(names))
+    assert all(r in names for c in catalog for r in requirements(c))
+    for layout in [DECONV_DEFAULT_LAYOUT, DECONV_DEFAULT_LAYOUT + [['sequence_view']], *TNT_DEFAULT_LAYOUTS.values()]:
+        assert validate_layout([layout], catalog) == ''
+    # Spectra follow an identification as well as the scan table
+    assert validate_layout([[['protein_table'], ['deconv_spectrum', 'mass_table']]], catalog) == ''
+    assert 'needs' in validate_layout([[['deconv_spectrum']]], catalog)
+
+
+def test_each_experiment_starts_from_the_default_of_its_run(tmp_path):
+    from src.render import topdown_layout
+    from src.render.layout_editor.catalog import DECONV_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS
+
+    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    assert topdown_layout.rows(file_manager, False, None) == DECONV_DEFAULT_LAYOUT
+    assert topdown_layout.rows(file_manager, True, 'Native') == TNT_DEFAULT_LAYOUTS['Native']
+    assert topdown_layout.rows(file_manager, True, 'Lysate') == TNT_DEFAULT_LAYOUTS['Lysate']
+    # A layout the former identification Viewer saved stays the default of identified runs
+    file_manager.store_data('flashtnt_layout', 'layout', _layout([['protein_table']]))
+    assert topdown_layout.rows(file_manager, True, 'Lysate') == [['protein_table']]
+    assert topdown_layout.rows(file_manager, False, None) == DECONV_DEFAULT_LAYOUT
+    # A saved layout is shown for every run
+    file_manager.store_data('topdown_layout', 'layout', _layout([['scan_table']]))
+    assert topdown_layout.rows(file_manager, True, 'Native') == [['scan_table']]
+    assert topdown_layout.rows(file_manager, False, None) == [['scan_table']]

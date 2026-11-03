@@ -1,11 +1,11 @@
-"""The Viewer of the merged workflow: every run, deconvolved and perhaps
-identified, and every comparison of runs.
+"""The Viewer of the merged workflow: every run in one combined view of its
+deconvolution and identification, and every comparison of runs.
 
-An experiment shows the identification components when its run was
-identified and the deconvolution components otherwise; an identified run can
-be switched to its deconvolution. Each kind keeps its own layout (Layout
-Manager under ``flashtnt_layout`` and ``layout``), so the layouts saved before
-the workflows were merged stay as they were.
+All runs share one layout (Edit layout, ``topdown_layout``). Until one is
+saved, each experiment starts from the default of its run: the
+deconvolution default for a run deconvolved only, the Native or Lysate
+identification default for an identified run, as it was searched
+(src/render/topdown_layout.py).
 """
 
 import streamlit as st
@@ -16,50 +16,32 @@ from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src import sample_type
 from src.render.render import render_grid
-from src.render.layout_editor import get_saved_layout
-from src.render.layout_editor.catalog import TNT_DEFAULT_LAYOUTS
-from src.render.layout_editor.dialogs import deconv_components, layout_button
+from src.render import topdown_layout
+from src.render.layout_editor.dialogs import layout_button
 from src.render import quant_view
 
-IDENTIFICATION, DECONVOLUTION = 'Identification', 'Deconvolution'
-TOOL = {IDENTIFICATION: 'flashtnt', DECONVOLUTION: 'flashdeconv'}
-LAYOUT_DATASET = {'flashtnt': 'flashtnt_layout', 'flashdeconv': 'layout'}
+TOOL = 'topdown'
 
 
 def selection_key(index):
     return f'selected_experiment{index}'
 
 
-def view_of(index):
-    """'flashtnt' or 'flashdeconv': what experiment `index` shows."""
-    dataset_id = st.session_state.get(selection_key(index))
-    if dataset_id not in identified:
-        return 'flashdeconv'
-    return TOOL[st.session_state.get(f'experiment_view_{index}', IDENTIFICATION)]
-
-
-def saved_layout(tool):
-    """(experiments, side_by_side) saved for `tool`; experiments are None
-    while nothing is saved (the default is chosen per experiment)."""
-    saved = get_saved_layout(file_manager, LAYOUT_DATASET[tool])
-    return saved if saved else ([None], False)
-
-
-def experiment_layout(tool, index, dataset_id):
-    """The rows experiment `index` shows: its saved layout, else the default."""
-    experiments, _ = saved_layout(tool)
-    rows = experiments[index] if index < len(experiments) else experiments[0]
-    if rows is not None:
-        return rows
-    if tool == 'flashdeconv':
-        return deconv_components(file_manager)[1]
-    kind = sample_type.of_result(file_manager, dataset_id) or sample_type.NATIVE
-    st.caption(
-        f"{kind} default layout: this experiment looks like a "
-        f"{'native or targeted run' if kind == sample_type.NATIVE else 'lysate LC-MS/MS run'}. "
-        "Press **Edit layout** to arrange your own."
-    )
-    return TNT_DEFAULT_LAYOUTS[kind]
+def experiment_layout(index, dataset_id):
+    """The rows experiment `index` shows: the saved layout, else the default of its run."""
+    identified = dataset_id in identified_runs
+    kind = (sample_type.of_result(file_manager, dataset_id) or sample_type.NATIVE) if identified else None
+    if topdown_layout.saved(file_manager) is None:
+        if topdown_layout.has_legacy(file_manager, identified):
+            name = 'identified runs' if identified else 'deconvolved runs'
+            text = f"The layout saved earlier for {name}."
+        elif identified:
+            run = 'native or targeted run' if kind == sample_type.NATIVE else 'lysate LC-MS/MS run'
+            text = f"{kind} default layout: this run was searched as a {run}."
+        else:
+            text = "Deconvolution default layout: this run was deconvolved only."
+        st.caption(text + " Press **Edit layout** to arrange your own.")
+    return topdown_layout.rows(file_manager, identified, kind, index)
 
 
 def select_experiment(index):
@@ -89,23 +71,13 @@ def comparison_selected():
 
 
 def selector(index, names, with_button=None):
-    """The experiment selector of experiment `index`, the switch between its
-    identification and its deconvolution, and (`with_button`) a button."""
+    """The experiment selector of experiment `index` and (`with_button`) a button."""
     with st.container(horizontal=True, vertical_alignment='bottom'):
         st.selectbox(
             'choose experiment', names, key=f'selected_experiment_dropdown_{index}',
             index=validate_selected_index(index, names),
             on_change=select_experiment, args=(index,),
         )
-        if st.session_state.get(selection_key(index)) in identified:
-            st.segmented_control(
-                'Show', [IDENTIFICATION, DECONVOLUTION], key=f'experiment_view_{index}',
-                default=IDENTIFICATION, width='content',
-                help='The proteoforms identified in this run, or its deconvolved masses',
-            )
-            # A segmented control can be cleared: keep showing something
-            if st.session_state.get(f'experiment_view_{index}') is None:
-                st.session_state[f'experiment_view_{index}'] = IDENTIFICATION
         if with_button is not None:
             with_button()
 
@@ -115,9 +87,8 @@ def experiment(index):
     dataset_id = st.session_state.get(selection_key(index))
     if dataset_id is None:
         return
-    tool = view_of(index)
     render_grid(
-        dataset_id, experiment_layout(tool, index, dataset_id), file_manager, tool,
+        dataset_id, experiment_layout(index, dataset_id), file_manager, TOOL,
         selection_key(index), f'flash_viewer_grid_{index}',
     )
 
@@ -133,12 +104,12 @@ quant_view.migrate_layout(file_manager)
 
 # Every deconvolved run, of which some were identified, then the comparisons
 results = file_manager.get_results_list(['threedim_SN_plot'])
-identified = set(file_manager.get_results_list(['protein_dfs']))
+identified_runs = set(file_manager.get_results_list(['protein_dfs']))
 comparison_names = quant_view.comparison_names(file_manager)
 comparison_ids = set(comparison_names.values())
 
 if len(results) == 0 and not comparison_names:
-    layout_button(file_manager, 'flashdeconv')
+    layout_button(file_manager)
     st.error('No results to show yet. Please run a workflow first!')
     st.stop()
 
@@ -148,11 +119,10 @@ display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id i
 display_name_to_id.update(comparison_names)
 display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items()}
 
-# The number of experiments (and side by side) follows the layout of what the
-# first experiment shows; its Edit layout edits that layout.
-first_tool = view_of(0)
-experiments, side_by_side = saved_layout(first_tool)
-edit_layout = lambda: layout_button(file_manager, first_tool)
+# The saved layout sets the number of experiments (and side by side); without
+# one, a single experiment
+experiments, side_by_side = topdown_layout.saved(file_manager) or ([None], False)
+edit_layout = lambda: layout_button(file_manager)
 
 if comparison_selected():
     selector(0, display_names, lambda: quant_view.buttons(file_manager, st.session_state[selection_key(0)]))

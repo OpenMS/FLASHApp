@@ -56,6 +56,34 @@ TNT_COMPONENTS = [
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
 ]
 
+# The Viewer's one combined view: every component of both kinds. Selecting a
+# proteoform or PrSM also selects its spectrum, so the spectra, the mass table
+# and the validation plots follow either the scan table or the identifications.
+_SELECTS_SCAN = ['scan_table', 'protein_table', 'proteoform_table', 'proteoform_prsm_table', 'proteoform_heatmap']
+_SELECTS_SCAN_LABEL = 'the scan table or an identification table'
+
+
+def _combined():
+    by_name = {}
+    for component in DECONV_COMPONENTS + TNT_COMPONENTS:
+        by_name.setdefault(component['name'], dict(component))
+    for name in ('mass_table', 'tag_table', 'deconv_spectrum', 'anno_spectrum', 'isotope_envelope', 'precursor_xic'):
+        by_name[name].update(requires=_SELECTS_SCAN, requires_label=_SELECTS_SCAN_LABEL)
+    # The proteoform of an identified run, or the sequence of the Sequence Input page
+    by_name['sequence_view'].update(
+        requires=_SELECTED_PROTEOFORM + ['mass_table'],
+        requires_label='a protein or proteoform table, or the mass table',
+    )
+    by_name['fdr_plot']['label'] = 'Score distribution plot (masses)'
+    by_name['id_fdr_plot']['label'] = 'Score distribution plot (identifications)'
+    groups = ['Heatmaps', 'Tables', 'Spectra & plots', 'Sequence', 'Validation', 'Quality control']
+    return sorted(by_name.values(), key=lambda c: groups.index(c['group']))
+
+
+TOPDOWN_COMPONENTS = _combined()
+# Offered only once a sequence has been submitted on the Sequence Input page.
+TOPDOWN_SEQUENCE_COMPONENTS = [c for c in DECONV_SEQUENCE_COMPONENTS if c['name'] != 'sequence_view']
+
 # Mirrors DEFAULT_LAYOUT in the FLASHDeconv Viewer, which uses it when nothing is saved.
 DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                          ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
