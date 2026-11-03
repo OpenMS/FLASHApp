@@ -35,7 +35,7 @@ before building any version of FLASHApp.
 
 First you need to build an image locally.
 
-build image with: `docker build -f Dockerfile --no-cache -t flashapp:latest --build-arg GITHUB_TOKEN=<your-github-token> .`
+build image with: `docker build -f Dockerfile --no-cache -t flashapp:latest --secret id=github_token,env=GITHUB_TOKEN .`
 
 You should see a successful output, but you can check if an image is built with:
 
