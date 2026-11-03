@@ -3,6 +3,8 @@ from pyopenms import Residue, AASequence, ModificationsDB
 from itertools import product, tee
 from copy import deepcopy
 
+from src.render import modifications
+
 
 fixed_mod_cysteine = {'No modification': 0,
                       'Carbamidomethyl (+57)': 57.021464,
@@ -56,34 +58,18 @@ def getFragmentMassesWithSeq(protein, res_type):
 
 # NOTE: cannot cache this function: cannot hash "OpenMS.AASequence"
 def setFixedModification(protein, fixed_mods=None):
-    """Apply the fixed modifications named in `fixed_mods` ({'fixed_mod_cysteine':
-    name, 'fixed_mod_methionine': name}); read from the session when None."""
+    """Apply the fixed modifications in `fixed_mods`: the library ids under
+    'fixed_modifications', else the Cys/Met names under 'fixed_mod_cysteine' and
+    'fixed_mod_methionine' saved by earlier versions; read from the session
+    when None. Returns the protein and the residues that carry one."""
     if fixed_mods is None:
         fixed_mods = st.session_state
-    fixed_mod_site = []
-
-    # fixed modification on cysteine
-    mod_mass = fixed_mod_cysteine.get(fixed_mods.get('fixed_mod_cysteine'), 0)
-    if mod_mass:
-        for index, aa in enumerate(protein.toString()):
-            if aa != 'C':
-                continue
-            # to remove warning, setModificationByDiffMonoMass was not used.
-            mod = ModificationsDB().getBestModificationByDiffMonoMass(mod_mass, 0.001, 'C', 0)
-            protein.setModification(index, mod)
-        fixed_mod_site.append('C')
-
-    # fixed modification on methionine
-    mod_mass = fixed_mod_methionine.get(fixed_mods.get('fixed_mod_methionine'), 0)
-    if mod_mass:
-        for index, aa in enumerate(protein.toUnmodifiedString()):
-            if aa != 'M':
-                continue
-                # to remove warning, setModificationByDiffMonoMass was not used.
-            mod = ModificationsDB().getBestModificationByDiffMonoMass(mod_mass, 0.001, 'M', 0)
-            protein.setModification(index, mod)
-        fixed_mod_site.append('M')
-
+    mod_ids = fixed_mods.get('fixed_modifications')
+    if mod_ids is None:
+        mod_ids = modifications.legacy_ids(
+            fixed_mods.get('fixed_mod_cysteine'), fixed_mods.get('fixed_mod_methionine')
+        )
+    protein, fixed_mod_site, _ = modifications.apply_fixed(protein, mod_ids)
     return protein, fixed_mod_site
 
 
