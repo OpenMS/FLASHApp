@@ -24,7 +24,7 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
-from src.render import hierarchy_data, insight_data, prsm_data, qc_data, validation_data
+from src.render import hierarchy_data, insight_data, prsm_data, prsm_summary, qc_data, validation_data
 from src.render.fragmentation import mzml_scan_methods
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
@@ -287,6 +287,15 @@ _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 # FLASHViewer's tables: as tall as their rows, up to 320 px below a 56 px title bar
 # PrSM mass table: every deconvolved mass of the identified spectrum
 # and the fragment ion it explains
+# Field / value rows of the selected hit (src/render/prsm_summary.py), in a
+# fixed order, so the header does not sort
+PRSM_SUMMARY_COLUMNS = [
+    {'title': 'Field', 'field': 'field', 'headerSort': False, 'width': 210, 'hozAlign': 'left'},
+    {'title': 'Value', 'field': 'value', 'headerSort': False, 'tooltip': True, 'hozAlign': 'left'},
+]
+# Tall enough for every field of a hit without scrolling
+PRSM_SUMMARY_HEIGHT = _HIERARCHY_CHROME + _HIERARCHY_ROW * prsm_summary.FIELD_COUNT
+
 PRSM_MASS_COLUMNS = [
     {'title': 'Mass ID', 'field': 'mass_id', 'sorter': 'number',
      'headerTooltip': 'The position of the mass in the deconvolved spectrum (1-based).'},
@@ -731,6 +740,20 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             ),
             required=['protein_dfs', 'scan_table'],
         ), {'height': TABLE_HEIGHT}
+
+    if comp_name == 'prsm_summary':
+        return _component(
+            Table, comp_name, fm, ds, ['protein_dfs', 'scan_table', 'spec2_tsv'],
+            lambda: dict(
+                data=prsm_summary.prsm_summary(fm, ds),
+                column_definitions=PRSM_SUMMARY_COLUMNS, title='PrSM Summary',
+                # Rows only show the hit; none is selected or highlighted
+                index_field='row', filters={'protein': 'index'}, default_row=-1,
+                layout='fitColumns',
+                pagination=False, float_precision='float64',
+            ),
+            required=['protein_dfs', 'scan_table'],
+        ), {'height': PRSM_SUMMARY_HEIGHT}
 
     if comp_name == 'prsm_mass_table':
         return _component(
