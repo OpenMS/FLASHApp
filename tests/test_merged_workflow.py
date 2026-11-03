@@ -8,9 +8,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pathlib import Path  # noqa: E402
 
-from src.Workflow import (  # noqa: E402
-    LEGACY_DECONV_INPUTS, DeconvWorkflow, TagWorkflow, TopDownWorkflow, adopt_legacy_inputs,
-)
 from src.workflow.FileManager import FileManager  # noqa: E402
 
 
@@ -19,11 +16,18 @@ def _external(workflow_dir):
     return listed.read_text().splitlines() if listed.exists() else []
 
 
+# src.Workflow is imported inside the tests: importing it here, at collection,
+# would load src.workflow.ParameterManager with the real streamlit before
+# test_parameter_defaults.py swaps in its mock.
+
+
 def test_former_workflows_name_the_merged_one():
+    from src.Workflow import DeconvWorkflow, TagWorkflow, TopDownWorkflow
     assert TagWorkflow is TopDownWorkflow and DeconvWorkflow is TopDownWorkflow
 
 
 def test_deconvolution_uploads_are_listed_once_by_reference(tmp_path):
+    from src.Workflow import LEGACY_DECONV_INPUTS, adopt_legacy_inputs
     legacy = Path(tmp_path, LEGACY_DECONV_INPUTS)
     legacy.mkdir(parents=True)
     Path(legacy, 'run_a.mzML').write_text('a')
@@ -47,6 +51,7 @@ def test_deconvolution_uploads_are_listed_once_by_reference(tmp_path):
 
 
 def test_workspace_without_deconvolution_uploads(tmp_path):
+    from src.Workflow import adopt_legacy_inputs
     assert adopt_legacy_inputs(tmp_path, Path(tmp_path, 'flashtnt')) == []
     assert _external(Path(tmp_path, 'flashtnt')) == []
 

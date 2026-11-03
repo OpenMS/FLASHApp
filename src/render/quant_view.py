@@ -9,11 +9,9 @@ conditions of the runs and the analysis settings.
 """
 
 import streamlit as st
-from openms_insight import StateManager, defer_reruns
 
 from src.quant import isobaric
 from src.quant.session import LEVEL_NAMES, QuantSession, comparisons
-from src.render import quant_cells
 from src.render.layout_editor import get_saved_layout, layout_editor
 from src.render.layout_editor.catalog import QUANT_COMPONENTS, QUANT_DEFAULT_LAYOUT
 from src.render.layout_editor.dialogs import _HELP, _own_file_manager
@@ -75,6 +73,7 @@ def _layout_dialog(file_manager):
 
 @st.dialog('Edit comparison', width='large')
 def _comparison_dialog(file_manager, dataset_id):
+    from src.render import quant_cells  # needs openms_insight
     session = QuantSession(_own_file_manager(file_manager), dataset_id)
     st.caption(
         'Which runs (or labelled samples) belong to which condition, which level to compare and how. '
@@ -96,6 +95,10 @@ def buttons(file_manager, dataset_id):
 
 def render(file_manager, dataset_id):
     """The comparison grid of the Viewer."""
+    # openms_insight only where the comparison is drawn, so the layout helpers
+    # above import without it (the unit tests do not install it)
+    from openms_insight import StateManager, defer_reruns
+    from src.render import quant_cells
     tool = comparison_tool(file_manager, dataset_id)
     session = QuantSession(file_manager, dataset_id)
     level = session.level
