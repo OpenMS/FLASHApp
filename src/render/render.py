@@ -742,7 +742,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 ),
                 column_definitions=PROTEIN_COLUMNS, title='Protein Table',
                 # A button per row opens the whole row, hidden columns included
-                row_overview=True,
+                row_overview="Scan {Scan}: {accession}",
                 index_field='index', go_to_fields=['Scan', 'accession'],
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 toggle_filters=[{
