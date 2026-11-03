@@ -34,6 +34,9 @@ def layout_editor(file_manager, dataset_id, components, default_layout, key, sta
 
     ``start_layout`` (experiments -> rows -> names) replaces the editor's
     draft when given, without saving it; bump the revision with it.
+
+    Returns True in the rerun that stored or removed the layout, so a caller
+    showing the editor in a dialog can rerun the page to apply it.
     """
     revision_key = '%s_revision' % key
     handled_key = '%s_handled' % key
@@ -43,6 +46,7 @@ def layout_editor(file_manager, dataset_id, components, default_layout, key, sta
     # triggers, so persist it before rendering and the editor gets fresh args.
     submitted = st.session_state.get(key)
     error = ''
+    changed = False
     if submitted and submitted.get('nonce') != st.session_state.get(handled_key):
         st.session_state[handled_key] = submitted.get('nonce')
         # A chosen starting point is done with once the draft is saved or reset
@@ -55,10 +59,12 @@ def layout_editor(file_manager, dataset_id, components, default_layout, key, sta
                     'layout': layout,
                     'side_by_side': bool(submitted.get('side_by_side')) and len(layout) == 2,
                 })
+                changed = True
         elif submitted.get('action') == 'reset':
             if file_manager.result_exists(dataset_id, 'layout'):
                 file_manager.remove_results(dataset_id)
             st.session_state[revision_key] += 1
+            changed = True
 
     saved = get_saved_layout(file_manager, dataset_id)
     _editor(
@@ -74,3 +80,4 @@ def layout_editor(file_manager, dataset_id, components, default_layout, key, sta
         key=key,
         default=None,
     )
+    return changed

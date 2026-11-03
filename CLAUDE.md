@@ -63,7 +63,7 @@ Viewer page ◄── render_grid() (src/render/render.py) ◄── reads cache
 
 ### Pages and the Layout Manager
 
-Each sub-app's pages (in `content/<SubApp>/`) are registered in `app.py`. The distinctive FLASHApp concept is the **Layout Manager** (`FLASHDeconvLayoutManager.py`, `FLASHTnTLayoutManager.py`): a grid editor where the user composes which visualization components appear in which cells (≤5 experiments, ≤3 columns/row). The chosen layout is persisted to the workspace cache and the **Viewer** page renders it (falling back to a built-in default if none is saved).
+Each sub-app's pages (in `content/<SubApp>/`) are registered in `app.py`. The distinctive FLASHApp concept is the **Layout Manager**, opened as a dialog by **Edit layout** on each Viewer page (`src/render/layout_editor/dialogs.py`; the editor itself is `src/render/layout_editor/frontend/index.html`, plain JS with a searchable palette of collapsible groups from `catalog.py`): a grid editor where the user composes which visualization components appear in which cells (≤5 experiments, ≤3 columns/row). The chosen layout is persisted to the workspace cache and the **Viewer** page renders it (falling back to a built-in default if none is saved).
 
 - Layout is stored via `FileManager.store_data` under dataset key **`'layout'`** for FLASHDeconv and **`'flashtnt_layout'`** for FLASHTnT (separate namespaces — they share the underlying `deconv_dfs`/`anno_dfs` data but keep independent layouts). It is JSON-importable/exportable.
 - **Sequence Input** (`FLASHDeconvSequenceInput.py`) saves a proteoform sequence + fixed modifications to the `'sequence'` dataset; doing so unlocks the `Sequence view` and `Internal fragment map` components in the Layout Manager.
