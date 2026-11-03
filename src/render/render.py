@@ -587,9 +587,10 @@ def _selected_tag(file_manager, dataset_id, state_manager):
 def _hierarchy_table(comp_name, file_manager, dataset_id):
     """One level of the protein → proteoform → PrSM tables and its height.
     Selecting a proteoform or PrSM selects its (best) PrSM in the other
-    cells, as a protein table row does. A table is as tall as the most rows
-    it can show (all proteins, the proteoforms of the protein with the most,
-    the PrSMs of the proteoform with the most), up to TABLE_HEIGHT."""
+    cells, as a protein table row does. The tables share one height: that of
+    the level with the most rows it can show at once (all proteins, the
+    proteoforms of the protein with the most, the PrSMs of the proteoform
+    with the most), up to TABLE_HEIGHT."""
     hits = hierarchy_data.prsms(file_manager, dataset_id)
     with_qvalues = hierarchy_data.has_qvalues(hits)
     common = dict(
@@ -597,6 +598,8 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
         pagination=False, float_precision='float64',
         # Columns share the cell's width, so a narrow cell never scrolls sideways
         layout='fitColumns',
+        # Stay at the shared height below, whatever the rows
+        fill_height=True,
     )
     if comp_name == 'protein_group_table':
         build = lambda: dict(
@@ -626,7 +629,9 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             interactivity={'protein': 'index', 'pscan': 'scan_idx'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
-    rows = hierarchy_data.most_rows(hits)[comp_name]
+    # All three are as tall as the one with the most rows, so that tables
+    # sitting side by side in a layout row line up
+    rows = max(hierarchy_data.most_rows(hits).values())
     height = min(TABLE_HEIGHT, _HIERARCHY_CHROME + _HIERARCHY_ROW * max(rows, 1))
     table = _component(
         Table, comp_name, file_manager, dataset_id, ['protein_dfs', 'scan_table'], build,
