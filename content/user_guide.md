@@ -49,7 +49,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 2. In **MS data**, drag your files into the box or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
 3. In **Protein database**, add a **FASTA** or **PEFF** file to identify proteoforms. FLASHApp adds the decoy sequences it needs to estimate the false discovery rate.
 4. **Example data** loads a small data set to try everything out. **Tool results** takes files a FLASHDeconv or FLASHTnT run produced elsewhere.
-5. To reanalyse a public dataset, enter its PRIDE accession (for example `PXD019247`) in **Import from a link or PRIDE** below the uploads and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
+5. To reanalyse a public dataset, enter its PRIDE accession (for example `PXD019247`) in the **Import from PRIDE** tab of the upload page and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
 
 ---
 
