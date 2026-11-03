@@ -523,17 +523,20 @@ def _deconv_sequence(file_manager, state_manager):
     if stored is None:
         return None
     sequence = state_manager.get_selection('sequence') or stored['input_sequence']
+    mod_ids = stored.get('fixed_modifications')
     return _sequence_data(
-        sequence, stored.get('fixed_mod_cysteine'), stored.get('fixed_mod_methionine')
+        sequence, stored.get('fixed_mod_cysteine'), stored.get('fixed_mod_methionine'),
+        None if mod_ids is None else tuple(mod_ids),
     )
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
-def _sequence_data(sequence, cysteine, methionine):
-    data = getFragmentDataFromSeq(
-        sequence,
-        fixed_mods={'fixed_mod_cysteine': cysteine, 'fixed_mod_methionine': methionine},
-    )
+def _sequence_data(sequence, cysteine, methionine, mod_ids=None):
+    fixed_mods = {'fixed_mod_cysteine': cysteine, 'fixed_mod_methionine': methionine}
+    if mod_ids is not None:
+        # Library ids saved by the Sequence Input page
+        fixed_mods['fixed_modifications'] = list(mod_ids)
+    data = getFragmentDataFromSeq(sequence, fixed_mods=fixed_mods)
     # Plain floats: the sequence is part of the component configuration
     return json.loads(json.dumps(data, default=float))
 
