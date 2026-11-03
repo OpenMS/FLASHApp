@@ -7,6 +7,7 @@ from src.workflow.FileManager import FileManager
 from src import sample_type
 from src.render.render import render_grid
 from src.render.layout_editor.catalog import TNT_DEFAULT_LAYOUTS
+from src.render.layout_editor.dialogs import layout_button
 
 
 def experiment_layout(saved_layout, dataset_id):
@@ -17,7 +18,7 @@ def experiment_layout(saved_layout, dataset_id):
     st.caption(
         f"{kind} default layout: this experiment looks like a "
         f"{'native or targeted run' if kind == sample_type.NATIVE else 'lysate LC-MS/MS run'}. "
-        "Arrange your own on the Layout Manager page."
+        "Press **Edit layout** to arrange your own."
     )
     return TNT_DEFAULT_LAYOUTS[kind]
 
@@ -70,6 +71,8 @@ else:
     # No saved layout: each experiment gets the default for its sample type
     layout = [None]
     side_by_side = False
+
+layout_button(file_manager, 'flashtnt')
 
 ### if no input file is given, show blank page
 if len(results) == 0:

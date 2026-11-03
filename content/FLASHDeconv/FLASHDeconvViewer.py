@@ -5,6 +5,7 @@ from pathlib import Path
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src.render.render import render_grid
+from src.render.layout_editor.dialogs import layout_button
 
 DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
                   ['anno_spectrum', 'deconv_spectrum'], ['3D_SN_plot']]
@@ -65,6 +66,8 @@ if file_manager.result_exists('layout', 'layout'):
 else:
     layout = [DEFAULT_LAYOUT]
     side_by_side = False
+
+layout_button(file_manager, 'flashdeconv')
 
 ### if no input file is given, show blank page
 if len(results) == 0:

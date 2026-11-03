@@ -46,8 +46,20 @@
   .palette { border: 1px solid var(--border); background: var(--bg2); border-radius: 10px; padding: 10px; position: sticky; top: 0; }
   .palette h4 { margin: 0 0 2px; font-size: 14px; }
   .palette .hint { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-  .palette .group { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 8px 0 4px; }
-  .palette .chips { display: flex; flex-direction: column; gap: 5px; }
+  .palette .search { width: 100%; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 14px; margin-bottom: 4px; user-select: text; -webkit-user-select: text; }
+  .palette .search:focus { outline: none; border-color: var(--primary); }
+  .palette .bulk { display: flex; justify-content: flex-end; gap: 2px; margin-bottom: 2px; }
+  .palette .bulk .link:hover { color: var(--primary); }
+  .palette .group { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 5px 2px; margin-top: 2px; border-radius: 6px;
+                    font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: left; }
+  .palette .group:hover { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }
+  .palette .group .caret { display: inline-block; width: 10px; transition: transform .1s; }
+  .palette .group.open .caret { transform: rotate(90deg); }
+  .palette .group .name { flex: 1 1 auto; }
+  .palette .group .count { font-variant-numeric: tabular-nums; text-transform: none; letter-spacing: 0; }
+  .palette .chips { display: flex; flex-direction: column; gap: 5px; margin: 2px 0 6px; }
+  .palette .empty { font-size: 13px; color: var(--muted); padding: 6px 2px; }
+  .chip mark { background: color-mix(in srgb, var(--primary) 25%, transparent); color: inherit; border-radius: 2px; }
   @media (max-width: 640px) { .palette { position: static; } .palette .chips { flex-direction: row; flex-wrap: wrap; } }
   .palette.drop-over { outline: 2px dashed var(--danger); outline-offset: -4px; }
 
@@ -129,6 +141,8 @@
   var active = 0;          // experiment that click-to-add targets
   var pending = false;     // a save/reset has been sent and not yet reflected
   var message = null;      // { kind, text } shown in the status line
+  var query = '';          // palette search text
+  var openGroups = null;   // palette group name -> expanded; null until the catalog is known
 
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
   function label(name) { return byName[name] ? byName[name].label : name; }
@@ -227,29 +241,23 @@
     else status = h('div', { class: 'status saved', text: '✓ Saved — the Viewer uses this layout' });
 
     // Palette
-    var used = {};
-    (draft.layout[active] || []).forEach(function (row) { row.forEach(function (n) { used[n] = true; }); });
-    var groups = [];
-    cfg.components.forEach(function (c) {
-      var g = groups.filter(function (x) { return x.name === c.group; })[0];
-      if (!g) { g = { name: c.group, items: [] }; groups.push(g); }
-      g.items.push(c);
-    });
+    var used = usedInActive();
+    var groups = paletteGroups();
     var palette = h('div', { class: 'palette', 'data-drop': 'palette' }, [
       h('h4', { text: 'Components' }),
-      h('div', { class: 'hint', text: 'Drag into the grid, or click to add to experiment ' + (active + 1) + '. Drag a placed component back here to remove it.' })
+      h('div', { class: 'hint', text: 'Drag into the grid, or click to add to experiment ' + (active + 1) + '. Drag a placed component back here to remove it.' }),
+      h('input', { class: 'search', id: 'palette-search', type: 'search', placeholder: 'Search components…', value: query,
+                   'aria-label': 'Search components', oninput: onSearch, onkeydown: onSearchKey })
     ]);
-    groups.forEach(function (g) {
-      palette.appendChild(h('div', { class: 'group', text: g.name || '' }));
-      palette.appendChild(h('div', { class: 'chips' }, g.items.map(function (c) {
-        return h('div', { class: 'chip' + (used[c.name] ? ' used' : ''), 'data-drag': 'palette', 'data-name': c.name,
-                          title: used[c.name] ? 'Already in experiment ' + (active + 1) : 'Drag or click to add' }, [
-          h('span', { class: 'grip', text: '⋮⋮' }),
-          h('span', { class: 'lbl', text: c.label }),
-          c.requires ? h('span', { class: 'req', text: '+ ' + reqLabel(c.name) }) : null
-        ]);
-      })));
-    });
+    if (groups.length > 1 && !query) {
+      var allOpen = groups.every(function (g) { return openGroups[g.name]; });
+      palette.appendChild(h('div', { class: 'bulk' }, [
+        h('button', { class: 'link', onclick: function () { setAllGroups(!allOpen); } }, [allOpen ? 'Collapse all' : 'Expand all'])
+      ]));
+    }
+    var list = h('div', { class: 'palette-list' });
+    paletteList(list, groups, used);
+    palette.appendChild(list);
 
     // Experiments
     var exps = h('div', { class: 'experiments' + (nExp === 2 && draft.sideBySide ? ' side-by-side' : '') });
@@ -284,8 +292,106 @@
       exps.appendChild(box);
     });
 
+    var focused = document.activeElement && document.activeElement.id === 'palette-search';
     app.replaceChildren(toolbar, status, h('div', { class: 'main' }, [palette, exps]));
+    if (focused) { var f = document.getElementById('palette-search'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
     syncHeight();
+  }
+
+  // ---- Palette: search and collapsible groups ----
+  function matches(c, q) {
+    return !q || c.label.toLowerCase().indexOf(q) >= 0 || (c.group || '').toLowerCase().indexOf(q) >= 0;
+  }
+  function highlight(text, q) {
+    var i = q ? text.toLowerCase().indexOf(q) : -1;
+    if (i < 0) return [text];
+    return [text.slice(0, i), h('mark', { text: text.slice(i, i + q.length) }), text.slice(i + q.length)];
+  }
+  function paletteGroups() {
+    var groups = [];
+    cfg.components.forEach(function (c) {
+      var g = groups.filter(function (x) { return x.name === c.group; })[0];
+      if (!g) { g = { name: c.group, items: [] }; groups.push(g); }
+      g.items.push(c);
+    });
+    return groups;
+  }
+  function usedInActive() {
+    var used = {};
+    (draft.layout[active] || []).forEach(function (row) { row.forEach(function (n) { used[n] = true; }); });
+    return used;
+  }
+  // Fill the list below the search field; typing redraws only this part, so the field keeps focus.
+  function paletteList(list, groups, used) {
+    var q = query.trim().toLowerCase();
+    var shown = 0;
+    var children = [];
+    groups.forEach(function (g) {
+      var items = g.items.filter(function (c) { return matches(c, q); });
+      if (!items.length) return;
+      shown += items.length;
+      // While searching every group with a match is open
+      var open = q ? true : !!openGroups[g.name];
+      var placed = g.items.filter(function (c) { return used[c.name]; }).length;
+      children.push(h('button', { class: 'group' + (open ? ' open' : ''), 'aria-expanded': open ? 'true' : 'false', disabled: !!q,
+                                   title: q ? '' : (open ? 'Collapse' : 'Expand'),
+                                   onclick: function () { openGroups[g.name] = !openGroups[g.name]; storeGroups(); render(); } }, [
+        h('span', { class: 'caret', text: '▸' }),
+        h('span', { class: 'name', text: g.name || 'Other' }),
+        h('span', { class: 'count', title: placed ? placed + ' of ' + g.items.length + ' in experiment ' + (active + 1) : '',
+                    text: q ? String(items.length) : (placed ? placed + '/' + g.items.length : String(g.items.length)) })
+      ]));
+      if (!open) return;
+      children.push(h('div', { class: 'chips' }, items.map(function (c) {
+        return h('div', { class: 'chip' + (used[c.name] ? ' used' : ''), 'data-drag': 'palette', 'data-name': c.name,
+                          title: used[c.name] ? 'Already in experiment ' + (active + 1) : 'Drag or click to add' }, [
+          h('span', { class: 'grip', text: '⋮⋮' }),
+          h('span', { class: 'lbl' }, highlight(c.label, q)),
+          c.requires ? h('span', { class: 'req', text: '+ ' + reqLabel(c.name) }) : null
+        ]);
+      })));
+    });
+    if (!shown) children.push(h('div', { class: 'empty', text: 'No component matches “' + query.trim() + '”' }));
+    list.replaceChildren.apply(list, children);
+  }
+  function onSearch(ev) {
+    var was = query;
+    query = ev.target.value;
+    // Starting or clearing a search shows or hides "Expand all": redraw the palette (focus is kept)
+    if (!was !== !query) return render();
+    var palette = ev.target.closest('.palette');
+    paletteList(palette.querySelector('.palette-list'), paletteGroups(), usedInActive());
+    syncHeight();
+  }
+  function onSearchKey(ev) {
+    if (ev.key === 'Escape' && query) { ev.stopPropagation(); query = ''; render(); }
+    else if (ev.key === 'Enter') {
+      // Enter adds the first match that is not yet in the experiment
+      var q = query.trim().toLowerCase(), used = usedInActive();
+      var hit = cfg.components.filter(function (c) { return q && matches(c, q) && !used[c.name]; })[0];
+      if (hit) clickAdd(hit.name);
+    }
+  }
+  var GROUPS_KEY = 'flash-layout-editor-groups';
+  function loadGroups() {
+    var stored = null;
+    try { stored = JSON.parse(window.localStorage.getItem(GROUPS_KEY) || 'null'); } catch (e) { stored = null; }
+    openGroups = {};
+    paletteGroups().forEach(function (g, i) {
+      // Remembered choice, else only the first group starts open
+      openGroups[g.name] = stored && g.name in stored ? !!stored[g.name] : i === 0;
+    });
+  }
+  function storeGroups() {
+    try {
+      var stored = JSON.parse(window.localStorage.getItem(GROUPS_KEY) || '{}') || {};
+      Object.keys(openGroups).forEach(function (k) { stored[k] = openGroups[k]; });
+      window.localStorage.setItem(GROUPS_KEY, JSON.stringify(stored));
+    } catch (e) { /* storage unavailable: the choice lasts while the editor is open */ }
+  }
+  function setAllGroups(open) {
+    Object.keys(openGroups).forEach(function (k) { openGroups[k] = open; });
+    storeGroups(); render();
   }
 
   // ---- Edits ----
@@ -470,6 +576,7 @@
     cfg = args;
     byName = {};
     cfg.components.forEach(function (c) { byName[c.name] = c; });
+    if (openGroups === null || paletteGroups().some(function (g) { return !(g.name in openGroups); })) loadGroups();
     if (draft === null || args.revision !== revision) { revision = args.revision; initDraft(); }
     pending = false;
     if (args.server_error) message = { kind: 'error', text: 'Not saved: ' + args.server_error };
