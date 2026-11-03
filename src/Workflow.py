@@ -11,6 +11,8 @@ from os.path import join, splitext, basename, exists, dirname
 from src import sample_type
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
+from src.parse.ida import parseIdaSimulator
+from src import flashida
 from src.workflow.WorkflowManager import WorkflowManager
 
 # Example inputs shipped with the default demo workspace.
@@ -574,6 +576,193 @@ class DeconvWorkflow(WorkflowManager):
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
 
+        return True
+
+
+class IdaWorkflow(WorkflowManager):
+    """FLASHIda acquisition: waits for the raw files an acquisition writes and
+    starts FLASHIda (on the instrument PC) for each, with the method named in
+    the file name (<name>FLASHIda_<method>[_2].raw; _2 uses the secondary
+    FLASHIda). Runs until stopped. Developer feature of the local app."""
+    share_cache = False
+    # Seconds between two looks at the raw folder
+    poll_interval = 1.0
+
+    def __init__(self) -> None:
+        super().__init__("FLASHIda", st.session_state["workspace"])
+        self.tool_name = 'FLASHIda'
+
+    def configure(self) -> None:
+        self.ui.input_widget(
+            key="executable", name="FLASHIda executable", default='',
+            widget_type="text", help="Path to FLASHIda's Flash.exe on the instrument PC.",
+        )
+        self.ui.input_widget(
+            key="executable-secondary", name="Secondary FLASHIda executable (optional)",
+            default='', widget_type="text",
+            help="Used for raw files named ..._2.raw.",
+        )
+        self.ui.input_widget(
+            key="raw-files", name="Raw file folder", default='', widget_type="text",
+            help="Folder the acquisition writes its raw files to.",
+        )
+        self.ui.input_widget(
+            key="method-files", name="Method folder", default='', widget_type="text",
+            help="Folder with the <method>.xml files named in the raw file names.",
+        )
+
+    def _executable(self, value, label):
+        path = Path(str(value or '').strip())
+        if str(path) in ('', '.'):
+            return None
+        if path.suffix.lower() != '.exe':
+            self.logger.log(f"The {label} '{path}' is not an .exe file.")
+            return False
+        if not path.is_file():
+            self.logger.log(f"The {label} '{path}' does not exist.")
+            return False
+        return path
+
+    def execution(self) -> bool:
+        params = self.parameter_manager.get_parameters_from_json()
+
+        primary = self._executable(params.get('executable'), 'FLASHIda executable')
+        if not primary:
+            if primary is None:
+                self.logger.log('Enter the path to the FLASHIda executable.')
+            return False
+        secondary = self._executable(
+            params.get('executable-secondary'), 'secondary FLASHIda executable'
+        )
+        if secondary is False:
+            return False
+
+        folders = {}
+        for key, label in (('method-files', 'Method folder'), ('raw-files', 'Raw file folder')):
+            folder = Path(str(params.get(key) or '').strip())
+            if str(folder) in ('', '.') or not folder.is_dir():
+                self.logger.log(f"{label} '{folder}' is not a folder.")
+                return False
+            folders[key] = folder
+
+        seen = flashida.find_raws(folders['raw-files'])
+        if seen:
+            self.logger.log('Ignoring the FLASHIda raw files already in the folder:')
+            for name, (method, is_secondary) in sorted(seen.items()):
+                self.logger.log(
+                    f"  {name} ({method}.xml, {'secondary' if is_secondary else 'primary'})"
+                )
+
+        self.logger.log('Waiting for new raw files...')
+        while True:
+            time.sleep(self.poll_interval)
+            for name, (method, is_secondary) in sorted(flashida.find_raws(folders['raw-files']).items()):
+                if name in seen:
+                    continue
+                seen[name] = (method, is_secondary)
+                self.logger.log(f"New raw file '{name}'.")
+                method_path = Path(folders['method-files'], f'{method}.xml')
+                exe = secondary if is_secondary else primary
+                if not method_path.is_file():
+                    self.logger.log(f"Method '{method_path}' does not exist. Skipping this file.")
+                elif exe is None:
+                    self.logger.log('No secondary FLASHIda executable is set. Skipping this file.')
+                else:
+                    self.logger.log(f"Starting FLASHIda with method '{method_path.name}'...")
+                    self.executor.run_command(
+                        [exe, '-m', method_path, '-r', Path(folders['raw-files'], name)],
+                        cwd=exe.parent,
+                    )
+                self.logger.log('Waiting for new raw files...')
+
+
+class IdaSimulatorWorkflow(WorkflowManager):
+    """Runs the FLASHIda simulator on the MS1 spectra of an mzML with a method
+    set on the Configure tab. Developer feature of the local app."""
+    share_cache = False
+
+    def __init__(self) -> None:
+        super().__init__("FLASHIdaSimulator", st.session_state["workspace"])
+        self.tool_name = 'FLASHIdaSimulator'
+
+    def upload(self) -> None:
+        self.ui.upload_widget(key="mzML-files", name="MS data", file_types="mzML")
+
+    def configure(self) -> None:
+        self.ui.select_input_file("mzML-files", name='Dataset')
+        self.ui.input_widget(
+            key="executable", name="FLASHIda simulator executable", default='',
+            widget_type="text", help="Path to the FLASHIda simulator (Flash.exe).",
+        )
+        tabs = st.tabs([f'**{section}**' for section in flashida.METHOD])
+        for tab, (section, entries) in zip(tabs, flashida.METHOD.items()):
+            with tab:
+                cols = st.columns(3)
+                for i, (name, default) in enumerate(entries):
+                    with cols[i % 3]:
+                        if isinstance(default, list):
+                            widget_type = 'textarea'
+                        elif isinstance(default, bool):
+                            widget_type = 'checkbox'
+                        elif isinstance(default, (int, float)):
+                            widget_type = 'number'
+                        else:
+                            widget_type = 'text'
+                        self.ui.input_widget(
+                            key=flashida.method_key(section, name), name=name,
+                            default=flashida.method_widget_default(default),
+                            widget_type=widget_type,
+                            step_size=1 if isinstance(default, int) else 0.01,
+                            help='One value per line.' if widget_type == 'textarea' else None,
+                        )
+
+    def execution(self) -> bool:
+        params = self.parameter_manager.get_parameters_from_json()
+        try:
+            in_mzml = self.file_manager.get_files(self.params["mzML-files"])[0]
+        except (KeyError, ValueError, IndexError):
+            self.logger.log('Please select an mzML file.')
+            return False
+        executable = Path(str(params.get('executable') or '').strip())
+        if str(executable) in ('', '.') or not executable.is_file():
+            self.logger.log(f"The FLASHIda simulator '{executable}' does not exist.")
+            return False
+
+        current_base = splitext(basename(in_mzml))[0]
+        dataset_id = '%s_%s' % (current_base, time.strftime("%Y%m%d-%H%M%S"))
+        folder_path = join(dirname(self.workflow_dir), 'FLASHIdaOutput', dataset_id)
+        makedirs(folder_path)
+        try:
+            input_txt = Path(folder_path, 'simulation_data.txt').resolve()
+            method_xml = Path(folder_path, 'method.xml').resolve()
+            output_tsv = Path(folder_path, 'simulation_results.tsv').resolve()
+
+            self.logger.log('Writing the MS1 spectra for the simulator...')
+            flashida.write_simulator_input(in_mzml, input_txt)
+            self.logger.log('Writing the method...')
+            flashida.write_method_xml(params, method_xml)
+
+            self.logger.log('Running the FLASHIda simulator...')
+            if not self.executor.run_command(
+                [executable, input_txt, output_tsv, method_xml], cwd=executable.parent,
+            ):
+                return False
+            if not output_tsv.is_file():
+                self.logger.log('The simulator wrote no results.')
+                return False
+
+            for file in listdir(folder_path):
+                self.file_manager.store_file(
+                    dataset_id, str(file).replace('.', '_'),
+                    Path(folder_path, file), file_name=file
+                )
+            results = self.file_manager.get_results(dataset_id, ['simulation_results_tsv'])
+            parseIdaSimulator(
+                self.file_manager, dataset_id, results['simulation_results_tsv'],
+                logger=self.logger,
+            )
+        finally:
+            rmtree(folder_path, ignore_errors=True)
         return True
 
 

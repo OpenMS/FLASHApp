@@ -698,9 +698,99 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
     return table, height
 
 
+IDA_MS2_COLUMNS = [
+    {'title': 'Index', 'field': 'index', 'sorter': 'number',
+     'headerTooltip': 'The sequential index of the MS2 spectrum in the dataset.'},
+    {'title': 'Scan', 'field': 'Scan', 'sorter': 'number'},
+    {'title': 'RT', 'field': 'RT', 'sorter': 'number', **_fixed(2),
+     'headerTooltip': 'Retention time in seconds.'},
+    {'title': 'Prec. Scan', 'field': 'PrecursorScan', 'sorter': 'number',
+     'headerTooltip': 'Scan number of the MS1 spectrum the precursor was chosen from.'},
+    {'title': 'Prec. m/z', 'field': 'PrecursorMz', 'sorter': 'number', **_fixed()},
+    {'title': 'z', 'field': 'PrecursorCharge', 'sorter': 'number',
+     'headerTooltip': 'Precursor charge.'},
+    {'title': 'Prec. Mass', 'field': 'PrecursorMass', 'sorter': 'number', **_fixed(),
+     'headerTooltip': 'Monoisotopic mass of the precursor.'},
+    {'title': 'Prec. Intensity', 'field': 'PrecursorIntensity', 'sorter': 'number', **_fixed(0)},
+    {'title': 'Prec. QScore', 'field': 'PrecursorQscore', 'sorter': 'number', **_fixed()},
+    {'title': '#Masses', 'field': '#Masses', 'sorter': 'number',
+     'headerTooltip': 'Masses deconvolved in the MS2 spectrum.'},
+    {'title': 'Identified', 'field': 'Identified', 'formatter': 'tickCross',
+     'headerTooltip': 'A TopPIC PrSM was reported for this scan.'},
+]
+
+
+def _ida(comp_name, fm, ds):
+    """Components of the FLASHIda viewers, or None for any other cell."""
+    if comp_name == 'ida_ms2_table':
+        if insight_data.result_path(fm, ds, 'ida_ms2_table') is None:
+            raise MissingResult('ida_ms2_table')
+        columns = insight_data.scan(fm, ds, 'ida_ms2_table').collect_schema().names()
+        return _component(
+            Table, comp_name, fm, ds, ['ida_ms2_table'],
+            lambda: dict(
+                data=insight_data.scan(fm, ds, 'ida_ms2_table'),
+                column_definitions=[c for c in IDA_MS2_COLUMNS if c['field'] in columns],
+                title='MS2 Table', index_field='index', go_to_fields=['index', 'Scan'],
+                # A click shows the MS2 spectrum and the MS1 spectrum its precursor came from
+                interactivity={'scan': 'index', 'precursor': 'precursor_index'},
+                on_select={'mass': 0},
+                # in the column chooser
+                hidden_columns=['index', 'PrecursorIntensity'],
+                reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
+                pagination=False, float_precision='float64',
+            ),
+        ), {'height': TABLE_HEIGHT}
+    if comp_name == 'ida_precursor_spectrum':
+        return _component(
+            DeconvolvedSpectrum, comp_name, fm, ds, ['combined_spectrum'],
+            lambda: dict(
+                data=insight_data.spectra(fm, ds, 'combined_spectrum'),
+                filters={'precursor': 'index'}, filter_defaults={'precursor': -1},
+                view='annotated', mass_identifier='precursor_mass',
+                title='Precursor Spectrum (MS1)', svg_filename='FLASHViewer-lineplot',
+                **SPECTRUM_COLUMNS, float_precision='float64',
+            ),
+        ), {}
+    if comp_name == 'ida_simulation_heat_map':
+        if insight_data.result_path(fm, ds, 'simulation_heatmap') is None:
+            raise MissingResult('simulation_heatmap')
+        levels = insight_data.heatmap_levels(fm, ds, 'simulation_heatmap')
+        return _component(
+            Heatmap, comp_name, fm, ds, ['simulation_heatmap', *(levels or [])],
+            lambda: dict(
+                data=insight_data.scan(fm, ds, 'simulation_heatmap'),
+                levels=None if levels is None else [
+                    insight_data.scan(fm, ds, name) for name in levels
+                ],
+                x_column='rt', y_column='mass', intensity_column='intensity',
+                interactivity={'simulated': 'row'}, highlight={'simulated': 'row'},
+                zoom_identifier=f'{comp_name}_zoom',
+                title='Simulated Precursors', x_label='Retention Time',
+                y_label='Monoisotopic Mass', colorscale='Portland', log_scale=True,
+                min_points=insight_data.HEATMAP_MIN_POINTS, downsample_zoomed=False,
+                svg_filename='FLASHIda-simulation-heatmap', scroll_zoom=False,
+            ),
+        ), {'height': 450}
+    if comp_name == 'ida_simulation_table':
+        return _component(
+            Table, comp_name, fm, ds, ['simulation_dfs'],
+            lambda: dict(
+                data=insight_data.scan(fm, ds, 'simulation_dfs'),
+                title='Simulated Precursors', index_field='row', go_to_fields=['row'],
+                interactivity={'simulated': 'row'},
+                reclick=RECLICK, scroll_position=SCROLL, float_precision='float64',
+            ),
+        ), {'height': TABLE_HEIGHT}
+    return None
+
+
 def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     """Insight component of a layout cell, and keyword arguments for rendering it."""
     fm, ds = file_manager, dataset_id
+
+    if comp_name.startswith('ida_'):
+        return _ida(comp_name, fm, ds)
 
     if comp_name in HEATMAPS:
         return _heatmap(comp_name, fm, ds), {'height': 450}

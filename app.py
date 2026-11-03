@@ -42,5 +42,15 @@ if __name__ == '__main__':
         ],
     }
 
+    # FLASHIda: developer feature of the local app (⚙️ Settings → Developer password)
+    from src import flashida
+    if flashida.available():
+        pages["🧠 FLASHIda"] = [
+            st.Page(Path("content", "FLASHIda", "FLASHIdaAcquisition.py"), title="Acquisition", icon="⚙️"),
+            st.Page(Path("content", "FLASHIda", "FLASHIdaViewer.py"), title="Viewer", icon="👀"),
+            st.Page(Path("content", "FLASHIda", "FLASHIdaSimulator.py"), title="Simulator", icon="🧪"),
+            st.Page(Path("content", "FLASHIda", "FLASHIdaSimulatorViewer.py"), title="Simulator Viewer", icon="📈"),
+        ]
+
     pg = st.navigation(pages, expanded=True)
     pg.run()

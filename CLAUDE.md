@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **FLASHDeconv** (⚡️) — spectral deconvolution: raw MS ion peaks → neutral monoisotopic masses (proteoforms), with isotope/charge resolution and FDR scoring.
 - **FLASHTnT** (🧨) — tag-and-track top-down identification: runs FLASHDeconv, then matches short sequence "tags" against a protein FASTA database to identify proteins (PrSMs), with target/decoy FDR.
 - **FLASHQuant** (📊) — proteoform quantification from FLASHDeconv mass traces (view-only; no run step).
+- **FLASHIda** (🧠) — developer feature of the local app only: registered in `app.py` when `src/flashida.py::available()` (local app + developer mode unlocked; the unlock is remembered in `<local workspaces>/.developer-mode` until Lock). Acquisition (`IdaWorkflow` starts FLASHIda.exe for every new `*FLASHIda_<method>[_2].raw`), loading FLASHDeconv/TopPIC results into a Viewer (MS2 table → precursor MS1 + MS2 spectra), and the FLASHIda simulator (`IdaSimulatorWorkflow`) with its viewer.
 
 The heavy lifting is done by **TOPP command-line tools** (`FLASHDeconv`, `FLASHTnT`, `DecoyDatabase`) shipped in the Docker image; the app drives them, parses their output into pandas DataFrames, caches them per workspace, and renders them with **openms-insight** components (`Table`, `Heatmap`, `DeconvolvedSpectrum`, `Plot3D`, `SeriesPlot`, `ProteinSequenceView`).
 
