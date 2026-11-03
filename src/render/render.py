@@ -495,6 +495,29 @@ def _precursor_xic(comp_name, file_manager, dataset_id, tool):
     )
 
 
+def _chromatogram(comp_name, file_manager, dataset_id):
+    """TIC, base peak and deconvolved intensity over retention time; a click
+    selects the spectrum."""
+    level = qc_data.chromatogram_level(file_manager, dataset_id)
+    return _component(
+        SeriesPlot, comp_name, file_manager, dataset_id,
+        ['scan_table', 'anno_spectrum', 'deconv_spectrum'],
+        lambda: dict(
+            data=qc_data.chromatograms(file_manager, dataset_id, level),
+            interactivity={'scan': 'index'},
+            x_column='x', y_column='y', series_column='series',
+            series_names={name: name for name in qc_data.CHROMATOGRAM_SERIES.values()},
+            series_colors=dict(zip(
+                qc_data.CHROMATOGRAM_SERIES.values(), ['#1f77b4', '#ff7f0e', '#2ca02c']
+            )),
+            mode='lines', y_range_mode='nonnegative',
+            title=f'Chromatogram (MS{level})', x_label='Retention time (s)',
+            y_label='Intensity', svg_filename='FLASHViewer-chromatogram',
+        ),
+        required=['scan_table', 'anno_spectrum'],
+    )
+
+
 def _proteins_with_characterization(file_manager, dataset_id):
     """Protein table rows with the characterization columns (empty when the
     results have no sequence data)."""
@@ -703,6 +726,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
 
     if comp_name == 'precursor_xic':
         return _precursor_xic(comp_name, fm, ds, tool), {'height': 400}
+
+    if comp_name == 'chromatogram':
+        return _chromatogram(comp_name, fm, ds), {'height': 350}
 
     if comp_name in ('fdr_plot', 'id_fdr_plot'):
         return _fdr_plot(comp_name, fm, ds), {'height': 400}

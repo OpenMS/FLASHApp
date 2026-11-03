@@ -232,3 +232,29 @@ def test_id_qc_on_demo(tnt):
     errors = qc_data.fragment_error_over_time(tnt, TNT_DATASET).collect()
     assert errors.height == 1
     assert abs(errors['y'][0]) < 5
+
+
+def test_chromatograms_on_demo(fd):
+    frame = qc_data.chromatograms(fd, FD_DATASET).collect()
+    scans = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / FD_DATASET / 'scan_table.pq')
+    ms1 = scans.filter(pl.col('MSLevel') == 1)
+    assert frame['series'].unique(maintain_order=True).to_list() == list(qc_data.CHROMATOGRAM_SERIES.values())
+    tic = frame.filter(pl.col('series') == 'TIC (raw)')
+    assert tic.height == ms1.height
+    assert tic['x'].is_sorted()
+    # The base peak is one peak of the spectrum, so never above its total
+    bpc = frame.filter(pl.col('series') == 'Base peak (raw)')
+    assert (bpc['y'] <= tic['y']).all() and (bpc['y'] > 0).all()
+    # A click selects the spectrum: every point carries its MS1 spectrum index
+    assert set(tic['index'].to_list()) == set(ms1['index'].cast(pl.Int64).to_list())
+    raw = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / FD_DATASET / 'anno_spectrum.pq')
+    first = int(tic['index'][0])
+    assert tic['y'][0] == pytest.approx(raw.filter(pl.col('index') == first)['SumIntensity_Anno'].list.sum().item(), rel=1e-6)
+
+
+def test_chromatograms_of_ms2_only_run(tnt):
+    # The FLASHTnT demo holds one fragmentation spectrum and no MS1
+    assert qc_data.chromatogram_level(tnt, TNT_DATASET) == 2
+    frame = qc_data.chromatograms(tnt, TNT_DATASET).collect()
+    assert frame.height == 3
+    assert qc_data.chromatograms(tnt, TNT_DATASET, ms_level=1).collect().is_empty()

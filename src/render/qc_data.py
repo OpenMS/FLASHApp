@@ -153,3 +153,56 @@ def fragment_error_over_time(file_manager, dataset_id):
         )
         .sort('x')
     )
+
+
+CHROMATOGRAM_SERIES = {
+    'tic': 'TIC (raw)',
+    'bpc': 'Base peak (raw)',
+    'deconv': 'Deconvolved TIC',
+}
+
+
+def chromatogram_level(file_manager, dataset_id):
+    """Lowest MS level of a run's spectra (1 unless it has MS2 only)."""
+    level = insight_data.scan_table(file_manager, dataset_id).select(
+        pl.col('MSLevel').min()
+    ).collect().item()
+    return 1 if level is None else int(level)
+
+
+def chromatograms(file_manager, dataset_id, ms_level=None):
+    """Total ion, base peak and deconvolved total intensity of every spectrum
+    of one MS level against its retention time. Without
+    `ms_level`, the lowest level the run has: MS1, or MS2 for runs of
+    fragmentation spectra only.
+
+    One row per (series, spectrum) with the spectrum `index`, so a click on a
+    point selects that spectrum. The deconvolved series is the summed
+    intensity of the spectrum's deconvolved masses."""
+    if ms_level is None:
+        ms_level = chromatogram_level(file_manager, dataset_id)
+    scans = insight_data.scan_table(file_manager, dataset_id).filter(pl.col('MSLevel') == ms_level).select('index', pl.col('RT').cast(pl.Float64).alias('x'))
+    raw = insight_data.spectra(file_manager, dataset_id, 'anno_spectrum').select(
+        'index',
+        pl.col('SumIntensity_Anno').list.sum().cast(pl.Float64).alias('tic'),
+        pl.col('SumIntensity_Anno').list.max().cast(pl.Float64).alias('bpc'),
+    )
+    frame = scans.join(raw, on='index', how='left')
+    value_columns = ['tic', 'bpc']
+    if insight_data.result_path(file_manager, dataset_id, 'deconv_spectrum') is not None:
+        deconv = insight_data.spectra(file_manager, dataset_id, 'deconv_spectrum').select(
+            'index', pl.col('SumIntensity').list.sum().cast(pl.Float64).alias('deconv'),
+        )
+        frame = frame.join(deconv, on='index', how='left')
+        value_columns.append('deconv')
+    order = {name: rank for rank, name in enumerate(CHROMATOGRAM_SERIES)}
+    return (
+        frame.unpivot(index=['index', 'x'], on=value_columns, variable_name='key', value_name='y')
+        .with_columns(
+            pl.col('y').fill_null(0.0),
+            pl.col('key').replace_strict(order, return_dtype=pl.Int64).alias('rank'),
+            pl.col('key').replace_strict(CHROMATOGRAM_SERIES, return_dtype=pl.String).alias('series'),
+        )
+        .sort(['rank', 'x'])
+        .select('series', 'x', 'y', 'index')
+    )
