@@ -23,10 +23,12 @@ FLASHAnnotator, FLASHQuantConsensus) on PATH, so run it inside the FLASHApp imag
 import json
 import shutil
 import subprocess
+import urllib.error
 import urllib.request
 import sqlite3
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -89,6 +91,22 @@ FLAGS = {
 }
 
 
+def download(url, path, attempts=6):
+    """Download `url` to `path`, waiting longer after each refusal (MassIVE rate-limits)."""
+    request = urllib.request.Request(url, headers={'User-Agent': 'FLASHApp-examples/1.0'})
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=600) as response, open(path, 'wb') as out:
+                shutil.copyfileobj(response, out)
+            return
+        except (urllib.error.URLError, TimeoutError) as error:
+            if attempt == attempts - 1:
+                raise
+            wait = 60 * 2 ** attempt
+            print(f'{error}: retrying in {wait} s', flush=True)
+            time.sleep(wait)
+
+
 def fetch(name):
     """Download the SpikeIn run behind example input `name` and keep SPIKEIN_RT."""
     target = INPUTS / 'mzML-files' / name
@@ -97,8 +115,7 @@ def fetch(name):
     with tempfile.TemporaryDirectory() as tmp:
         full = Path(tmp, SOURCES[name])
         print(f'Downloading {SOURCES[name]}', flush=True)
-        with urllib.request.urlopen(MASSIVE + SOURCES[name]) as response, open(full, 'wb') as out:
-            shutil.copyfileobj(response, out)
+        download(MASSIVE + SOURCES[name], full)
         subprocess.run(
             ['FileFilter', '-in', str(full), '-out', str(target), '-rt', f'{SPIKEIN_RT[0]}:{SPIKEIN_RT[1]}'],
             check=True,
