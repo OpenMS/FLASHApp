@@ -40,6 +40,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
+        hierarchy_data.__file__, prsm_data.__file__,
         str(Path(__file__).with_name('compare.py')),
     ):
         try:
@@ -397,6 +398,36 @@ def _heatmap(comp_name, file_manager, dataset_id):
     )
 
 
+def _proteoform_heatmap(comp_name, file_manager, dataset_id):
+    """Every PrSM as a point at its retention time and proteoform mass,
+    coloured by score. A click selects the PrSM in the protein, proteoform and
+    PrSM tables (and the cells that follow them); the selected PrSM is ringed,
+    whichever cell selected it."""
+    points = hierarchy_data.proteoform_map_from(hierarchy_data.prsms(file_manager, dataset_id))
+    if not points.height:
+        raise MissingResult('proteoform masses')
+    return _component(
+        Heatmap, comp_name, file_manager, dataset_id, ['protein_dfs', 'scan_table'],
+        lambda: dict(
+            data=points.lazy(),
+            x_column='rt', y_column='mass', intensity_column='score',
+            interactivity={
+                'protein': 'index', 'pscan': 'scan_idx',
+                'proteoform': 'proteoform_id', 'protein_group': 'protein_group',
+            },
+            on_select=_IDENTIFICATION_ON_SELECT,
+            highlight={'protein': 'index'},
+            hover_column='label',
+            zoom_identifier=f'{comp_name}_zoom',
+            title=f'Proteoform Heatmap ({points.height} PrSMs)',
+            x_label='Retention Time', y_label='Proteoform Mass',
+            colorscale='Portland', log_scale=False, intensity_label='Score',
+            min_points=insight_data.HEATMAP_MIN_POINTS, downsample_zoomed=False,
+            svg_filename='FLASHViewer-proteoform-heatmap', scroll_zoom=False,
+        ),
+    )
+
+
 def _fdr_plot(comp_name, file_manager, dataset_id):
     if comp_name == 'id_fdr_plot':
         target, decoy = 'density_id_target', 'density_id_decoy'
@@ -609,6 +640,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
 
     if comp_name in HEATMAPS:
         return _heatmap(comp_name, fm, ds), {'height': 450}
+
+    if comp_name == 'proteoform_heatmap':
+        return _proteoform_heatmap(comp_name, fm, ds), {'height': 450}
 
     if comp_name == 'scan_table':
         return _component(
@@ -981,6 +1015,11 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
     except MissingResult as e:
         if str(e) == 'sequence':
             st.info('Enter a sequence on the Sequence Input page to show the sequence view.')
+        elif str(e) == 'proteoform masses':
+            st.info(
+                'No PrSM of this dataset has a proteoform or precursor mass, '
+                'so the proteoform heatmap has nothing to show.'
+            )
         else:
             st.info(f'This dataset has no data for this view ({e}).')
         return
