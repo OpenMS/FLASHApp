@@ -44,23 +44,19 @@ PRECURSOR_COLUMNS = [
      'headerTooltip': 'Monoisotopic mass.'},
     {'title': 'z', 'field': 'z', 'sorter': 'number'},
     {'title': 'QScore', 'field': 'QScore', 'sorter': 'number', **_fixed(3)},
-    {'title': 'MS2', 'field': 'MS2', 'sorter': 'number',
-     'headerTooltip': 'MS2 scans commanded for it.'},
-    {'title': 'MS3', 'field': 'MS3', 'sorter': 'number',
-     'headerTooltip': 'MS3 scans commanded for its fragments.'},
-    {'title': 'Waiting', 'field': 'Waiting', 'sorter': 'number',
-     'headerTooltip': 'Commanded scans not acquired yet.'},
-    {'title': 'Decisions', 'field': 'Decisions',
+    {'title': 'MS2/MS3', 'field': 'MS2/MS3',
+     'headerTooltip': 'MS2 scans commanded for it / MS3 scans for its fragments.'},
+    {'title': 'Scans for', 'field': 'Decisions',
      'headerTooltip': 'What its scans were for: recording, exploration, quantification, ...'},
-    {'title': 'Best energy', 'field': 'Best energy', 'sorter': 'number',
+    {'title': 'Best CE', 'field': 'Best energy', 'sorter': 'number',
      'headerTooltip': 'Energy of the winning variant of an exploration.'},
     {'title': 'Quant', 'field': 'Quant verdict',
      'headerTooltip': 'Quantification verdict.'},
     {'title': 'Identified', 'field': 'Identified', **_tick()},
     {'title': 'Score', 'field': 'Score', 'sorter': 'number', **_fixed(0)},
-    {'title': 'Coverage %', 'field': 'Coverage', 'sorter': 'number', **_fixed(1),
+    {'title': 'Cov. %', 'field': 'Coverage', 'sorter': 'number', **_fixed(1),
      'headerTooltip': 'Sequence coverage of the fragments pooled over its scans.'},
-    {'title': 'Proteoform', 'field': 'Proteoform'},
+    {'title': 'Proteoform', 'field': 'Proteoform', 'hozAlign': 'left'},
 ]
 
 SCAN_COLUMNS = [
@@ -90,7 +86,7 @@ SCAN_COLUMNS = [
     {'title': 'Tags', 'field': 'Tags', 'sorter': 'number'},
     {'title': 'Quant', 'field': 'Quant verdict'},
     {'title': 'Score', 'field': 'Score', 'sorter': 'number', **_fixed(0)},
-    {'title': 'Proteoform', 'field': 'Proteoform'},
+    {'title': 'Proteoform', 'field': 'Proteoform', 'hozAlign': 'left'},
     {'title': 'QScore', 'field': 'QScore', 'sorter': 'number', **_fixed(3)},
     {'title': 'Priority', 'field': 'Priority', 'sorter': 'number'},
     {'title': 'Parent', 'field': 'Parent',
@@ -98,21 +94,31 @@ SCAN_COLUMNS = [
 ]
 
 
-def _component(cls, name, cache_path, stamp, build):
-    """Insight component `name` from its cache, or built when the logs changed."""
+def _no_collapse(columns):
+    """Columns that never fold into a row's details: a table too narrow for
+    them scrolls instead."""
+    return [{**c, 'responsive': 0} for c in columns]
+
+
+def _component(cls, name, cache_path, stamp, build, **styling):
+    """Insight component `name` from its cache, or built when the logs changed.
+    `styling` (colors, hidden columns) is not stored with the cache, so it is
+    passed either way."""
     cache_id = f'{name}-{stamp}-{CODE_VERSION}'
     try:
-        return cls(cache_id=cache_id, cache_path=str(cache_path))
+        return cls(cache_id=cache_id, cache_path=str(cache_path), **styling)
     except CacheMissError:
         pass
     if cache_path.exists():
         for old in cache_path.glob(f'{name}-*'):
             if old.name != cache_id:
                 shutil.rmtree(old, ignore_errors=True)
-    return cls(cache_id=cache_id, cache_path=str(cache_path), **build())
+    return cls(cache_id=cache_id, cache_path=str(cache_path), **build(), **styling)
 
 
 def _frame(df):
+    if 'MS3' in df.columns and 'Waiting' in df.columns:
+        df = df.assign(**{'MS2/MS3': [f'{a} / {b}' for a, b in zip(df['MS2'], df['MS3'])]})
     return pl.from_pandas(df).lazy()
 
 
@@ -152,31 +158,36 @@ def show_run(run: Path, cache_root: Path, key: str):
     heatmap = _component(
         Heatmap, 'decision_map', cache_path, stamp, lambda: dict(
             data=_frame(points), x_column='rt', y_column='mass', intensity_column='intensity',
-            category_column='Decision', category_colors=COLORS,
+            category_column='Decision',
             interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
             hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
             title='Survey masses and chosen precursors', x_label='Retention time (min)',
             y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
             svg_filename='FLASHIda-decisions', scroll_zoom=False,
         ),
+        # Render-time styling, not stored with the cache
+        category_colors=COLORS,
     )
     precursors = _component(
         Table, 'precursors', cache_path, stamp, lambda: dict(
             data=_frame(result['precursors']), title='Chosen precursors',
             index_field='precursor', go_to_fields=['precursor', 'Mass'],
-            interactivity={'precursor': 'precursor'}, column_definitions=PRECURSOR_COLUMNS,
+            interactivity={'precursor': 'precursor'}, column_definitions=_no_collapse(PRECURSOR_COLUMNS),
             initial_sort=[{'column': 'precursor', 'dir': 'desc'}],
             reclick='keep', scroll_position='top',
             toggle_filters=[{'label': 'Identified', 'column': 'Identified', 'default': False}],
         ),
+        hidden_columns=['Identified'],
     )
     scans = _component(
         Table, 'scans', cache_path, stamp, lambda: dict(
             data=_frame(result['scans']), title='Scans commanded for the precursor',
             index_field='scan', filters={'precursor': 'precursor'},
-            column_definitions=SCAN_COLUMNS, reclick='keep', scroll_position='top',
+            column_definitions=_no_collapse(SCAN_COLUMNS), reclick='keep', scroll_position='top',
             default_row_selects=False,
         ),
+        hidden_columns=['m/z', 'Width', 'Exploration score', 'Tags', 'Quant verdict', 'QScore',
+                        'Priority', 'Parent'],
     )
     with defer_reruns():
         heatmap(key=f'{key}_map', state_manager=state_manager, height=420)
