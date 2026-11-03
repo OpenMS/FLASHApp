@@ -98,34 +98,19 @@ def samples_and_groups(workflow, quant, identify):
     """Tab 1 of the configuration: which sample is which. Label-free: the
     condition of each run. Isobaric: the sample and condition of each label."""
     if quant == analysis.LABEL_FREE:
-        what = 'proteoforms' if identify else 'masses'
-        st.caption(
-            f'Give each run its condition (for example *control* and *treated*). The comparison '
-            f'tests which {what} differ between two conditions; at least three runs, '
-            'ideally two or more per condition. You can still change the conditions later in '
-            'the Viewer with **Edit comparison**.'
-        )
+        st.caption('The condition of each run, e.g. *control* and *treated*.')
         workflow.ui.experimental_design('mzML-files', name='Samples')
     elif quant == analysis.ISOBARIC:
         isobaric_samples(workflow)
     else:
-        st.caption(
-            'Choose a quantification above to compare samples: **Label-free** when each sample '
-            'is its own run, **Isobaric labels** when the samples were labelled and pooled.'
-        )
+        st.caption('No quantification chosen: nothing to describe here.')
 
 
 def isobaric_samples(workflow):
     """The sample and condition of each label (channel) of the chosen plex."""
     plex = analysis.plex(workflow.current_params())
     channels = isobaric.load_channels(workflow.workflow_dir, plex)
-    st.caption(
-        f'Each label of the {isobaric.label(plex)} is one sample. Name the samples and give each '
-        'its condition (for example *control* and *treated*); labels with the same condition are '
-        'replicates, a label without a condition is left out of the test. The selected runs count '
-        'as fractions of the same labelled samples. You can still change the conditions later in '
-        'the Viewer with **Edit comparison**.'
-    )
+    st.caption('The sample and condition of each label. A label without a condition is not tested.')
     edited = st.data_editor(
         channels.to_pandas(),
         column_config={
@@ -139,15 +124,11 @@ def isobaric_samples(workflow):
     saved = isobaric.save_channels(workflow.workflow_dir, pl.from_pandas(edited), plex)
     conditions = {c for c in saved['condition'] if c}
     if len(conditions) < 2:
-        st.info('Give at least two conditions to test which proteoforms change.', icon='💡')
+        st.info('Give at least two conditions.', icon='💡')
 
 
 def comparison_settings(workflow):
     """The label-free comparison's tab: how the runs are linked."""
-    st.caption(
-        'FLASHQuantConsensus links the features of the runs by mass and retention time and '
-        'fills a run where a feature was not detected from its signal there (match between runs).'
-    )
     workflow.ui.input_TOPP(
         'FLASHQuantConsensus', exclude_parameters=CONSENSUS_EXCLUDE,
         display_subsections=True, display_tool_name=False,
@@ -308,7 +289,6 @@ class TopDownWorkflow(WorkflowManager):
             key=key, on_change=self._apply_sample_type, args=(key, current),
             help=' '.join(f'**{analysis.SAMPLE_LABELS[t]}**: {h}' for t, h in analysis.SAMPLE_HELP.items()),
         )
-        st.caption(analysis.SAMPLE_HELP[current])
 
     def _apply_sample_type(self, key, current):
         chosen = st.session_state.get(key)
@@ -333,15 +313,12 @@ class TopDownWorkflow(WorkflowManager):
                 self.ui.select_input_file("fasta-file", name='Protein database', multiple=False, reactive=True)
                 self._sample_type_choice(current_sample)
                 self._recommend_sample_type(current_sample)
-            else:
-                st.caption('The runs are deconvolved only: no database is needed.')
 
             quant = self._choice(
                 analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
                 analysis.quantification(self.params), 'Quantification',
                 help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
             )
-            st.caption(analysis.QUANT_HELP[quant])
             if quant == analysis.ISOBARIC:
                 self._choice(
                     analysis.PLEX_KEY, list(isobaric.PLEXES), {p: isobaric.label(p) for p in isobaric.PLEXES},

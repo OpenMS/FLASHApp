@@ -79,33 +79,22 @@ def _runs(count):
 
 
 def summary(runs, identify, sample, database, quant, plex_type=None):
-    """What a start of the workflow will do, as one paragraph."""
+    """What a start of the workflow will do, in one line."""
     if not runs:
         return 'Select the MS data to analyse.'
-    sentences = [f'FLASHApp will find the proteoform masses in {_runs(runs)} (FLASHDeconv).']
+    parts = ['Deconvolution']
     if identify:
-        db = f'**{Path(database).name}**' if database else 'the protein database'
+        db = f'**{Path(database).name}**' if database else 'no database selected'
         settings = 'native' if sample == sample_type.NATIVE else 'lysate'
-        sentences.append(
-            f'It then identifies them against {db} with the {settings} settings (FLASHTnT) '
-            'and annotates their fragments (FLASHAnnotator).'
-        )
+        parts.append(f'identification ({settings} settings, {db})')
     if quant == LABEL_FREE:
-        what = 'proteoforms and proteins' if identify else 'masses'
-        if runs < 2:
-            sentences.append('Label-free quantification needs at least two runs: select more runs.')
-        else:
-            sentences.append(
-                f'Finally the {_runs(runs)} are linked and their {what} compared between conditions.'
-            )
+        parts.append('label-free quantification')
     elif quant == ISOBARIC:
-        what = 'proteoforms and proteins' if identify else 'precursor masses'
-        label = isobaric.label(plex_type or isobaric.DEFAULT_PLEX)
-        fractions = ' (as fractions of one labelled set)' if runs > 1 else ''
-        sentences.append(
-            f'The {label} reporter ions of every fragmentation spectrum{fractions} are measured, and '
-            f'the {what} compared between the labelled samples.'
-        )
-    if quant != NO_QUANT:
-        sentences.append('**Samples and groups** (first tab below) says which sample belongs to which condition.')
-    return ' '.join(sentences)
+        parts.append(f'{isobaric.label(plex_type or isobaric.DEFAULT_PLEX)} quantification')
+    text = ' + '.join(parts) + f' of {_runs(runs)}'
+    if quant == ISOBARIC and runs > 1:
+        text += ' (fractions of one labelled set)'
+    text += '.'
+    if quant == LABEL_FREE and runs < 2:
+        text += ' Label-free quantification needs at least two runs.'
+    return text

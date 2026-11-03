@@ -133,6 +133,7 @@ def test_summary_says_what_a_start_does():
     assert analysis.summary(0, True, 'Native', None, analysis.NO_QUANT) == 'Select the MS data to analyse.'
     text = analysis.summary(1, True, 'Lysate', 'x/db.fasta', analysis.LABEL_FREE)
     assert '**db.fasta**' in text and 'lysate settings' in text and 'at least two runs' in text
+    assert text.startswith('Deconvolution + identification')
     text = analysis.summary(3, False, 'Native', None, analysis.ISOBARIC, 'tmt10plex')
     assert 'FLASHTnT' not in text and 'TMT 10-plex' in text and 'fractions' in text
 

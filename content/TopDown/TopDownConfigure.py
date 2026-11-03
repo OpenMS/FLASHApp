@@ -12,19 +12,7 @@ wf = TopDownWorkflow()
 st.title('Describe your experiment')
 page_intro(
     """
-Tell FLASHApp what your experiment is in the **Your analysis** box below:
-
-1. **MS data**: the runs to analyse.
-2. **Identify proteoforms**: on to search the runs against a protein database, off to find the
-   masses only (MS1-only or intact-mass runs, or no database for the sample).
-3. **Sample** (when identifying): native or purified proteins, or a cell lysate. A recommendation
-   follows the selected runs.
-4. **Quantification**: none, **label-free** (each sample is its own run) or **isobaric labels**
-   (TMT or iTRAQ samples pooled into one run).
-
-The box then says in one paragraph what will run. **Samples and groups** (first tab) gives each run,
-or each label, its condition. Everything else starts at values that suit a typical experiment and is
-saved as you go. Switch on **Show advanced parameters** only if you need to change a specific setting.
+Choose your analysis below. All other settings start at values that suit a typical experiment.
 """,
     background="""
 - **Deconvolution** turns the m/z peaks of a spectrum, which carry many charges and isotopes
