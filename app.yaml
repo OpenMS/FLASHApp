@@ -29,39 +29,32 @@ inputs:
     multiple: false
     description: Protein database for FLASHTnT.
 workflows:
-- name: FLASHDeconv
-  class: src/Workflow.py:DeconvWorkflow
-  inputs:
-  - mzML-files
-  steps:
-  - tool: FLASHDeconv
-    in: mzML-files
 - name: FLASHTnT
-  class: src/Workflow.py:TagWorkflow
+  class: src/Workflow.py:TopDownWorkflow
   inputs:
   - mzML-files
   - fasta-file
   steps:
   - tool: DecoyDatabase
     in: fasta-file
+    optional: true
   - tool: FLASHDeconv
     in: mzML-files
   - tool: FLASHTnT
     in: FLASHDeconv
+    optional: true
   - tool: FLASHAnnotator
+    optional: true
+  - tool: FLASHQuantConsensus
     optional: true
 - name: FLASHQuant
   class: src/Workflow.py:QuantWorkflow
   steps: []
 results:
 - role: custom
-  workflow: FLASHDeconv
-  title: Viewer (Vue grid)
-  page: content/FLASHDeconv/FLASHDeconvViewer.py
-- role: custom
   workflow: FLASHTnT
   title: Viewer (Vue grid)
-  page: content/FLASHTnT/FLASHTnTViewer.py
+  page: content/TopDown/TopDownViewer.py
 - role: custom
   workflow: FLASHQuant
   title: Viewer
@@ -69,17 +62,12 @@ results:
 pages:
 - content/quickstart.py
 - content/user_guide.py
-- content/FLASHDeconv/FLASHDeconvUpload.py
-- content/FLASHDeconv/FLASHDeconvConfigure.py
-- content/FLASHDeconv/FLASHDeconvRun.py
-- content/FLASHDeconv/FLASHDeconvSequenceInput.py
-- content/FLASHDeconv/FLASHDeconvViewer.py
-- content/FLASHDeconv/FLASHDeconvDownload.py
-- content/FLASHTnT/FLASHTnTUpload.py
-- content/FLASHTnT/FLASHTnTConfigure.py
-- content/FLASHTnT/FLASHTnTRun.py
-- content/FLASHTnT/FLASHTnTViewer.py
-- content/FLASHTnT/FLASHTnTDownload.py
+- content/TopDown/TopDownUpload.py
+- content/TopDown/TopDownConfigure.py
+- content/TopDown/TopDownRun.py
+- content/TopDown/TopDownSequenceInput.py
+- content/TopDown/TopDownViewer.py
+- content/TopDown/TopDownDownload.py
 - content/FLASHQuant/FLASHQuantFileUpload.py
 - content/FLASHQuant/FLASHQuantViewer.py
 deploy:

@@ -24,20 +24,14 @@ if __name__ == '__main__':
             st.Page(Path("content", "user_guide.py"), title="User Guide", icon="📖"),
 
         ],
-        "⚡️ FLASHDeconv" : [
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvUpload.py"), title="Upload data", icon="📁"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvConfigure.py"), title="Describe experiment", icon="⚙️"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvRun.py"), title="Run analysis", icon="🚀"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvSequenceInput.py"), title="Sequence Input", icon="🧵"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvDownload.py"), title=export, icon=export_icon),
-        ],
-        "🧨 FLASHTnT": [
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTUpload.py"), title="Upload data", icon="📁"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTConfigure.py"), title="Describe experiment", icon="⚙️"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTRun.py"), title="Run analysis", icon="🚀"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTViewer.py"), title="Viewer", icon="👀"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTDownload.py"), title=export, icon=export_icon),
+        # One workflow: FLASHDeconv for every run, FLASHTnT when a database is given
+        "⚡️ FLASHDeconv + TnT" : [
+            st.Page(Path("content", "TopDown", "TopDownUpload.py"), title="Upload data", icon="📁"),
+            st.Page(Path("content", "TopDown", "TopDownConfigure.py"), title="Describe experiment", icon="⚙️"),
+            st.Page(Path("content", "TopDown", "TopDownRun.py"), title="Run analysis", icon="🚀"),
+            st.Page(Path("content", "TopDown", "TopDownSequenceInput.py"), title="Sequence Input", icon="🧵"),
+            st.Page(Path("content", "TopDown", "TopDownViewer.py"), title="Viewer", icon="👀"),
+            st.Page(Path("content", "TopDown", "TopDownDownload.py"), title=export, icon=export_icon),
         ],
         "📊 FLASHQuant" : [
             st.Page(Path("content", "FLASHQuant", "FLASHQuantFileUpload.py"), title="File Upload", icon="📂"),

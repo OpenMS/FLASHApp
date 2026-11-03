@@ -10,18 +10,12 @@ import streamlit as st
 
 # Page paths per workflow, so links survive a page being renamed in one place only
 PAGES = {
-    'flashdeconv': {
-        'upload': ('content/FLASHDeconv/FLASHDeconvUpload.py', 'Upload data', '📁'),
-        'configure': ('content/FLASHDeconv/FLASHDeconvConfigure.py', 'Describe experiment', '⚙️'),
-        'run': ('content/FLASHDeconv/FLASHDeconvRun.py', 'Run analysis', '🚀'),
-        'sequence': ('content/FLASHDeconv/FLASHDeconvSequenceInput.py', 'Sequence Input', '🧵'),
-        'viewer': ('content/FLASHDeconv/FLASHDeconvViewer.py', 'Viewer', '👀'),
-    },
-    'flashtnt': {
-        'upload': ('content/FLASHTnT/FLASHTnTUpload.py', 'Upload data', '📁'),
-        'configure': ('content/FLASHTnT/FLASHTnTConfigure.py', 'Describe experiment', '⚙️'),
-        'run': ('content/FLASHTnT/FLASHTnTRun.py', 'Run analysis', '🚀'),
-        'viewer': ('content/FLASHTnT/FLASHTnTViewer.py', 'Viewer', '👀'),
+    'topdown': {
+        'upload': ('content/TopDown/TopDownUpload.py', 'Upload data', '📁'),
+        'configure': ('content/TopDown/TopDownConfigure.py', 'Describe experiment', '⚙️'),
+        'run': ('content/TopDown/TopDownRun.py', 'Run analysis', '🚀'),
+        'sequence': ('content/TopDown/TopDownSequenceInput.py', 'Sequence Input', '🧵'),
+        'viewer': ('content/TopDown/TopDownViewer.py', 'Viewer', '👀'),
     },
 }
 
