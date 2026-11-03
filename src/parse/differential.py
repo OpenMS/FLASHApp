@@ -10,14 +10,6 @@ step pages to continue from (``done`` is kept for parity).
 
 import pandas as pd
 import polars as pl
-from openms_insight.analysis.filter import (
-    filter_low_abundance,
-    filter_low_repeatability,
-    filter_low_variance,
-)
-from openms_insight.analysis.imputation import impute_mar, impute_smallest_value
-from openms_insight.analysis.normalization import normalize_samples, scale_data, transform_data
-from openms_insight.analysis.statistics import adjust_fdr_lazy, calculate_statistical_tests
 
 STAT_COLUMNS = ["log2FC", "p-value", "p-adj", "stat"]
 
@@ -132,6 +124,17 @@ def run_differential(
     ``normalized_transform`` and the test actually used (``stat_test``).
     Raises ValueError when the samples do not form at least two groups.
     """
+    # Imported here so the settings and descriptions above work without openms_insight
+    # pylint: disable=import-outside-toplevel
+    from openms_insight.analysis.filter import (
+        filter_low_abundance,
+        filter_low_repeatability,
+        filter_low_variance,
+    )
+    from openms_insight.analysis.imputation import impute_mar, impute_smallest_value
+    from openms_insight.analysis.normalization import normalize_samples, scale_data, transform_data
+    from openms_insight.analysis.statistics import adjust_fdr_lazy, calculate_statistical_tests
+
     done = {k: v for k, v in (done or {}).items() if k in STEPS and v is not None}
     # Samples without a group stay in the tables but take no part in the comparison
     sample_cols = [
