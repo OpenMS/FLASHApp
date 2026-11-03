@@ -24,7 +24,7 @@ DECONV_COMPONENTS = [
     {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
 ]
 
-# Offered only once a sequence has been submitted on the Sequence Input page.
+# Offered only once a sequence has been set in the sequence view.
 DECONV_SEQUENCE_COMPONENTS = [
     {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': 'mass_table'},
     {'name': 'internal_fragment_map', 'label': 'Internal fragment map', 'group': 'Sequence', 'requires': 'mass_table'},
@@ -76,7 +76,7 @@ def _combined():
         by_name.setdefault(component['name'], dict(component))
     for name in ('mass_table', 'tag_table', 'deconv_spectrum', 'anno_spectrum', 'isotope_envelope', 'precursor_xic'):
         by_name[name].update(requires=_SELECTS_SCAN, requires_label=_SELECTS_SCAN_LABEL)
-    # The proteoform of an identified run, or the sequence of the Sequence Input page
+    # The proteoform of an identified run, or the sequence set in the view
     by_name['sequence_view'].update(
         requires=_SELECTED_PROTEOFORM + ['mass_table'],
         requires_label='a protein or proteoform table, or the mass table',
@@ -90,7 +90,7 @@ def _combined():
 
 
 TOPDOWN_COMPONENTS = _combined()
-# Offered only once a sequence has been submitted on the Sequence Input page.
+# Offered only once a sequence has been set in the sequence view.
 TOPDOWN_SEQUENCE_COMPONENTS = [c for c in DECONV_SEQUENCE_COMPONENTS if c['name'] != 'sequence_view']
 
 # Mirrors DEFAULT_LAYOUT in the FLASHDeconv Viewer, which uses it when nothing is saved.

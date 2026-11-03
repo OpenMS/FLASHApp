@@ -300,7 +300,7 @@ _HIERARCHY_ROW = 33
 _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 
 # Components with nothing to show for a run deconvolved only (the sequence
-# view then shows the Sequence Input sequence)
+# view then shows the sequence set in the view)
 IDENTIFICATION_ONLY = (
     {c['name'] for c in TNT_COMPONENTS} - {c['name'] for c in DECONV_COMPONENTS} - {'sequence_view'}
 )
@@ -618,16 +618,30 @@ def _proteins_with_characterization(file_manager, dataset_id):
     )
 
 
-def _deconv_sequence(file_manager, state_manager):
-    """Sequence data for the FLASHDeconv sequence view: the sequence the user
-    typed into the view, else the one saved on the Sequence Input page."""
-    stored = None
+def _stored_sequence(file_manager):
+    """The sequence saved for the workspace (dict), or an empty dict."""
     if file_manager.result_exists('sequence', 'sequence'):
-        stored = file_manager.get_results('sequence', 'sequence')['sequence']
-    if stored is None:
-        return None
-    sequence = state_manager.get_selection('sequence') or stored['input_sequence']
-    mod_ids = _fixed_modification_ids(stored, state_manager)
+        return file_manager.get_results('sequence', 'sequence')['sequence']
+    return {}
+
+
+def _deconv_sequence(file_manager, state_manager):
+    """Sequence data for the FLASHDeconv sequence view: the sequence set in the
+    view's "Change sequence" dialog, else the one saved earlier, else an empty
+    sequence (the view then offers its dialog to set one).
+
+    A sequence set in the view is saved for the workspace, so it stays after a
+    reload and unlocks the components that need a sequence."""
+    stored = _stored_sequence(file_manager)
+    sequence = state_manager.get_selection('sequence') or stored.get('input_sequence') or ''
+    mod_ids = list(_fixed_modification_ids(stored, state_manager))
+    if sequence and (sequence != stored.get('input_sequence') or mod_ids != stored.get('fixed_modifications')):
+        file_manager.store_data('sequence', 'sequence', {
+            'input_sequence': sequence,
+            'fixed_mod_cysteine': None,
+            'fixed_mod_methionine': None,
+            'fixed_modifications': mod_ids,
+        })
     return _sequence_data(sequence, tuple(mod_ids))
 
 
@@ -927,7 +941,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'sequence_view':
-        # The proteoform of an identified run, else the Sequence Input sequence
+        # The proteoform of an identified run, else the sequence set in the view
         if tool == 'flashtnt' or (tool == 'topdown' and fm.result_exists(ds, 'protein_dfs')):
             component = _component(
                 ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
@@ -957,8 +971,6 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             return component, {}
 
         sequence = _deconv_sequence(fm, state_manager)
-        if sequence is None:
-            raise MissingResult('sequence')
         component = _component(
             ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
             ['sequence_view', 'out_deconv_mzML'],
@@ -976,8 +988,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         )
         # The "Change sequence" dialog also picks the fixed modifications
         if hasattr(component, 'set_modification_picker'):
-            stored = fm.get_results('sequence', 'sequence')['sequence']
-            mod_ids = _fixed_modification_ids(stored, state_manager)
+            mod_ids = _fixed_modification_ids(_stored_sequence(fm), state_manager)
             component.set_modification_picker(
                 _modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids
             )
@@ -1101,9 +1112,7 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
     try:
         component, render_args = _build(comp_name, file_manager, dataset_id, tool, state_manager)
     except MissingResult as e:
-        if str(e) == 'sequence':
-            st.info('Enter a sequence on the Sequence Input page to show the sequence view.')
-        elif str(e) == 'proteoform masses':
+        if str(e) == 'proteoform masses':
             st.info(
                 'No PrSM of this dataset has a proteoform or precursor mass, '
                 'so the proteoform heatmap has nothing to show.'

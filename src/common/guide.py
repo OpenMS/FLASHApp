@@ -14,7 +14,6 @@ PAGES = {
         'upload': ('content/TopDown/TopDownUpload.py', 'Upload data', '📁'),
         'configure': ('content/TopDown/TopDownConfigure.py', 'Describe experiment', '⚙️'),
         'run': ('content/TopDown/TopDownRun.py', 'Run analysis', '🚀'),
-        'sequence': ('content/TopDown/TopDownSequenceInput.py', 'Sequence Input', '🧵'),
         'viewer': ('content/TopDown/TopDownViewer.py', 'Viewer', '👀'),
     },
 }

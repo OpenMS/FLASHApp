@@ -28,7 +28,7 @@ def has_sequence(file_manager):
 
 def components(file_manager):
     """What Edit layout offers: every component of both kinds, plus the
-    sequence components of the Sequence Input page once a sequence is saved."""
+    sequence components once a sequence is set in the sequence view."""
     if has_sequence(file_manager):
         return TOPDOWN_COMPONENTS + TOPDOWN_SEQUENCE_COMPONENTS
     return TOPDOWN_COMPONENTS

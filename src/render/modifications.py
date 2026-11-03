@@ -4,8 +4,7 @@ ModificationsDB holds the Unimod modifications (glycans such as
 ``Hex(5)HexNAc(4) (N)`` among them). This module lists and searches them by
 site and applies a set of fixed modifications to an ``AASequence``: a residue
 modification to every residue of its kind, a terminal one to the proteoform's
-terminus. It is Streamlit-free, so the Sequence Input page and the viewer's
-sequence data share it.
+terminus. It is Streamlit-free.
 """
 
 from functools import lru_cache
@@ -19,7 +18,7 @@ _TERM = ResidueModification.TermSpecificity
 _N_TERMINAL = (_TERM.N_TERM, _TERM.PROTEIN_N_TERM)
 _C_TERMINAL = (_TERM.C_TERM, _TERM.PROTEIN_C_TERM)
 
-# Fixed modifications the Sequence Input page offered before the library,
+# Fixed modifications the former Sequence Input page offered before the library,
 # by stored name: (residue, mass shift)
 LEGACY_FIXED_MODS = {
     'Carbamidomethyl (+57)': ('C', 57.021464),
@@ -117,7 +116,7 @@ def search(query='', site=None, limit=None):
 
 def legacy_ids(fixed_mod_cysteine=None, fixed_mod_methionine=None):
     """Library ids for the Cys/Met fixed modifications saved by earlier
-    versions of the Sequence Input page."""
+    versions of the former Sequence Input page."""
     db = ModificationsDB()
     ids = []
     for name in (fixed_mod_cysteine, fixed_mod_methionine):
@@ -131,7 +130,7 @@ def legacy_ids(fixed_mod_cysteine=None, fixed_mod_methionine=None):
 
 
 def fixed_ids(stored, picked=None):
-    """Fixed modification ids for a saved sequence (the Sequence Input page's
+    """Fixed modification ids for a saved sequence (the former Sequence Input page's
     record): ``picked`` (ids chosen in the sequence view's dialog, unknown ones
     dropped) when not None, else the saved ids, else those of the Cys/Met
     names saved before the library."""

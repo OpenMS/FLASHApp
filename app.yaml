@@ -58,7 +58,6 @@ pages:
 - content/TopDown/TopDownUpload.py
 - content/TopDown/TopDownConfigure.py
 - content/TopDown/TopDownRun.py
-- content/TopDown/TopDownSequenceInput.py
 - content/TopDown/TopDownViewer.py
 - content/TopDown/TopDownDownload.py
 deploy:
