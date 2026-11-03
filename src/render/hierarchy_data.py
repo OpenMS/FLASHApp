@@ -144,6 +144,55 @@ def prsm_rows_from(hits):
     )
 
 
+# Longest ProForma string shown in a proteoform map point's hover text
+_HOVER_PROTEOFORM = 40
+
+
+def proteoform_map_from(hits):
+    """One point per PrSM for the proteoform heatmap: retention time, mass and
+    score, the ids the hierarchy tables select by, and a hover label.
+
+    The mass is the proteoform mass FLASHTnT determined, else the precursor
+    mass; PrSMs with neither (single spectra without precursor information)
+    have no place on the map and are left out.
+    """
+    if not hits.height:
+        return pl.DataFrame(schema={
+            'rt': pl.Float64, 'mass': pl.Float64, 'score': pl.Float64, 'index': pl.Int64,
+            'scan_idx': pl.Int64, 'proteoform_id': pl.Int64, 'protein_group': pl.Int64,
+            'label': pl.String,
+        })
+    proteoform = pl.col('proteoform_key')
+    shortened = (
+        pl.when(proteoform.str.len_chars() > _HOVER_PROTEOFORM)
+        .then(proteoform.str.slice(0, _HOVER_PROTEOFORM - 1) + '…')
+        .otherwise(proteoform)
+    )
+    return (
+        hits.with_columns(
+            pl.coalesce(
+                _with_missing('ProteoformMass'),
+                pl.when(pl.col('PrecursorMass') > 0).then(pl.col('PrecursorMass')),
+            ).cast(pl.Float64).alias('mass'),
+        )
+        .filter(pl.col('mass').is_not_null() & pl.col('RetentionTime').is_not_null())
+        .select(
+            pl.col('RetentionTime').cast(pl.Float64).alias('rt'),
+            'mass',
+            pl.col('Score').cast(pl.Float64).alias('score'),
+            pl.col('index').cast(pl.Int64),
+            pl.col('scan_idx').cast(pl.Int64),
+            'proteoform_id', 'protein_group',
+            pl.concat_str(
+                [
+                    pl.col('accession'), pl.lit(' · '), shortened,
+                    pl.lit('<br>Scan '), pl.col('Scan').cast(pl.String).fill_null('-'),
+                ],
+            ).alias('label'),
+        )
+    )
+
+
 def key_figures(hits):
     """Counts of the protein list's title: proteins, proteoforms, PrSMs and
     the cutoff they were counted at."""

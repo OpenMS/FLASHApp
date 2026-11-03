@@ -80,10 +80,10 @@ Welcome to the **FLASHDeconv & FLASHTnT User Guide**. This guide provides a step
 
 ## **7️⃣ Layout Manager**
 
-The **Layout Manager** allows users to customize the experiment display settings.
+The **Layout Manager** allows users to customize the experiment display settings. Open it with **Edit layout** at the top of the **Viewer** page; it opens as a window over the Viewer.
 
 1. Select the **number of experiments** to view at once.
-2. Click **"Select..."** to choose components to add:
+2. Drag components from the list into the grid, or click one to add it. The list is grouped (Heatmaps, Tables, Spectra & plots, …); click a group to expand or collapse it, or type in the search field to filter by name (Enter adds the first match):
    - **MS1 raw heatmap** - 2D heatmap of raw MS signals with m/z (y-axis), retention time (x-axis), and intensity as color gradient.
    - **MS1 deconvolved heatmap** - Displays raw MS signals as a 2D heatmap with monoisotopic mass (y-axis), retention time (x-axis), and intensity as a color gradient.
    - **Scan table** - Lists scan details (e.g., number, retention time, precursor mass). 
@@ -94,7 +94,7 @@ The **Layout Manager** allows users to customize the experiment display settings
    - **Isotope envelope fit** - The observed isotope envelope of the selected mass (all charges summed; the precursor of a fragmentation spectrum while no mass is selected) mirrored against the averagine envelope. A shifted apex points to a wrong monoisotopic mass.
    - **Precursor XIC by charge** - The precursor mass of the selected fragmentation spectrum traced over the MS1 spectra, one line per charge plus their sum.
    - **Run QC** - Optional (add it in the Layout Manager). Distributions over the whole run, per MS level: QScores, charge states and masses of the deconvolved masses, and the number of masses per spectrum over retention time. A failed acquisition or poor deconvolution shows here before the identifications are read.
-3. Click **Save** to apply changes.
+3. Click **Save** to apply changes; the window closes and the Viewer shows the new layout.
 
 
 ![Layout Manager](/static/images/flashdeconv_layout_manager.png)
@@ -174,9 +174,9 @@ Adjust **general settings** such as:
 
 ## **4️⃣ Layout Manager**
 
-1. Navigate to Layout Manager.
+1. On the **Viewer** page, press **Edit layout**.
 2. Select how many experiments to display simultaneously (e.g., 1–5).
-3. Choose **components** to add for each experiment:
+3. Choose **components** to add for each experiment (search the list, or expand its groups):
 - **Protein Table** – Lists proteins identified by FLASHTnT, including accession, modifications, and score. The **Characterization** badge tells how completely the fragments pin down each proteoform: *Characterized* (green) when both termini are determined, every mass shift is localized to one residue and at least 25% of the bonds are explained by fragments; *Ambiguous* (red) below 10%; *Partial* (amber) in between. **Cleavages (%)** and **Localized Mods** give the numbers behind it.
 - **Sequence View** – Annotates tags, PTMs, and fragments. Visualizes FLASHTnT results; for FLASHDeconv data must be user-supplied. For FLASHTnT the fragment ions are FLASHAnnotator's raw-spectrum annotation: terminal fragments are marked on the residues, internal fragments as a purple depth strip and brackets on the residues and as an internal fragment track below the sequence (one bar per piece, packed into lanes, colored by ion type, shaded by intensity). Click a bar or residue to select the fragment in the table and highlight its residues.
 - **Structure View (3D)** – Part of the default layout. Shows the 3D structure of the selected protein, with the fragmentation points marked in the Sequence View's colors: one residue per terminal ion, where it ends (a/x green, b/y blue, c/z red), and, when FLASHAnnotator reports internal ions, both cleavage sites of each (purple). Modified residues carry the Sequence View's dotted pattern, and termini cleaved off the proteoform are not shown. For proteins with a UniProt accession the AlphaFold DB model is downloaded once and kept in the workspace. The upload button in the viewer stores a PDB or mmCIF file for the selected protein in the workspace too and shows it instead (needed offline and for proteins without a UniProt accession); the delete button goes back to the stored AlphaFold DB model. The database sequence is aligned to the structure, so experimental structures with their own residue numbering work too. Clicking a residue selects it in the Sequence View and Tag Table, and the other way round. Selecting a fragment in the Sequence View (table row, residue or internal fragment bar) colours the residues it covers, labels where it was cleaved (one residue for a terminal ion, both ends for an internal ion), fades the rest of the protein and fits the view to the fragment.

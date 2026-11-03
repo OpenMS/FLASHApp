@@ -27,13 +27,11 @@ if __name__ == '__main__':
         "⚡️ FLASHDeconv" : [
             st.Page(Path("content", "FLASHDeconv", "FLASHDeconvWorkflow.py"), title="Workflow", icon="⚙️"),
             st.Page(Path("content", "FLASHDeconv", "FLASHDeconvSequenceInput.py"), title="Sequence Input", icon="🧵"),
-            st.Page(Path("content", "FLASHDeconv", "FLASHDeconvLayoutManager.py"), title="Layout Manager", icon="📝️"),
             st.Page(Path("content", "FLASHDeconv", "FLASHDeconvViewer.py"), title="Viewer", icon="👀"),
             st.Page(Path("content", "FLASHDeconv", "FLASHDeconvDownload.py"), title=export, icon=export_icon),
         ],
         "🧨 FLASHTnT": [
             st.Page(Path("content", "FLASHTnT", "FLASHTnTWorkflow.py"), title="Workflow", icon="⚙️"),
-            st.Page(Path("content", "FLASHTnT", "FLASHTnTLayoutManager.py"), title="Layout Manager", icon="📝️"),
             st.Page(Path("content", "FLASHTnT", "FLASHTnTViewer.py"), title="Viewer", icon="👀"),
             st.Page(Path("content", "FLASHTnT", "FLASHTnTDownload.py"), title=export, icon=export_icon),
         ],
