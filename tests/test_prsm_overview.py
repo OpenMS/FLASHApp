@@ -72,7 +72,7 @@ def test_no_hits():
     assert list(frame.schema) == list(prsm_overview.OVERVIEW_SCHEMA)
 
 
-DEMO = Path('example-data/workspaces/default/flashtnt/cache')
+DEMO = Path('example-data/workspaces/default/cache')
 
 
 @pytest.mark.skipif(not DEMO.exists(), reason='demo workspace not present')

@@ -10,7 +10,7 @@ from src.render.insight_data import with_fragmentation
 
 AM = oms.Precursor.ActivationMethod
 DEMO_MZML = Path(
-    'example-data/workspaces/default/flashdeconv/cache/files/example_fd/out_deconv.mzML'
+    'example-data/workspaces/default/cache/files/example_deconvolution/out_deconv.mzML'
 )
 
 

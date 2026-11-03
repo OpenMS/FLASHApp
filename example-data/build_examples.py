@@ -24,6 +24,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
+from src.Workflow import FLASHANNOTATOR_FLAGS, FLASHDECONV_FLAGS, FLASHTNT_FLAGS  # noqa: E402
+
 DEMO = REPO / 'example-data' / 'workspaces' / 'default'
 INPUTS = DEMO / 'flashtnt' / 'input-files'
 DATABASE = INPUTS / 'fasta-file' / 'example_database.fasta'
@@ -43,6 +45,11 @@ EXAMPLES = {
     ),
 }
 
+# Valueless switches, as the Configure page records them (_flag_params)
+FLAGS = {
+    'FLASHDeconv': FLASHDECONV_FLAGS, 'FLASHTnT': FLASHTNT_FLAGS, 'FLASHAnnotator': FLASHANNOTATOR_FLAGS,
+}
+
 
 def run(dataset_id, file_name, params, workspace):
     """Run one example in `workspace` and return the dataset id it was stored under."""
@@ -52,14 +59,18 @@ def run(dataset_id, file_name, params, workspace):
     workflow_dir = workspace / 'flashtnt'
     shutil.rmtree(workflow_dir, ignore_errors=True)
     workflow_dir.mkdir(parents=True)
-    params = dict(params, **{'mzML-files': [str(INPUTS / 'mzML-files' / file_name)]})
+    params = dict(params, **{'mzML-files': [str(INPUTS / 'mzML-files' / file_name)], '_flag_params': FLAGS})
     if params.get('identify'):
         params['fasta-file'] = str(DATABASE)
     (workflow_dir / 'params.json').write_text(json.dumps(params, indent=4))
 
     cache = workspace / 'cache'
     before = set(FileManager(workflow_dir, cache).get_results_list(['threedim_SN_plot']))
-    execute_workflow(str(workflow_dir), 'TopDownWorkflow', 'src.Workflow')
+    try:
+        execute_workflow(str(workflow_dir), 'TopDownWorkflow', 'src.Workflow')
+    except Exception:
+        print((workflow_dir / 'logs' / 'all.log').read_text())
+        raise
     stored = set(FileManager(workflow_dir, cache).get_results_list(['threedim_SN_plot'])) - before
     if len(stored) != 1:
         print((workflow_dir / 'logs' / 'all.log').read_text())

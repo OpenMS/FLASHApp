@@ -30,7 +30,8 @@ extends them along the proteins of the database.
   Decoys are added when the FASTA file has none. Without a database the runs
   are deconvolved only.
 
-No data at hand? Example runs and a database are used when nothing is uploaded.
+No data at hand? Two example runs and a database are used when nothing is uploaded,
+and their results are already in the Viewer.
 Already ran the tools yourself? Add their output under **Tool results**.
 """,
     background="""

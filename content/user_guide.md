@@ -48,7 +48,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 1. Open **Top-down analysis › Upload data**.
 2. In **MS data**, drag your files into the box or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
 3. In **Protein database**, add a **FASTA** or **PEFF** file to identify proteoforms. FLASHApp adds the decoy sequences it needs to estimate the false discovery rate.
-4. **Example data** loads a small data set to try everything out. **Tool results** takes files a FLASHDeconv or FLASHTnT run produced elsewhere.
+4. **Example data** is there to try everything out, named after the analysis it shows: *Deconvolution-only_ProteinMix_LC-MS* (an LC-MS/MS run of a protein standard mix) and *Native-identified_GapA_HCD* (a native top-down spectrum of E. coli GapA, identified with the example database). Their results are already in the **Viewer** as *Example: deconvolution only* and *Example: native, identified*. **Tool results** takes files a FLASHDeconv or FLASHTnT run produced elsewhere.
 
 ---
 

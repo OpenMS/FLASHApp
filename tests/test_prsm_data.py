@@ -14,15 +14,15 @@ from src.render import prsm_data, validation_data  # noqa: E402
 from src.workflow.FileManager import FileManager  # noqa: E402
 
 WORKSPACE = Path(__file__).resolve().parent.parent / 'example-data' / 'workspaces' / 'default'
-TNT_DATASET = 'example_spectrum_aqpz'
+TNT_DATASET = 'example_native_identified'
 
 
 @pytest.fixture
 def tnt(tmp_path):
     cache = tmp_path / 'flashtnt'
     cache.mkdir()
-    shutil.copy(WORKSPACE / 'flashtnt' / 'cache' / 'cache.db', cache / 'cache.db')
-    (cache / 'files').symlink_to(WORKSPACE / 'flashtnt' / 'cache' / 'files')
+    shutil.copy(WORKSPACE / 'cache' / 'cache.db', cache / 'cache.db')
+    (cache / 'files').symlink_to(WORKSPACE / 'cache' / 'files')
     return FileManager(cache, cache)
 
 
