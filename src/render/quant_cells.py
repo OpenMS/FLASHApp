@@ -20,7 +20,7 @@ from openms_insight import ClusteredHeatmap, PCAPlot, SeriesPlot, Table, Volcano
 from src.common.common import show_fig
 from src.parse import differential as diff
 from src.quant.session import LEVEL_NAMES, RESULTS, STATUS_LABELS
-from src.render import insight_data
+from src.render import go_terms, insight_data
 from src.render.postprocessing_plots import (
     imputed_value_preview, missingness_vs_intensity, pvalue_histogram, sample_distributions,
 )
@@ -180,6 +180,8 @@ def build_table(session, state_manager, key, height):
             data=_comparison_table(session), column_definitions=_table_columns(session, runs),
             title=f'{LEVEL_NAMES[session.level]} of the compared {_sample(session).lower()}s', index_field='ConsensusIndex',
             interactivity={'consensus': 'ConsensusIndex'}, go_to_fields=['Proteoform'],
+            # Check boxes pick entries for the GO enrichment cell
+            multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
             reclick=RECLICK,
         ),
     )(key=key, state_manager=state_manager, height=height)
@@ -197,6 +199,10 @@ def build_volcano(session, state_manager, key, height):
             data=session.result('statistics').drop_nulls(['log2FC', 'p-adj']),
             log2fc_column='log2FC', pvalue_column='p-adj', label_column='Proteoform',
             interactivity={'consensus': 'ConsensusIndex'},
+            # A box or lasso, or All changed / Higher / Lower, picks entries
+            # for the GO enrichment cell
+            multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
+            preset_labels={'up': f'Higher in {compared}', 'down': f'Lower in {compared}'},
             title=f'{compared} vs. {reference}',
             up_color='#E74C3C', down_color='#3498DB', ns_color='#95A5A6',
             show_threshold_lines=True, threshold_line_style='dash',
@@ -326,6 +332,7 @@ def build_heatmap(session, state_manager, key, height):
             x_label=f'{_sample(session)}s', y_label=LEVEL_NAMES[session.level],
             colorscale=[[0, '#6699E0'], [0.5, '#FFFFFF'], [1, '#E06666']],
             reversescale=False, intensity_label='Z-score', group_colors=colors,
+            multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
         ),
     )(key=key, state_manager=state_manager, height=height)
 
@@ -358,6 +365,16 @@ def build_diagnostics(session, state_manager, key, height=None):
         show_fig(pvalue_histogram(statistics), f'{key}-p-values')
 
 
+def build_go(session, state_manager, key, height=None):
+    """GO terms over-represented in the entries picked in the volcano plot,
+    the table or the heatmap, against every tested entry."""
+    del height
+    if not _ready(session):
+        return
+    from src.render import go_view
+    go_view.render_comparison(session, state_manager, key)
+
+
 BUILDERS = {
     'quant_summary': (build_summary, None),
     'quant_table': (build_table, 376),
@@ -367,6 +384,7 @@ BUILDERS = {
     'quant_pca': (build_pca, 480),
     'quant_heatmap': (build_heatmap, 600),
     'quant_diagnostics': (build_diagnostics, None),
+    'quant_go': (build_go, None),
 }
 
 

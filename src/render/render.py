@@ -26,7 +26,7 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import (
-    hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
+    go_terms, hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
@@ -45,7 +45,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
-        hierarchy_data.__file__, prsm_data.__file__,
+        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__,
         str(Path(__file__).with_name('quant_cells.py')),
     ):
         try:
@@ -467,6 +467,8 @@ def _proteoform_heatmap(comp_name, file_manager, dataset_id):
             },
             on_select=_IDENTIFICATION_ON_SELECT,
             highlight={'protein': 'index'},
+            # A box or lasso selects the proteins of the PrSMs in it (GO terms)
+            multi_select={go_terms.RUN_SET: 'accession'},
             hover_column='label',
             zoom_identifier=f'{comp_name}_zoom',
             title=f'Proteoform Heatmap ({points.height} PrSMs)',
@@ -689,7 +691,8 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             column_definitions=_hierarchy_columns(PROTEIN_GROUP_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('Proteins', hierarchy_data.key_figures(hits)['proteins']),
             index_field='protein_group', go_to_fields=['accession'],
-            interactivity={'protein_group': 'protein_group'}, **common,
+            interactivity={'protein_group': 'protein_group'},
+            multi_select={go_terms.RUN_SET: 'accession'}, **common,
         )
     elif comp_name == 'proteoform_table':
         build = lambda: dict(
@@ -699,6 +702,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             index_field='proteoform_id', go_to_fields=['proteoform'],
             filters={'protein_group': 'protein_group'},
             interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+            multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     else:
@@ -709,6 +713,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             index_field='index', go_to_fields=['Scan'],
             filters={'proteoform': 'proteoform_id'},
             interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+            multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     # All three are as tall as the one with the most rows, so that tables
@@ -881,6 +886,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     'color': '#6200EE',
                 }],
                 interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+                multi_select={go_terms.RUN_SET: 'accession'},
                 on_select={'tag': None, 'aa': None, 'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
@@ -1097,6 +1103,10 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
         return
     if comp_name == 'id_qc':
         _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        return
+    if comp_name == 'go_enrichment':
+        from src.render import go_view
+        go_view.render_run(file_manager, dataset_id, state_manager, key)
         return
     try:
         component, render_args = _build(comp_name, file_manager, dataset_id, tool, state_manager)

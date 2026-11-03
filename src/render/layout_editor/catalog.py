@@ -52,6 +52,9 @@ TNT_COMPONENTS = [
     {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
     {'name': 'id_qc', 'label': 'Identification QC (IDs and fragment error over time)', 'group': 'Quality control'},
     {'name': 'proteoform_heatmap', 'label': 'Proteoform heatmap (PrSMs by RT and mass)', 'group': 'Heatmaps'},
+    {'name': 'go_enrichment', 'label': 'GO enrichment of the selected proteins', 'group': 'Functional analysis',
+     'requires': ['protein_table', 'protein_group_table', 'proteoform_table', 'proteoform_prsm_table', 'proteoform_heatmap'],
+     'requires_label': 'a protein, proteoform or PrSM table, or the proteoform heatmap'},
     {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
 ]
@@ -85,7 +88,10 @@ def _combined():
     by_name['reporter_ions'].update(requires=_SELECTS_SCAN + ['reporter_table'], requires_label=_SELECTS_SCAN_LABEL + ' or the reporter ion table')
     by_name['fdr_plot']['label'] = 'Score distribution plot (masses)'
     by_name['id_fdr_plot']['label'] = 'Score distribution plot (identifications)'
-    groups = ['Heatmaps', 'Tables', 'Spectra & plots', 'Sequence', 'Quantification', 'Validation', 'Quality control']
+    groups = [
+        'Heatmaps', 'Tables', 'Spectra & plots', 'Sequence', 'Quantification', 'Functional analysis',
+        'Validation', 'Quality control',
+    ]
     return sorted(by_name.values(), key=lambda c: groups.index(c['group']))
 
 
@@ -106,6 +112,7 @@ TNT_LYSATE_LAYOUT = [
     ['sequence_view'],
     ['fragment_error_plot', 'precursor_xic'],
     ['id_fdr_plot', 'id_qc'],
+    ['go_enrichment'],
 ]
 TNT_DEFAULT_LAYOUT = TNT_NATIVE_LAYOUT
 TNT_DEFAULT_LAYOUTS = {'Native': TNT_NATIVE_LAYOUT, 'Lysate': TNT_LYSATE_LAYOUT}
@@ -119,9 +126,14 @@ QUANT_COMPONENTS = [
     {'name': 'quant_runs', 'label': 'Selected entry per run', 'group': 'Quantification', 'requires': ('quant_table', 'quant_volcano'), 'requires_label': 'the comparison table or the volcano plot'},
     {'name': 'quant_pca', 'label': 'Sample similarity (PCA)', 'group': 'Quantification'},
     {'name': 'quant_heatmap', 'label': 'Clustered heatmap', 'group': 'Quantification'},
+    {'name': 'quant_go', 'label': 'GO enrichment of the selected entries', 'group': 'Functional analysis',
+     'requires': ('quant_table', 'quant_volcano', 'quant_heatmap'),
+     'requires_label': 'the comparison table, the volcano plot or the clustered heatmap'},
     {'name': 'quant_diagnostics', 'label': 'Comparison diagnostics', 'group': 'Quality control'},
 ]
-QUANT_DEFAULT_LAYOUT = [['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca']]
+QUANT_DEFAULT_LAYOUT = [
+    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca'], ['quant_go'],
+]
 
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3
