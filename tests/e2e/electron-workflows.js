@@ -9,8 +9,9 @@ const VIEW_TIMEOUT = 3 * 60 * 1000;
 async function setCheckbox(t, label, checked) {
   const box = t.page.getByRole("checkbox", { name: label }).first();
   if ((await box.isChecked()) !== checked) {
-    // Streamlit hides the input itself behind its styled box
-    await box.click({ force: true });
+    // Streamlit draws the input at 0x0 behind its styled box, so even a forced
+    // click on it fails ("outside of the viewport"); click its label instead.
+    await box.locator("xpath=ancestor::label[1]").click();
     await t.settle();
   }
 }
@@ -25,6 +26,13 @@ async function runWorkflow(t, workflowPage, inputs, identify) {
   // No settle() here: while the workflow runs, the status fragment reruns the
   // page, which can keep it from going quiet for 120 s. waitForText waits.
   await t.page.getByRole("button", { name: "Start Workflow" }).first().click();
+  // While the new run is running, its page reruns every second and can still
+  // show the previous run's "completed" message as stale elements, so wait
+  // for the run to start (Stop Workflow appears) and to end (it goes away)
+  // before reading the result.
+  const stop = t.page.getByRole("button", { name: "Stop Workflow" }).first();
+  await stop.waitFor({ timeout: 60000 }).catch(() => t.log("no running state seen within 60 s"));
+  await stop.waitFor({ state: "detached", timeout: RUN_TIMEOUT });
   await t.waitForText("Workflow completed successfully.", {
     timeout: RUN_TIMEOUT,
     failOn: ["Errors occurred, check log file."],
@@ -70,6 +78,9 @@ module.exports = async (t) => {
 
   await runWorkflow(t, "TopDown", [["MS data", "Native-identified_GapA_HCD.mzML"]], true);
   const log = await t.page.locator("body").innerText();
-  if (!log.includes("FLASHAnnotator")) throw new Error("The identification did not reach FLASHAnnotator");
+  if (!log.includes("FLASHAnnotator")) {
+    t.log(log.slice(-4000));
+    throw new Error("The identification did not reach FLASHAnnotator");
+  }
   await checkViewer(t, "TopDownViewer", "Native-identified_GapA_HCD");
 };

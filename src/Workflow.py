@@ -229,8 +229,9 @@ class TopDownWorkflow(WorkflowManager):
             self.ui.upload_widget(key="mzML-files", name="MS data", file_types=MS_DATA_TYPES, fallback=EXAMPLE_DATA)
         with t[1]:
             st.caption(
-                'Only needed to identify proteoforms. Without a database the runs are '
-                'deconvolved only (switch off **Identify proteoforms** on Describe experiment).'
+                'Only needed to identify proteoforms, and only for a database of your own: '
+                'a UniProt proteome can be chosen on Describe experiment. Without a database '
+                'the runs are deconvolved only (switch off **Identify proteoforms** there).'
             )
             self.ui.upload_widget(key="fasta-file", name="Database", file_types=DATABASE_TYPES,
                                   fallback='example-data/workspaces/default/flashtnt/input-files/fasta-file/example_database.fasta')
@@ -307,7 +308,7 @@ class TopDownWorkflow(WorkflowManager):
             identify = self.identifying()
             current_sample = self._current_sample_type()
             if identify:
-                self.ui.select_input_file("fasta-file", name='Protein database', multiple=False, reactive=True)
+                self.ui.select_protein_database("fasta-file", name='Protein database', reactive=True)
                 self._sample_type_choice(current_sample)
                 self._recommend_sample_type(current_sample)
 
