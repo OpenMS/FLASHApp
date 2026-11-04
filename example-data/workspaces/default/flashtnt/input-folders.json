@@ -1,0 +1,11 @@
+{
+  "mzML-files": {
+    "Deconvolution-only_ProteinMix_LC-MS.mzML": "Deconvolution only",
+    "Isobaric_TMT10_HeLa-Ratio.mzML": "TMT 10-plex",
+    "Label-free_SpikeIn-0.1x_R1.mzML": "Label-free comparison/Spike-in 0.1x",
+    "Label-free_SpikeIn-0.1x_R2.mzML": "Label-free comparison/Spike-in 0.1x",
+    "Label-free_SpikeIn-1x_R1.mzML": "Label-free comparison/Spike-in 1x",
+    "Label-free_SpikeIn-1x_R2.mzML": "Label-free comparison/Spike-in 1x",
+    "Native-identified_GapA_HCD.mzML": "Native identification"
+  }
+}
