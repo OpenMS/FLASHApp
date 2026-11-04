@@ -92,6 +92,49 @@ jobs:
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "desktop build: $run" >> "$GITHUB_STEP_SUMMARY"
 
+  # TEMPORARY (develop only): openms-insight is built from its development
+  # branch (main) and installed over the PyPI release from requirements.txt.
+  # Revert this commit before a FLASHApp release: releases use a published
+  # openms-insight version.
+  build-openms-insight:
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '21'
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Checkout openms-insight
+      uses: actions/checkout@v4
+      with:
+        repository: 't0mdavid-m/openms-insight'
+        ref: 'main'
+        path: 'openms-insight'
+
+    - name: Build the Vue bundle and the wheel
+      run: |
+        cd openms-insight/js-component
+        npm ci
+        npm run build
+        mkdir -p ../openms_insight/js-component
+        cp -r dist ../openms_insight/js-component/
+        cd ..
+        python -m pip wheel --no-deps -w wheel .
+
+    - name: Upload wheel as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: openms-insight-wheel
+        path: openms-insight/wheel/*.whl
+
   # Release or build? A released OpenMS ("3.5.0") is downloaded by the build
   # job's "Stage OpenMS TOPP tools" step on every platform, and this job only
   # takes seconds. A branch, tag or commit ("OpenMS/OpenMS@develop",
@@ -111,7 +154,7 @@ jobs:
   # this platform's installer, which the same test steps install and drive.
   build:
     name: ${{ matrix.platform }}
-    needs: [openms]
+    needs: [openms, build-openms-insight]
     strategy:
       fail-fast: false
       matrix:
@@ -174,6 +217,12 @@ jobs:
         fi
         electron/scripts/stage-openms.sh "$OPENMS_VERSION" electron/payload $TOPP_TOOLS
 
+    - name: Download openms-insight wheel
+      uses: actions/download-artifact@v4
+      with:
+        name: openms-insight-wheel
+        path: openms-insight-wheel
+
     - name: Stage Python with the app's requirements
       run: |
         electron/scripts/stage-python.sh "$PYTHON_VERSION" electron/payload requirements.txt
@@ -182,6 +231,8 @@ jobs:
         else
           py="electron/payload/python-$PYTHON_VERSION/bin/python3"
         fi
+        # TEMPORARY: openms-insight from main over the release in requirements.txt
+        "$py" -m pip install --no-deps --force-reinstall --no-warn-script-location --disable-pip-version-check openms-insight-wheel/*.whl
         "$py" -c 'import openms_insight; print("openms_insight", openms_insight.__version__)'
         if [[ $RUNNER_OS != macOS ]]; then
           # polars' default wheel needs AVX2 and more; the LTS build runs on

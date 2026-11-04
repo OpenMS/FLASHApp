@@ -15,6 +15,15 @@ The viewers are built from [openms-insight](https://github.com/t0mdavid-m/openms
 components (tables, heatmaps, spectra, 3D plots and the proteoform sequence view).
 They come from the `openms-insight` release pinned in `requirements.txt`, so
 `pip install -r requirements.txt` installs them.
+The develop branch's Docker images and desktop apps currently build
+openms-insight from its `main` branch instead; for the same locally:
+
+```
+git clone https://github.com/t0mdavid-m/openms-insight.git
+cd openms-insight/js-component && npm ci && npm run build
+mkdir -p ../openms_insight/js-component && cp -r dist ../openms_insight/js-component/
+cd .. && pip install --no-deps --force-reinstall .
+```
 
 ## Build
 
