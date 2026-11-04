@@ -1,5 +1,5 @@
 # Argo CD Image Updater: deploys every new release of this app. It watches
-# ghcr.io/openms/flashapp for release images (`^[0-9]+\.[0-9]+\.[0-9]+-full$`; the per-commit,
+# ghcr.io/openms/flashapp for release images (`1.2.0-full`, `2.0.0-alpha-full`; the per-commit,
 # `-simple`, `-amd64`/`-arm64` and moving tags never match), picks the most
 # recently built one, and sets it on the `flashapp` Application (write-back
 # `argocd`, so nothing is committed to the repo). Needs Image Updater >= 1.0
@@ -26,7 +26,7 @@ spec:
           imageName: ghcr.io/openms/flashapp
           commonUpdateSettings:
             updateStrategy: newest-build
-            allowTags: 'regexp:^[0-9]+\.[0-9]+\.[0-9]+-full$'
+            allowTags: 'regexp:^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9.]*)?-full$'
           manifestTargets:
             kustomize:
               # The placeholder image name k8s/base uses and the overlay's

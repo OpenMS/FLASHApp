@@ -50,6 +50,14 @@ def test_deconvolution_uploads_are_listed_once_by_reference(tmp_path):
     assert _external(workflow_dir) == []
 
 
+def test_every_example_run_is_an_example():
+    # A demo run left out of EXAMPLE_DATA counts as the user's own file, and
+    # the Browse dialog then removes the listed examples from the workspace.
+    from src.Workflow import EXAMPLE_DATA, EXAMPLE_DIR
+    shipped = sorted(p.name for p in Path(EXAMPLE_DIR).glob('*.mzML'))
+    assert sorted(Path(f).name for f in EXAMPLE_DATA) == shipped
+
+
 def test_workspace_without_deconvolution_uploads(tmp_path):
     from src.Workflow import adopt_legacy_inputs
     assert adopt_legacy_inputs(tmp_path, Path(tmp_path, 'flashtnt')) == []

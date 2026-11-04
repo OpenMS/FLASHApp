@@ -1,4 +1,3 @@
-import re
 import streamlit as st
 
 from src.common.common import page_setup, themed_asset, v_space
@@ -372,125 +371,6 @@ def inject_workflow_button_css():
         unsafe_allow_html=True,
     )
 
-def create_navigation_button(emoji, title, subtitle, page_path):
-    """Create a functional workflow button that navigates to the specified page."""
-    
-    # Create unique key for this button
-    button_key = f"{re.sub(r'[^a-z0-9]+', '_', title.lower())}_nav_btn"
-    
-    # Create the button with custom styling applied via CSS classes
-    button_label = f"{emoji} {title}"
-    
-    # Use Streamlit's button with custom styling
-    if st.button(
-        label=button_label,
-        key=button_key,
-        help=f"Navigate to {title} - {subtitle}",
-        use_container_width=True,
-        type="primary"
-    ):
-        st.switch_page(page_path)
-    
-    # Apply custom CSS styling using the key-based selector approach
-    st.markdown(
-        f"""
-        <style>
-        /* Target the specific button using key-based selector */
-        .st-key-{button_key} button {{
-            background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%) !important;
-            border: 2px solid rgba(128, 128, 128, 0.3) !important;
-            border-radius: 12px !important;
-            padding: 2rem 1.5rem !important;
-            height: max(280px, 20vh) !important;
-            min-height: max(280px, 20vh) !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-            transition: all 0.3s ease !important;
-            margin-bottom: 1rem !important;
-            color: var(--fa-accent) !important;
-            font-size: clamp(1.25rem, 2.5vw, 1.5rem) !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            font-weight: 700 !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            align-items: center !important;
-            text-align: center !important;
-            line-height: 1.4 !important;
-            width: 100% !important;
-        }}
-        
-        .st-key-{button_key} button p {{
-            color: var(--fa-accent) !important;
-            font-size: clamp(1.25rem, 2.5vw, 1.5rem) !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            font-weight: 700 !important;
-            margin: 0 !important;
-        }}
-        
-        .st-key-{button_key} button:hover {{
-            background: linear-gradient(135deg, #29379b 0%, #1e2a7a 100%) !important;
-            border-color: #29379b !important;
-            transform: translateY(-4px) !important;
-            box-shadow: 0 8px 24px rgba(41, 55, 155, 0.3) !important;
-        }}
-        
-        .st-key-{button_key} button:hover p {{
-            color: white !important;
-        }}
-        
-        .st-key-{button_key} button:active {{
-            background: linear-gradient(135deg, #1e2a7a 0%, #162159 100%) !important;
-            border-color: #1e2a7a !important;
-            transform: translateY(-2px) scale(0.98) !important;
-            box-shadow: 0 4px 12px rgba(41, 55, 155, 0.4) !important;
-        }}
-        
-        .st-key-{button_key} button:active p {{
-            color: white !important;
-        }}
-        
-        .st-key-{button_key} button:focus {{
-            background: linear-gradient(135deg, #29379b 0%, #1e2a7a 100%) !important;
-            border-color: #29379b !important;
-        }}
-        
-        .st-key-{button_key} button:focus p {{
-            color: white !important;
-        }}
-        
-        /* Add subtitle styling using pseudo-element */
-        .st-key-{button_key} button::after {{
-            content: "{subtitle}";
-            display: block;
-            font-size: clamp(0.875rem, 1.5vw, 1rem) !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            font-weight: 500 !important;
-            color: #6c757d !important;
-            margin-top: 0.5rem !important;
-        }}
-        
-        .st-key-{button_key} button:hover::after {{
-            color: #e9ecef !important;
-        }}
-        
-        .st-key-{button_key} button:active::after {{
-            color: #e9ecef !important;
-        }}
-        
-        .st-key-{button_key} button:focus::after {{
-            color: #e9ecef !important;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
 def render_workflow_selection():
     """Render the main workflow selection section."""
     # Hero section with title on left and FLASHApp logo on right
@@ -518,17 +398,111 @@ def render_workflow_selection():
     
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Main workflow selection buttons with centered, compact layout
-    # Use spacing columns to center buttons and prevent wide-screen spreading
-    spacer1, col1, spacer2 = st.columns([2, 3, 2], gap="small")
+    render_workflow_flow()
 
-    with col1:
-        create_navigation_button(
-            "⚡️",
-            "Top-down analysis",
-            "Deconvolution, identification and quantification",
-            "content/TopDown/TopDownConfigure.py"
+
+FLOW_STEPS = [
+    ("⚙️", "Describe experiment", "Pick runs, database and samples",
+     "content/TopDown/TopDownConfigure.py"),
+    ("🚀", "Run analysis", "Deconvolve, identify, quantify",
+     "content/TopDown/TopDownRun.py"),
+    ("👀", "Viewer", "Explore spectra, masses, proteoforms",
+     "content/TopDown/TopDownViewer.py"),
+    ("⬇️", "Download", "Result files of every run",
+     "content/TopDown/TopDownDownload.py"),
+]
+
+
+def render_workflow_flow():
+    """The steps of a top-down analysis, each a button to its page."""
+    steps = list(FLOW_STEPS)
+    if st.session_state.get("location") == "local":
+        steps[-1] = ("📤", "Export", "Result files to a folder", steps[-1][3])
+
+    st.markdown(
+        '<h3 class="flow-title">⚡️ Top-down analysis</h3>',
+        unsafe_allow_html=True,
+    )
+    widths = []
+    for i in range(len(steps)):
+        widths += [4, 1] if i < len(steps) - 1 else [4]
+    cols = st.columns(widths, gap="small", vertical_alignment="center")
+
+    css = []
+    for i, (emoji, title, subtitle, page) in enumerate(steps):
+        key = f"flow_step_{i}"
+        with cols[2 * i]:
+            if st.button(f"{i + 1}\\. {emoji} {title}", key=key,
+                         help=subtitle, use_container_width=True):
+                st.switch_page(page)
+        if i < len(steps) - 1:
+            with cols[2 * i + 1]:
+                st.markdown('<div class="flow-arrow">➜</div>',
+                            unsafe_allow_html=True)
+        css.append(
+            f'.st-key-{key} button::after {{ content: "{subtitle}"; }}'
         )
+
+    st.markdown(
+        "<style>"
+        + """
+        .flow-title {
+            color: var(--fa-accent);
+            text-align: center;
+            font-weight: 700;
+            margin: 1rem 0 1.25rem 0;
+        }
+        [class*="st-key-flow_step_"] button {
+            background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%) !important;
+            border: 2px solid rgba(128, 128, 128, 0.3) !important;
+            border-radius: 12px !important;
+            min-height: 150px !important;
+            padding: 1.25rem 1rem !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+            transition: all 0.25s ease !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            align-items: center !important;
+            text-align: center !important;
+        }
+        [class*="st-key-flow_step_"] button p {
+            color: var(--fa-accent) !important;
+            font-size: 1.15rem !important;
+            font-weight: 700 !important;
+            margin: 0 !important;
+        }
+        [class*="st-key-flow_step_"] button::after {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #6c757d;
+            margin-top: 0.4rem;
+        }
+        [class*="st-key-flow_step_"] button:hover {
+            background: linear-gradient(135deg, #29379b 0%, #1e2a7a 100%) !important;
+            border-color: #29379b !important;
+            transform: translateY(-3px) !important;
+            box-shadow: 0 8px 24px rgba(41, 55, 155, 0.3) !important;
+        }
+        [class*="st-key-flow_step_"] button:hover p,
+        [class*="st-key-flow_step_"] button:hover::after {
+            color: white !important;
+        }
+        .flow-arrow {
+            text-align: center;
+            font-size: 2rem;
+            color: var(--fa-accent);
+            opacity: 0.6;
+        }
+        @media (max-width: 640px) {
+            .flow-arrow { transform: rotate(90deg); }
+        }
+        """
+        + "\n".join(css)
+        + "</style>",
+        unsafe_allow_html=True,
+    )
 
 def render_whats_new():
     """Render the release highlights below the workflow buttons."""
@@ -537,21 +511,21 @@ def render_whats_new():
         st.markdown(
             """
             <div class="whats-new">
-                <h3>✨ What's new in FLASHApp 1.2.0</h3>
+                <h3>✨ What's new in FLASHApp 2.0 (alpha)</h3>
                 <div class="whats-new-columns">
                     <div>
-                        <h4>Check every identification</h4>
+                        <h4>One top-down analysis</h4>
                         <ul>
-                            <li>FLASHTnT results go from protein to proteoform to PrSM, with matched and unmatched masses per PrSM.</li>
-                            <li>New validation views: fragment mass errors, isotope envelope fit and the precursor XIC by charge.</li>
-                            <li>Run QC and identification QC panels.</li>
+                            <li>Deconvolution, proteoform identification and label-free or TMT quantification in one workflow.</li>
+                            <li>Pick runs in a file selector with folders, import public PRIDE datasets, or download a UniProt proteome as the database.</li>
+                            <li>Example results for every analysis are ready in the Viewer.</li>
                         </ul>
                     </div>
                     <div>
-                        <h4>More accurate sequence view</h4>
+                        <h4>A more flexible Viewer</h4>
                         <ul>
-                            <li>Ion series follow each scan's fragmentation method (ETD, EThcD, UVPD), with a tolerance in Da.</li>
-                            <li>The protein table shows characterization, cleavages and localized modifications.</li>
+                            <li>Arrange the Viewer in a layout window with a searchable component list.</li>
+                            <li>New views: chromatogram, proteoform heatmap and GO enrichment of selected proteins.</li>
                         </ul>
                     </div>
                 </div>
