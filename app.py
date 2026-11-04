@@ -15,8 +15,8 @@ if "settings" not in st.session_state:
 
 if __name__ == '__main__':
     # A local install exports results to a folder instead of downloading them.
-    export = "Export" if not st.session_state.settings["online_deployment"] else "Download"
-    export_icon = "📤" if export == "Export" else "⬇️"
+    export = "Export results" if not st.session_state.settings["online_deployment"] else "Download results"
+    export_icon = "📤" if export.startswith("Export") else "⬇️"
     pages = {
         "FLASHApp" : [
             st.Page(Path("content", "quickstart.py"), title="Quickstart", icon="👋"),
