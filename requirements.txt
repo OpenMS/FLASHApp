@@ -138,6 +138,8 @@ watchdog==6.0.0
     # via streamlit
 xlsxwriter
 scipy>=1.15
+# GO terms of the selected proteins (Viewer: GO enrichment)
+mygene>=3.2
 polars>=1.0.0,<2  # 2.0 removed APIs the parsers use (e.g. LazyFrame.with_row_count)
 
 # Redis Queue dependencies (for online mode)
