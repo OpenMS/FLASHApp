@@ -1,10 +1,13 @@
 """Which presets fit the chosen analysis (src/analysis.py)."""
 import json
+import sys
 from pathlib import Path
 
-from src import analysis
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-PRESETS = json.loads(Path('presets.json').read_text())['flashtnt']
+from src import analysis  # noqa: E402
+
+PRESETS = json.loads(Path(__file__).resolve().parents[1].joinpath('presets.json').read_text())['flashtnt']
 
 
 def test_sample_presets_fit_only_with_identification():
