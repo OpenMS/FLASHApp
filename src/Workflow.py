@@ -1,3 +1,4 @@
+import inspect
 import json
 import time
 
@@ -171,6 +172,16 @@ IDENTIFY_HELP = (
 # FLASHDeconv parameters the workflow sets itself
 # -quant follows label-free quantification, -iq:type the label choice
 FLASHDECONV_EXCLUDE = ['ida_log', 'quant', 'iq:type']
+# Output and file options: in the "All parameters" dialog, not on the page
+FLASHDECONV_ADVANCED = ['keep_empty_out', 'write_detail', 'FD:scan_commands']
+FLASHTNT_ADVANCED = ['ex:var_mod_file']
+
+
+def _advanced(ui, names):
+    """advanced_parameters for input_TOPP, where the template has it."""
+    if 'advanced_parameters' in inspect.signature(ui.input_TOPP).parameters:
+        return {'advanced_parameters': names}
+    return {}
 
 # FLASHDeconv's outputs: (parameter, file name in the run's folder)
 FLASHDECONV_OUTPUTS = [
@@ -378,6 +389,7 @@ class TopDownWorkflow(WorkflowManager):
             self.ui.input_TOPP(
                 'FLASHDeconv', exclude_parameters=exclude, display_subsections=True,
                 display_tool_name=False, flag_parameters=FLASHDECONV_FLAGS,
+                **_advanced(self.ui, FLASHDECONV_ADVANCED),
             )
         if identify:
             with t[2]:
@@ -390,6 +402,7 @@ class TopDownWorkflow(WorkflowManager):
                     display_tool_name=False,
                     custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
                     flag_parameters=FLASHTNT_FLAGS,
+                    **_advanced(self.ui, FLASHTNT_ADVANCED),
                 )
                 # Decoy database size (set with the sample type)
                 self.ui.input_widget(
