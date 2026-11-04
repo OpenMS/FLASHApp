@@ -37,3 +37,22 @@ def test_warning_names_the_switch():
     assert 'identification' in text and 'Identify proteoforms' in text
     text = analysis.preset_warning('Q', {'FLASHQuantConsensus': {'a': 1}}, True, analysis.ISOBARIC)
     assert 'Label-free' in text
+
+
+def test_sample_presets_support_analyses_without_identification():
+    # Deconvolution only (DDA runs) and label-free without identification are
+    # supported: the sample type is a note there, never a warning
+    for key in ('Native', 'Lysate'):
+        assert analysis.preset_note(key, PRESETS[key], True, analysis.LABEL_FREE) is None
+        for quant in (analysis.NO_QUANT, analysis.LABEL_FREE, analysis.ISOBARIC):
+            level, text = analysis.preset_note(key, PRESETS[key], False, quant)
+            assert level == 'info'
+            assert 'Identify proteoforms' in text
+
+
+def test_other_presets_still_warn():
+    level, _ = analysis.preset_note('Q', {'FLASHQuantConsensus': {'a': 1}}, False, analysis.NO_QUANT)
+    assert level == 'warning'
+    level, _ = analysis.preset_note('Native', {'FLASHQuantConsensus': {'a': 1}, **PRESETS['Native']},
+                                    False, analysis.NO_QUANT)
+    assert level == 'warning'

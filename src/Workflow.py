@@ -162,7 +162,8 @@ COMPARE_KEY = analysis.COMPARE_KEY
 IDENTIFY_HELP = (
     'Search the fragmentation spectra against a protein database (FLASHTnT), so that masses '
     'become proteoforms and proteins. Needs MS/MS spectra and a database (FASTA). Switch it '
-    'off for MS1-only or intact-mass runs, or when no database fits the sample.'
+    'off to deconvolve the runs only, e.g. LC-MS/MS (DDA) runs without a fitting database, MS1-only '
+    'or intact-mass runs; label-free and isobaric quantification then compare the masses.'
 )
 
 # FLASHDeconv parameters the workflow sets itself
@@ -363,10 +364,14 @@ class TopDownWorkflow(WorkflowManager):
             if name and name in presets and name not in shown:
                 shown.append(name)
         for name in shown:
-            label = analysis.SAMPLE_LABELS.get(name, name)
-            warning = analysis.preset_warning(label, presets[name], identify, quant)
-            if warning:
-                st.warning(warning, icon='⚠️')
+            note = analysis.preset_note(name, presets[name], identify, quant)
+            if note is None:
+                continue
+            level, text = note
+            if level == 'warning':
+                st.warning(text, icon='⚠️')
+            else:
+                st.caption(text)
 
     @st.fragment
     def configure(self) -> None:
