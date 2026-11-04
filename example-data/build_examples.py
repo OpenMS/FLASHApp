@@ -80,7 +80,7 @@ EXAMPLES = [
         'runs': [('example_native_identified', 'Example: native, identified (GapA)')],
     },
     {
-        'files': list(SOURCES),
+        'files': [name for name in SOURCES if name.startswith('Label-free_')],
         # The Lysate preset (presets.json)
         'params': {'identify': True, 'quantification': 'label-free', 'FLASHTnT': {'native': False},
                    'few_proteins': False},
