@@ -60,3 +60,58 @@ def test_same_size_other_content_is_kept(tmp_path, monkeypatch):
     folder.mkdir()
     (folder / 'mine.mzML').write_bytes(b'old example XXX')
     assert former_examples.retire(folder, [], tmp_path / 'marker') == []
+
+
+def _cache(path, rows):
+    import sqlite3
+    (path / 'files').mkdir(parents=True)
+    con = sqlite3.connect(path / 'cache.db')
+    con.execute('CREATE TABLE stored_data (id TEXT PRIMARY KEY, display_name TEXT, scan_table TEXT)')
+    con.execute('CREATE TABLE stored_files (id TEXT PRIMARY KEY, display_name TEXT)')
+    for run in rows:
+        con.execute('INSERT INTO stored_data VALUES (?, ?, ?)', (run, run.title(), f'files/{run}/scan_table.pq'))
+        con.execute('INSERT INTO stored_files VALUES (?, ?)', (run, run.title()))
+        (path / 'files' / run).mkdir()
+        (path / 'files' / run / 'scan_table.pq').write_text(run)
+    con.commit()
+    con.close()
+
+
+def test_example_results_added_once(tmp_path):
+    import sqlite3
+    example = tmp_path / 'example'
+    _cache(example, ['example_a', 'example_b'])
+    cache = tmp_path / 'workspace' / 'cache'
+    cache.mkdir(parents=True)
+    con = sqlite3.connect(cache / 'cache.db')
+    con.execute('CREATE TABLE stored_data (id TEXT PRIMARY KEY, display_name TEXT)')
+    con.execute("INSERT INTO stored_data VALUES ('example_a', 'mine')")
+    con.commit()
+    con.close()
+
+    assert former_examples.add_example_results(cache, example) == ['example_b']
+    con = sqlite3.connect(cache / 'cache.db')
+    assert dict(con.execute('SELECT id, display_name FROM stored_data')) == {
+        'example_a': 'mine', 'example_b': 'Example_B'}
+    assert con.execute("SELECT scan_table FROM stored_data WHERE id='example_b'").fetchone() == (
+        'files/example_b/scan_table.pq',)
+    assert [r[0] for r in con.execute('SELECT id FROM stored_files')] == ['example_b']
+    con.close()
+    assert (cache / 'files' / 'example_b' / 'scan_table.pq').read_text() == 'example_b'
+    assert not (cache / 'files' / 'example_a').exists()
+
+    # Deleted by the user, it stays deleted
+    import shutil
+    shutil.rmtree(cache / 'files' / 'example_b')
+    assert former_examples.add_example_results(cache, example) == []
+
+
+def test_example_results_shipped():
+    """The demo workspace's cache holds the example runs the Viewer lists."""
+    import sqlite3
+    con = sqlite3.connect(former_examples.EXAMPLE_CACHE / 'cache.db')
+    runs = {r[0] for r in con.execute('SELECT id FROM stored_data')}
+    con.close()
+    assert {'example_deconvolution', 'example_native_identified'} <= runs
+    for run in runs:
+        assert (former_examples.EXAMPLE_CACHE / 'files' / run).is_dir()

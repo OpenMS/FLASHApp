@@ -105,3 +105,64 @@ def retire(folder, examples, marker) -> list:
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text('\n'.join(removed))
     return removed
+
+
+EXAMPLE_CACHE = Path('example-data', 'workspaces', 'default', 'cache')
+RESULTS_MARKER = '.example-results-added'
+
+
+def add_example_results(cache_path, example_cache=EXAMPLE_CACHE) -> list:
+    """Add, once per workspace, the example runs of the demo workspace that its
+    shared cache ``cache_path`` lacks.
+
+    A workspace from an earlier release has no shared cache, so its Viewer
+    lists none of today's example runs. Rows are copied into both tables of
+    cache.db (adding the columns the workspace's tables lack) and the files of
+    each run go to ``files/<id>``. Runs already there are left alone, and the
+    marker keeps a run the user deleted from coming back. Returns the ids
+    added."""
+    import shutil
+    import sqlite3
+
+    cache_path, example_cache = Path(cache_path), Path(example_cache)
+    marker = Path(cache_path, RESULTS_MARKER)
+    source_db = Path(example_cache, 'cache.db')
+    if marker.exists() or not source_db.exists():
+        return []
+    if cache_path.resolve() == example_cache.resolve():
+        return []
+    cache_path.mkdir(parents=True, exist_ok=True)
+    added = set()
+    con = sqlite3.connect(Path(cache_path, 'cache.db'))
+    try:
+        con.execute("ATTACH DATABASE ? AS example", (str(source_db),))
+        tables = ('stored_data', 'stored_files')
+        for table in tables:
+            con.execute(f"CREATE TABLE IF NOT EXISTS main.{table} (id TEXT PRIMARY KEY)")
+        # A run counts as present when either table has it
+        present = {r[0] for t in tables for r in con.execute(f"SELECT id FROM main.{t}")}
+        for table in tables:
+            source_cols = [r[1] for r in con.execute(f"PRAGMA example.table_info({table})")]
+            if not source_cols:
+                continue
+            target_cols = {r[1] for r in con.execute(f"PRAGMA main.table_info({table})")}
+            for col in source_cols:
+                if col not in target_cols:
+                    con.execute(f'ALTER TABLE main.{table} ADD COLUMN "{col}" TEXT')
+            rows = [r[0] for r in con.execute(f"SELECT id FROM example.{table}") if r[0] not in present]
+            cols = ', '.join(f'"{c}"' for c in source_cols)
+            for run in rows:
+                con.execute(
+                    f"INSERT INTO main.{table} ({cols}) SELECT {cols} FROM example.{table} WHERE id = ?",
+                    (run,))
+            added |= set(rows)
+        con.commit()
+    finally:
+        con.close()
+    for run in sorted(added):
+        source = Path(example_cache, 'files', run)
+        target = Path(cache_path, 'files', run)
+        if source.is_dir() and not target.exists():
+            shutil.copytree(source, target)
+    marker.write_text('\n'.join(sorted(added)))
+    return sorted(added)

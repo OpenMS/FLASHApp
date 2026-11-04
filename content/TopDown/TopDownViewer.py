@@ -14,7 +14,7 @@ from pathlib import Path
 
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
-from src import analysis, sample_type
+from src import analysis, former_examples, sample_type
 from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.dialogs import layout_button
@@ -100,6 +100,8 @@ def experiment(index):
 # page initialization
 params = page_setup()
 
+# A workspace from an earlier release gets today's example runs (once)
+former_examples.add_example_results(Path(st.session_state['workspace'], 'cache'))
 file_manager = FileManager(
     st.session_state["workspace"],
     Path(st.session_state['workspace'], 'cache')
