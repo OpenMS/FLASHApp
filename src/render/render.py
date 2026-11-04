@@ -657,6 +657,13 @@ def _modification_picker_library():
     return [{'id': e['id'], 'mass': e['mass'], 'site': e['site']} for e in modifications.library()]
 
 
+def _offer_variable_modifications(component):
+    """The residue menus of a sequence view offer the whole modification
+    library (when the installed openms-insight supports it)."""
+    if hasattr(component, 'set_variable_modification_library'):
+        component.set_variable_modification_library(_modification_picker_library())
+
+
 @st.cache_data(max_entries=4, show_spinner=False)
 def _sequence_data(sequence, mod_ids):
     fixed_mods = {'fixed_modifications': list(mod_ids)}
@@ -972,6 +979,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 component.set_tag(None)
             else:
                 component.set_tag(int(tag['StartPos']), int(tag['EndPos']))
+            _offer_variable_modifications(component)
             return component, {}
 
         sequence = _deconv_sequence(fm, state_manager)
@@ -996,6 +1004,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             component.set_modification_picker(
                 _modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids
             )
+        _offer_variable_modifications(component)
         return component, {}
 
     if comp_name == 'structure_view':
