@@ -8,7 +8,6 @@ import subprocess
 from typing import Any, Union, List, Literal, Callable
 import json
 import os
-import re
 import sys
 import importlib.util
 import time
@@ -30,10 +29,13 @@ from src.workflow.progress import (
     DONE,
     FAILED,
     RUNNING,
+    current_step,
     failures,
     file_counts,
     format_duration,
     read_progress,
+    sample_counts,
+    tool_progress,
 )
 from src.workflow.InputFolders import (
     design_rows,
@@ -2756,8 +2758,7 @@ class StreamlitUI:
             job_status = "running"
 
         log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
-        log_path_complete = Path(self.workflow_dir, "logs", 'all' + ".log")
-        log_exists = log_path.exists() and log_path_complete.exists()
+        log_exists = log_path.exists()
 
         # Show queue status if available (online mode)
         if status.get("job_id"):
@@ -2777,76 +2778,184 @@ class StreamlitUI:
                 time.sleep(1)
                 st.rerun()
 
-        error_box = st.empty()
-        with st.status("", expanded=True) as status_widget:
-
+        # Display logs and status. Drawn into one st.empty() slot so the
+        # running view replaces the finished one completely: st.rerun()
+        # below ends the script early, which otherwise leaves the earlier
+        # view's trailing elements on the page.
+        status_area = st.empty()
+        with status_area.container():
             if is_running:
                 # Real-time display during execution
-                run_label = "**Workflow running...**"
+                spinner_text = "**Workflow running...**"
                 if job_status == "queued":
                     pos = status.get("queue_position", "?")
-                    run_label = f"**Waiting in queue (position {pos})...**"
+                    spinner_text = f"**Waiting in queue (position {pos})...**"
 
-                status_widget.update(
-                    label=run_label, state='running',
-                    expanded=True
+                if job_status != "queued":
+                    self._show_run_progress()
+                with st.spinner(spinner_text):
+                    if log_exists:
+                        with open(log_path, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                        if log_lines_count == "all":
+                            display_lines = lines
+                        else:
+                            display_lines = lines[-st.session_state.log_lines_count:]
+                        st.code(
+                            "".join(display_lines),
+                            language="neon",
+                            line_numbers=False,
+                        )
+                    # Faster polling for real-time updates
+                    time.sleep(1)
+                    st.rerun()
+
+            elif log_exists:
+                # Static display after completion
+                st.markdown(
+                    f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
                 )
-                if log_exists:
-                    # Parse progress from complete log
-                    percentage = -1
-                    progress_label = None
-                    with open(log_path_complete, "r", encoding="utf-8") as f:
-                        for line in reversed(f.readlines()):
-                            line = line.strip()
-                            match = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
-                            if match and percentage < 0:
-                                percentage = float(match.group(1))/100
-                            match = re.search(r"Progress of\s+'([^']+)'", line)
-                            if match:
-                                progress_label = match.group(1)
-                                break
-                            elif "Process finished:" in line:
-                                break
-                    if 0 <= percentage <= 1:
-                        st.progress(percentage, text=progress_label)
+                with open(log_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                content = "".join(lines)
+                outcome = classify_log_outcome(content)
+                if outcome == "finished":
+                    st.success("**Workflow completed successfully.**")
+                elif outcome == "cancelled":
+                    st.warning("**Workflow was cancelled.**")
+                else:
+                    st.error("**Errors occurred, check log file.**")
+                self._show_run_summary(show_failures=outcome != "finished")
+                # Apply line limit to static display
+                if log_lines_count == "all":
+                    display_lines = lines
+                else:
+                    display_lines = lines[-st.session_state.log_lines_count:]
+                st.code("".join(display_lines), language="neon", line_numbers=False)
 
-                    with open(log_path, "r", encoding="utf-8") as f:
-                        lines = f.readlines()
-                    if log_lines_count == "all":
-                        display_lines = lines
-                    else:
-                        display_lines = lines[-st.session_state.log_lines_count:]
-                    code_box = st.container(key='log')
-                    code_box.code(
-                        "".join(display_lines), language="neon",
-                        line_numbers=False
-                    )
-                # Update
-                time.sleep(1)
-                st.rerun()
-
-        if log_exists:
-            # Static display after completion
+    def _show_run_progress(self) -> None:
+        """Progress of the running workflow: per sample when the run records
+        its samples, else per file of the running tool; elapsed times."""
+        state = read_progress(self.workflow_dir)
+        if not state:
+            return
+        if len(state.get("samples") or []) > 1:
+            self._show_sample_progress(state)
+            return
+        if not state.get("steps"):
+            return
+        now = time.time()
+        step = state["steps"][-1]
+        files = step["files"]
+        n = len(files)
+        finished = sum(f["status"] in (DONE, FAILED) for f in files)
+        active = [i for i, f in enumerate(files) if f["status"] == RUNNING]
+        with st.container(border=True):
             st.markdown(
-                f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
+                f"**Elapsed {format_duration(now - state['started'])}** · "
+                f"step {len(state['steps'])}: **{step['tool']}**"
+                + ("" if step["ended"] is None else " finished")
             )
-            with open(log_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            content = "".join(lines)
-            outcome = classify_log_outcome(content)
-            if outcome == "finished":
-                st.success("**Workflow completed successfully.**")
-            elif outcome == "cancelled":
-                st.warning("**Workflow was cancelled.**")
+            # A step without commands (e.g. the workflow's own processing) has no files
+            if step["ended"] is None and n:
+                counts = file_counts(step)
+                if active and n > 1:
+                    which = ", ".join(str(i + 1) for i in active)
+                    where = (
+                        f"running file{'s' if len(active) > 1 else ''} {which} of {n}"
+                        f" · {counts[DONE]} done"
+                    )
+                else:
+                    where = f"{counts[DONE]} of {n} file{'s' if n > 1 else ''} done"
+                if counts[FAILED]:
+                    where += f" · :red[{counts[FAILED]} failed]"
+                threads = step.get("threads", 1)
+                parallel = step.get("parallel", 1)
+                text = (
+                    f"{where} · {format_duration(now - step['started'])} · "
+                    f"{threads} thread{'s' if threads > 1 else ''}"
+                    + (f" × {parallel} in parallel" if parallel > 1 else "")
+                )
+                st.progress(finished / n if n else 0.0, text=text)
+                if len(active) == 1:
+                    self._show_tool_progress()
+            if n > 1 or step["ended"] is not None:
+                lines = []
+                for f in files:
+                    if f["status"] == DONE:
+                        lines.append(f":green[:material/check_circle:] {f['name']} :gray[{format_duration(f['ended'] - f['started'])}]")
+                    elif f["status"] == FAILED:
+                        lines.append(f":red[:material/cancel:] {f['name']} :red[failed]")
+                    elif f["status"] == RUNNING:
+                        lines.append(f":blue[:material/progress_activity:] **{f['name']}** :gray[{format_duration(now - f['started'])}]")
+                    else:
+                        lines.append(f":gray[:material/radio_button_unchecked: {f['name']}]")
+                st.markdown("  \n".join(lines))
+            earlier = state["steps"][:-1]
+            if earlier:
+                st.caption("Done: " + " · ".join(self._step_summary(s) for s in earlier))
+
+    def _show_tool_progress(self) -> None:
+        """The running tool's own progress ("loading spectra 42 %"), if it reports any."""
+        found = tool_progress(Path(self.workflow_dir, "logs", "all.log"))
+        if found:
+            label, fraction = found
+            st.progress(fraction, text=f":gray[{label} · {fraction:.0%}]")
+
+    def _show_sample_progress(self, state: dict) -> None:
+        """One line per sample: waiting, running (with its tool), done or failed."""
+        now = time.time()
+        samples = state["samples"]
+        n = len(samples)
+        counts = sample_counts(state)
+        running = [i for i, s in enumerate(samples) if s["status"] == RUNNING]
+        with st.container(border=True):
+            head = f"**Elapsed {format_duration(now - state['started'])}**"
+            # A step outside every sample, e.g. one over all of them at the end
+            shared = None
+            steps = state.get("steps") or []
+            if steps and steps[-1].get("sample") is None and steps[-1]["ended"] is None:
+                shared = steps[-1]
+            if running:
+                i = running[0]
+                head += f" · sample {i + 1} of {n}: **{samples[i]['name']}**"
+            elif shared is not None:
+                head += f" · **{shared['tool']}**"
+            st.markdown(head)
+            text = f"{counts[DONE]} of {n} samples done"
+            if counts[FAILED]:
+                text += f" · :red[{counts[FAILED]} failed]"
+            st.progress((counts[DONE] + counts[FAILED]) / n, text=text)
+            step = shared
+            if running:
+                step = current_step(state, samples[running[0]]["name"])
+            one_command = (
+                step is not None
+                and step["ended"] is None
+                and file_counts(step)[RUNNING] == 1
+            )
+            if one_command:
+                self._show_tool_progress()
+            st.markdown("  \n".join(self._sample_lines(state, now)))
+
+    @staticmethod
+    def _sample_lines(state: dict, now: float) -> list:
+        """A markdown line per sample, with its time and, while it runs, its tool."""
+        lines = []
+        for s in state["samples"]:
+            if s["status"] == DONE:
+                lines.append(f":green[:material/check_circle:] {s['name']} :gray[{format_duration(s['ended'] - s['started'])}]")
+            elif s["status"] == FAILED:
+                lines.append(f":red[:material/cancel:] {s['name']} :red[failed]")
+            elif s["status"] == RUNNING:
+                step = current_step(state, s["name"])
+                tool = ""
+                if step is not None:
+                    tool = f" · {step['tool']}" + ("" if step["ended"] is None else " finished")
+                lines.append(f":blue[:material/progress_activity:] **{s['name']}** :gray[{format_duration(now - s['started'])}{tool}]")
             else:
-                st.error("**Errors occurred, check log file.**")
-            self._show_run_summary(show_failures=outcome != "finished")
-            # Apply line limit to static display
-            if log_lines_count == "all":
-                display_lines = lines
-            else:
-                display_lines = lines[-st.session_state.log_lines_count:]
-            st.code("".join(display_lines), language="neon", line_numbers=False)
+                lines.append(f":gray[:material/radio_button_unchecked: {s['name']}]")
+        return lines
 
     @staticmethod
     def _step_summary(step: dict) -> str:
@@ -2877,7 +2986,33 @@ class StreamlitUI:
                         f"Tool output (exit code {failure['returncode']})"
                     ):
                         st.code("\n".join(failure["output"]), language="neon")
+        if len(state.get("samples") or []) > 1:
+            st.markdown("  \n".join(self._sample_lines(state, time.time())))
+            st.caption(self._tool_totals(state["steps"]))
+            return
         st.caption(" · ".join(self._step_summary(s) for s in state["steps"]))
+
+    @staticmethod
+    def _tool_totals(steps: list) -> str:
+        """'FLASHDeconv: 4 runs in 2:10 · FLASHTnT: 4 runs in 5:02 (1 failed)'."""
+        totals = {}
+        for step in steps:
+            took = (step["ended"] or time.time()) - step["started"]
+            runs, seconds, failed = totals.get(step["tool"], (0, 0.0, 0))
+            totals[step["tool"]] = (
+                runs + 1,
+                seconds + took,
+                failed + (file_counts(step)[FAILED] > 0),
+            )
+        parts = []
+        for tool, (runs, seconds, failed) in totals.items():
+            part = f"{tool}: " + (
+                f"{runs} runs in {format_duration(seconds)}" if runs > 1 else format_duration(seconds)
+            )
+            if failed:
+                part += f" ({failed} failed)"
+            parts.append(part)
+        return " · ".join(parts)
 
     def _show_queue_status(self, status: dict) -> None:
         """Display queue job status for online mode"""

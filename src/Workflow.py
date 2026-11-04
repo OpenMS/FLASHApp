@@ -635,6 +635,9 @@ class TopDownWorkflow(WorkflowManager):
                     'Please select a database, or switch off Identify proteoforms to deconvolve only.'
                 )
                 return False
+        # The Run page lists every run as waiting, running (with its tool), done or failed
+        progress = self.executor.progress
+        progress.start_samples([basename(str(p).rstrip('/\\')) for p in in_mzmls])
         # Thermo .raw / Bruker .d input becomes mzML here; mzML passes through.
         in_mzmls = self.executor.convert_to_mzml(in_mzmls)
         if in_mzmls is None:
@@ -651,47 +654,50 @@ class TopDownWorkflow(WorkflowManager):
         dataset_ids = []
         errors = []
         # Process files in sequence
-        for in_mzml in in_mzmls:
+        for index, in_mzml in enumerate(in_mzmls):
             try:
-                # Generate a temporary output folder
-                current_base = splitext(basename(in_mzml))[0]
-                current_time = time.strftime("%Y%m%d-%H%M%S")
-                dataset_id = '%s_%s' % (current_base, current_time)
-                folder_path = join(base_path, 'FLASHAppOutput', dataset_id)
-                if exists(folder_path):
+                with progress.sample(index):
+                    # Generate a temporary output folder
+                    current_base = splitext(basename(in_mzml))[0]
+                    current_time = time.strftime("%Y%m%d-%H%M%S")
+                    dataset_id = '%s_%s' % (current_base, current_time)
+                    folder_path = join(base_path, 'FLASHAppOutput', dataset_id)
+                    if exists(folder_path):
+                        rmtree(folder_path)
+                    makedirs(folder_path)
+
+                    self.logger.log(f'Processing {current_base}:')
+                    self.logger.log("-> Running FLASHDeconv...")
+                    io = {'in': [in_mzml]}
+                    io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
+                    if not self.executor.run_topp(
+                        'FLASHDeconv', input_output=io,
+                        custom_params=deconv_params,
+                    ):
+                        raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
+
+                    if identify:
+                        self._identify(in_mzml, folder_path, database, current_base)
+
+                    self.logger.log("-> Processing Results...")
+                    parsing = progress.start_step('Processing results', [])
+                    # Store all files
+                    for file in listdir(folder_path):
+                        self.file_manager.store_file(
+                            dataset_id, str(file).replace('.', '_'),
+                            Path(folder_path, file), file_name=file
+                        )
+                    self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters')
+                    if identify:
+                        self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
+                    self._parse(dataset_id, identify)
+                    if quant == analysis.ISOBARIC:
+                        self._parse_isobaric(dataset_id, plex)
+
+                    progress.end_step(parsing)
+                    # Remove temporary folder
                     rmtree(folder_path)
-                makedirs(folder_path)
-
-                self.logger.log(f'Processing {current_base}:')
-                self.logger.log("-> Running FLASHDeconv...")
-                io = {'in': [in_mzml]}
-                io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
-                if not self.executor.run_topp(
-                    'FLASHDeconv', input_output=io,
-                    custom_params=deconv_params,
-                ):
-                    raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
-
-                if identify:
-                    self._identify(in_mzml, folder_path, database, current_base)
-
-                self.logger.log("-> Processing Results...")
-                # Store all files
-                for file in listdir(folder_path):
-                    self.file_manager.store_file(
-                        dataset_id, str(file).replace('.', '_'),
-                        Path(folder_path, file), file_name=file
-                    )
-                self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters')
-                if identify:
-                    self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
-                self._parse(dataset_id, identify)
-                if quant == analysis.ISOBARIC:
-                    self._parse_isobaric(dataset_id, plex)
-
-                # Remove temporary folder
-                rmtree(folder_path)
-                dataset_ids.append(dataset_id)
+                    dataset_ids.append(dataset_id)
             except Exception as e:
                 errors.append(e)
         if errors:
