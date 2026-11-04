@@ -16,7 +16,7 @@ depend on the selection is prepared once and stored in the cache: the
 workflow looks up the GO terms of every identified protein after a run and
 writes the run's term index (``precompute_run``), a table with one row per
 protein and term. A selection then only counts its proteins in that index and
-runs the tests (``enrich``). Results of earlier builds get their index the
+runs the tests (``enrich``, openms_insight's go_enrichment_from_index). Results of earlier builds get their index the
 first time the cell shows them. Free of Streamlit.
 """
 
@@ -27,7 +27,6 @@ import time
 from collections import OrderedDict
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 
 # Identifiers of the selected set
@@ -199,12 +198,21 @@ def _index_file(file_manager, universe):
     return Path(file_manager.cache_path, 'go', 'index', f'v{INDEX_VERSION}-{_digest(universe)}.parquet')
 
 
+def _insight():
+    from openms_insight.analysis import enrichment
+    return enrichment
+
+
 def index_frame(annotation_frame, universe):
-    """The term index of the proteins `universe` (clean accessions): columns
-    accession, category, term, one row per protein and term of a category; a
-    protein without any term has one row with null category and term, so
-    the index also lists every protein it was built for."""
-    rows_acc, rows_cat, rows_term = [], [], []
+    """The term index of the proteins `universe` (clean accessions), as
+    openms_insight's go_term_index builds it: columns accession, category,
+    term, one row per protein and term; a protein without any term has one
+    row with null category and term."""
+    insight = _insight()
+    if hasattr(insight, 'go_term_index'):
+        return insight.go_term_index(annotation_frame, sorted(universe))
+    # openms-insight 0.5.0 has no go_term_index: the same frame
+    rows = {'accession': [], 'category': [], 'term': []}
     seen = set()
     for _, row in annotation_frame.iterrows():
         accession = str(row['query'])
@@ -212,18 +220,16 @@ def index_frame(annotation_frame, universe):
             continue
         for category in CATEGORIES:
             for term in row[f'{category}_terms']:
-                rows_acc.append(accession)
-                rows_cat.append(category)
-                rows_term.append(str(term))
+                rows['accession'].append(accession)
+                rows['category'].append(category)
+                rows['term'].append(str(term))
                 seen.add(accession)
     for accession in sorted(set(universe) - seen):
-        rows_acc.append(accession)
-        rows_cat.append(None)
-        rows_term.append(None)
-    return pl.DataFrame(
-        {'accession': rows_acc, 'category': rows_cat, 'term': rows_term},
-        schema={'accession': pl.Utf8, 'category': pl.Utf8, 'term': pl.Utf8},
-    ).unique(maintain_order=True)
+        rows['accession'].append(accession)
+        rows['category'].append(None)
+        rows['term'].append(None)
+    schema = {'accession': pl.Utf8, 'category': pl.Utf8, 'term': pl.Utf8}
+    return pl.DataFrame(rows, schema=schema).unique(maintain_order=True)
 
 
 def index_ready(file_manager, accessions):
@@ -309,74 +315,35 @@ def precompute_run(file_manager, dataset_id, fetch=None):
 
 # -- enrichment ---------------------------------------------------------------------
 
-_TABLE_COLUMNS = [
-    'GO_Term', 'Count', 'Background', 'GeneRatio', 'BgRatio', 'FoldEnrichment',
-    'p_value', '-log10(p)', 'p_adj', 'Proteins',
-]
-
-
-def _category_table(terms, fg, n_fg, n_bg):
-    """Fisher's exact test (one-sided) of every term of one category that a
-    selected protein has, as openms_insight's go_term_table writes it."""
-    import pandas as pd
-    from scipy.stats import hypergeom
-    from openms_insight.analysis.enrichment import benjamini_hochberg
-
-    picked = terms.filter(pl.col('accession').is_in(list(fg)))
-    if not picked.height:
-        return pd.DataFrame(columns=_TABLE_COLUMNS)
-    counts = (
-        picked.group_by('term').agg(
-            pl.col('accession').n_unique().alias('Count'),
-            pl.col('accession').unique().sort().str.join(';').alias('Proteins'),
+def _annotation_frame(index):
+    """The annotations of a term index in the shape go_enrichment takes."""
+    terms = index.drop_nulls('term')
+    frame = terms.select('accession').unique(maintain_order=True)
+    for category in CATEGORIES:
+        lists = (
+            terms.filter(pl.col('category') == category)
+            .group_by('accession', maintain_order=True)
+            .agg(pl.col('term').alias(f'{category}_terms'))
         )
-        .join(terms.group_by('term').agg(pl.col('accession').n_unique().alias('Background')), on='term')
-        .sort('term')
-    )
-    a = counts['Count'].to_numpy().astype(np.int64)
-    k = counts['Background'].to_numpy().astype(np.int64)
-    # P(X >= a) for X ~ hypergeometric: the one-sided Fisher's exact test
-    # (many terms share their counts, so each pair is computed once)
-    pairs, inverse = np.unique(np.stack([a, k]), axis=1, return_inverse=True)
-    p = np.clip(hypergeom.sf(pairs[0] - 1, n_bg, n_fg, pairs[1]), 0.0, 1.0)[np.ravel(inverse)]
-    frame = pd.DataFrame({
-        'GO_Term': counts['term'].to_list(),
-        'Count': a,
-        'Background': k,
-        'GeneRatio': [f'{x}/{n_fg}' for x in a],
-        'BgRatio': [f'{x}/{n_bg}' for x in k],
-        'FoldEnrichment': (a / n_fg) / (k / n_bg),
-        'p_value': p,
-        '-log10(p)': -np.log10(np.clip(p, 1e-300, None)),
-        'p_adj': benjamini_hochberg(p),
-        'Proteins': counts['Proteins'].to_list(),
-    })
-    return frame.sort_values(['p_value', 'GO_Term']).reset_index(drop=True)[_TABLE_COLUMNS]
+        frame = frame.join(lists, on='accession', how='left').with_columns(
+            pl.col(f'{category}_terms').fill_null(pl.lit([], pl.List(pl.Utf8)))
+        )
+    out = frame.rename({'accession': 'query'}).to_pandas()
+    for category in CATEGORIES:
+        out[f'{category}_terms'] = out[f'{category}_terms'].map(list)
+    return out
 
 
 def enrich(index, foreground, background, categories=tuple(CATEGORIES)):
     """GO enrichment of the proteins `foreground` against `background`
-    (accessions) from a term index, with the result of openms_insight's
-    go_enrichment: fg_total, bg_total, fg_count, bg_count (proteins with any
-    term) and categories (category -> table of go_term_table)."""
-    fg = {clean_accession(a) for a in foreground if a}
-    bg = {clean_accession(a) for a in background if a} | fg
-    terms = index.filter(
-        pl.col('accession').is_in(list(bg)) & pl.col('category').is_in(list(categories))
-    )
-    annotated = set(terms['accession'].unique().to_list())
-    fg_annotated = fg & annotated
-    n_fg, n_bg = len(fg_annotated), len(annotated)
-    return {
-        'fg_total': len(fg),
-        'bg_total': len(bg),
-        'fg_count': n_fg,
-        'bg_count': n_bg,
-        'categories': {
-            t: _category_table(terms.filter(pl.col('category') == t), fg_annotated, n_fg, n_bg)
-            for t in categories
-        },
-    }
+    (accessions) from a term index, with openms_insight: the result of its
+    go_enrichment (fg_total, bg_total, fg_count, bg_count, categories ->
+    table of go_term_table)."""
+    insight = _insight()
+    if hasattr(insight, 'go_enrichment_from_index'):
+        return insight.go_enrichment_from_index(index, foreground, background, categories=categories)
+    # openms-insight 0.5.0: the same result, without its faster test
+    return insight.go_enrichment(_annotation_frame(index), foreground, background, categories=categories)
 
 
 def enrichment(file_manager, selected, background, fetch=None, universe=None):
