@@ -1,6 +1,10 @@
 {
-    "_comment": "Display names for the TOPP parameters the Describe experiment page shows, per tool: \"<Tool>\": {\"<parameter path>\": \"Name\"} or {\"name\": ..., \"help\": ...}. Without \"help\" the tool's description is shown. Parameters without an entry keep the tool's name. See src/workflow/parameter_names.py.",
+    "_comment": "Display names for the TOPP parameters the Describe experiment page shows, per tool: \"<Tool>\": {\"<parameter path>\": \"Name\"} or {\"name\": ..., \"help\": ...}. Without \"help\" the tool's description is shown. A section path (\"SD\") names that section's heading. Parameters and sections without an entry keep the tool's name. See src/workflow/parameter_names.py.",
     "FLASHDeconv": {
+        "FD": "Deconvolution",
+        "SD": "Masses and charges",
+        "ft": "Feature tracing",
+        "iq": "Isobaric quantification",
         "keep_empty_out": "Keep empty output files",
         "write_detail": "Write peak details",
         "FD:report_FDR": {
@@ -33,6 +37,9 @@
         "iq:only_fully_quantified": "Only spectra with every channel quantified"
     },
     "FLASHTnT": {
+        "raw": "Spectrum matching",
+        "tag": "Sequence tags",
+        "ex": "Proteoform extension",
         "fixed_mod": "Fixed modifications",
         "var_mod": "Variable modifications",
         "max_var_mod_count": "Maximum variable modifications",
@@ -60,6 +67,7 @@
         "ex:var_mod_file": "Variable modifications file (TopPIC format)"
     },
     "FLASHAnnotator": {
+        "algorithm": "Annotation",
         "precursor_charge": "Precursor charge",
         "algorithm:tol": "Fragment tolerance (ppm)",
         "algorithm:calibrate": "Recalibrate m/z",
