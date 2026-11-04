@@ -253,24 +253,37 @@ def parseTnT(
     logger.log("100.0 %", level=2)
 
 
+def _density(values):
+    """Kernel density of `values` on 200 points between their minimum and
+    maximum. Empty (columns x, y) when there are fewer than two distinct
+    values, as a kernel density needs some spread."""
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+    if np.unique(values).size < 2:
+        return pd.DataFrame(columns=['x', 'y'])
+    try:
+        kde = gaussian_kde(values)
+    except (ValueError, np.linalg.LinAlgError):
+        return pd.DataFrame(columns=['x', 'y'])
+    x = np.linspace(values.min(), values.max(), 200)
+    return pd.DataFrame({'x': x, 'y': kde(x)})
+
+
 def fdr_density_distribution(df, logger=None):
+    """Densities of the target and decoy q-values above 0. A side with fewer
+    than two distinct values gets an empty table (the FDR plot then has no
+    curve for it), never an error: a run with all identifications at q = 0,
+    or a single one above, is a good run."""
     df = df[df['ProteoformLevelQvalue'] > 0]
-    # Find density targets
-    target_qscores = df[~df['accession'].str.startswith('DECOY_')]['ProteoformLevelQvalue'].dropna()
-    if len(target_qscores) > 0:
-        x_target = np.linspace(target_qscores.min(), target_qscores.max(), 200)
-        kde_target = gaussian_kde(target_qscores)
-        density_target = pd.DataFrame({'x': x_target, 'y': kde_target(x_target)})
-    else:
-        density_target = pd.DataFrame(columns=['x', 'y'])
-
-    # Find density decoys (if present)
-    decoy_qscores = df[df['accession'].str.startswith('DECOY_')]['ProteoformLevelQvalue'].dropna()
-    if len(decoy_qscores) > 0:
-        x_decoy = np.linspace(decoy_qscores.min(), decoy_qscores.max(), 200)
-        kde_decoy = gaussian_kde(decoy_qscores)
-        density_decoy = pd.DataFrame({'x': x_decoy, 'y': kde_decoy(x_decoy)})
-    else:
-        density_decoy = pd.DataFrame(columns=['x', 'y'])
-
-    return density_target, density_decoy
+    is_decoy = df['accession'].astype(str).str.startswith('DECOY_')
+    densities = []
+    for kind, qvalues in (('target', df[~is_decoy]), ('decoy', df[is_decoy])):
+        qvalues = qvalues['ProteoformLevelQvalue'].dropna()
+        density = _density(qvalues)
+        if density.empty and len(qvalues) > 0 and logger is not None:
+            logger.log(
+                f"FDR plot: {len(qvalues)} {kind} q-value(s) above 0 with no spread, "
+                f"no {kind} density drawn.", level=1
+            )
+        densities.append(density)
+    return densities[0], densities[1]
