@@ -78,6 +78,9 @@ module.exports = async (t) => {
 
   await runWorkflow(t, "TopDown", [["MS data", "GapA_5458mz_HCD.mzML"]], true);
   const log = await t.page.locator("body").innerText();
-  if (!log.includes("FLASHAnnotator")) throw new Error("The identification did not reach FLASHAnnotator");
+  if (!log.includes("FLASHAnnotator")) {
+    t.log(log.slice(-4000));
+    throw new Error("The identification did not reach FLASHAnnotator");
+  }
   await checkViewer(t, "TopDownViewer", "GapA_5458mz_HCD");
 };
