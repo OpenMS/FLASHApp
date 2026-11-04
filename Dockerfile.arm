@@ -223,7 +223,7 @@ RUN python -c "import pyopenms; print('pyOpenMS', pyopenms.__version__, pyopenms
 FROM node:21 AS insight-build
 
 ARG INSIGHT_REPO=https://github.com/t0mdavid-m/openms-insight.git
-ARG INSIGHT_REF=claude/project-thread-pnhysh
+ARG INSIGHT_REF=claude/project-thread-hxjbbs
 
 ADD https://api.github.com/repos/t0mdavid-m/openms-insight/git/refs/heads/$INSIGHT_REF version.json
 
