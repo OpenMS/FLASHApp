@@ -9,7 +9,7 @@ CLI_TOOLS_URL = "https://abibuilder.cs.uni-tuebingen.de/archive/openms/OpenMSIns
 
 
 def render_download_section():
-    """The downloads, first on the page: the desktop app for each platform and
+    """The downloads, below the title and logo: the desktop app for each platform and
     the FLASH* command line tools."""
     # The offline downloads are pointless inside the offline app itself.
     if st.session_state.get("location") == "local":
@@ -342,8 +342,6 @@ def render_workflow_selection():
         st.image(themed_asset("assets/flashapp-icon-light.svg", "assets/flashapp-icon.svg"), width=160)
     
     st.markdown("</div>", unsafe_allow_html=True)
-    
-    render_workflow_flow()
 
 
 FLOW_STEPS = [
@@ -527,10 +525,12 @@ def main():
     inject_theme_colors()
     inject_workflow_button_css()
     
-    # Render main sections, the downloads first
+    # Render main sections: title and logo, the downloads, the workflow, what's new
+    render_workflow_selection()
+
     render_download_section()
 
-    render_workflow_selection()
+    render_workflow_flow()
 
     render_whats_new()
     
