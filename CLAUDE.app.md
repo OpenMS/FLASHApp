@@ -26,7 +26,7 @@ pytest tests/test_selection_clear.py::test_name -v      # single test
 pylint $(git ls-files '*.py') --errors-only --disable=C0103,C0114,C0301,C0411,W0212,W0631,W0602,W1514,W2402,E0401,E1101,F0001,R1732
 
 # Docker (full image with OpenMS + TOPP tools + openms-insight built from source)
-docker build -f Dockerfile --no-cache -t flashapp:latest --build-arg GITHUB_TOKEN=<gh-token> .
+docker build -f Dockerfile --no-cache -t flashapp:latest --secret id=github_token,env=GITHUB_TOKEN .
 docker run -p 8501:8501 flashapp:latest          # → http://localhost:8501
 # Dockerfile.arm is the linux/arm64 variant (swaps miniforge installer to aarch64).
 ```
@@ -35,7 +35,7 @@ Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is req
 
 ### openms-insight
 
-The viewers need `openms_insight` importable. Until a release after 0.4.0 includes t0mdavid-m/openms-insight#21 (MirrorPlot shared selections, SeriesPlot `y_range_mode`/`hover_column`, NaN-safe table formatters, used by the validation, QC and run comparison views) #23 (per-scan fragmentation method in the sequence view) and #34 (Heatmap `hover_column`, `highlight` ring and `on_select`, used by the FLASHTnT proteoform heatmap), merged into the branch `claude/project-thread-hxjbbs`, it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and `build-desktop-app.yaml`'s `build-openms-insight` job (a wheel for the Windows, macOS and Linux apps) clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
+The viewers need `openms_insight` importable. Until a release after 0.4.0 includes t0mdavid-m/openms-insight#21 (MirrorPlot shared selections, SeriesPlot `y_range_mode`/`hover_column`, NaN-safe table formatters, used by the validation, QC and run comparison views) #23 (per-scan fragmentation method in the sequence view) #34 (Heatmap `hover_column`, `highlight` ring and `on_select`, used by the FLASHTnT proteoform heatmap) and `multi_select` (several proteins picked at once for the GO enrichment cells), on the branch `claude/project-thread-hxjbbs`, it is **built from source**: the Dockerfiles' `insight-build` stage (`INSIGHT_REF` build arg) and `build-desktop-app.yaml`'s `build-openms-insight` job (a wheel for the Windows, macOS and Linux apps) clone `t0mdavid-m/openms-insight`, build its Vue bundle and install it with `--no-deps` (its dependencies come from `requirements.txt`). For local work, see README → Visualizations. When the release is out, add `openms-insight>=<version>` to `requirements.txt` and drop those build steps. The unit tests do not import it.
 
 `.streamlit/config.toml` → `developmentMode = false` for production builds.
 

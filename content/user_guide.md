@@ -85,7 +85,7 @@ Until you save your own layout, each run opens in the layout made for its analys
 |---|---|
 | Deconvolved only | The masses over retention time (heatmap), the spectra with their masses, the raw and deconvolved spectrum and a 3D signal-to-noise view. |
 | Identified, native or purified proteins | The identified proteins, the sequence with its fragments and modifications, the 3D structure, and the sequence tags behind each identification. |
-| Identified, lysate | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors and quality control of the identifications. |
+| Identified, lysate | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors, quality control of the identifications and the GO enrichment of the proteins you select. |
 | Labelled with TMT or iTRAQ | The layout of its kind as above, with the **reporter ions** of every spectrum and of the selected spectrum, right below the table that selects the spectrum. |
 
 **Edit layout** opens the Layout Manager: drag components into the grid, choose how many runs to show at once, and **Save**. **Reset** goes back to the defaults above. A saved layout is used for every run of the workspace.
@@ -99,6 +99,16 @@ Search the list in the Layout Manager by name, or expand its groups:
 - **Spectra & plots**: *Raw spectrum*, *Deconvolved spectrum*, *Isotope envelope fit* (observed against expected isotope pattern: a shifted top points to a wrong monoisotopic mass), *Precursor XIC by charge*, *3D S/N plot*, *Run QC*.
 - **Sequence**: *Sequence view* (fragments and modifications on the sequence, internal fragments as a purple strip), *Structure view (3D)* (the AlphaFold model, or a structure you upload, with the cleavage sites), *Internal fragment map*, *Fragment mass errors*.
 - **Quantification**: *Reporter ions per spectrum (TMT, iTRAQ)* and *Reporter ions of the selected spectrum*.
+- **Functional analysis**: *GO enrichment of the selected proteins* (see below).
+
+### GO enrichment of selected proteins
+
+The GO enrichment component tests which Gene Ontology terms (biological process, cellular component, molecular function) are over-represented in the proteins you select, against all proteins identified in the run. Select several at once:
+
+- in the *Proteins*, *Proteoforms*, *PrSMs* or *Protein table*, turn on the check boxes with the check mark button of the table's toolbar and tick rows (the box in the header ticks every row shown; Shift-click ticks a range),
+- or pick box or lasso select in the mode bar of the *Proteoform heatmap* and drag over it. Shift adds to the selection.
+
+Every component marks the selected proteins, and **Clear selection** (in the GO component, or the eraser in a plot's mode bar) starts over. The bar chart shows the most significant terms; how many is set next to the category. The GO terms of each protein are looked up once at MyGene.info by its UniProt accession (this needs a network connection) and kept in the workspace. The test is a one-sided Fisher's exact test, adjusted for the number of terms (Benjamini-Hochberg).
 
 The **Sequence view** of a run that was not identified shows a sequence you set in the view itself with **Change sequence** (the DNA icon above the sequence); it is saved for the workspace.
 
@@ -106,7 +116,9 @@ The **Sequence view** of a run that was not identified shows a sequence you set 
 
 ## **5️⃣ Comparing samples**
 
-With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date). Selecting it shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap and quality control.
+With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date). Selecting it shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap, quality control and the GO enrichment of the entries you select.
+
+To test GO terms, select entries in the volcano plot (press **All changed**, **Higher in …** or **Lower in …**, or use box or lasso select in its mode bar), tick rows in the comparison table after turning its check boxes on, or select rows on the clustered heatmap with box or lasso select. The background is every protein of the entries tested.
 
 **Edit comparison** changes the conditions, the level compared (features, proteoforms or proteins; the latter two need identification) and the statistics (fold-change and adjusted p-value cutoffs, filtering, imputation, normalization, test). The comparison is recomputed in seconds; nothing is run again.
 

@@ -116,8 +116,12 @@ jobs:
           provenance: false
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}/cache:${{ matrix.variant }}-amd64
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}/cache:{2}-amd64,mode=max', env.REGISTRY, env.IMAGE_NAME_LC, matrix.variant) || '' }}
+          # The token reaches the installer download as a BuildKit secret, so it is
+          # never written to the image or its cache; INSTALLER_REFRESH re-runs that step.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
           build-args: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            INSTALLER_REFRESH=${{ github.run_id }}
             RELEASE_TAG=${{ github.event_name == 'release' && github.ref_name || '' }}
 
       - name: Retag for kind (image name the kustomize overlay points at)
@@ -225,8 +229,12 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}/cache:${{ matrix.variant }}-arm64
           cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref={0}/{1}/cache:{2}-arm64,mode=max', env.REGISTRY, env.IMAGE_NAME_LC, matrix.variant) || '' }}
           provenance: false
+          # The token reaches the installer download as a BuildKit secret, so it is
+          # never written to the image or its cache; INSTALLER_REFRESH re-runs that step.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
           build-args: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            INSTALLER_REFRESH=${{ github.run_id }}
             RELEASE_TAG=${{ github.event_name == 'release' && github.ref_name || '' }}
 
       - name: Retag for kind (image name the kustomize overlay points at)
@@ -337,7 +345,9 @@ jobs:
     # significant maintenance surface for limited value (HPC SIF consumers
     # remain amd64). Re-evaluate if upstream starts publishing arm64 builds.
     needs: build-amd64
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04, not ubuntu-latest: the apptainer .deb depends on libfuse3-3,
+    # which Ubuntu 26.04 no longer ships, so installing apptainer fails there.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -514,7 +524,9 @@ jobs:
     # on-the-fly OCI->SIF conversion the docker:// path requires.
     needs: test-apptainer
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04, not ubuntu-latest: the apptainer .deb depends on libfuse3-3,
+    # which Ubuntu 26.04 no longer ships, so installing apptainer fails there.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
