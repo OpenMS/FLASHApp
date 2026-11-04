@@ -43,7 +43,7 @@ DATABASE = INPUTS / 'fasta-file' / 'example_database.fasta'
 MASSIVE = 'https://massive.ucsd.edu/ProteoSAFe/DownloadResultFile?forceDownload=true&file=f.MSV000091923/peak/'
 # Retention time window kept of the SpikeIn runs (seconds): spike-in proteins
 # and E. coli background elute here
-SPIKEIN_RT = (3960, 4200)
+SPIKEIN_RT = (3990, 4140)
 # Example input -> run of MSV000091923 it is cut from
 SOURCES = {
     'Label-free_SpikeIn-1x_R1.mzML': '20220414_Ecoli_ProtMix_A_R1.mzML',
@@ -74,13 +74,9 @@ EXAMPLES = [
                    'few_proteins': False},
         'conditions': ['Spike-in 1x', 'Spike-in 1x', 'Spike-in 0.1x', 'Spike-in 0.1x'],
         'replicates': [1, 2, 1, 2],
-        # The first run is the lysate example; the others are there for the comparison
-        'runs': [
-            ('example_lysate_identified', 'Example: lysate, identified (E. coli + spike-in)'),
-            ('example_label_free_1x_r2', 'Example: label-free run (spike-in 1x, R2)'),
-            ('example_label_free_01x_r1', 'Example: label-free run (spike-in 0.1x, R1)'),
-            ('example_label_free_01x_r2', 'Example: label-free run (spike-in 0.1x, R2)'),
-        ],
+        # The first run is the lysate example. The comparison keeps its own
+        # tables, so the other runs' results are not shipped (None).
+        'runs': [('example_lysate_identified', 'Example: lysate, identified (E. coli + spike-in)'), None, None, None],
         'comparison': ('example_label_free', 'Example: label-free comparison (spike-in 1x vs 0.1x)'),
     },
 ]
@@ -107,19 +103,28 @@ def download(url, path, attempts=6):
             time.sleep(wait)
 
 
+def trim(source, target):
+    """Keep the spectra within SPIKEIN_RT (FileFilter); `source` may be `target`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp, 'trimmed.mzML')
+        subprocess.run(
+            ['FileFilter', '-in', str(source), '-out', str(out), '-rt', f'{SPIKEIN_RT[0]}:{SPIKEIN_RT[1]}'],
+            check=True,
+        )
+        shutil.move(out, target)
+
+
 def fetch(name):
     """Download the SpikeIn run behind example input `name` and keep SPIKEIN_RT."""
     target = INPUTS / 'mzML-files' / name
     if target.exists():
+        trim(target, target)
         return
     with tempfile.TemporaryDirectory() as tmp:
         full = Path(tmp, SOURCES[name])
         print(f'Downloading {SOURCES[name]}', flush=True)
         download(MASSIVE + SOURCES[name], full)
-        subprocess.run(
-            ['FileFilter', '-in', str(full), '-out', str(target), '-rt', f'{SPIKEIN_RT[0]}:{SPIKEIN_RT[1]}'],
-            check=True,
-        )
+        trim(full, target)
     print(f'{name}: {target.stat().st_size / 1e6:.1f} MB', flush=True)
 
 
@@ -213,22 +218,18 @@ def main():
             for name in example['files']:
                 if name in SOURCES:
                     fetch(name)
-            print(f"== {', '.join(name for _, name in example['runs'])}", flush=True)
+            named = [entry for entry in example['runs'] if entry] + [example.get('comparison')]
+            print(f"== {', '.join(name for name in (e[1] for e in named if e))}", flush=True)
             run_ids, comparison = run(example, workspace)
-            renamed = {}
-            for old_id, (new_id, display_name) in zip(run_ids, example['runs']):
-                rename(cache, old_id, new_id, display_name)
-                renamed[old_id] = new_id
-            kept += [new_id for new_id, _ in example['runs']]
+            for old_id, entry in zip(run_ids, example['runs']):
+                if entry is None:
+                    FileManager(workspace / 'flashtnt', cache).remove_results(old_id)
+                    continue
+                rename(cache, old_id, *entry)
+                kept.append(entry[0])
             if comparison is not None:
-                new_id, display_name = example['comparison']
-                rename(cache, comparison, new_id, display_name)
-                # The comparison names its runs by dataset id
-                file_manager = FileManager(workspace / 'flashtnt', cache)
-                manifest = file_manager.get_results(new_id, ['quant_manifest'])['quant_manifest']
-                manifest['runs'] = [renamed.get(d, d) for d in manifest['runs']]
-                file_manager.store_data(new_id, 'quant_manifest', manifest)
-                kept.append(new_id)
+                rename(cache, comparison, *example['comparison'])
+                kept.append(example['comparison'][0])
         target = DEMO / 'cache'
         shutil.rmtree(target, ignore_errors=True)
         target.mkdir()
