@@ -537,21 +537,21 @@ def render_whats_new():
         st.markdown(
             """
             <div class="whats-new">
-                <h3>✨ What's new in FLASHApp 1.2.0</h3>
+                <h3>✨ What's new in FLASHApp 2.0 (alpha)</h3>
                 <div class="whats-new-columns">
                     <div>
-                        <h4>Check every identification</h4>
+                        <h4>One top-down analysis</h4>
                         <ul>
-                            <li>FLASHTnT results go from protein to proteoform to PrSM, with matched and unmatched masses per PrSM.</li>
-                            <li>New validation views: fragment mass errors, isotope envelope fit and the precursor XIC by charge.</li>
-                            <li>Run QC and identification QC panels.</li>
+                            <li>Deconvolution, proteoform identification and label-free or TMT quantification in one workflow.</li>
+                            <li>Pick runs in a file selector with folders, import public PRIDE datasets, or download a UniProt proteome as the database.</li>
+                            <li>Example results for every analysis are ready in the Viewer.</li>
                         </ul>
                     </div>
                     <div>
-                        <h4>More accurate sequence view</h4>
+                        <h4>A more flexible Viewer</h4>
                         <ul>
-                            <li>Ion series follow each scan's fragmentation method (ETD, EThcD, UVPD), with a tolerance in Da.</li>
-                            <li>The protein table shows characterization, cleavages and localized modifications.</li>
+                            <li>Arrange the Viewer in a layout window with a searchable component list.</li>
+                            <li>New views: chromatogram, proteoform heatmap and GO enrichment of selected proteins.</li>
                         </ul>
                     </div>
                 </div>
