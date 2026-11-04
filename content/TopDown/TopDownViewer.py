@@ -20,6 +20,7 @@ from src.render import topdown_layout
 from src.render.layout_editor.dialogs import layout_button
 from src.render import quant_view
 from src.render.tool_results import tool_results_button
+from src.common import result_download
 
 TOOL = 'topdown'
 
@@ -114,6 +115,7 @@ identified_runs = set(file_manager.get_results_list(['protein_dfs']))
 labelled_runs = set(file_manager.get_results_list(['isobaric_dfs']))
 comparison_names = quant_view.comparison_names(file_manager)
 comparison_ids = set(comparison_names.values())
+downloadable = set(result_download.downloadable_runs(file_manager))
 
 if len(results) == 0 and not comparison_names:
     with st.container(horizontal=True):
@@ -133,9 +135,12 @@ display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items(
 experiments, side_by_side = topdown_layout.saved(file_manager) or ([None], False)
 
 
-def edit_layout():
+def edit_layout(index=0):
     layout_button(file_manager)
     tool_results_button()
+    shown = st.session_state.get(selection_key(index))
+    if downloadable:
+        result_download.viewer_button(file_manager, shown if shown in downloadable else None)
 
 
 if comparison_selected():
@@ -149,7 +154,7 @@ elif len(experiments) == 2 and side_by_side:
         selector(0, display_names)
         experiment(0)
     with c2:
-        selector(1, run_names, edit_layout)
+        selector(1, run_names, lambda: edit_layout(1))
         experiment(1)
 
 else:
