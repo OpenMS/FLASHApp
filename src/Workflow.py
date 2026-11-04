@@ -16,6 +16,7 @@ from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
 from src.quant.run import CONSENSUS_EXCLUDE, compare_isobaric, compare_runs
 from src import flashida
+from src import former_examples
 from src.workflow.WorkflowManager import WorkflowManager
 
 # Example inputs shipped with the default demo workspace, named after the
@@ -203,7 +204,10 @@ def adopt_legacy_inputs(workspace, workflow_dir):
     present = {p.name for p in target.iterdir() if p.name != 'external_files.txt'}
     if external.exists():
         present |= {Path(line).name for line in external.read_text().splitlines() if line.strip()}
-    adopted = [p for p in paths if p.name not in present]
+    # The former workflow's example run is not adopted: today's examples
+    # take its place.
+    adopted = [p for p in paths if p.name not in present
+               and not former_examples.is_example(p, EXAMPLE_DATA)]
     if adopted:
         with open(external, 'a') as f:
             for p in adopted:
@@ -228,6 +232,10 @@ class TopDownWorkflow(WorkflowManager):
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
         self.tool_name = 'FLASHTaggerViewer'
         adopt_legacy_inputs(st.session_state["workspace"], self.workflow_dir)
+        # A workspace from an earlier release still holds that release's
+        # example runs, which would keep today's examples out.
+        former_examples.retire(Path(self.workflow_dir, 'input-files', 'mzML-files'), EXAMPLE_DATA,
+                               Path(self.workflow_dir, former_examples.MARKER))
         # The Native and Lysate presets are applied by the Sample choice of
         # Your analysis, not by buttons of their own
         # (a module-level function: the workflow object is pickled for its run)
