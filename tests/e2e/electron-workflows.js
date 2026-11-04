@@ -26,13 +26,13 @@ async function runWorkflow(t, workflowPage, inputs, identify) {
   // No settle() here: while the workflow runs, the status fragment reruns the
   // page, which can keep it from going quiet for 120 s. waitForText waits.
   await t.page.getByRole("button", { name: "Start Workflow" }).first().click();
-  // The page still shows the previous run's "completed" message until the new
-  // run is listed as running; wait for that, or waitForText returns at once.
-  await t.page
-    .getByRole("button", { name: "Stop Workflow" })
-    .first()
-    .waitFor({ timeout: 60000 })
-    .catch(() => t.log("no running state seen within 60 s"));
+  // While the new run is running, its page reruns every second and can still
+  // show the previous run's "completed" message as stale elements, so wait
+  // for the run to start (Stop Workflow appears) and to end (it goes away)
+  // before reading the result.
+  const stop = t.page.getByRole("button", { name: "Stop Workflow" }).first();
+  await stop.waitFor({ timeout: 60000 }).catch(() => t.log("no running state seen within 60 s"));
+  await stop.waitFor({ state: "detached", timeout: RUN_TIMEOUT });
   await t.waitForText("Workflow completed successfully.", {
     timeout: RUN_TIMEOUT,
     failOn: ["Errors occurred, check log file."],
