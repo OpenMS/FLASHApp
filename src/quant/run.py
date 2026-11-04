@@ -44,6 +44,14 @@ def design_of(workflow_dir, selected_files, mzmls):
     return {run_name(m): by_name.get(run_name(m), ('', i + 1)) for i, m in enumerate(mzmls)}
 
 
+def database_of(workflow):
+    """The FASTA the runs were searched against (None without one)."""
+    try:
+        return str(workflow.file_manager.get_files(workflow.params['fasta-file'])[0])
+    except (KeyError, ValueError, IndexError, TypeError):
+        return None
+
+
 def compare_runs(workflow, tool, dataset_ids, mzmls, selected_files, prsm_key=None):
     """Run FLASHQuantConsensus over the stored runs `dataset_ids` (with their
     `mzmls`, in the same order) and store the comparison. `prsm_key` names the
@@ -77,7 +85,7 @@ def compare_runs(workflow, tool, dataset_ids, mzmls, selected_files, prsm_key=No
         return None
 
     logger.log('-> Storing the comparison...')
-    levels, runs = contract.build(out, out_id)
+    levels, runs = contract.build(out, out_id, database_of(workflow))
     file_manager.store_file(dataset_id, 'consensus_tsv', Path(out), file_name='consensus.tsv')
     if out_id is not None and Path(out_id).exists():
         file_manager.store_file(dataset_id, 'identifications_tsv', Path(out_id), file_name='identifications.tsv')
@@ -104,7 +112,7 @@ def compare_isobaric(workflow, tool, dataset_ids, plex):
         prsm_path = file_manager.get_results(dataset_id, ['prsms_tsv'], partial=True).get('prsms_tsv')
         runs.append((dataset_id, quant, isobaric.read_prsms(prsm_path) if prsm_path else None))
     logger.log(f'-> Comparing the {len(channels)} labelled samples ({isobaric.label(plex)})...')
-    levels = isobaric.build(runs, channels)
+    levels = isobaric.build(runs, channels, database_of(workflow))
     if not levels:
         logger.log('No spectrum carried reporter ions with a precursor mass: no comparison made.')
         return None

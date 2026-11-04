@@ -26,7 +26,7 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import (
-    hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
+    go_terms, hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
@@ -45,7 +45,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
-        hierarchy_data.__file__, prsm_data.__file__,
+        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__,
         str(Path(__file__).with_name('quant_cells.py')),
     ):
         try:
@@ -315,23 +315,21 @@ def _plex(fm, ds):
     return plex, info.get('channels') or isobaric.channel_names(plex)
 
 
-def _reporter_columns(channels):
+def _reporter_columns(identified):
+    """The reporter table's columns: the spectrum and how many labels it
+    carries. The intensity of each label is in the reporter ion plot of the
+    selected spectrum, not one column per label."""
     columns = [
         {'title': 'Scan', 'field': 'Scan', 'sorter': 'number'},
         {'title': 'RT (min)', 'field': 'RT', 'sorter': 'number', **_fixed(2)},
         {'title': 'Precursor mass', 'field': 'PrecursorMass', 'sorter': 'number', **_fixed(2),
          'headerTooltip': 'Monoisotopic mass of the precursor (FLASHDeconv), in Daltons.'},
-        {'title': 'Charge', 'field': 'Charge', 'sorter': 'number'},
-        {'title': 'Identified as', 'field': 'Identified', 'sorter': 'string',
-         'headerTooltip': 'The protein of the best PrSM of the spectrum (FLASHTnT).'},
         {'title': 'Labels found', 'field': 'QuantifiedChannels', 'sorter': 'number',
          'headerTooltip': 'How many labels have a reporter ion in the spectrum.'},
     ]
-    columns += [
-        {'title': name, 'field': name, 'sorter': 'number', 'formatter': 'scientific', 'formatterParams': {'precision': 2},
-         'headerTooltip': f'Reporter ion intensity of label {name}, corrected for isotope impurities.'}
-        for name in channels
-    ]
+    if identified:
+        columns.append({'title': 'Identified as', 'field': 'Identified', 'sorter': 'string',
+                        'headerTooltip': 'The protein of the best PrSM of the spectrum (FLASHTnT).'})
     return columns
 
 
@@ -467,6 +465,8 @@ def _proteoform_heatmap(comp_name, file_manager, dataset_id):
             },
             on_select=_IDENTIFICATION_ON_SELECT,
             highlight={'protein': 'index'},
+            # A box or lasso selects the proteins of the PrSMs in it (GO terms)
+            multi_select={go_terms.RUN_SET: 'accession'},
             hover_column='label',
             zoom_identifier=f'{comp_name}_zoom',
             title=f'Proteoform Heatmap ({points.height} PrSMs)',
@@ -703,7 +703,8 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             column_definitions=_hierarchy_columns(PROTEIN_GROUP_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('Proteins', hierarchy_data.key_figures(hits)['proteins']),
             index_field='protein_group', go_to_fields=['accession'],
-            interactivity={'protein_group': 'protein_group'}, **common,
+            interactivity={'protein_group': 'protein_group'},
+            multi_select={go_terms.RUN_SET: 'accession'}, **common,
         )
     elif comp_name == 'proteoform_table':
         build = lambda: dict(
@@ -713,6 +714,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             index_field='proteoform_id', go_to_fields=['proteoform'],
             filters={'protein_group': 'protein_group'},
             interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+            multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     else:
@@ -723,6 +725,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
             index_field='index', go_to_fields=['Scan'],
             filters={'proteoform': 'proteoform_id'},
             interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+            multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     # All three are as tall as the one with the most rows, so that tables
@@ -758,13 +761,13 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'reporter_table':
-        plex, channels = _plex(fm, ds)
+        plex, _ = _plex(fm, ds)
         return _component(
             Table, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
             lambda: dict(
                 data=insight_data.reporter_table(fm, ds),
-                column_definitions=_reporter_columns(channels),
-                title=f'Reporter ions per spectrum ({isobaric.label(plex)})',
+                column_definitions=_reporter_columns(fm.result_exists(ds, 'protein_dfs')),
+                title=f'Reporter ions ({isobaric.label(plex)})',
                 index_field='scan_idx', go_to_fields=['Scan'], interactivity={'scan': 'scan_idx'},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
@@ -895,6 +898,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     'color': '#6200EE',
                 }],
                 interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+                multi_select={go_terms.RUN_SET: 'accession'},
                 on_select={'tag': None, 'aa': None, 'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),
@@ -1108,6 +1112,10 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
         return
     if comp_name == 'id_qc':
         _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        return
+    if comp_name == 'go_enrichment':
+        from src.render import go_view
+        go_view.render_run(file_manager, dataset_id, state_manager, key)
         return
     try:
         component, render_args = _build(comp_name, file_manager, dataset_id, tool, state_manager)

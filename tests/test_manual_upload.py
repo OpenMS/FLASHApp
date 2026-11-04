@@ -1,7 +1,7 @@
 """
 Tests for the manual result upload of FLASHDeconv and FLASHTnT results.
 
-Uploading result files through the "Manual Result Upload" tab used to fail
+Uploading result files through the Viewer's "Add tool results" dialog used to fail
 with "AttributeError: 'UploadedFile' object has no attribute 'suffix'":
 FileManager.store_file derived the stored file name from `file.suffix`, which
 a Streamlit `UploadedFile` (a BytesIO subclass carrying the original name in
@@ -28,7 +28,7 @@ import pytest
 from src.workflow.FileManager import FileManager
 
 
-# content/TopDown/TopDownUpload.py :: UPLOAD_FILE_TYPES, the deconvolution files
+# src/render/tool_results.py :: UPLOAD_FILE_TYPES, the deconvolution files
 UPLOAD_FILE_TYPES = (
     ('deconv.mzML', 'out_deconv_mzML', 'out'),
     ('annotated.mzML', 'anno_annotated_mzML', 'anno'),
@@ -36,7 +36,7 @@ UPLOAD_FILE_TYPES = (
     ('spec2.tsv', 'spec2_tsv', ''),
 )
 
-# content/TopDown/TopDownUpload.py :: UPLOAD_FILE_TYPES, the identification files
+# src/render/tool_results.py :: UPLOAD_FILE_TYPES, the identification files
 TNT_UPLOAD_FILE_TYPES = (
     ('deconv.mzML', 'out_deconv_mzML', 'out'),
     ('annotated.mzML', 'anno_annotated_mzML', 'anno'),

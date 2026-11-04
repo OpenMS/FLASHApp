@@ -44,7 +44,9 @@ def comparison_names(file_manager, tool=None):
             what = f"{isobaric.label(manifest.get('plex', ''))}, {len(manifest['runs'])} samples"
         else:
             what = f"{len(manifest['runs'])} runs"
-        names[f"Comparison: {what} ({when})"] = dataset_id
+        # A comparison given a name of its own (the examples) keeps it
+        custom = file_manager.get_display_name(dataset_id)
+        names[custom if custom != dataset_id else f"Comparison: {what} ({when})"] = dataset_id
     return names
 
 

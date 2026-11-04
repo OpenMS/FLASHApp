@@ -136,7 +136,7 @@ def proteoforms_from(hits):
 
 def prsm_rows_from(hits):
     return hits.select(
-        'proteoform_id', 'index', 'scan_idx', 'Scan',
+        'proteoform_id', 'index', 'scan_idx', 'Scan', 'accession',
         pl.col('RetentionTime'), 'PrecursorMass',
         _with_missing('ProteoformMass').alias('ProteoformMass'),
         'MatchingFragments', 'Score',
@@ -160,7 +160,7 @@ def proteoform_map_from(hits):
         return pl.DataFrame(schema={
             'rt': pl.Float64, 'mass': pl.Float64, 'score': pl.Float64, 'index': pl.Int64,
             'scan_idx': pl.Int64, 'proteoform_id': pl.Int64, 'protein_group': pl.Int64,
-            'label': pl.String,
+            'accession': pl.String, 'label': pl.String,
         })
     proteoform = pl.col('proteoform_key')
     shortened = (
@@ -182,7 +182,7 @@ def proteoform_map_from(hits):
             pl.col('Score').cast(pl.Float64).alias('score'),
             pl.col('index').cast(pl.Int64),
             pl.col('scan_idx').cast(pl.Int64),
-            'proteoform_id', 'protein_group',
+            'proteoform_id', 'protein_group', 'accession',
             pl.concat_str(
                 [
                     pl.col('accession'), pl.lit(' · '), shortened,

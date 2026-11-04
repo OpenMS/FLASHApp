@@ -19,15 +19,15 @@ from src.render import validation_data  # noqa: E402
 from src.workflow.FileManager import FileManager  # noqa: E402
 
 WORKSPACE = Path(__file__).resolve().parent.parent / 'example-data' / 'workspaces' / 'default'
-FD_DATASET = 'example_fd'
-TNT_DATASET = 'example_spectrum_aqpz'
+FD_DATASET = 'example_deconvolution'
+TNT_DATASET = 'example_native_identified'
 
 
 def _file_manager(tmp_path, tool):
     cache = tmp_path / tool
     cache.mkdir()
-    shutil.copy(WORKSPACE / tool / 'cache' / 'cache.db', cache / 'cache.db')
-    (cache / 'files').symlink_to(WORKSPACE / tool / 'cache' / 'files')
+    shutil.copy(WORKSPACE / 'cache' / 'cache.db', cache / 'cache.db')
+    (cache / 'files').symlink_to(WORKSPACE / 'cache' / 'files')
     return FileManager(cache, cache)
 
 
@@ -113,9 +113,11 @@ def test_fragment_errors_on_demo(tnt):
     errors = validation_data.fragment_errors(tnt, TNT_DATASET).collect()
     assert errors.height > 0
     assert set(errors.columns) == set(validation_data.FRAGMENT_ERROR_SCHEMA)
-    # Matched within the FLASHTnT tolerance of the demo (5 ppm)
-    assert errors['ppm_error'].abs().max() <= 5.0 + 1e-6
-    assert set(errors['ion_type'].unique()) <= {'b', 'c', 'y', 'z'}
+    # The demo's fragments come from FLASHAnnotator, matched within its
+    # tolerance (10 ppm), internal fragments included
+    assert errors['ppm_error'].abs().max() <= 10.0 + 1e-6
+    assert set(errors['ion_type'].unique()) <= {'b', 'c', 'y', 'z', 'internal'}
+    assert {'b', 'y'} <= set(errors['ion_type'].unique())
 
 
 def test_isotope_envelopes_on_demo(fd):
@@ -128,7 +130,7 @@ def test_isotope_envelopes_on_demo(fd):
     # Fragmentation spectra get their precursor envelope as mass -1
     precursors = envelopes.filter(pl.col('mass_idx') == -1)
     assert precursors.height > 0
-    scans = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / 'example_fd' / 'scan_table.pq')
+    scans = pl.read_parquet(WORKSPACE / 'cache' / 'files' / FD_DATASET / 'scan_table.pq')
     ms2 = set(scans.filter(pl.col('MSLevel') == 2)['index'].cast(pl.Int64).to_list())
     assert set(precursors['scan_idx'].unique().to_list()) <= ms2
 
@@ -185,13 +187,11 @@ def test_characterize_levels():
 
 def test_characterization_on_demo(tnt):
     table = validation_data.characterization(tnt, TNT_DATASET).collect()
-    assert table.height == 17
-    assert set(table['Characterization']) <= {'Characterized', 'Partial', 'Ambiguous'}
-    # The best hit of the demo (AQPZ, score 505) is identified but carries an
-    # unlocalized mass shift
-    best = table.filter(pl.col('proteoform_index') == 9).row(0, named=True)
-    assert best['Characterization'] == 'Partial'
-    assert best['LocalizedMods'] == '0/1'
+    # The demo (GapA) has one proteoform, identified without a mass shift
+    assert table.height == 1
+    best = table.row(0, named=True)
+    assert best['Characterization'] == 'Characterized'
+    assert best['LocalizedMods'] == '-'
     assert best['Cleavages'] > 25
 
 
@@ -214,7 +214,7 @@ def test_histogram_integer_bins():
 
 
 def test_run_qc_on_demo(fd):
-    masses = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / 'example_fd' / 'mass_table.pq')
+    masses = pl.read_parquet(WORKSPACE / 'cache' / 'files' / FD_DATASET / 'mass_table.pq')
     total = masses['MonoMass'].list.len().sum()
     qscores = qc_data.qscore_distribution(fd, FD_DATASET).collect()
     assert qscores['y'].sum() == total
@@ -227,8 +227,11 @@ def test_run_qc_on_demo(fd):
 
 def test_id_qc_on_demo(tnt):
     ids = qc_data.identifications_over_time(tnt, TNT_DATASET).collect()
-    # One spectrum, one best hit; the demo has no q-values
-    assert ids.to_dicts() == [{'series': 'Best hit per spectrum', 'x': 30.0, 'y': 1.0}]
+    # One spectrum, one best hit, within 1% FDR
+    assert ids.to_dicts() == [
+        {'series': 'Best hit per spectrum', 'x': 30.0, 'y': 1.0},
+        {'series': 'q ≤ 0.01', 'x': 30.0, 'y': 1.0},
+    ]
     errors = qc_data.fragment_error_over_time(tnt, TNT_DATASET).collect()
     assert errors.height == 1
     assert abs(errors['y'][0]) < 5
@@ -236,7 +239,7 @@ def test_id_qc_on_demo(tnt):
 
 def test_chromatograms_on_demo(fd):
     frame = qc_data.chromatograms(fd, FD_DATASET).collect()
-    scans = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / FD_DATASET / 'scan_table.pq')
+    scans = pl.read_parquet(WORKSPACE / 'cache' / 'files' / FD_DATASET / 'scan_table.pq')
     ms1 = scans.filter(pl.col('MSLevel') == 1)
     assert frame['series'].unique(maintain_order=True).to_list() == list(qc_data.CHROMATOGRAM_SERIES.values())
     tic = frame.filter(pl.col('series') == 'TIC (raw)')
@@ -247,7 +250,7 @@ def test_chromatograms_on_demo(fd):
     assert (bpc['y'] <= tic['y']).all() and (bpc['y'] > 0).all()
     # A click selects the spectrum: every point carries its MS1 spectrum index
     assert set(tic['index'].to_list()) == set(ms1['index'].cast(pl.Int64).to_list())
-    raw = pl.read_parquet(WORKSPACE / 'flashdeconv' / 'cache' / 'files' / FD_DATASET / 'anno_spectrum.pq')
+    raw = pl.read_parquet(WORKSPACE / 'cache' / 'files' / FD_DATASET / 'anno_spectrum.pq')
     first = int(tic['index'][0])
     assert tic['y'][0] == pytest.approx(raw.filter(pl.col('index') == first)['SumIntensity_Anno'].list.sum().item(), rel=1e-6)
 
