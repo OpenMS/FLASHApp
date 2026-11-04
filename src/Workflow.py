@@ -17,6 +17,7 @@ from src.parse.deconv import parseDeconv
 from src.quant.run import CONSENSUS_EXCLUDE, compare_isobaric, compare_runs
 from src import flashida
 from src.workflow.WorkflowManager import WorkflowManager
+from src.workflow.StreamlitUI import editor_table
 
 # Example inputs shipped with the default demo workspace, named after the
 # analysis they show. All of them are listed: the upload treats any other file
@@ -116,17 +117,23 @@ def samples_and_groups(workflow, quant, identify):
 def isobaric_samples(workflow):
     """The sample and condition of each label (channel) of the chosen plex."""
     plex = analysis.plex(workflow.current_params())
-    channels = isobaric.load_channels(workflow.workflow_dir, plex)
     st.caption('The sample and condition of each label. A label without a condition is not tested.')
+    # Drawn from the labels as first read, not as saved after each edit: a
+    # new table would make a new editor that drops the edit just made
+    editor_key = f'isobaric_channels_{plex}'
+    channels = editor_table(
+        st.session_state, editor_key,
+        lambda: isobaric.load_channels(workflow.workflow_dir, plex).to_pandas(),
+    )
     edited = st.data_editor(
-        channels.to_pandas(),
+        channels,
         column_config={
             'channel': st.column_config.TextColumn('Label', disabled=True),
             'sample': st.column_config.TextColumn('Sample'),
             'condition': st.column_config.TextColumn('Condition'),
         },
         hide_index=True, use_container_width=True, num_rows='fixed',
-        key=f'isobaric_channels_{plex}',
+        key=editor_key,
     )
     saved = isobaric.save_channels(workflow.workflow_dir, pl.from_pandas(edited), plex)
     conditions = {c for c in saved['condition'] if c}
