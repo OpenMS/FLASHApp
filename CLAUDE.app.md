@@ -35,7 +35,7 @@ Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is req
 
 ### openms-insight
 
-The viewers need `openms_insight` importable. It comes from PyPI (`openms-insight>=0.5.0` in `requirements.txt`) in the Docker images, the desktop apps and local installs. A feature that needs an unreleased openms-insight change may build it from a branch for a while, but a release requires a published version. The unit tests do not import it.
+The viewers need `openms_insight` importable. It comes from PyPI (`openms-insight>=0.5.0` in `requirements.txt`) in the Docker images, the desktop apps and local installs. A feature that needs an unreleased openms-insight change may build it from a branch for a while, but a release requires a published version. **Currently (develop only):** the Dockerfiles' `insight-build` stage (`INSIGHT_REF=main`) and `build-desktop-app.yaml`'s `build-openms-insight` job build openms-insight from its `main` branch and install it with `--no-deps --force-reinstall` over the PyPI release, for the precomputed GO term index (t0mdavid-m/openms-insight#45). Revert that commit, and raise the pin to the release that has it, before the next FLASHApp release. The unit tests do not import it.
 
 `.streamlit/config.toml` → `developmentMode = false` for production builds.
 
