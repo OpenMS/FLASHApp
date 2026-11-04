@@ -580,6 +580,25 @@ class TopDownWorkflow(WorkflowManager):
             logger=self.logger
         )
 
+    def _prepare_go_terms(self, dataset_ids):
+        """Look up the GO terms of the identified proteins and store each
+        run's term index, so the Viewer's GO enrichment cell only runs the
+        tests when proteins are selected. A failure (no network) is logged and
+        the cell looks the terms up itself later."""
+        from src.render import go_terms
+        if not dataset_ids:
+            return
+        self.logger.log('-> Looking up GO terms of the identified proteins...')
+        for dataset_id in dataset_ids:
+            try:
+                count, error = go_terms.precompute_run(self.file_manager, dataset_id)
+            except Exception as e:  # never fail a run over GO terms
+                count, error = 0, f'GO terms were not prepared ({type(e).__name__}: {e}).'
+            if error:
+                self.logger.log(f'{dataset_id}: {error} The Viewer looks them up when they are needed.')
+            elif count:
+                self.logger.log(f'{dataset_id}: GO terms of {count} proteins prepared.', 1)
+
     def _parse_isobaric(self, dataset_id, plex):
         """The reporter ions of every fragmentation spectrum, for the Viewer."""
         stored = self.file_manager.get_results(dataset_id, ['quant_tsv'], partial=True).get('quant_tsv')
@@ -670,6 +689,8 @@ class TopDownWorkflow(WorkflowManager):
                 errors.append(e)
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
+        if identify:
+            self._prepare_go_terms(dataset_ids)
 
         tool = 'flashtnt' if identify else 'flashdeconv'
         if quant == analysis.ISOBARIC:

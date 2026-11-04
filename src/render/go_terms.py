@@ -11,12 +11,20 @@ proteins of the run or comparison (Fisher's exact test, Benjamini-Hochberg),
 with openms_insight.analysis.enrichment.
 
 GO annotations come from MyGene.info by UniProt accession and are kept in the
-workspace cache, so each protein is looked up once. Free of Streamlit.
+workspace cache, so each protein is looked up once. Everything that does not
+depend on the selection is prepared once and stored in the cache: the
+workflow looks up the GO terms of every identified protein after a run and
+writes the run's term index (``precompute_run``), a table with one row per
+protein and term. A selection then only counts its proteins in that index and
+runs the tests (``enrich``, openms_insight's go_enrichment_from_index). Results of earlier builds get their index the
+first time the cell shows them. Free of Streamlit.
 """
 
+import hashlib
 import json
 import threading
 import time
+from collections import OrderedDict
 from pathlib import Path
 
 import polars as pl
@@ -31,6 +39,13 @@ CATEGORIES = {'BP': 'Biological process', 'CC': 'Cellular component', 'MF': 'Mol
 RETRY_NOT_FOUND_S = 30 * 24 * 3600
 
 _CACHE_LOCK = threading.Lock()
+
+# Bump when the index files change shape
+INDEX_VERSION = 1
+# Term indexes kept in memory per process
+_INDEXES_KEPT = 16
+_INDEXES = OrderedDict()
+_INDEX_LOCK = threading.Lock()
 
 
 def clean_accession(name):
@@ -83,6 +98,13 @@ def comparison_entries(session):
         else:
             frame = table.select('Proteoform', pl.lit(None, pl.Utf8).alias('accession'))
     return frame.unique(maintain_order=True)
+
+
+def comparison_universe(session):
+    """Accessions of every entry of a comparison's level: the term index of
+    a comparison is built for these, so the tested background and any
+    selection come from the same index."""
+    return sorted({a for a in comparison_entries(session)['accession'] if a})
 
 
 def comparison_selection(session, labels):
@@ -166,14 +188,173 @@ def annotations(file_manager, accessions, fetch=None, now=None):
     return frame, error
 
 
-def enrichment(file_manager, selected, background, fetch=None):
-    """GO enrichment of `selected` against `background` (accessions).
-    Returns (result of go_enrichment, error message or None, accession ->
+# -- term index -------------------------------------------------------------------
+
+def _digest(accessions):
+    return hashlib.md5(json.dumps(sorted(accessions)).encode()).hexdigest()[:16]
+
+
+def _index_file(file_manager, universe):
+    return Path(file_manager.cache_path, 'go', 'index', f'v{INDEX_VERSION}-{_digest(universe)}.parquet')
+
+
+def _insight():
+    from openms_insight.analysis import enrichment
+    return enrichment
+
+
+def index_frame(annotation_frame, universe):
+    """The term index of the proteins `universe` (clean accessions), as
+    openms_insight's go_term_index builds it: columns accession, category,
+    term, one row per protein and term; a protein without any term has one
+    row with null category and term."""
+    insight = _insight()
+    if hasattr(insight, 'go_term_index'):
+        return insight.go_term_index(annotation_frame, sorted(universe))
+    # openms-insight 0.5.0 has no go_term_index: the same frame
+    rows = {'accession': [], 'category': [], 'term': []}
+    seen = set()
+    for _, row in annotation_frame.iterrows():
+        accession = str(row['query'])
+        if accession not in universe:
+            continue
+        for category in CATEGORIES:
+            for term in row[f'{category}_terms']:
+                rows['accession'].append(accession)
+                rows['category'].append(category)
+                rows['term'].append(str(term))
+                seen.add(accession)
+    for accession in sorted(set(universe) - seen):
+        rows['accession'].append(accession)
+        rows['category'].append(None)
+        rows['term'].append(None)
+    schema = {'accession': pl.Utf8, 'category': pl.Utf8, 'term': pl.Utf8}
+    return pl.DataFrame(rows, schema=schema).unique(maintain_order=True)
+
+
+def index_ready(file_manager, accessions):
+    """Whether the term index of these proteins is stored."""
+    universe = {clean_accession(a) for a in accessions if a}
+    return _index_file(file_manager, universe).exists()
+
+
+def term_index(file_manager, accessions, fetch=None):
+    """The term index (see index_frame) of the proteins `accessions`, from
+    memory or the workspace cache, else built from their annotations (which
+    may ask MyGene.info for the ones not looked up yet). Returns (index,
+    error message or None). An index built while MyGene.info could not be
+    reached is not stored, so the next call asks again."""
+    universe = {clean_accession(a) for a in accessions if a}
+    path = _index_file(file_manager, universe)
+    with _INDEX_LOCK:
+        cached = _INDEXES.get(str(path))
+        if cached is not None:
+            _INDEXES.move_to_end(str(path))
+            return cached, None
+    error = None
+    try:
+        index = pl.read_parquet(path)
+    except (OSError, pl.exceptions.PolarsError):
+        frame, error = annotations(file_manager, sorted(universe), fetch=fetch)
+        index = index_frame(frame, universe)
+        if error is None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(f'.{time.time_ns()}.tmp')
+            index.write_parquet(tmp)
+            tmp.replace(path)
+    if error is None:
+        with _INDEX_LOCK:
+            _INDEXES[str(path)] = index
+            while len(_INDEXES) > _INDEXES_KEPT:
+                _INDEXES.popitem(last=False)
+    return index, error
+
+
+def _run_file(file_manager, dataset_id):
+    return Path(file_manager.cache_path, 'go', 'runs', f'{dataset_id}.json')
+
+
+def _run_stamp(file_manager, dataset_id):
+    from src.render import insight_data
+    path = insight_data.result_path(file_manager, dataset_id, 'protein_dfs')
+    if path is None:
+        return None
+    stat = path.stat()
+    return [path.name, stat.st_size, stat.st_mtime_ns]
+
+
+def stored_run_background(file_manager, dataset_id):
+    """run_background, kept in the workspace cache next to the run's term
+    index while the run's protein table is unchanged."""
+    path = _run_file(file_manager, dataset_id)
+    stamp = _run_stamp(file_manager, dataset_id)
+    try:
+        stored = json.loads(path.read_text())
+        if stored.get('stamp') == stamp and stored.get('version') == INDEX_VERSION:
+            return stored['background']
+    except (OSError, ValueError, KeyError):
+        pass
+    background = run_background(file_manager, dataset_id) if stamp is not None else []
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f'.{time.time_ns()}.tmp')
+    tmp.write_text(json.dumps({'version': INDEX_VERSION, 'stamp': stamp, 'background': background}))
+    tmp.replace(path)
+    return background
+
+
+def precompute_run(file_manager, dataset_id, fetch=None):
+    """Prepare the GO enrichment cell of a run: its background, the GO terms
+    of its proteins and its term index. Returns (number of proteins, error
+    message or None). Called by the workflow after a run."""
+    background = stored_run_background(file_manager, dataset_id)
+    if not background:
+        return 0, None
+    _, error = term_index(file_manager, background, fetch=fetch)
+    return len(background), error
+
+
+# -- enrichment ---------------------------------------------------------------------
+
+def _annotation_frame(index):
+    """The annotations of a term index in the shape go_enrichment takes."""
+    terms = index.drop_nulls('term')
+    frame = terms.select('accession').unique(maintain_order=True)
+    for category in CATEGORIES:
+        lists = (
+            terms.filter(pl.col('category') == category)
+            .group_by('accession', maintain_order=True)
+            .agg(pl.col('term').alias(f'{category}_terms'))
+        )
+        frame = frame.join(lists, on='accession', how='left').with_columns(
+            pl.col(f'{category}_terms').fill_null(pl.lit([], pl.List(pl.Utf8)))
+        )
+    out = frame.rename({'accession': 'query'}).to_pandas()
+    for category in CATEGORIES:
+        out[f'{category}_terms'] = out[f'{category}_terms'].map(list)
+    return out
+
+
+def enrich(index, foreground, background, categories=tuple(CATEGORIES)):
+    """GO enrichment of the proteins `foreground` against `background`
+    (accessions) from a term index, with openms_insight: the result of its
+    go_enrichment (fg_total, bg_total, fg_count, bg_count, categories ->
+    table of go_term_table)."""
+    insight = _insight()
+    if hasattr(insight, 'go_enrichment_from_index'):
+        return insight.go_enrichment_from_index(index, foreground, background, categories=categories)
+    # openms-insight 0.5.0: the same result, without its faster test
+    return insight.go_enrichment(_annotation_frame(index), foreground, background, categories=categories)
+
+
+def enrichment(file_manager, selected, background, fetch=None, universe=None):
+    """GO enrichment of `selected` against `background` (accessions), from
+    the term index of `universe` (default: the background; it has to hold
+    both). Returns (result of enrich, error message or None, accession ->
     label of the proteins)."""
-    from openms_insight.analysis.enrichment import go_enrichment
-    frame, error = annotations(file_manager, list(selected) + list(background), fetch=fetch)
-    result = go_enrichment(frame, selected, background, categories=tuple(CATEGORIES))
-    labels = {clean_accession(a): protein_label(a) for a in list(selected) + list(background) if a}
+    pool = list(universe if universe is not None else background) + list(selected)
+    index, error = term_index(file_manager, pool, fetch=fetch)
+    result = enrich(index, selected, background)
+    labels = {clean_accession(a): protein_label(a) for a in list(selected) + list(pool) if a}
     return result, error, labels
 
 
