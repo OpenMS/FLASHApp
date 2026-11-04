@@ -1,130 +1,75 @@
 import streamlit as st
 
 from src.common.common import page_setup, themed_asset, v_space
-from src.common.installers import installers_available, render_installer_buttons
+from src.common.installers import render_installer_buttons
 
 page_setup(page="main")
 
-def render_download_box(container_key, title, description, icon="", subtitle=""):
-    """Render a styled download box container with consistent styling."""
-    with st.container(key=container_key):
-        st.markdown(
-            f"""
-            <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
-                {icon} {title}
-            </h4>
-            <p style="color: #6c757d; margin-bottom: 1rem;">
-                {description}
-            </p>
-            """,
-            unsafe_allow_html=True,
-        )
-        
-        # Return context for button placement
-        return st.columns([1, 2, 1])
+CLI_TOOLS_URL = "https://abibuilder.cs.uni-tuebingen.de/archive/openms/OpenMSInstaller/experimental/FVdeploy/"
 
-def render_desktop_download_box():
-    """Render the desktop app download box: one button per platform."""
-    if not installers_available():
-        return False
 
-    with st.container(key="desktop_download_container"):
+def render_download_section():
+    """The downloads, first on the page: the desktop app for each platform and
+    the FLASH* command line tools."""
+    # The offline downloads are pointless inside the offline app itself.
+    if st.session_state.get("location") == "local":
+        return
+    with st.container(key="fa_downloads"):
         st.markdown(
             """
-            <h4 style="color: #6c757d; margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
-                Use FLASHApp Offline
-            </h4>
+            <div class="fa-downloads-title">⬇️ Download FLASHApp</div>
+            <div class="fa-downloads-text">
+                Run FLASHApp on your own computer: the same analysis and Viewer,
+                on files that stay on your disk, with no upload.
+            </div>
             """,
             unsafe_allow_html=True,
         )
-        render_installer_buttons(app_name="FLASHApp")
-
-    return True
-
-def render_flash_cli_tools_box():
-    """Render the FLASH* command line tools box."""
-    cols = render_download_box(
-        container_key="flash_cli_tools_container",
-        title="FLASH* Command Line Tools",
-        description="Access FLASH* tools (FLASHDeconv, FLASHTnT, etc.) through the command line interface as part of OpenMS.",
-        icon=""
-    )
-    
-    # Center the link button using Streamlit button with custom styling
-    with cols[1]:
-
-        st.link_button(
-            "📥 Download Command Line Tools",
-            "https://abibuilder.cs.uni-tuebingen.de/archive/openms/OpenMSInstaller/experimental/FVdeploy/",
-            use_container_width=True,
-            type="secondary",   # matches the solid/primary button look
+        if not render_installer_buttons(app_name="FLASHApp"):
+            st.caption("The desktop app of the latest release cannot be listed right now. "
+                       "See the [releases](https://github.com/OpenMS/FLASHApp/releases).")
+        st.markdown(
+            f'<div class="fa-downloads-cli">Prefer scripting? Get the '
+            f'<a href="{CLI_TOOLS_URL}" target="_blank">FLASH* command line tools</a> '
+            f'(FLASHDeconv, FLASHTnT and more, as part of OpenMS).</div>',
+            unsafe_allow_html=True,
         )
-
-    
-    # Add subtitle text
     st.markdown(
         """
-        <div style="text-align: center; margin-top: 1rem; color: #6c757d;">
-            FLASH* tools are a part of the OpenMS TOPP tools and can be used via command line interface for advanced custom automated workflows and scripting.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-def apply_download_box_styling(container_key):
-    """Apply consistent styling to a download box container."""
-    st.markdown(
-        f"""
         <style>
-        .st-key-{container_key} {{
-            background: linear-gradient(135deg, rgba(128, 128, 128, 0.06) 0%, rgba(128, 128, 128, 0.12) 100%) !important;
-            border: 1px solid rgba(128, 128, 128, 0.3) !important;
-            border-radius: 8px !important;
-            padding: 1.5rem !important;
-            margin: 1rem 0 !important;
+        .st-key-fa_downloads {
+            border: 2px solid var(--fa-accent) !important;
+            border-radius: 12px !important;
+            padding: 1.25rem 1.5rem !important;
+            margin: 0 0 1.5rem 0 !important;
+            background: linear-gradient(135deg, rgba(128, 128, 128, 0.04) 0%, rgba(128, 128, 128, 0.10) 100%) !important;
             text-align: center !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
-        }}
-        
-        .st-key-{container_key} > div {{
-            background: transparent !important;
-        }}
+        }
+        .fa-downloads-title {
+            color: var(--fa-accent);
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        .fa-downloads-text { opacity: 0.85; margin-bottom: 0.75rem; }
+        .fa-downloads-cli { opacity: 0.75; font-size: 0.9rem; margin-top: 0.25rem; }
+        .st-key-fa_downloads [data-testid^="stBaseLinkButton"],
+        .st-key-fa_downloads [data-testid^="stBaseButton"] {
+            background: var(--fa-accent) !important;
+            border-color: var(--fa-accent) !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            min-height: 3rem !important;
+        }
+        .st-key-fa_downloads [data-testid^="stBaseLinkButton"] p,
+        .st-key-fa_downloads [data-testid^="stBaseButton"] p {
+            color: #ffffff !important;
+            font-size: 1.05rem !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-
-def render_download_boxes_responsive():
-    """Render download boxes in a responsive layout."""
-    # Collect available boxes
-    available_boxes = []
-    
-    # Check if a desktop installer is available
-    if installers_available():
-        available_boxes.append("desktop")
-    
-    # Always include FLASH* CLI tools
-    available_boxes.append("flash_cli")
-    
-    num_boxes = len(available_boxes)
-    
-    if num_boxes == 0:
-        return
-    
-    spacer1, center_col, spacer2 = st.columns([1, 3, 1])
-    # Render boxes based on count
-    if num_boxes == 1:
-        # Single box: centered
-        with center_col:
-            render_flash_cli_tools_box()
-            apply_download_box_styling("flash_cli_tools_container")
-                
-    elif num_boxes == 2:
-        with center_col:
-            render_desktop_download_box()
-            apply_download_box_styling("desktop_download_container")
-            render_flash_cli_tools_box()
-            apply_download_box_styling("flash_cli_tools_container")
 
 
 def inject_theme_colors():
@@ -575,17 +520,6 @@ def render_whats_new():
             unsafe_allow_html=True,
         )
 
-def render_enhanced_download_section():
-    """Render the enhanced download section with modular components."""
-    # The offline downloads are pointless inside the offline app itself.
-    if st.session_state.get("location") == "local":
-        return
-    # Add spacing
-    st.markdown("<br><hr><br>", unsafe_allow_html=True)
-    
-    # Render download boxes using responsive layout
-    render_download_boxes_responsive()
-
 # Main execution
 def main():
     """Main function to render the quickstart page."""
@@ -593,12 +527,12 @@ def main():
     inject_theme_colors()
     inject_workflow_button_css()
     
-    # Render main sections
+    # Render main sections, the downloads first
+    render_download_section()
+
     render_workflow_selection()
 
     render_whats_new()
-
-    render_enhanced_download_section()
     
 
 main()

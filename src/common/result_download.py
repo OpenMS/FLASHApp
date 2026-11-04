@@ -114,18 +114,20 @@ def safe_name(name):
     return cleaned or 'results'
 
 
-def run_button(file_manager, dataset_id, key, export_dir=None, label=None, primary=True):
+def run_button(file_manager, dataset_id, key, export_dir=None, label=None, primary=True,
+               message_area=None):
     """One click downloads the run's ZIP (online) or copies its files to
-    ``export_dir/<name>`` (local app)."""
+    ``export_dir/<name>`` (local app), reporting the export in `message_area`."""
     name = file_manager.get_display_name(dataset_id)
     kind = 'primary' if primary else 'secondary'
     if is_local():
         if st.button(label or 'Export', key=f'export_{key}', icon=':material/drive_file_move:',
                      type=kind, width='stretch'):
-            export_files(
-                [(f, f.name) for f in result_files(file_manager, dataset_id)],
-                Path(export_dir, safe_name(name)),
-            )
+            with message_area if message_area is not None else st.container():
+                export_files(
+                    [(f, f.name) for f in result_files(file_manager, dataset_id)],
+                    Path(export_dir, safe_name(name)),
+                )
         return
     st.download_button(
         label or 'Download ZIP',
@@ -163,8 +165,7 @@ def file_table(files):
     )
 
 
-@st.dialog('Download results', width='large')
-def _run_dialog(file_manager, dataset_id):
+def _run_dialog_body(file_manager, dataset_id):
     name = file_manager.get_display_name(dataset_id)
     files = result_files(file_manager, dataset_id)
     if not files:
@@ -181,6 +182,20 @@ def _run_dialog(file_manager, dataset_id):
     except KeyError:
         # A page loaded on its own (AppTest.from_file) has no navigation to link into
         pass
+
+
+@st.dialog('Download results', width='large')
+def _download_dialog(file_manager, dataset_id):
+    _run_dialog_body(file_manager, dataset_id)
+
+
+@st.dialog('Export results', width='large')
+def _export_dialog(file_manager, dataset_id):
+    _run_dialog_body(file_manager, dataset_id)
+
+
+def _run_dialog(file_manager, dataset_id):
+    (_export_dialog if is_local() else _download_dialog)(file_manager, dataset_id)
 
 
 def viewer_button(file_manager, dataset_id=None):

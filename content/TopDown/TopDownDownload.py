@@ -73,9 +73,10 @@ for i, experiment in enumerate(experiments):
                         st.session_state[edit_mode_key] = True
                         st.rerun()
             st.caption(f"{len(files)} files, {rd.format_size(rd.total_size(files))}")
+        message_area = st.container()
         with download_col:
             rd.run_button(file_manager, experiment, i, export_dir,
-                          label=None if local else 'Download ZIP')
+                          label=None if local else 'Download ZIP', message_area=message_area)
         with delete_col:
             if st.button("", key=f"delete_{experiment}", icon=':material/delete:',
                          help=f"Delete {current_name} and its results", width='stretch'):
