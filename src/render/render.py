@@ -26,7 +26,8 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import (
-    hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
+    hierarchy_data, insight_data, linked_spectra, modifications, prsm_data, prsm_overview, qc_data,
+    validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
@@ -202,6 +203,9 @@ SPECTRUM_TITLES = {
     'annotated': 'Annotated Spectrum',
     'ladder': 'Augmented Deconvolved Spectrum',
 }
+# Selections of the precursor spectrum cell: the precursor spectrum, the
+# precursor mass in it, and the spectrum they were looked up for
+SURVEY, SURVEY_MASS, SURVEY_FOR = 'survey', 'survey_mass', 'survey_for'
 SEQUENCE_VIEW_OPTIONS = dict(
     mass_column='MonoMass', precursor_mass_column='PrecursorMass',
     annotation_title='FLASHAnnotator', svg_filename='FLASHViewer-sequence',
@@ -599,6 +603,39 @@ def _chromatogram(comp_name, file_manager, dataset_id):
     )
 
 
+# Precursor spectrum links per dataset, keyed by the scan table file and its mtime
+_SURVEY_LINKS = {}
+
+
+def _survey_links(file_manager, dataset_id):
+    path = insight_data.result_path(file_manager, dataset_id, 'scan_table')
+    if path is None:
+        raise MissingResult('scan_table')
+    key = (str(path), path.stat().st_mtime_ns)
+    if key not in _SURVEY_LINKS:
+        _SURVEY_LINKS.clear()
+        _SURVEY_LINKS[key] = linked_spectra.survey_links(file_manager, dataset_id)
+    return _SURVEY_LINKS[key]
+
+
+def _follow_selected_spectrum(file_manager, dataset_id, state_manager, scan_identifier):
+    """Select the precursor spectrum and precursor mass of the selected
+    spectrum, once per newly selected spectrum, so a mass clicked in the
+    precursor spectrum stays selected until another spectrum is."""
+    links = _survey_links(file_manager, dataset_id)
+    if links['survey_idx'].is_null().all():
+        raise MissingResult('no MS1 spectra')
+    scan = state_manager.get_selection(scan_identifier)
+    if scan == state_manager.get_selection(SURVEY_FOR) and state_manager.get_selection(SURVEY) is not None:
+        return
+    survey, survey_mass = linked_spectra.survey_of(links, scan)
+    for identifier, value in ((SURVEY, survey), (SURVEY_MASS, survey_mass), (SURVEY_FOR, scan)):
+        if value is None:
+            state_manager.clear_selection(identifier)
+        else:
+            state_manager.set_selection(identifier, int(value))
+
+
 def _proteins_with_characterization(file_manager, dataset_id):
     """Protein table rows with the characterization columns (empty when the
     results have no sequence data)."""
@@ -837,6 +874,21 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     key=state_manager.get_selection('tag'),
                 )
         return component, {}
+
+    if comp_name == 'survey_spectrum':
+        # FLASHTnT spectra follow the spectrum of the selected proteoform
+        _follow_selected_spectrum(fm, ds, state_manager, 'pscan' if tool == 'flashtnt' else 'scan')
+        return _component(
+            DeconvolvedSpectrum, f'{comp_name}-{tool}', fm, ds, ['combined_spectrum', 'scan_table'],
+            lambda: dict(
+                data=insight_data.spectra(fm, ds, 'combined_spectrum'),
+                filters={SURVEY: 'index'}, view='annotated', mass_identifier=SURVEY_MASS,
+                title='Precursor Spectrum (MS1)', svg_filename='FLASHViewer-precursor-spectrum',
+                drilldown_title='Precursor Spectrum (MS1)',
+                **SPECTRUM_COLUMNS,
+                float_precision='float64',
+            ),
+        ), {}
 
     if comp_name == '3D_SN_plot':
         return _component(
