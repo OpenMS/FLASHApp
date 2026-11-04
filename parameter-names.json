@@ -1,0 +1,90 @@
+{
+    "_comment": "Display names for the TOPP parameters the Describe experiment page shows, per tool: \"<Tool>\": {\"<parameter path>\": \"Name\"} or {\"name\": ..., \"help\": ...}. Without \"help\" the tool's description is shown. Parameters without an entry keep the tool's name. See src/workflow/parameter_names.py.",
+    "FLASHDeconv": {
+        "keep_empty_out": "Keep empty output files",
+        "write_detail": "Write peak details",
+        "FD:report_FDR": {
+            "name": "Estimate mass FDR (q-values)",
+            "help": "Report a q-value (approximate FDR) for every deconvolved mass, with the decoy masses it was estimated from."
+        },
+        "FD:merging_method": "Merge spectra before deconvolution",
+        "FD:merging_min_ms_level": "Merge from MS level",
+        "FD:merging_max_ms_level": "Merge up to MS level",
+        "FD:scan_commands": "FLASHIda scan commands file",
+        "SD:tol": {
+            "name": "Mass tolerance (ppm) per MS level",
+            "help": "Tolerance in ppm for MS1, MS2, and so on, one value per line (e.g. 10 for MS1, then 10 for MS2)."
+        },
+        "SD:min_mass": "Minimum mass (Da)",
+        "SD:max_mass": "Maximum mass (Da)",
+        "SD:min_charge": "Minimum charge",
+        "SD:max_charge": "Maximum charge",
+        "SD:precursor_charge": {
+            "name": "Fixed precursor charge",
+            "help": "Charge of the targeted precursor: every MS2 precursor gets this charge. 0 determines the charge from the data."
+        },
+        "ft:ion_mobility_tolerance": "Ion mobility tolerance (1/K0)",
+        "ft:min_sample_rate": "Minimum fraction of scans with signal",
+        "ft:min_trace_length": "Minimum feature length (s)",
+        "ft:min_cos": "Minimum isotope cosine of features",
+        "ft:iso_merge_tol_ppm": "Isotope merge tolerance (ppm)",
+        "iq:isotope_correction": "Correct reporter isotope impurities",
+        "iq:reporter_mz_tol": "Reporter ion tolerance (Th)",
+        "iq:only_fully_quantified": "Only spectra with every channel quantified"
+    },
+    "FLASHTnT": {
+        "fixed_mod": "Fixed modifications",
+        "var_mod": "Variable modifications",
+        "max_var_mod_count": "Maximum variable modifications",
+        "max_blind_mod_count": {
+            "name": "Maximum unknown modifications",
+            "help": "Maximum number of blind modifications (mass shifts not given as a modification) per proteoform."
+        },
+        "max_mod_mass": "Maximum unknown modification mass (Da)",
+        "pro_fdr": "Proteoform FDR",
+        "discard_underdetermined": "Discard underdetermined proteoforms",
+        "keep_decoy": "Report decoy hits",
+        "protein_level_only": "Protein-level search only",
+        "ion_type": "Fragment ion types",
+        "peff_max_mods": "Annotated modifications per entry (PEFF)",
+        "peff_mod_masses": "Modification masses (PEFF)",
+        "gapped_tags": "Candidates from gapped tags",
+        "terminal_ladders": "Candidates from terminal ladders",
+        "precursor_ladders": "Candidates from precursor ladders",
+        "native": "Native or targeted sample",
+        "decoy_precursor": "Decoy precursor masses",
+        "chimeric_rounds": "Chimeric spectrum search rounds",
+        "raw:tol": "Raw spectrum tolerance (ppm)",
+        "tag:min_length": "Minimum tag length",
+        "tag:max_length": "Maximum tag length",
+        "ex:var_mod_file": "Variable modifications file (TopPIC format)"
+    },
+    "FLASHAnnotator": {
+        "precursor_charge": "Precursor charge",
+        "algorithm:tol": "Fragment tolerance (ppm)",
+        "algorithm:calibrate": "Recalibrate m/z",
+        "algorithm:calibration_tol": "Calibration tolerance (ppm)",
+        "algorithm:min_peaks": "Minimum isotope peaks",
+        "algorithm:min_peaks_small": "Minimum isotope peaks of small fragments",
+        "algorithm:min_rel_isotope_intensity": "Minimum relative isotope intensity",
+        "algorithm:min_cos": "Minimum isotope cosine",
+        "algorithm:min_pearson": "Minimum isotope correlation",
+        "algorithm:min_mass_per_charge": "Minimum mass per charge",
+        "algorithm:max_mass": "Maximum fragment mass (Da)",
+        "algorithm:decoy_shifts": "Decoy mass shifts (Da)",
+        "algorithm:p1": "Fragment observation probability",
+        "algorithm:terminal_calibration": "Terminal fragment score calibration",
+        "algorithm:internal_calibration": "Internal fragment score calibration",
+        "algorithm:internal_ions": "Annotate internal fragments",
+        "algorithm:internal_max_length": "Longest internal fragment (residues)",
+        "algorithm:internal_min_tag_length_asp": "Tag length for cleavage after Asp",
+        "algorithm:internal_min_tag_length": "Tag length for other cleavages",
+        "algorithm:internal_extension": "Internal fragments beyond Asp ladders"
+    },
+    "FLASHQuantConsensus": {
+        "min_run_fraction": "Minimum fraction of runs",
+        "mbr_fdr": "Match between runs FDR",
+        "id_fdr": "Identification FDR",
+        "mbr_min_score": "Minimum match between runs score"
+    }
+}
