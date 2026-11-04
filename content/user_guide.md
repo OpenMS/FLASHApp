@@ -47,7 +47,9 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 1. Open **Top-down analysis › Describe experiment**.
 2. In **Your analysis**, pick the **MS data**. **📂 Browse** beside it opens your files:
    - **Your files** lists them by folder. Tick the runs to analyse, or pick a folder to select its runs at once. Type a folder name in the *Folder* column to sort a run into it; FLASHApp suggests folders from the file names (for example `Control_R1`, `Control_R2`, `Treated_R1`), and a run's folder becomes its condition under **Samples and groups**.
-   - **Add files** takes new runs: drag them in or browse for them, or import them from a link. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
+   - **Data on your computer** takes new runs: drag them in or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
+   - **Cloud data** imports them from a link (an object store, OneDrive, Zenodo or Figshare).
+   - **Import from PRIDE** reanalyses a public dataset: enter its accession (for example `PXD019247`) and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
 
    Without files of your own, a small example data set is used.
 3. Switch **Identify proteoforms** on or off, pick the **Protein database** (a **FASTA** or **PEFF** file, added the same way with **📂 Browse**; FLASHApp adds the decoy sequences it needs) and the **Sample** type, and choose the **Quantification** (see the table above).
