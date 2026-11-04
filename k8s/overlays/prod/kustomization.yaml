@@ -15,7 +15,7 @@ commonLabels:
 images:
   - name: openms-streamlit
     newName: ghcr.io/openms/flashapp
-    newTag: 1.2.0-full
+    newTag: 2.0.0-alpha-full
 
 # FLASHApp's own values. k8s/base and k8s/components are the template's and
 # arrive through the template sync; everything this app sets for itself is a
