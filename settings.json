@@ -59,7 +59,8 @@
         "enabled": true,
         "max_download_gb_online": 50,
         "allowed_hosts": [],
-        "parallel_downloads": 4
+        "parallel_downloads": 4,
+        "pride_example": "PXD078120"
     },
     "structure_view": {
         "alphafold_download": true
