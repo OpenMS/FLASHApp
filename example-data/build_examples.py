@@ -9,9 +9,11 @@ and a display name that says what the example shows.
 
 The label-free example uses four runs of the FLASHQuant SpikeIn dataset
 (MassIVE MSV000091923 / PXD042169: the six-protein mix spiked into an E. coli
-lysate at relative amounts 1 (A) and 1/10 (F), two replicates each). A missing
-input is downloaded from MassIVE and cut to a short retention-time window with
-FileFilter, so the repository stays small.
+lysate at relative amounts 1 (A) and 1/10 (F), two replicates each). The
+isobaric example uses one fraction of the ratio sample of PXD078120 (HeLa
+proteoforms labelled intact with TMT 10-plex reagents, six channels mixed
+1:1:2:2:4:4). A missing input is downloaded and cut to a short retention-time
+window with FileFilter, so the repository stays small.
 
 It needs the TOPP tools (FileFilter, FLASHDeconv, DecoyDatabase, FLASHTnT,
 FLASHAnnotator, FLASHQuantConsensus) on PATH, so run it inside the FLASHApp image from the repository root:
@@ -41,15 +43,25 @@ INPUTS = DEMO / 'flashtnt' / 'input-files'
 DATABASE = INPUTS / 'fasta-file' / 'example_database.fasta'
 
 MASSIVE = 'https://massive.ucsd.edu/ProteoSAFe/DownloadResultFile?forceDownload=true&file=f.MSV000091923/peak/'
+PRIDE = 'https://ftp.pride.ebi.ac.uk/pride/data/archive/2026/08/PXD078120/'
 # Retention time window kept of the SpikeIn runs (seconds): spike-in proteins
 # and E. coli background elute here
 SPIKEIN_RT = (3990, 4140)
-# Example input -> run of MSV000091923 it is cut from
+# Of the TMT fraction: a stretch dense in spectra with all six reporter ions
+TMT_RT = (6380, 6680)
+# Example input -> (URL of the run it is cut from, retention time window kept)
 SOURCES = {
-    'Label-free_SpikeIn-1x_R1.mzML': '20220414_Ecoli_ProtMix_A_R1.mzML',
-    'Label-free_SpikeIn-1x_R2.mzML': '20220414_Ecoli_ProtMix_A_R2.mzML',
-    'Label-free_SpikeIn-0.1x_R1.mzML': '20220414_Ecoli_ProtMix_F_R1.mzML',
-    'Label-free_SpikeIn-0.1x_R2.mzML': '20220414_Ecoli_ProtMix_F_R2.mzML',
+    'Label-free_SpikeIn-1x_R1.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_A_R1.mzML', SPIKEIN_RT),
+    'Label-free_SpikeIn-1x_R2.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_A_R2.mzML', SPIKEIN_RT),
+    'Label-free_SpikeIn-0.1x_R1.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_F_R1.mzML', SPIKEIN_RT),
+    'Label-free_SpikeIn-0.1x_R2.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_F_R2.mzML', SPIKEIN_RT),
+    'Isobaric_TMT10_HeLa-Ratio.mzML': (PRIDE + 'Ratio_F50.mzML', TMT_RT),
+}
+# The channels of the TMT example: sample and condition (its relative amount);
+# 128N, 130N, 130C and 131 were not used
+TMT_CHANNELS = {
+    '126': ('1x_a', '1x'), '127N': ('1x_b', '1x'), '127C': ('2x_a', '2x'),
+    '128C': ('2x_b', '2x'), '129N': ('4x_a', '4x'), '129C': ('4x_b', '4x'),
 }
 
 # Each example: the input files, its analysis parameters, and the dataset id
@@ -79,6 +91,13 @@ EXAMPLES = [
         'runs': [('example_lysate_identified', 'Example: lysate, identified (E. coli + spike-in)'), None, None, None],
         'comparison': ('example_label_free', 'Example: label-free comparison (spike-in 1x vs 0.1x)'),
     },
+    {
+        'files': ['Isobaric_TMT10_HeLa-Ratio.mzML'],
+        'params': {'identify': False, 'quantification': 'isobaric', 'isobaric-plex': 'tmt10plex'},
+        'channels': TMT_CHANNELS,
+        'runs': [('example_isobaric', 'Example: TMT 10-plex, deconvolution only (HeLa, ratio mix)')],
+        'comparison': ('example_isobaric_comparison', 'Example: TMT comparison (1x vs 2x vs 4x)'),
+    },
 ]
 
 # Valueless switches, as the Configure page records them (_flag_params)
@@ -103,28 +122,29 @@ def download(url, path, attempts=6):
             time.sleep(wait)
 
 
-def trim(source, target):
-    """Keep the spectra within SPIKEIN_RT (FileFilter); `source` may be `target`."""
+def trim(source, target, rt):
+    """Keep the spectra within `rt` (FileFilter); `source` may be `target`."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp, 'trimmed.mzML')
         subprocess.run(
-            ['FileFilter', '-in', str(source), '-out', str(out), '-rt', f'{SPIKEIN_RT[0]}:{SPIKEIN_RT[1]}'],
+            ['FileFilter', '-in', str(source), '-out', str(out), '-rt', f'{rt[0]}:{rt[1]}'],
             check=True,
         )
         shutil.move(out, target)
 
 
 def fetch(name):
-    """Download the SpikeIn run behind example input `name` and keep SPIKEIN_RT."""
+    """Download the run behind example input `name` and keep its window."""
+    url, rt = SOURCES[name]
     target = INPUTS / 'mzML-files' / name
     if target.exists():
-        trim(target, target)
+        trim(target, target, rt)
         return
     with tempfile.TemporaryDirectory() as tmp:
-        full = Path(tmp, SOURCES[name])
-        print(f'Downloading {SOURCES[name]}', flush=True)
-        download(MASSIVE + SOURCES[name], full)
-        trim(full, target)
+        full = Path(tmp, 'full.mzML')
+        print(f'Downloading {url}', flush=True)
+        download(url, full)
+        trim(full, target, rt)
     print(f'{name}: {target.stat().st_size / 1e6:.1f} MB', flush=True)
 
 
@@ -148,6 +168,17 @@ def run(example, workspace):
         design['condition'] = example['conditions']
         design['replicate'] = example['replicates']
         ExperimentalDesign.save_design(workflow_dir, design, files)
+    if 'channels' in example:
+        import polars as pl
+        from src.quant import isobaric
+        plex = params['isobaric-plex']
+        table = isobaric.default_channels(plex).with_columns(
+            pl.col('channel').replace_strict({c: s for c, (s, _) in example['channels'].items()},
+                                             default=pl.col('sample')).alias('sample'),
+            pl.col('channel').replace_strict({c: g for c, (_, g) in example['channels'].items()},
+                                             default='').alias('condition'),
+        )
+        isobaric.save_channels(workflow_dir, table, plex)
 
     cache = workspace / 'cache'
 

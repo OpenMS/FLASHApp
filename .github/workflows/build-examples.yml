@@ -1,0 +1,31 @@
+# Temporary: builds the demo workspace's example results with the TOPP tools
+# of the FLASHApp image and commits them to this branch. Removed before merge.
+name: Build example results
+on:
+  push:
+    branches: [claude/project-thread-bz4izy]
+    paths: [example-data/build_examples.py, .github/workflows/build-examples.yml]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    container: ghcr.io/openms/flashapp:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build examples
+        run: |
+          export PATH=/openms/bin:$PATH
+          FLASHDeconv --helphelp 2>&1 | grep -i "iq:" || true
+          /root/miniforge3/envs/streamlit-env/bin/python example-data/build_examples.py
+          du -sh example-data/workspaces/default/cache example-data/workspaces/default/cache/files/* example-data/workspaces/default/flashtnt/input-files/mzML-files/*
+      - name: Commit results
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add example-data/workspaces/default/cache example-data/workspaces/default/flashtnt/input-files/mzML-files
+          git commit -m "Rebuild the examples, adding the TMT example (PXD078120)"
+          git pull --rebase origin claude/project-thread-bz4izy
+          git push
