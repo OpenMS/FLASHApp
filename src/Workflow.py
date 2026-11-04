@@ -109,8 +109,6 @@ def samples_and_groups(workflow, quant, identify):
         workflow.ui.experimental_design('mzML-files', name='Samples', suggest=True)
     elif quant == analysis.ISOBARIC:
         isobaric_samples(workflow)
-    else:
-        st.caption('No quantification chosen: nothing to describe here.')
 
 
 def isobaric_samples(workflow):
@@ -327,8 +325,9 @@ class TopDownWorkflow(WorkflowManager):
                     "fasta-file", name='Protein database', multiple=False, reactive=True,
                     upload=dict(file_types=DATABASE_TYPES, fallback=EXAMPLE_DATABASE, uniprot=True),
                 )
-                self._sample_type_choice(current_sample)
-                self._recommend_sample_type(current_sample)
+            # The sample presets are always offered, and warn when they do not fit
+            self._sample_type_choice(current_sample)
+            self._recommend_sample_type(current_sample)
 
             quant = self._choice(
                 analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
@@ -342,6 +341,8 @@ class TopDownWorkflow(WorkflowManager):
                     help='The isobaric labelling reagent of the samples (FLASHDeconv -iq:type).',
                 )
 
+            self._preset_fit_warning(identify, quant, current_sample)
+
             params = self.current_params()
             selected = params.get('mzML-files') or []
             selected = [selected] if isinstance(selected, str) else selected
@@ -351,28 +352,48 @@ class TopDownWorkflow(WorkflowManager):
                 quant, analysis.plex(params),
             ), icon='🧭')
 
+    def _preset_fit_warning(self, identify, quant, current_sample) -> None:
+        """Warn when the sample preset, or the preset applied last, sets
+        settings of steps the chosen analysis does not run."""
+        pm = self.parameter_manager
+        presets = pm.load_presets()
+        shown = []
+        applied, _ = pm.applied_preset_status()
+        for name in (current_sample, applied):
+            if name and name in presets and name not in shown:
+                shown.append(name)
+        for name in shown:
+            label = analysis.SAMPLE_LABELS.get(name, name)
+            warning = analysis.preset_warning(label, presets[name], identify, quant)
+            if warning:
+                st.warning(warning, icon='⚠️')
+
     @st.fragment
     def configure(self) -> None:
         params = self.current_params()
         identify = bool(params.get(IDENTIFY_KEY, True))
         quant = analysis.quantification(params)
-        # One tab per analysis step, in the order they run
-        steps = ["Samples and groups", "Deconvolution"]
+        # One tab per step the chosen analysis runs, in the order they run
+        steps = []
+        if quant != analysis.NO_QUANT:
+            steps += ["Samples and groups"]
+        steps += ["Deconvolution"]
         if identify:
             steps += ["Identification", "Fragment annotation"]
         if quant == analysis.LABEL_FREE:
             steps += ["Linking runs"]
-        t = st.tabs([f"**{i} · {step}**" for i, step in enumerate(steps, start=1)])
-        with t[0]:
-            samples_and_groups(self, quant, identify)
-        with t[1]:
+        t = dict(zip(steps, st.tabs([f"**{i} · {step}**" for i, step in enumerate(steps, start=1)])))
+        if "Samples and groups" in t:
+            with t["Samples and groups"]:
+                samples_and_groups(self, quant, identify)
+        with t["Deconvolution"]:
             exclude = FLASHDECONV_EXCLUDE + ([] if quant == analysis.ISOBARIC else ['iq:'])
             self.ui.input_TOPP(
                 'FLASHDeconv', exclude_parameters=exclude, display_subsections=True,
                 display_tool_name=False, flag_parameters=FLASHDECONV_FLAGS,
             )
         if identify:
-            with t[2]:
+            with t["Identification"]:
                 self.ui.input_TOPP(
                     'FLASHTnT',
                     # fd: holds FLASHDeconv's parameters for a raw -in; the workflow
@@ -388,7 +409,7 @@ class TopDownWorkflow(WorkflowManager):
                     'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
                     help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
                 )
-            with t[3]:
+            with t["Fragment annotation"]:
                 # FLASHAnnotator Configuration (ion types follow FLASHTnT)
                 self.ui.input_TOPP(
                     'FLASHAnnotator',
@@ -398,7 +419,7 @@ class TopDownWorkflow(WorkflowManager):
                     flag_parameters=FLASHANNOTATOR_FLAGS,
                 )
         if quant == analysis.LABEL_FREE:
-            with t[-1]:
+            with t["Linking runs"]:
                 comparison_settings(self)
 
     def _recommend_sample_type(self, current) -> None:
