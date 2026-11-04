@@ -3,6 +3,8 @@
 
 from pathlib import Path
 
+import polars as pl
+
 from src import sample_type
 from src.quant.session import QuantSession, comparisons
 from src.render.quant_view import comparison_names
@@ -59,3 +61,19 @@ def test_the_tmt_example_compares_its_reporter_channels(tmp_path):
     # The channels hold 1:2:4 of the same lysate: normalizing them would
     # remove the difference the example shows
     assert session.settings['postproc-normalization'] == 'None'
+
+
+def test_the_reporter_plot_shows_room_beyond_the_outermost_labels(tmp_path):
+    from src.quant import isobaric
+    from src.render import insight_data
+    file_manager = _file_manager(tmp_path)
+    channels = isobaric.channel_names('tmt10plex')
+    mzs = dict(isobaric.PLEXES['tmt10plex'][1])
+    ions = insight_data.reporter_ions(
+        file_manager, 'example_isobaric', channels, [mzs[c] for c in channels],
+    ).collect()
+    first = ions.filter(pl.col('scan_idx') == ions['scan_idx'][0])
+    labelled = first.filter(pl.col('label') != '')
+    assert labelled.height == 10
+    assert first['mz'].min() <= labelled['mz'].min() - insight_data.REPORTER_MARGIN + 1e-9
+    assert first['mz'].max() >= labelled['mz'].max() + insight_data.REPORTER_MARGIN - 1e-9
