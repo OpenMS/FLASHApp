@@ -235,8 +235,9 @@ class TopDownWorkflow(WorkflowManager):
                                   suggest_folders=True)
         with t[1]:
             st.caption(
-                'Only needed to identify proteoforms. Without a database the runs are '
-                'deconvolved only (switch off **Identify proteoforms** on Describe experiment).'
+                'Only needed to identify proteoforms, and only for a database of your own: '
+                'a UniProt proteome can be chosen on Describe experiment. Without a database '
+                'the runs are deconvolved only (switch off **Identify proteoforms** there).'
             )
             self.ui.upload_widget(key="fasta-file", name="Database", file_types=DATABASE_TYPES,
                                   fallback=EXAMPLE_DATABASE)
@@ -319,7 +320,7 @@ class TopDownWorkflow(WorkflowManager):
             if identify:
                 self.ui.select_input_file(
                     "fasta-file", name='Protein database', multiple=False, reactive=True,
-                    upload=dict(file_types=DATABASE_TYPES, fallback=EXAMPLE_DATABASE),
+                    upload=dict(file_types=DATABASE_TYPES, fallback=EXAMPLE_DATABASE, uniprot=True),
                 )
                 self._sample_type_choice(current_sample)
                 self._recommend_sample_type(current_sample)
