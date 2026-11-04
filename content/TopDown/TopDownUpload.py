@@ -31,8 +31,8 @@ extends them along the proteins of the database.
   are deconvolved only.
 
 No data at hand? Two example runs and a database are used when nothing is uploaded.
-The Viewer already holds the results of every example, including a lysate run and a
-label-free comparison.
+The Viewer already holds the results of every example, including a lysate run, a
+label-free comparison and a TMT comparison.
 Already ran the tools yourself? Add their output under **Tool results**.
 """,
     background="""

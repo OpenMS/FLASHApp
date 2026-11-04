@@ -23,6 +23,7 @@ def test_every_example_is_named_after_what_it_shows(tmp_path):
         'example_deconvolution': 'Example: deconvolution only (protein mix, LC-MS)',
         'example_native_identified': 'Example: native, identified (GapA)',
         'example_lysate_identified': 'Example: lysate, identified (E. coli + spike-in)',
+        'example_isobaric': 'Example: TMT 10-plex, deconvolution only (HeLa, ratio mix)',
     }
 
 
@@ -35,12 +36,26 @@ def test_identified_examples_open_their_sample_type_layout(tmp_path):
 
 def test_the_label_free_example_compares_two_conditions(tmp_path):
     file_manager = _file_manager(tmp_path)
-    assert comparisons(file_manager) == ['example_label_free']
+    assert sorted(comparisons(file_manager)) == ['example_isobaric_comparison', 'example_label_free']
     assert comparison_names(file_manager) == {
         'Example: label-free comparison (spike-in 1x vs 0.1x)': 'example_label_free',
+        'Example: TMT comparison (1x vs 2x vs 4x)': 'example_isobaric_comparison',
     }
     session = QuantSession(file_manager, 'example_label_free')
     assert not session.isobaric
     assert len(session.runs) == 4
     design = session._get('quant_design')
     assert sorted(set(design['condition'])) == ['Spike-in 0.1x', 'Spike-in 1x']
+
+
+def test_the_tmt_example_compares_its_reporter_channels(tmp_path):
+    file_manager = _file_manager(tmp_path)
+    assert file_manager.get_results('example_isobaric', ['isobaric_plex'])['isobaric_plex']['plex'] == 'tmt10plex'
+    session = QuantSession(file_manager, 'example_isobaric_comparison')
+    assert session.isobaric
+    assert session.conditions() == {
+        '1x_a': '1x', '1x_b': '1x', '2x_a': '2x', '2x_b': '2x', '4x_a': '4x', '4x_b': '4x',
+    }
+    # The channels hold 1:2:4 of the same lysate: normalizing them would
+    # remove the difference the example shows
+    assert session.settings['postproc-normalization'] == 'None'

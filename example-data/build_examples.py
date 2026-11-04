@@ -97,6 +97,9 @@ EXAMPLES = [
         'channels': TMT_CHANNELS,
         'runs': [('example_isobaric', 'Example: TMT 10-plex, deconvolution only (HeLa, ratio mix)')],
         'comparison': ('example_isobaric_comparison', 'Example: TMT comparison (1x vs 2x vs 4x)'),
+        # Every protein is mixed 1:2:4, so normalizing the channels to a
+        # common median would remove the very difference the example shows
+        'comparison_settings': {'postproc-normalization': 'None'},
     },
 ]
 
@@ -260,6 +263,10 @@ def main():
                 kept.append(entry[0])
             if comparison is not None:
                 rename(cache, comparison, *example['comparison'])
+                if 'comparison_settings' in example:
+                    from src.quant.session import QuantSession
+                    session = QuantSession(FileManager(workspace / 'flashtnt', cache), example['comparison'][0])
+                    session.save_settings({**session.settings, **example['comparison_settings']})
                 kept.append(example['comparison'][0])
         target = DEMO / 'cache'
         shutil.rmtree(target, ignore_errors=True)
