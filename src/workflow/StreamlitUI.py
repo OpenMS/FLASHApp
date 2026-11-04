@@ -3,12 +3,11 @@ import pyopenms as poms
 from pathlib import Path
 import shutil
 import filecmp
-import zipfile
 import subprocess
 from typing import Any, Union, List, Literal, Callable
 import json
+import math
 import os
-import re
 import sys
 import importlib.util
 import time
@@ -16,6 +15,7 @@ from io import BytesIO
 import pandas as pd
 import zipfile
 from datetime import datetime
+
 
 from src.common.common import (
     OS_PLATFORM,
@@ -62,11 +62,30 @@ from src.workflow.ParameterManager import (
 )
 
 
-def _matches_topp_parameter(pattern: str, key: bytes) -> bool:
+def _txt(value) -> str:
+    """Text from pyOpenMS: bytes up to pyOpenMS 3.5, str from 3.6 (nanobind)."""
+    return value.decode() if isinstance(value, bytes) else str(value)
+
+
+def _tags(param, key) -> list[str]:
+    """A parameter's tags as str, whichever pyOpenMS gave them."""
+    return [_txt(t) for t in param.getTags(key)]
+
+
+def _valid_strings(entry) -> list[str]:
+    """A parameter's allowed strings. pyOpenMS 3.6 raises TypeError when asked
+    for those of a boolean parameter, which is a checkbox and has none."""
+    if isinstance(entry.value, bool):
+        return []
+    return [_txt(v) for v in entry.valid_strings]
+
+
+def _matches_topp_parameter(pattern: str, key) -> bool:
     """
     Match an include/exclude pattern against a TOPP parameter key.
 
-    Key format: b"ToolName:1:section:subsection:param_name"
+    Key format: "ToolName:1:section:subsection:param_name" (bytes before
+    pyOpenMS 3.6)
 
     A pattern matches the end of the parameter path, bounded by ':' or the
     start of the path ("tol" matches "FD:tol"). A pattern ending in ':' names
@@ -74,7 +93,7 @@ def _matches_topp_parameter(pattern: str, key: bytes) -> bool:
     parameter under "fd:", but not "FD:" or "algorithm:fd:").
     """
     pattern = pattern.lstrip(":")  # Strip legacy leading colon
-    key_str = key.decode()
+    key_str = _txt(key)
 
     # Extract param path after "ToolName:1:"
     parts = key_str.split(":")
@@ -144,15 +163,6 @@ def _short(value) -> str:
     return text if len(text) <= 40 else text[:37] + "..."
 
 
-def _rerun_here():
-    """Rerun the fragment (or dialog) drawing the widget, so a dialog stays open;
-    the whole page when it is drawn outside one."""
-    try:
-        st.rerun(scope="fragment")
-    except st.errors.StreamlitAPIException:
-        st.rerun()
-
-
 class StreamlitUI:
     """
     Provides an interface for Streamlit applications to handle file uploads,
@@ -208,13 +218,13 @@ class StreamlitUI:
         # create the files dir
         files_dir.mkdir(exist_ok=True, parents=True)
 
-        # if fallback is not None:
-        #     # check if only fallback files are in files_dir, if yes, reset the directory before adding new files
-        #     if [Path(f).name for f in Path(files_dir).iterdir()] == [
-        #         Path(f).name for f in fallback
-        #     ]:
-        #         shutil.rmtree(files_dir)
-        #         files_dir.mkdir()
+        if fallback is not None:
+            # check if only fallback files are in files_dir, if yes, reset the directory before adding new files
+            if [Path(f).name for f in Path(files_dir).iterdir()] == [
+                Path(f).name for f in fallback
+            ]:
+                shutil.rmtree(files_dir)
+                files_dir.mkdir()
 
         if not name:
             name = key.replace("-", " ")
@@ -291,7 +301,6 @@ class StreamlitUI:
                                     fh.write(f.getbuffer())
                         if not failed:
                             st.success("Successfully added uploaded files!")
-                            _rerun_here()
                     else:
                         st.error("Nothing to add, please upload file.")
         else:
@@ -342,8 +351,8 @@ class StreamlitUI:
                                     f_handle.write(f"{f}\n")
                         my_bar.empty()
                         st.success("Successfully added files!")
+
                         st.session_state["previous_dir"] = Path(local_files[0]).parent
-                        _rerun_here()
 
         # Local file upload option: via directory path
         if st.session_state.location == "local":
@@ -413,7 +422,6 @@ class StreamlitUI:
                                     f_handle.write(f"{f}\n")
                         my_bar.empty()
                         st.success("Successfully copied files!")
-                        _rerun_here()
 
             if not TK_AVAILABLE:
                 c2.warning(
@@ -1273,7 +1281,9 @@ class StreamlitUI:
                 min_value=min_value,
                 max_value=max_value,
                 step=step_size,
-                format=None,
+                # "%g" keeps every decimal the user types; Streamlit's float
+                # default "%0.2f" rounds to two.
+                format="%g" if number_type is float else None,
                 key=key,
                 help=help,
                 on_change=on_change,
@@ -1630,8 +1640,8 @@ class StreamlitUI:
             key
             for key in param.keys()
             if not (
-                b"input file" in param.getTags(key)
-                or b"output file" in param.getTags(key)
+                "input file" in _tags(param, key)
+                or "output file" in _tags(param, key)
                 or any([_matches_topp_parameter(k, key) for k in excluded_keys])
             )
         ]
@@ -1648,35 +1658,35 @@ class StreamlitUI:
         for key in valid_keys:
             entry = param.getEntry(key)
             p = {
-                "name": entry.name.decode(),
+                "name": _txt(entry.name),
                 "key": key,
                 "value": entry.value,
                 "original_is_list": isinstance(entry.value, list),
-                "valid_strings": [v.decode() for v in entry.valid_strings],
-                "description": entry.description.decode(),
-                "advanced": (b"advanced" in param.getTags(key)),
+                "valid_strings": _valid_strings(entry),
+                "description": _txt(entry.description),
+                "advanced": ("advanced" in _tags(param, key)),
                 "non_included": key not in included_keys,
                 "section_description": param.getSectionDescription(
-                    ":".join(key.decode().split(":")[:-1])
+                    ":".join(_txt(key).split(":")[:-1])
                 ),
             }
             # Parameter sections and subsections as string (e.g. "section:subsection")
             if display_subsections:
                 p["sections"] = ":".join(
-                    p["key"].decode().split(":1:")[1].split(":")[:-1]
+                    _txt(p["key"]).split(":1:")[1].split(":")[:-1]
                 )
             params.append(p)
 
         # Build ini_params dict for three-layer merge
         ini_params = {}
         for p in params:
-            name = p["key"].decode().split(":1:")[1]
+            name = _txt(p["key"]).split(":1:")[1]
             ini_params[name] = p["value"]
 
         # Resolve effective values: ini < _defaults < user overrides
         merged = self.parameter_manager.get_merged_params(tool_instance_name, ini_params=ini_params)
         for p in params:
-            name = p["key"].decode().split(":1:")[1]
+            name = _txt(p["key"]).split(":1:")[1]
             if name in merged:
                 p["value"] = merged[name]
             # Ensure list parameters stay as lists after loading from JSON
@@ -1767,7 +1777,7 @@ class StreamlitUI:
             i = 0
             for p in params:
                 # get key and name – use tool_instance_name in session state key
-                key_str = p['key'].decode()
+                key_str = _txt(p['key'])
                 if tool_instance_name != topp_tool_name:
                     key_str = key_str.replace(f"{topp_tool_name}:1:", f"{tool_instance_name}:1:", 1)
                 key = f"{self.parameter_manager.topp_param_prefix}{key_str}"
@@ -1814,12 +1824,22 @@ class StreamlitUI:
 
                     # floats
                     elif isinstance(p["value"], float):
+                        value = float(p["value"])
+                        # Streamlit's default "%0.2f" rounds what the user
+                        # types to two decimals, which makes tolerances such as
+                        # 0.015 Da impossible to enter. "%g" shows the value as
+                        # typed, and small defaults step in their own decade.
+                        step = (
+                            10.0 ** math.floor(math.log10(abs(value)))
+                            if 0 < abs(value) < 1
+                            else 1.0
+                        )
                         cols[i].number_input(
                             name,
-                            value=float(p["value"]),
-                            step=1.0,
+                            value=value,
+                            step=step,
+                            format="%g",
                             help=p["description"],
-                            format="%0.5f",
                             key=key,
                         )
 
@@ -1902,7 +1922,7 @@ class StreamlitUI:
         custom = stored.get("_defaults", {}).get(tool_instance_name, {})
         rows = []
         for p in params:
-            name = p["key"].decode().split(":1:")[1]
+            name = _txt(p["key"]).split(":1:")[1]
             value = p["value"]
             if isinstance(value, list):
                 value = [v.decode() if isinstance(v, bytes) else v for v in value]
@@ -1948,13 +1968,13 @@ class StreamlitUI:
         ] + list(exclude_parameters)
         rows = []
         for key in param.keys():
-            tags = param.getTags(key)
-            if b"input file" in tags or b"output file" in tags:
+            tags = _tags(param, key)
+            if "input file" in tags or "output file" in tags:
                 continue
             if any(_matches_topp_parameter(k, key) for k in excluded):
                 continue
             entry = param.getEntry(key)
-            name = key.decode().split(":1:")[1]
+            name = _txt(key).split(":1:")[1]
             default = defaults.get(name, entry.value)
             value = user.get(name, default)
             if isinstance(entry.value, list):
@@ -1964,13 +1984,13 @@ class StreamlitUI:
             rows.append(
                 {
                     "name": name,
-                    "label": entry.name.decode(),
+                    "label": _txt(entry.name),
                     "section": ":".join(name.split(":")[:-1]),
-                    "description": entry.description.decode(),
+                    "description": _txt(entry.description),
                     "value": value,
                     "default": default,
-                    "valid_strings": [v.decode() for v in entry.valid_strings],
-                    "advanced": b"advanced" in tags,
+                    "valid_strings": _valid_strings(entry),
+                    "advanced": "advanced" in tags,
                     "is_list": isinstance(entry.value, list),
                 }
             )
@@ -2727,8 +2747,7 @@ class StreamlitUI:
             job_status = "running"
 
         log_path = Path(self.workflow_dir, "logs", log_level.replace(" ", "-") + ".log")
-        log_path_complete = Path(self.workflow_dir, "logs", 'all' + ".log")
-        log_exists = log_path.exists() and log_path_complete.exists()
+        log_exists = log_path.exists()
 
         # Show queue status if available (online mode)
         if status.get("job_id"):
@@ -2748,76 +2767,113 @@ class StreamlitUI:
                 time.sleep(1)
                 st.rerun()
 
-        error_box = st.empty()
-        with st.status("", expanded=True) as status_widget:
-
+        # Display logs and status. Drawn into one st.empty() slot so the
+        # running view replaces the finished one completely: st.rerun()
+        # below ends the script early, which otherwise leaves the earlier
+        # view's trailing elements on the page.
+        status_area = st.empty()
+        with status_area.container():
             if is_running:
                 # Real-time display during execution
-                run_label = "**Workflow running...**"
+                spinner_text = "**Workflow running...**"
                 if job_status == "queued":
                     pos = status.get("queue_position", "?")
-                    run_label = f"**Waiting in queue (position {pos})...**"
+                    spinner_text = f"**Waiting in queue (position {pos})...**"
 
-                status_widget.update(
-                    label=run_label, state='running',
-                    expanded=True
+                if job_status != "queued":
+                    self._show_run_progress()
+                with st.spinner(spinner_text):
+                    if log_exists:
+                        with open(log_path, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                        if log_lines_count == "all":
+                            display_lines = lines
+                        else:
+                            display_lines = lines[-st.session_state.log_lines_count:]
+                        st.code(
+                            "".join(display_lines),
+                            language="neon",
+                            line_numbers=False,
+                        )
+                    # Faster polling for real-time updates
+                    time.sleep(1)
+                    st.rerun()
+
+            elif log_exists:
+                # Static display after completion
+                st.markdown(
+                    f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
                 )
-                if log_exists:
-                    # Parse progress from complete log
-                    percentage = -1
-                    progress_label = None
-                    with open(log_path_complete, "r", encoding="utf-8") as f:
-                        for line in reversed(f.readlines()):
-                            line = line.strip()
-                            match = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
-                            if match and percentage < 0:
-                                percentage = float(match.group(1))/100
-                            match = re.search(r"Progress of\s+'([^']+)'", line)
-                            if match:
-                                progress_label = match.group(1)
-                                break
-                            elif "Process finished:" in line:
-                                break
-                    if 0 <= percentage <= 1:
-                        st.progress(percentage, text=progress_label)
+                with open(log_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                content = "".join(lines)
+                outcome = classify_log_outcome(content)
+                if outcome == "finished":
+                    st.success("**Workflow completed successfully.**")
+                elif outcome == "cancelled":
+                    st.warning("**Workflow was cancelled.**")
+                else:
+                    st.error("**Errors occurred, check log file.**")
+                self._show_run_summary(show_failures=outcome != "finished")
+                # Apply line limit to static display
+                if log_lines_count == "all":
+                    display_lines = lines
+                else:
+                    display_lines = lines[-st.session_state.log_lines_count:]
+                st.code("".join(display_lines), language="neon", line_numbers=False)
 
-                    with open(log_path, "r", encoding="utf-8") as f:
-                        lines = f.readlines()
-                    if log_lines_count == "all":
-                        display_lines = lines
-                    else:
-                        display_lines = lines[-st.session_state.log_lines_count:]
-                    code_box = st.container(key='log')
-                    code_box.code(
-                        "".join(display_lines), language="neon",
-                        line_numbers=False
-                    )
-                # Update
-                time.sleep(1)
-                st.rerun()
-
-        if log_exists:
-            # Static display after completion
+    def _show_run_progress(self) -> None:
+        """Per-file progress of the running workflow: tool, file n of N, elapsed times."""
+        state = read_progress(self.workflow_dir)
+        now = time.time()
+        if not state or not state.get("steps"):
+            return
+        step = state["steps"][-1]
+        files = step["files"]
+        n = len(files)
+        finished = sum(f["status"] in (DONE, FAILED) for f in files)
+        active = [i for i, f in enumerate(files) if f["status"] == RUNNING]
+        with st.container(border=True):
             st.markdown(
-                f"**Workflow log file: {datetime.fromtimestamp(log_path.stat().st_ctime).strftime('%Y-%m-%d %H:%M')} CET**"
+                f"**Elapsed {format_duration(now - state['started'])}** · "
+                f"step {len(state['steps'])}: **{step['tool']}**"
+                + ("" if step["ended"] is None else " finished")
             )
-            with open(log_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            content = "".join(lines)
-            outcome = classify_log_outcome(content)
-            if outcome == "finished":
-                st.success("**Workflow completed successfully.**")
-            elif outcome == "cancelled":
-                st.warning("**Workflow was cancelled.**")
-            else:
-                st.error("**Errors occurred, check log file.**")
-            self._show_run_summary(show_failures=outcome != "finished")
-            # Apply line limit to static display
-            if log_lines_count == "all":
-                display_lines = lines
-            else:
-                display_lines = lines[-st.session_state.log_lines_count:]
-            st.code("".join(display_lines), language="neon", line_numbers=False)
+            if step["ended"] is None:
+                counts = file_counts(step)
+                if active and n > 1:
+                    which = ", ".join(str(i + 1) for i in active)
+                    where = (
+                        f"running file{'s' if len(active) > 1 else ''} {which} of {n}"
+                        f" · {counts[DONE]} done"
+                    )
+                else:
+                    where = f"{counts[DONE]} of {n} file{'s' if n > 1 else ''} done"
+                if counts[FAILED]:
+                    where += f" · :red[{counts[FAILED]} failed]"
+                threads = step.get("threads", 1)
+                parallel = step.get("parallel", 1)
+                text = (
+                    f"{where} · {format_duration(now - step['started'])} · "
+                    f"{threads} thread{'s' if threads > 1 else ''}"
+                    + (f" × {parallel} in parallel" if parallel > 1 else "")
+                )
+                st.progress(finished / n if n else 0.0, text=text)
+            if n > 1 or step["ended"] is not None:
+                lines = []
+                for f in files:
+                    if f["status"] == DONE:
+                        lines.append(f":green[:material/check_circle:] {f['name']} :gray[{format_duration(f['ended'] - f['started'])}]")
+                    elif f["status"] == FAILED:
+                        lines.append(f":red[:material/cancel:] {f['name']} :red[failed]")
+                    elif f["status"] == RUNNING:
+                        lines.append(f":blue[:material/progress_activity:] **{f['name']}** :gray[{format_duration(now - f['started'])}]")
+                    else:
+                        lines.append(f":gray[:material/radio_button_unchecked: {f['name']}]")
+                st.markdown("  \n".join(lines))
+            earlier = state["steps"][:-1]
+            if earlier:
+                st.caption("Done: " + " · ".join(self._step_summary(s) for s in earlier))
 
     @staticmethod
     def _step_summary(step: dict) -> str:
@@ -2879,7 +2935,7 @@ class StreamlitUI:
             # Check if the job result indicates success or failure
             job_result = status.get("result")
             if job_result and isinstance(job_result, dict) and job_result.get("success") is False:
-                st.error("**Status: Completed with errors**")
+                st.error(f"**Status: Completed with errors**")
                 error_msg = job_result.get("error", "Unknown error")
                 if error_msg:
                     with st.expander("Error Details", expanded=True):
@@ -2902,6 +2958,8 @@ class StreamlitUI:
             st.code(f"""Job ID: {status.get('job_id', 'N/A')}
 Submitted: {status.get('enqueued_at', 'N/A')}
 Started: {status.get('started_at', 'N/A')}""")
+
+
 
     def results_section(self, custom_results_function) -> None:
         custom_results_function()
@@ -3125,27 +3183,10 @@ Started: {status.get('started_at', 'N/A')}""")
     def export_parameters_markdown(self):
         markdown = []
 
-        tools_to_citations = {
-            'FLASHDeconv' : 'Jeong, Kyowon, et al. "FLASHDeconv: Ultrafast, High-Quality Feature Deconvolution for Top-Down Proteomics." (2020) [https://doi.org/10.1016/j.cels.2020.01.003](https://doi.org/10.1016/j.cels.2020.01.003).'
-        }
-        citation_position = 4
-
         url = f"https://github.com/{st.session_state.settings['github-user']}/{st.session_state.settings['repository-name']}"
         tools = [p.stem for p in Path(self.parameter_manager.ini_dir).iterdir()]
-        tool_text = []
-        cited_tools = []
-        for tool in tools:
-            if tool in tools_to_citations:
-                tool_text.append(f'{tool} [{citation_position}]')
-                cited_tools.append(tool)
-                citation_position += 1
-            else:
-                tool_text.append(tool)
-        if len(tool_text) > 1:
-            tool_text = ", ".join(tool_text[:-1]) + " and " + tool_text[-1]
-        else:
-            # No .ini files yet when the TOPP tools are not installed.
-            tool_text = tool_text[0] if tool_text else ""
+        if len(tools) > 1:
+            tools = ", ".join(tools[:-1]) + " and " + tools[-1]
 
         result = subprocess.run(
             "FileFilter --help", shell=True, text=True, capture_output=True
@@ -3155,18 +3196,14 @@ Started: {status.get('started_at', 'N/A')}""")
             version = result.stderr.split("Version: ")[1].split("-")[0]
 
         markdown.append(
-            f"""Data was processed using **{st.session_state.settings['app-name']}** ([{url}]({url})) [1], a web application based on the OpenMS WebApps framework [2].
-OpenMS ([https://www.openms.org](https://www.openms.org)) is a free and open-source software for LC-MS data analysis [3].
-The workflow includes the **OpenMS {version}** TOPP tool{'s' if len(tools) > 1 else ''} {tool_text} as well as Python scripts. Non-default parameters are listed in the supplementary section below.
+            f"""Data was processed using **{st.session_state.settings['app-name']}** ([{url}]({url})), a web application based on the OpenMS WebApps framework [1].
+OpenMS ([https://www.openms.de](https://www.openms.de)) is a free and open-source software for LC-MS data analysis [2].
+The workflow includes the **OpenMS {version}** TOPP tools {tools} as well as Python scripts. Non-default parameters are listed in the supplementary section below.
 
-[1] Müller, Tom David, et al. "FLASHApp: Interactive Data Analysis and Visualization for Top-Down Proteomics." (2025) [https://doi.org/10.1002/pmic.70042](https://doi.org/10.1002/pmic.70042).
+[1] Müller, Tom David, et al. "OpenMS WebApps: Building User-Friendly Solutions for MS Analysis." (2025) [https://doi.org/10.1021/acs.jproteome.4c00872](https://doi.org/10.1021/acs.jproteome.4c00872).
 \\
-[2] Müller, Tom David, et al. "OpenMS WebApps: Building User-Friendly Solutions for MS Analysis." (2025) [https://doi.org/10.1021/acs.jproteome.4c00872](https://doi.org/10.1021/acs.jproteome.4c00872).
-\\
-[3] Pfeuffer, Julianus, et al. "OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data." (2024) [https://doi.org/10.1038/s41592-024-02197-7](https://doi.org/10.1038/s41592-024-02197-7)."""
+[2] Pfeuffer, Julianus, et al. "OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data." (2024) [https://doi.org/10.1038/s41592-024-02197-7](https://doi.org/10.1038/s41592-024-02197-7).
+"""
         )
-        for i, cited_tool in enumerate(cited_tools):
-            markdown.append(f'\\\n[{i+4}] {tools_to_citations[cited_tool]}  ')
-        markdown.append('\n')
         markdown.append(self.non_default_params_summary())
         return "\n".join(markdown)
