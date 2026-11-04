@@ -52,7 +52,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
    - **Import from PRIDE** reanalyses a public dataset: enter its accession (for example `PXD019247`) and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
 
    Without files of your own, a small example data set is used.
-3. Switch **Identify proteoforms** on or off, pick the **Protein database** (a **FASTA** or **PEFF** file, added the same way with **📂 Browse**; FLASHApp adds the decoy sequences it needs) and the **Sample** type, and choose the **Quantification** (see the table above).
+3. Switch **Identify proteoforms** on or off, pick the **Protein database** (a **FASTA** or **PEFF** file, added the same way with **📂 Browse**, whose **UniProt proteome** tab also finds the proteome of your organism by name or taxonomy ID and downloads it; FLASHApp adds the decoy sequences it needs) and the **Sample** type, and choose the **Quantification** (see the table above).
 4. The numbered tabs below follow the steps of the analysis. You rarely need more than the first:
    - **1 · Samples and groups**: which sample belongs to which condition (see below).
    - **2 · Deconvolution**, **3 · Identification**, **4 · Fragment annotation**: the settings of each tool. The sample type already sets them; change them only if you know why. **Show advanced parameters** shows every setting.
