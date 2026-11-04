@@ -527,7 +527,7 @@ def render_workflow_selection():
             "⚡️",
             "Top-down analysis",
             "Deconvolution, identification and quantification",
-            "content/TopDown/TopDownUpload.py"
+            "content/TopDown/TopDownConfigure.py"
         )
 
 def render_whats_new():

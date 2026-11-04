@@ -1,15 +1,14 @@
-# **Top-down analysis in four steps**
+# **Top-down analysis in three steps**
 
-FLASHApp turns top-down MS data into proteoform masses, identifications and, if you like, a comparison of your samples. Every analysis follows the same four pages under **Top-down analysis** in the sidebar:
+FLASHApp turns top-down MS data into proteoform masses, identifications and, if you like, a comparison of your samples. Every analysis follows the same three pages under **Top-down analysis** in the sidebar:
 
-1. **Upload data**: your MS runs and, to identify proteoforms, a protein database.
-2. **Describe experiment**: what you want to learn, in the **Your analysis** box.
-3. **Run analysis**: one click, then follow the progress.
-4. **Viewer**: every run, and every comparison of samples, laid out for the analysis you chose.
+1. **Describe experiment**: your MS runs, a protein database to identify proteoforms, and what you want to learn, in the **Your analysis** box.
+2. **Run analysis**: one click, then follow the progress.
+3. **Viewer**: every run, and every comparison of samples, laid out for the analysis you chose.
 
 The short videos below walk through each step with example data. No knowledge of the tools behind FLASHApp is needed to follow them.
 
-@video guide-1-start.mp4 | Start an analysis: upload your runs and describe the experiment
+@video guide-1-start.mp4 | Start an analysis: choose your runs and describe the experiment
 
 ---
 
@@ -43,21 +42,18 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ---
 
-## **1️⃣ Upload data**
-
-1. Open **Top-down analysis › Upload data**.
-2. In **MS data**, drag your files into the box or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
-3. In **Protein database**, add a **FASTA** or **PEFF** file to identify proteoforms. FLASHApp adds the decoy sequences it needs to estimate the false discovery rate.
-4. **Example data** loads a small data set to try everything out. **Tool results** takes files a FLASHDeconv or FLASHTnT run produced elsewhere.
-5. To reanalyse a public dataset, enter its PRIDE accession (for example `PXD019247`) in the **Import from PRIDE** tab of the upload page and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
-
----
-
-## **2️⃣ Describe experiment**
+## **1️⃣ Describe experiment**
 
 1. Open **Top-down analysis › Describe experiment**.
-2. In **Your analysis**, pick the MS data, switch **Identify proteoforms** on or off, pick the database and the **Sample** type, and choose the **Quantification** (see the table above).
-3. The numbered tabs below follow the steps of the analysis. You rarely need more than the first:
+2. In **Your analysis**, pick the **MS data**. **📂 Browse** beside it opens your files:
+   - **Your files** lists them by folder. Tick the runs to analyse, or pick a folder to select its runs at once. Type a folder name in the *Folder* column to sort a run into it; FLASHApp suggests folders from the file names (for example `Control_R1`, `Control_R2`, `Treated_R1`), and a run's folder becomes its condition under **Samples and groups**.
+   - **Data on your computer** takes new runs: drag them in or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
+   - **Cloud data** imports them from a link (an object store, OneDrive, Zenodo or Figshare).
+   - **Import from PRIDE** reanalyses a public dataset: enter its accession (for example `PXD019247`) and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
+
+   Without files of your own, a small example data set is used.
+3. Switch **Identify proteoforms** on or off, pick the **Protein database** (a **FASTA** or **PEFF** file, added the same way with **📂 Browse**, whose **UniProt proteome** tab also finds the proteome of your organism by name or taxonomy ID and downloads it; FLASHApp adds the decoy sequences it needs) and the **Sample** type, and choose the **Quantification** (see the table above).
+4. The numbered tabs below follow the steps of the analysis. You rarely need more than the first:
    - **1 · Samples and groups**: which sample belongs to which condition (see below).
    - **2 · Deconvolution**, **3 · Identification**, **4 · Fragment annotation**: the settings of each tool. The sample type already sets them; change them only if you know why. **Show advanced parameters** shows every setting.
    - **5 · Linking runs** (label-free only): how runs are matched by mass and retention time.
@@ -69,7 +65,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ---
 
-## **3️⃣ Run analysis**
+## **2️⃣ Run analysis**
 
 1. Open **Top-down analysis › Run analysis**. The box at the top repeats the analysis you chose.
 2. Press **Start Workflow**. The log shows each run as it is processed. You can close the page and come back with the same workspace.
@@ -77,9 +73,9 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ---
 
-## **4️⃣ Viewer**
+## **3️⃣ Viewer**
 
-The Viewer shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows.
+The Viewer shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows. **💡 Add tool results** shows the output of a FLASHDeconv or FLASHTnT run made outside FLASHApp.
 
 @video guide-2-viewer.mp4 | Explore a run in the Viewer and arrange your own layout
 

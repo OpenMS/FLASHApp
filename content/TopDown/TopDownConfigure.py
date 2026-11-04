@@ -12,9 +12,20 @@ wf = TopDownWorkflow()
 st.title('Describe your experiment')
 page_intro(
     """
-Choose your analysis below. All other settings start at values that suit a typical experiment.
+Choose your runs and your analysis below. All other settings start at values that suit a typical experiment.
+
+- **MS data**: one file per run, mzML, Thermo *.raw* or a Bruker timsTOF *.d* folder
+  (vendor files are converted for you). **📂 Browse** opens your files by folder and adds new ones.
+- **Protein database** (to identify proteoforms): FASTA or PEFF. Decoys are added when the
+  FASTA file has none. Without a database the runs are deconvolved only.
+
+No data at hand? Example runs and a database are used until you add your own.
 """,
     background="""
+- **mzML** is the open file format for raw MS data. Other vendor formats convert to it with
+  [ProteoWizard msConvert](https://proteowizard.sourceforge.io/) (keep *peak picking* on).
+- A reference proteome as FASTA comes from [UniProt](https://www.uniprot.org/proteomes).
+  Only proteins in the database can be identified.
 - **Deconvolution** turns the m/z peaks of a spectrum, which carry many charges and isotopes
   of each proteoform, into one neutral monoisotopic mass per proteoform: the precursor masses
   and the fragment masses the search reads.
