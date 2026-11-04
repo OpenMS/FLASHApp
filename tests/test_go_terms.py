@@ -130,3 +130,77 @@ def test_comparison_selection_maps_entries_to_proteins(level, picked, selected, 
 
 def test_comparison_selection_nothing_picked():
     assert go_terms.comparison_selection(FakeSession('protein'), None)[2:] == (0, 0)
+
+
+# -- precomputed term index ------------------------------------------------------
+
+def test_enrich_matches_go_enrichment(tmp_path):
+    from openms_insight.analysis.enrichment import go_enrichment
+    fm = _fm(tmp_path)
+    background = ['sp|P1|A_HUMAN', 'P2', 'P3', 'P4', 'Q9']
+    frame, _ = go_terms.annotations(fm, background, fetch=FakeFetch())
+    index, error = go_terms.term_index(fm, background, fetch=FakeFetch())
+    assert error is None
+    for selected in (['P1'], ['P1', 'P2'], ['P2', 'P3', 'Q9'], background):
+        got = go_terms.enrich(index, selected, background)
+        want = go_enrichment(frame, selected, background, categories=tuple(go_terms.CATEGORIES))
+        for key in ('fg_total', 'bg_total', 'fg_count', 'bg_count'):
+            assert got[key] == want[key]
+        for category in go_terms.CATEGORIES:
+            a, b = got['categories'][category], want['categories'][category]
+            assert list(a.columns) == list(b.columns)
+            if len(b):
+                pd.testing.assert_frame_equal(
+                    a.reset_index(drop=True), b.reset_index(drop=True), check_dtype=False,
+                )
+            else:
+                assert len(a) == 0
+
+
+def test_term_index_is_stored_and_reused(tmp_path):
+    fm = _fm(tmp_path)
+    fetch = FakeFetch()
+    index, _ = go_terms.term_index(fm, ['P1', 'P2', 'Q9'], fetch=fetch)
+    assert go_terms.index_ready(fm, ['sp|P1|A_HUMAN', 'P2', 'Q9'])
+    # Q9 has no terms but stays in the index as a protein of the background
+    assert index.filter(pl.col('category').is_null())['accession'].to_list() == ['Q9']
+    go_terms._INDEXES.clear()
+    again, _ = go_terms.term_index(fm, ['Q9', 'P2', 'P1'], fetch=fetch)
+    assert len(fetch.calls) == 1
+    assert again.sort(['accession', 'category', 'term']).equals(index.sort(['accession', 'category', 'term']))
+
+
+def test_term_index_offline_is_not_stored(tmp_path):
+    fm = _fm(tmp_path)
+    _, error = go_terms.term_index(fm, ['P1'], fetch=FakeFetch(fail=True))
+    assert 'MyGene.info' in error
+    assert not go_terms.index_ready(fm, ['P1'])
+    _, error = go_terms.term_index(fm, ['P1'], fetch=FakeFetch())
+    assert error is None and go_terms.index_ready(fm, ['P1'])
+
+
+def test_precompute_run_prepares_the_cell(tmp_path, monkeypatch):
+    fm = _fm(tmp_path)
+    source = tmp_path / 'protein_dfs.pq'
+    source.write_text('x')
+    monkeypatch.setattr('src.render.insight_data.result_path', lambda fm, ds, tag: source)
+    calls = []
+
+    def background(fm, ds):
+        calls.append(ds)
+        return ['sp|P1|A_HUMAN', 'sp|P3|C_HUMAN']
+
+    monkeypatch.setattr(go_terms, 'run_background', background)
+    assert go_terms.precompute_run(fm, 'run1', fetch=FakeFetch()) == (2, None)
+    assert go_terms.index_ready(fm, ['P1', 'P3'])
+    # The background is read back while the run's protein table is unchanged
+    assert go_terms.stored_run_background(fm, 'run1') == ['sp|P1|A_HUMAN', 'sp|P3|C_HUMAN']
+    assert calls == ['run1']
+    source.write_text('changed')
+    go_terms.stored_run_background(fm, 'run1')
+    assert calls == ['run1', 'run1']
+    # A selection now needs no lookup
+    fetch = FakeFetch()
+    go_terms._INDEXES.clear()
+    result, error, _ = go_terms.enrichment(fm, ['sp|P1|A_HUMAN'], ['sp|P1|A_HUMAN', 'sp|P3|C_HUMAN'], fetch=fetch)
+    assert error is None and fetch.calls == [] and result['fg_count'] == 1

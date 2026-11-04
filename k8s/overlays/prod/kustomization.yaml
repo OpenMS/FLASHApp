@@ -15,7 +15,11 @@ commonLabels:
 images:
   - name: openms-streamlit
     newName: ghcr.io/openms/flashapp
-    newTag: 1.2.0-full
+    # A release image, not the deployed one: under Argo CD the ImageUpdater
+    # (k8s/argocd/image-updater.yaml) sets the latest release on the
+    # Application. This tag is only where a new Application starts and the
+    # name CI loads its test image under, so it need not follow releases.
+    newTag: 2.0.0-alpha-full
 
 # FLASHApp's own values. k8s/base and k8s/components are the template's and
 # arrive through the template sync; everything this app sets for itself is a
