@@ -432,7 +432,7 @@ class TopDownWorkflow(WorkflowManager):
                 )
                 # Decoy database size (set with the sample type)
                 self.ui.input_widget(
-                    'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
+                    'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=False,
                     help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
                 )
             with t["Fragment annotation"]:
@@ -502,7 +502,7 @@ class TopDownWorkflow(WorkflowManager):
             copyfile(database, out_db)
             return
         # If few proteins are present increase decoy size
-        few = self.executor.parameter_manager.get_parameters_from_json().get('few_proteins', True)
+        few = self.executor.parameter_manager.get_parameters_from_json().get('few_proteins', False)
         ratio = 10 if few else 1
         self.logger.log(f"-> Creating decoy database with target:decoy ratio 1:{ratio}...")
         if not self.executor.run_topp(
