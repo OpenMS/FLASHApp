@@ -72,7 +72,7 @@ def test_no_hits():
     assert list(frame.schema) == list(prsm_overview.OVERVIEW_SCHEMA)
 
 
-DEMO = Path('example-data/workspaces/default/flashtnt/cache')
+DEMO = Path('example-data/workspaces/default/cache')
 
 
 @pytest.mark.skipif(not DEMO.exists(), reason='demo workspace not present')
@@ -90,6 +90,10 @@ def test_demo_workspace(tmp_path):
     for dataset_id in datasets:
         frame = prsm_overview.protein_overview(file_manager, dataset_id).collect()
         assert frame['index'].n_unique() == frame.height > 0
-        # The demo spectra carry an isolation m/z but no precursor charge
         assert frame['precursor_mz'].is_not_null().all()
-        assert frame['precursor_charge'].is_null().all()
+        # The native spectra carry an isolation m/z but no precursor charge;
+        # the lysate's data-dependent spectra do
+        if dataset_id == 'example_native_identified':
+            assert frame['precursor_charge'].is_null().all()
+        else:
+            assert frame['precursor_charge'].is_not_null().any()

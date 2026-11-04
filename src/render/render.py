@@ -315,23 +315,21 @@ def _plex(fm, ds):
     return plex, info.get('channels') or isobaric.channel_names(plex)
 
 
-def _reporter_columns(channels):
+def _reporter_columns(identified):
+    """The reporter table's columns: the spectrum and how many labels it
+    carries. The intensity of each label is in the reporter ion plot of the
+    selected spectrum, not one column per label."""
     columns = [
         {'title': 'Scan', 'field': 'Scan', 'sorter': 'number'},
         {'title': 'RT (min)', 'field': 'RT', 'sorter': 'number', **_fixed(2)},
         {'title': 'Precursor mass', 'field': 'PrecursorMass', 'sorter': 'number', **_fixed(2),
          'headerTooltip': 'Monoisotopic mass of the precursor (FLASHDeconv), in Daltons.'},
-        {'title': 'Charge', 'field': 'Charge', 'sorter': 'number'},
-        {'title': 'Identified as', 'field': 'Identified', 'sorter': 'string',
-         'headerTooltip': 'The protein of the best PrSM of the spectrum (FLASHTnT).'},
         {'title': 'Labels found', 'field': 'QuantifiedChannels', 'sorter': 'number',
          'headerTooltip': 'How many labels have a reporter ion in the spectrum.'},
     ]
-    columns += [
-        {'title': name, 'field': name, 'sorter': 'number', 'formatter': 'scientific', 'formatterParams': {'precision': 2},
-         'headerTooltip': f'Reporter ion intensity of label {name}, corrected for isotope impurities.'}
-        for name in channels
-    ]
+    if identified:
+        columns.append({'title': 'Identified as', 'field': 'Identified', 'sorter': 'string',
+                        'headerTooltip': 'The protein of the best PrSM of the spectrum (FLASHTnT).'})
     return columns
 
 
@@ -763,13 +761,13 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': TABLE_HEIGHT}
 
     if comp_name == 'reporter_table':
-        plex, channels = _plex(fm, ds)
+        plex, _ = _plex(fm, ds)
         return _component(
             Table, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
             lambda: dict(
                 data=insight_data.reporter_table(fm, ds),
-                column_definitions=_reporter_columns(channels),
-                title=f'Reporter ions per spectrum ({isobaric.label(plex)})',
+                column_definitions=_reporter_columns(fm.result_exists(ds, 'protein_dfs')),
+                title=f'Reporter ions ({isobaric.label(plex)})',
                 index_field='scan_idx', go_to_fields=['Scan'], interactivity={'scan': 'scan_idx'},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
             ),

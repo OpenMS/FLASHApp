@@ -14,15 +14,15 @@ from src.render import prsm_data, validation_data  # noqa: E402
 from src.workflow.FileManager import FileManager  # noqa: E402
 
 WORKSPACE = Path(__file__).resolve().parent.parent / 'example-data' / 'workspaces' / 'default'
-TNT_DATASET = 'example_spectrum_aqpz'
+TNT_DATASET = 'example_native_identified'
 
 
 @pytest.fixture
 def tnt(tmp_path):
     cache = tmp_path / 'flashtnt'
     cache.mkdir()
-    shutil.copy(WORKSPACE / 'flashtnt' / 'cache' / 'cache.db', cache / 'cache.db')
-    (cache / 'files').symlink_to(WORKSPACE / 'flashtnt' / 'cache' / 'files')
+    shutil.copy(WORKSPACE / 'cache' / 'cache.db', cache / 'cache.db')
+    (cache / 'files').symlink_to(WORKSPACE / 'cache' / 'files')
     return FileManager(cache, cache)
 
 
@@ -92,9 +92,8 @@ def test_prsm_masses_on_demo(tnt):
     assert masses['SumIntensity'].null_count() == 0
     assert masses['charges'].null_count() == 0
 
-    # The same masses as the fragment error plot
+    # The fragment error plot shows the same proteoforms. Its fragments come
+    # from FLASHAnnotator's envelopes in the demo, so they are not the
+    # deconvolved masses of this table.
     errors = validation_data.fragment_errors(tnt, TNT_DATASET).collect()
-    plot = errors.group_by('proteoform_index').agg(pl.col('observed_mass').n_unique().alias('n'))
-    table = matched.group_by('proteoform_index').agg(pl.len().alias('n'))
-    joined = plot.join(table, on='proteoform_index', how='full', coalesce=True).fill_null(0)
-    assert (joined['n'] == joined['n_right']).all()
+    assert set(errors['proteoform_index']) == set(matched['proteoform_index'])

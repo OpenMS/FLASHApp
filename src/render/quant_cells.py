@@ -99,11 +99,19 @@ def _table_columns(session, runs):
     columns = [{'title': noun, 'field': 'Proteoform', 'sorter': 'string',
                 'headerTooltip': {
                     'feature': 'Monoisotopic mass and apex retention time of the consensus feature.',
-                    'proteoform': 'The ProForma of the PrSMs that identify it (its mass when they have none).',
+                    'proteoform': 'The protein, the residues the proteoform covers and its mass shifts. The ProForma is in its own column.',
                     'protein': 'The protein the proteoforms belong to.',
                 }[level]}]
     if level == 'proteoform':
         columns.append({'title': 'Protein', 'field': 'protein_label', 'sorter': 'string'})
+        names = session.annotations().collect_schema().names()
+        if 'start' in names:
+            columns.append({'title': 'Residues', 'field': 'residues', 'sorter': 'string',
+                            'headerTooltip': 'First and last residue of the proteoform in the protein sequence.'})
+        if 'shifts' in names:
+            columns.append({'title': 'Mass shifts', 'field': 'shifts', 'sorter': 'string',
+                            'headerTooltip': 'Mass shifts (Da) at a residue, or within a range when not localized.'})
+        columns.append({'title': 'ProForma', 'field': 'proforma', 'sorter': 'string'})
     if level == 'protein':
         columns.append({'title': 'Description', 'field': 'description', 'sorter': 'string'})
     columns += [
@@ -164,6 +172,10 @@ def _comparison_table(session):
         table = table.with_columns(
             pl.col('accession').str.split('|').list.get(-1, null_on_oob=True).alias('protein_label'),
         )
+        if 'start' in table.columns:
+            table = table.with_columns(
+                (pl.col('start').cast(pl.Utf8) + '\u2013' + pl.col('end').cast(pl.Utf8)).alias('residues'),
+            )
     return table.with_columns(_change(compared, fc, padj).alias('Change')).sort('p-adj', nulls_last=True).lazy()
 
 

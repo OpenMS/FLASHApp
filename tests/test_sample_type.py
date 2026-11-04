@@ -57,10 +57,11 @@ def test_recommend(tmp_path):
 
 
 @pytest.mark.skipif(not TNT_EXAMPLES.exists(), reason='example data not checked out')
-def test_the_native_examples_are_native():
-    files = sorted(TNT_EXAMPLES.glob('*.mzML'))
-    assert files
-    assert recommend(files).sample_type == NATIVE
+def test_the_examples_are_named_after_their_sample_type():
+    native = TNT_EXAMPLES / 'Native-identified_GapA_HCD.mzML'
+    lc_ms = TNT_EXAMPLES / 'Deconvolution-only_ProteinMix_LC-MS.mzML'
+    assert recommend([native]).sample_type == NATIVE
+    assert recommend([lc_ms]).sample_type == LYSATE
 
 
 class _Results:

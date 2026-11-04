@@ -25,6 +25,7 @@ in that run.
 """
 
 import json
+import re
 
 import polars as pl
 
@@ -109,6 +110,104 @@ def read_identifications(path):
     )
 
 
+
+def read_sequences(path):
+    """accession -> sequence of a FASTA file (empty without one)."""
+    sequences, accession, parts = {}, None, []
+    if not path:
+        return sequences
+    with open(path, errors='replace') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('>'):
+                if accession is not None:
+                    sequences[accession] = ''.join(parts)
+                accession, parts = line[1:].split()[0] if len(line) > 1 else '', []
+            elif accession is not None:
+                parts.append(line)
+    if accession is not None:
+        sequences[accession] = ''.join(parts)
+    return sequences
+
+
+_TOKEN = re.compile(r'\(([A-Z]+)\)\[([^\]]+)\]|([A-Z])\[([^\]]+)\]|\[([^\]]+)\]-|([A-Z])')
+
+
+def parse_proforma(proforma):
+    """The bare sequence of a FLASHTnT ProForma and its mass shifts, each as
+    (shift, first, last) with 1-based positions in that sequence: a localized
+    shift has first == last, an unlocalized one (``(SEQ)[+mass]``) spans its
+    residues."""
+    sequence, shifts = [], []
+    for block, block_shift, residue, residue_shift, nterm, plain in _TOKEN.findall(proforma or ''):
+        if block:
+            shifts.append((block_shift, len(sequence) + 1, len(sequence) + len(block)))
+            sequence.append(block)
+        elif residue:
+            sequence.append(residue)
+            shifts.append((residue_shift, len(sequence), len(sequence)))
+        elif nterm:
+            shifts.append((nterm, 1, 1))
+        else:
+            sequence.append(plain)
+    return ''.join(sequence), shifts
+
+
+def _shift_text(shift):
+    """'+15.99' / '−83.18' for a mass, the name otherwise (Acetyl)."""
+    try:
+        value = float(shift)
+    except ValueError:
+        return shift
+    return f'{value:+.2f}'.replace('-', '\u2212')
+
+
+def describe_proteoform(accession, proforma, mass, sequences):
+    """Short name and details of a proteoform: {label, entry, start, end,
+    shifts}. The label is the protein's entry name, the residues the
+    proteoform covers in it (when its sequence is in `sequences`) and its mass
+    shifts, e.g. 'RS7_ECOLI 2\u2013157 (+446.14)'. Without the protein's
+    sequence the start of the proteoform's stands for the residues; without
+    a ProForma, the mass."""
+    entry = (accession or '').split('|')[-1] or (accession or '')
+    if not proforma:
+        text = f'{mass:.1f} Da' if mass is not None and mass > 0 else 'mass not determined'
+        return {'label': f'{entry} {text}', 'entry': entry, 'start': None, 'end': None, 'shifts': None}
+    bare, shifts = parse_proforma(proforma)
+    protein = sequences.get(accession, '')
+    found = protein.find(bare) if protein and bare else -1
+    start = found + 1 if found >= 0 else None
+    end = found + len(bare) if found >= 0 else None
+    offset = (start or 1) - 1
+    details = []
+    for shift, first, last in shifts:
+        where = f'{first + offset}' if first == last else f'{first + offset}\u2013{last + offset}'
+        details.append(f'{_shift_text(shift)} at {where}' if first == last else f'{_shift_text(shift)} in {where}')
+    label = entry
+    if start is not None:
+        label += f' {start}\u2013{end}'
+    else:
+        # Not in the database (or none given): the start of its sequence
+        label += ' ' + (bare[:10] + '\u2026' if len(bare) > 10 else bare)
+    if shifts:
+        label += ' (' + ', '.join(_shift_text(s) for s, _, _ in shifts) + ')'
+    return {'label': label, 'entry': entry, 'start': start, 'end': end,
+            'shifts': '; '.join(details) or None}
+
+
+def describe_proteoforms(forms, sequences):
+    """`forms` (accession, proforma, mass) with the columns of
+    describe_proteoform: label, entry, start, end and shifts."""
+    rows = [
+        describe_proteoform(a, p, m, sequences)
+        for a, p, m in zip(forms['accession'], forms['proforma'], forms['mass'])
+    ]
+    described = pl.DataFrame(rows, schema={
+        'label': pl.Utf8, 'entry': pl.Utf8, 'start': pl.Int64, 'end': pl.Int64, 'shifts': pl.Utf8,
+    })
+    return forms.with_columns(described.get_columns())
+
+
 def _rollup(long, mapping):
     """Sum `long` (id, sample, intensity, status) into the parent ids of
     `mapping` (id, parent_id). Status: the best status of the parts that have
@@ -139,10 +238,11 @@ def _rollup(long, mapping):
     )
 
 
-def build(consensus_tsv, id_tsv=None):
+def build(consensus_tsv, id_tsv=None, database=None):
     """The levels of one comparison: {level: (long, annotations)} and the run
     names. Without identifications (or with an empty -out_id) only the
-    feature level exists."""
+    feature level exists. With the `database` (FASTA) searched, a
+    proteoform's label names the residues it covers."""
     features, long, runs = read_consensus(consensus_tsv)
     feature_annotations = features.with_columns(
         pl.col('ConsensusIndex').cast(pl.Utf8).alias('id'),
@@ -184,9 +284,8 @@ def build(consensus_tsv, id_tsv=None):
             pl.len().alias('PrSMs'),
             pl.col('Run').n_unique().alias('IdentifiedRuns'),
         ).filter(pl.col('proteoform').is_in(to_proteoform['parent_id'].implode()))
-        form_annotations = forms.with_columns(
-            pl.col('proteoform').alias('id'),
-            pl.coalesce(pl.col('proforma'), pl.col('mass').round(1).cast(pl.Utf8) + ' Da').alias('label'),
+        form_annotations = describe_proteoforms(
+            forms.with_columns(pl.col('proteoform').alias('id')), read_sequences(database),
         )
         form_long = _rollup(long.select('id', 'sample', 'intensity', 'status'), to_proteoform)
         form_long = form_long.join(

@@ -18,19 +18,16 @@ from src.quant.run import CONSENSUS_EXCLUDE, compare_isobaric, compare_runs
 from src import flashida
 from src.workflow.WorkflowManager import WorkflowManager
 
-# Example inputs shipped with the default demo workspace.
-TNT_EXAMPLE_DIR = 'example-data/workspaces/default/flashtnt/input-files/mzML-files'
-# Native top-down MS2 spectra of E. coli proteins (2026-05-15 test set)
-TNT_EXAMPLE_DATA = [
-    f'{TNT_EXAMPLE_DIR}/{name}.mzML' for name in [
-        'AqpZ_3090mz_HCD', 'GapA_5458mz_HCD', 'OMPA_3908mz_HCD',
-        'OMPF_4800-5860mz_HCD', 'OMPX_2341mz_HCD', 'MALE_3701mz_HCD',
-        'TSX_3927mz_HCD', 'ADHE_6626mz_EChcD',
-    ]
-] + [f'{TNT_EXAMPLE_DIR}/example_spectrum_antibody.mzML']
+# Example inputs shipped with the default demo workspace: one run per default
+# layout of the Viewer, named after the analysis it shows. Their results are
+# in the demo workspace's cache (example-data/build_examples.py).
+EXAMPLE_DIR = 'example-data/workspaces/default/flashtnt/input-files/mzML-files'
 EXAMPLE_DATA = [
-    'example-data/workspaces/default/flashdeconv/input-files/mzML-files/example_fd.mzML',
-] + TNT_EXAMPLE_DATA
+    # LC-MS/MS of a protein standard mix, deconvolved only
+    f'{EXAMPLE_DIR}/Deconvolution-only_ProteinMix_LC-MS.mzML',
+    # Native top-down MS2 spectrum of E. coli GapA, identified (Native preset)
+    f'{EXAMPLE_DIR}/Native-identified_GapA_HCD.mzML',
+]
 
 # Valueless TOPP switches (registerFlag_ in the tool source), emitted as a bare
 # "-name" when on and omitted when off. Every other parameter is passed with its

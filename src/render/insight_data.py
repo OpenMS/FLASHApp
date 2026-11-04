@@ -277,6 +277,10 @@ def sequence_view_spectra(file_manager, dataset_id):
     return spectra(file_manager, dataset_id, 'sequence_view')
 
 
+# m/z shown beyond the first and the last reporter ion
+REPORTER_MARGIN = 0.5
+
+
 def reporter_table(file_manager, dataset_id):
     """The reporter ions of every fragmentation spectrum (FLASHDeconv
     -out_quant) with scan_idx and, for an identified run, the protein of the
@@ -306,4 +310,14 @@ def reporter_ions(file_manager, dataset_id, channels, mzs):
         )
         for name, mz in zip(channels, mzs)
     ]
+    # Unlabelled points without intensity half an m/z unit beyond the first
+    # and the last label, so the plot shows every reporter ion with its label
+    # instead of cutting the outermost ones at the edges
+    known = [mz for mz in mzs if mz]
+    if known:
+        parts += [
+            lf.select('scan_idx', pl.lit(mz).alias('mz'), pl.lit(0.0).alias('intensity'),
+                      pl.lit('').alias('label'))
+            for mz in (min(known) - REPORTER_MARGIN, max(known) + REPORTER_MARGIN)
+        ]
     return pl.concat(parts).sort('scan_idx', 'mz')
