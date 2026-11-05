@@ -22,23 +22,28 @@ from src.workflow.WorkflowManager import WorkflowManager
 from src.workflow.StreamlitUI import editor_table
 
 # Example inputs shipped with the default demo workspace, named after the
-# analysis they show. All of them are listed: the upload treats any other file
-# as the user's own and then removes the example copies. Their results are
-# in the demo workspace's cache (example-data/build_examples.py).
+# analysis they show, each in the folder of its kind of analysis (the
+# Samples table reads the label-free example's conditions, 1x and 0.1x, from
+# the names in its folder). All of them are listed: the upload treats any other file as the user's own and then
+# removes the example copies. Their results are in the demo workspace's cache
+# (example-data/build_examples.py); the demo workspace holds the same folders
+# in flashtnt/input-folders.json.
 EXAMPLE_DIR = 'example-data/workspaces/default/flashtnt/input-files/mzML-files'
-EXAMPLE_DATA = [
+EXAMPLE_FOLDERS = {
     # LC-MS/MS of a protein standard mix, deconvolved only
-    f'{EXAMPLE_DIR}/Deconvolution-only_ProteinMix_LC-MS.mzML',
+    'Deconvolution-only_ProteinMix_LC-MS.mzML': 'Deconvolution only',
     # Native top-down MS2 spectrum of E. coli GapA, identified (Native preset)
-    f'{EXAMPLE_DIR}/Native-identified_GapA_HCD.mzML',
+    'Native-identified_GapA_HCD.mzML': 'Native identification',
     # Label-free comparison: E. coli lysate with a spike-in at 1x and 0.1x
-    f'{EXAMPLE_DIR}/Label-free_SpikeIn-1x_R1.mzML',
-    f'{EXAMPLE_DIR}/Label-free_SpikeIn-1x_R2.mzML',
-    f'{EXAMPLE_DIR}/Label-free_SpikeIn-0.1x_R1.mzML',
-    f'{EXAMPLE_DIR}/Label-free_SpikeIn-0.1x_R2.mzML',
+    'Label-free_SpikeIn-1x_R1.mzML': 'Label-free comparison',
+    'Label-free_SpikeIn-1x_R2.mzML': 'Label-free comparison',
+    'Label-free_SpikeIn-0.1x_R1.mzML': 'Label-free comparison',
+    'Label-free_SpikeIn-0.1x_R2.mzML': 'Label-free comparison',
     # TMT 10-plex of a HeLa ratio mix
-    f'{EXAMPLE_DIR}/Isobaric_TMT10_HeLa-Ratio.mzML',
-]
+    'Isobaric_TMT10_HeLa-Ratio.mzML': 'TMT 10-plex',
+}
+# Example file -> its folder, as upload_widget(fallback=...) takes it
+EXAMPLE_DATA = {f'{EXAMPLE_DIR}/{name}': folder for name, folder in EXAMPLE_FOLDERS.items()}
 
 # Valueless TOPP switches (registerFlag_ in the tool source), emitted as a bare
 # "-name" when on and omitted when off. Every other parameter is passed with its
@@ -108,7 +113,7 @@ def samples_and_groups(workflow, quant, identify):
     condition of each run. Isobaric: the sample and condition of each label."""
     if quant == analysis.LABEL_FREE:
         st.caption('The condition of each run, e.g. *control* and *treated*. Runs sorted into folders '
-                   '(📂 Browse beside MS data) take the folder as their condition.')
+                   '(📂 Browse beside MS data) take the folder as their condition, or the groups their file names show within the folder.')
         workflow.ui.experimental_design('mzML-files', name='Samples', suggest=True)
     elif quant == analysis.ISOBARIC:
         isobaric_samples(workflow)
