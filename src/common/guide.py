@@ -2,8 +2,8 @@
 
 Each workflow page opens with ``page_intro`` (what the page is for and, folded
 away, the background a newcomer needs) and ends with ``next_steps`` (where to
-go from here), so a workflow reads as one path: Upload data, Describe
-experiment, Run analysis, Viewer.
+go from here), so a workflow reads as one path: Describe experiment (which
+also takes the files), Run analysis, Viewer.
 """
 
 import streamlit as st
@@ -11,16 +11,18 @@ import streamlit as st
 # Page paths per workflow, so links survive a page being renamed in one place only
 PAGES = {
     'topdown': {
-        'upload': ('content/TopDown/TopDownUpload.py', 'Upload data', '📁'),
         'configure': ('content/TopDown/TopDownConfigure.py', 'Describe experiment', '⚙️'),
         'run': ('content/TopDown/TopDownRun.py', 'Run analysis', '🚀'),
         'viewer': ('content/TopDown/TopDownViewer.py', 'Viewer', '👀'),
+        'download': ('content/TopDown/TopDownDownload.py', 'Download results', '⬇️'),
     },
 }
 
 
 def page_link(tool, key, label=None):
     path, default_label, icon = PAGES[tool][key]
+    if key == 'download' and st.session_state.get('location') == 'local':
+        default_label, icon = 'Export results', '📤'
     try:
         st.page_link(path, label=label or default_label, icon=icon)
     except KeyError:

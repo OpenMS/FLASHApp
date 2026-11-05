@@ -14,11 +14,13 @@ from pathlib import Path
 
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
-from src import analysis, sample_type
+from src import analysis, former_examples, sample_type
 from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.dialogs import layout_button
 from src.render import quant_view
+from src.render.tool_results import tool_results_button
+from src.common import result_download
 
 TOOL = 'topdown'
 
@@ -99,6 +101,8 @@ def experiment(index):
 # page initialization
 params = page_setup()
 
+# A workspace from an earlier release gets today's example runs (once)
+former_examples.add_example_results(Path(st.session_state['workspace'], 'cache'))
 file_manager = FileManager(
     st.session_state["workspace"],
     Path(st.session_state['workspace'], 'cache')
@@ -111,10 +115,13 @@ identified_runs = set(file_manager.get_results_list(['protein_dfs']))
 labelled_runs = set(file_manager.get_results_list(['isobaric_dfs']))
 comparison_names = quant_view.comparison_names(file_manager)
 comparison_ids = set(comparison_names.values())
+downloadable = set(result_download.downloadable_runs(file_manager))
 
 if len(results) == 0 and not comparison_names:
-    layout_button(file_manager)
-    st.error('No results to show yet. Please run a workflow first!')
+    with st.container(horizontal=True):
+        layout_button(file_manager)
+        tool_results_button()
+    st.error('No results to show yet. Run the analysis first, or add the output of the tools with **Add tool results**.')
     st.stop()
 
 run_names = [file_manager.get_display_name(exp_id) for exp_id in results]
@@ -126,7 +133,15 @@ display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items(
 # The saved layout sets the number of experiments (and side by side); without
 # one, a single experiment
 experiments, side_by_side = topdown_layout.saved(file_manager) or ([None], False)
-edit_layout = lambda: layout_button(file_manager)
+
+
+def edit_layout(index=0):
+    layout_button(file_manager)
+    tool_results_button()
+    shown = st.session_state.get(selection_key(index))
+    if downloadable:
+        result_download.viewer_button(file_manager, shown if shown in downloadable else None)
+
 
 if comparison_selected():
     selector(0, display_names, lambda: quant_view.buttons(file_manager, st.session_state[selection_key(0)]))
@@ -139,7 +154,7 @@ elif len(experiments) == 2 and side_by_side:
         selector(0, display_names)
         experiment(0)
     with c2:
-        selector(1, run_names, edit_layout)
+        selector(1, run_names, lambda: edit_layout(1))
         experiment(1)
 
 else:

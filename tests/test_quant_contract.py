@@ -113,3 +113,23 @@ def test_design_of_matches_runs_by_base_name(tmp_path):
     mzmls = [tmp_path / 'converted-mzML' / 'A_1.mzML', '/data/B_1.mzML']
     assert run_name(mzmls[0]) == 'A_1'
     assert design_of(tmp_path, selected, mzmls) == {'A_1': ('control', 1), 'B_1': ('treated', 2)}
+
+
+def test_a_proteoform_is_named_by_protein_residues_and_mass_shifts(tmp_path):
+    fasta = tmp_path / 'db.fasta'
+    fasta.write_text('>sp|P1|PROT_ECOLI Protein\nMKPEPTIDESEQ\nUENCE\n')
+    sequences = contract.read_sequences(fasta)
+    assert sequences == {'sp|P1|PROT_ECOLI': 'MKPEPTIDESEQUENCE'}
+
+    form = contract.describe_proteoform('sp|P1|PROT_ECOLI', 'K[Acetyl]PEP(TIDE)[-17.02]SEQ', 1500.0, sequences)
+    assert form['label'] == 'PROT_ECOLI 2–12 (Acetyl, −17.02)'
+    assert (form['start'], form['end']) == (2, 12)
+    assert form['shifts'] == 'Acetyl at 2; −17.02 in 6–9'
+
+    # Not in the database: the start of its sequence stands for the residues
+    assert contract.describe_proteoform('sp|P2|OTHER_HUMAN', 'ACDEFGHIKLMN[+15.99]', 0, {})['label'] == \
+        'OTHER_HUMAN ACDEFGHIKL… (+15.99)'
+    # No ProForma: the mass, or that it was not determined
+    assert contract.describe_proteoform('sp|P1|PROT_ECOLI', None, 1234.56, sequences)['label'] == 'PROT_ECOLI 1234.6 Da'
+    assert contract.describe_proteoform('sp|P1|PROT_ECOLI', None, -1.0, sequences)['label'] == \
+        'PROT_ECOLI mass not determined'

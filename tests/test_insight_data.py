@@ -1,7 +1,7 @@
 """Tests for the frames the openms-insight viewer components are built from.
 
-They run on the demo workspace shipped in example-data/, so they also check
-that results written by earlier versions of the workflows still load.
+They run on the example results of the demo workspace shipped in example-data/
+(built by example-data/build_examples.py).
 """
 
 import os
@@ -18,8 +18,8 @@ from src.render import insight_data  # noqa: E402
 from src.workflow.FileManager import FileManager  # noqa: E402
 
 WORKSPACE = Path(__file__).resolve().parent.parent / 'example-data' / 'workspaces' / 'default'
-FD_DATASET = 'example_fd'
-TNT_DATASET = 'example_spectrum_aqpz'
+FD_DATASET = 'example_deconvolution'
+TNT_DATASET = 'example_native_identified'
 
 
 def _file_manager(tmp_path, tool):
@@ -27,8 +27,8 @@ def _file_manager(tmp_path, tool):
     # the stored results
     cache = tmp_path / tool
     cache.mkdir()
-    shutil.copy(WORKSPACE / tool / 'cache' / 'cache.db', cache / 'cache.db')
-    (cache / 'files').symlink_to(WORKSPACE / tool / 'cache' / 'files')
+    shutil.copy(WORKSPACE / 'cache' / 'cache.db', cache / 'cache.db')
+    (cache / 'files').symlink_to(WORKSPACE / 'cache' / 'files')
     return FileManager(cache, cache)
 
 
@@ -96,9 +96,8 @@ def test_tags_get_scan_index(tnt):
     assert tags['scan_idx'].null_count() == 0
 
 
-def test_proteoform_sequences_from_pickled_results(tnt):
-    # The demo results predate the parquet sequence store
-    assert insight_data.result_path(tnt, TNT_DATASET, 'sequence_data').suffix == '.gz'
+def test_proteoform_sequences(tnt):
+    assert insight_data.result_path(tnt, TNT_DATASET, 'sequence_data').suffix == '.pq'
     rows = insight_data.proteoform_sequences(tnt, TNT_DATASET).collect()
     assert rows.height == insight_data.scan(tnt, TNT_DATASET, 'protein_dfs').collect().height
     row = rows.row(0, named=True)

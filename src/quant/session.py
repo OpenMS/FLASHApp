@@ -226,7 +226,7 @@ class QuantSession:
             .select('id', 'sample', pl.col('status').replace_strict(STATUS_LABELS, default='missing'))
             .pivot(on='sample', index='id', values='status', aggregate_function='first')
         )
-        keep = [c for c in ('accession', 'description', 'proforma', 'mass', 'rt', 'PrSMs',
+        keep = [c for c in ('accession', 'description', 'proforma', 'start', 'end', 'shifts', 'mass', 'rt', 'PrSMs',
                             'IdentifiedRuns', 'proteoforms', 'DetectedRuns', 'parent') if c in annotations.columns]
         table = (
             statistics.join(annotations.select('id', *keep), on='id', how='left')

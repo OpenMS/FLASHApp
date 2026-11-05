@@ -15,8 +15,8 @@ if "settings" not in st.session_state:
 
 if __name__ == '__main__':
     # A local install exports results to a folder instead of downloading them.
-    export = "Export" if not st.session_state.settings["online_deployment"] else "Download"
-    export_icon = "📤" if export == "Export" else "⬇️"
+    export = "Export results" if not st.session_state.settings["online_deployment"] else "Download results"
+    export_icon = "📤" if export.startswith("Export") else "⬇️"
     pages = {
         "FLASHApp" : [
             st.Page(Path("content", "quickstart.py"), title="Quickstart", icon="👋"),
@@ -26,7 +26,6 @@ if __name__ == '__main__':
         ],
         # One workflow: FLASHDeconv for every run, FLASHTnT when a database is given
         "⚡️ Top-down analysis" : [
-            st.Page(Path("content", "TopDown", "TopDownUpload.py"), title="Upload data", icon="📁"),
             st.Page(Path("content", "TopDown", "TopDownConfigure.py"), title="Describe experiment", icon="⚙️"),
             st.Page(Path("content", "TopDown", "TopDownRun.py"), title="Run analysis", icon="🚀"),
             st.Page(Path("content", "TopDown", "TopDownViewer.py"), title="Viewer", icon="👀"),

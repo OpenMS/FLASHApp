@@ -1,15 +1,14 @@
-# **Top-down analysis in four steps**
+# **Top-down analysis in three steps**
 
-FLASHApp turns top-down MS data into proteoform masses, identifications and, if you like, a comparison of your samples. Every analysis follows the same four pages under **Top-down analysis** in the sidebar:
+FLASHApp turns top-down MS data into proteoform masses, identifications and, if you like, a comparison of your samples. Every analysis follows the same three pages under **Top-down analysis** in the sidebar:
 
-1. **Upload data**: your MS runs and, to identify proteoforms, a protein database.
-2. **Describe experiment**: what you want to learn, in the **Your analysis** box.
-3. **Run analysis**: one click, then follow the progress.
-4. **Viewer**: every run, and every comparison of samples, laid out for the analysis you chose.
+1. **Describe experiment**: your MS runs, a protein database to identify proteoforms, and what you want to learn, in the **Your analysis** box.
+2. **Run analysis**: one click, then follow the progress.
+3. **Viewer**: every run, and every comparison of samples, laid out for the analysis you chose.
 
 The short videos below walk through each step with example data. No knowledge of the tools behind FLASHApp is needed to follow them.
 
-@video guide-1-start.mp4 | Start an analysis: upload your runs and describe the experiment
+@video guide-1-start.mp4 | Start an analysis: choose your runs and describe the experiment
 
 ---
 
@@ -43,23 +42,21 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ---
 
-## **1️⃣ Upload data**
-
-1. Open **Top-down analysis › Upload data**.
-2. In **MS data**, drag your files into the box or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
-3. In **Protein database**, add a **FASTA** or **PEFF** file to identify proteoforms. FLASHApp adds the decoy sequences it needs to estimate the false discovery rate.
-4. **Example data** loads a small data set to try everything out. **Tool results** takes files a FLASHDeconv or FLASHTnT run produced elsewhere.
-
----
-
-## **2️⃣ Describe experiment**
+## **1️⃣ Describe experiment**
 
 1. Open **Top-down analysis › Describe experiment**.
-2. In **Your analysis**, pick the MS data, switch **Identify proteoforms** on or off, pick the database and the **Sample** type, and choose the **Quantification** (see the table above).
-3. The numbered tabs below follow the steps of the analysis. You rarely need more than the first:
-   - **1 · Samples and groups**: which sample belongs to which condition (see below).
-   - **2 · Deconvolution**, **3 · Identification**, **4 · Fragment annotation**: the settings of each tool. The sample type already sets them; change them only if you know why. **Show advanced parameters** shows every setting.
-   - **5 · Linking runs** (label-free only): how runs are matched by mass and retention time.
+2. In **Your analysis**, pick the **MS data**. **📂 Browse** beside it opens your files:
+   - **Your files** lists them by folder. Tick the runs to analyse, or pick a folder to select its runs at once. Type a folder name in the *Folder* column to sort a run into it; FLASHApp suggests folders from the file names (for example `Control_R1`, `Control_R2`, `Treated_R1`), and a run's folder becomes its condition under **Samples and groups**.
+   - **Data on your computer** takes new runs: drag them in or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
+   - **Cloud data** imports them from a link (an object store, OneDrive, Zenodo or Figshare).
+   - **Import from PRIDE** reanalyses a public dataset: enter its accession (for example `PXD078120`, intact TMT-labelled proteins) and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
+
+   Without files of your own, a small example data set is used. The **Viewer** already holds the results of every example, each named after the analysis it shows: *Example: deconvolution only* (an LC-MS/MS run of a protein standard mix), *Example: native, identified* (a native top-down spectrum of E. coli GapA), *Example: lysate, identified* and *Example: label-free comparison (spike-in 1x vs 0.1x)* (four short runs of a six-protein mix spiked into an E. coli lysate at two amounts, from the FLASHQuant SpikeIn dataset, MassIVE MSV000091923), and *Example: TMT 10-plex, deconvolution only* and *Example: TMT comparison (1x vs 2x vs 4x)* (five minutes of one fraction of a TMT 10-plex labelled HeLa lysate mixed 1:1:2:2:4:4, PRIDE PXD078120).
+3. Switch **Identify proteoforms** on or off, pick the **Protein database** (a **FASTA** or **PEFF** file, added the same way with **📂 Browse**, whose **UniProt proteome** tab also finds the proteome of your organism by name or taxonomy ID and downloads it; FLASHApp adds the decoy sequences it needs) and the **Sample** type, and choose the **Quantification** (see the table above). Identification is optional: LC-MS/MS (DDA) runs can be deconvolved only, or compared label-free, without a database. The **Sample** type is always offered; it sets how proteoforms are identified, so without identification it changes nothing until **Identify proteoforms** is switched on.
+4. The numbered tabs below follow the steps of the analysis you chose; a step the analysis does not run has no tab:
+   - **Samples and groups** (with quantification only): which sample belongs to which condition (see below).
+   - **Deconvolution**, and with identification **Identification** and **Fragment annotation**: the settings of each tool. The sample type already sets them; change them only if you know why. **All N parameters** beside each tool shows every setting.
+   - **Linking runs** (label-free only): how runs are matched by mass and retention time.
 
 ### Samples and groups
 
@@ -68,7 +65,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ---
 
-## **3️⃣ Run analysis**
+## **2️⃣ Run analysis**
 
 1. Open **Top-down analysis › Run analysis**. The box at the top repeats the analysis you chose.
 2. Press **Start Workflow**. The log shows each run as it is processed. You can close the page and come back with the same workspace.
@@ -76,9 +73,9 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ---
 
-## **4️⃣ Viewer**
+## **3️⃣ Viewer**
 
-The Viewer shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows.
+The Viewer shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows. **💡 Add tool results** shows the output of a FLASHDeconv or FLASHTnT run made outside FLASHApp.
 
 @video guide-2-viewer.mp4 | Explore a run in the Viewer and arrange your own layout
 
@@ -88,7 +85,7 @@ Until you save your own layout, each run opens in the layout made for its analys
 |---|---|
 | Deconvolved only | The masses over retention time (heatmap), the spectra with their masses, the raw and deconvolved spectrum and a 3D signal-to-noise view. |
 | Identified, native or purified proteins | The identified proteins, the sequence with its fragments and modifications, the 3D structure, and the sequence tags behind each identification. |
-| Identified, lysate | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors and quality control of the identifications. |
+| Identified, lysate | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors, quality control of the identifications and the GO enrichment of the proteins you select. |
 | Labelled with TMT or iTRAQ | The layout of its kind as above, with the **reporter ions** of every spectrum and of the selected spectrum, right below the table that selects the spectrum. |
 
 **Edit layout** opens the Layout Manager: drag components into the grid, choose how many runs to show at once, and **Save**. **Reset** goes back to the defaults above. A saved layout is used for every run of the workspace.
@@ -102,6 +99,16 @@ Search the list in the Layout Manager by name, or expand its groups:
 - **Spectra & plots**: *Raw spectrum*, *Deconvolved spectrum*, *Isotope envelope fit* (observed against expected isotope pattern: a shifted top points to a wrong monoisotopic mass), *Precursor XIC by charge*, *3D S/N plot*, *Run QC*.
 - **Sequence**: *Sequence view* (fragments and modifications on the sequence, internal fragments as a purple strip), *Structure view (3D)* (the AlphaFold model, or a structure you upload, with the cleavage sites), *Internal fragment map*, *Fragment mass errors*.
 - **Quantification**: *Reporter ions per spectrum (TMT, iTRAQ)* and *Reporter ions of the selected spectrum*.
+- **Functional analysis**: *GO enrichment of the selected proteins* (see below).
+
+### GO enrichment of selected proteins
+
+The GO enrichment component tests which Gene Ontology terms (biological process, cellular component, molecular function) are over-represented in the proteins you select, against all proteins identified in the run. Select several at once:
+
+- in the *Proteins*, *Proteoforms*, *PrSMs* or *Protein table*, turn on the check boxes with the check mark button of the table's toolbar and tick rows (the box in the header ticks every row shown; Shift-click ticks a range),
+- or pick box or lasso select in the mode bar of the *Proteoform heatmap* and drag over it. Shift adds to the selection.
+
+Every component marks the selected proteins, and **Clear selection** (in the GO component, or the eraser in a plot's mode bar) starts over. The bar chart shows the most significant terms; how many is set next to the category. The GO terms of each protein are looked up once at MyGene.info by its UniProt accession (this needs a network connection) and kept in the workspace. The test is a one-sided Fisher's exact test, adjusted for the number of terms (Benjamini-Hochberg).
 
 The **Sequence view** of a run that was not identified shows a sequence you set in the view itself with **Change sequence** (the DNA icon above the sequence); it is saved for the workspace.
 
@@ -109,7 +116,9 @@ The **Sequence view** of a run that was not identified shows a sequence you set 
 
 ## **5️⃣ Comparing samples**
 
-With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date). Selecting it shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap and quality control.
+With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date). Selecting it shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap, quality control and the GO enrichment of the entries you select.
+
+To test GO terms, select entries in the volcano plot (press **All changed**, **Higher in …** or **Lower in …**, or use box or lasso select in its mode bar), tick rows in the comparison table after turning its check boxes on, or select rows on the clustered heatmap with box or lasso select. The background is every protein of the entries tested.
 
 **Edit comparison** changes the conditions, the level compared (features, proteoforms or proteins; the latter two need identification) and the statistics (fold-change and adjusted p-value cutoffs, filtering, imputation, normalization, test). The comparison is recomputed in seconds; nothing is run again.
 

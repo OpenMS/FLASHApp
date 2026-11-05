@@ -218,12 +218,13 @@ RUN python -c "import pyopenms; print('pyOpenMS', pyopenms.__version__, pyopenms
 # Build openms-insight, the visualization components of the viewers (quick).
 # Placed after the slow OpenMS build so that changes to openms-insight do not
 # invalidate the OpenMS compile cache; it is installed in the run-app stage.
-# TEMPORARY: built from source until an openms-insight release after 0.4.0
-# includes t0mdavid-m/openms-insight#21; then add it to requirements.txt instead.
+# TEMPORARY (develop only): built from openms-insight's development branch
+# (main) and installed over the PyPI release from requirements.txt. Revert this
+# before a FLASHApp release: releases use a published openms-insight version.
 FROM node:21 AS insight-build
 
 ARG INSIGHT_REPO=https://github.com/t0mdavid-m/openms-insight.git
-ARG INSIGHT_REF=claude/project-thread-hxjbbs
+ARG INSIGHT_REF=main
 
 ADD https://api.github.com/repos/t0mdavid-m/openms-insight/git/refs/heads/$INSIGHT_REF version.json
 
@@ -306,8 +307,8 @@ COPY clean-up-workspaces.py /app/clean-up-workspaces.py
 # adding the bundle twice (it is force-included because git ignores it).
 COPY --from=insight-build /openms-insight/pyproject.toml /openms-insight/README.md /openms-insight/LICENSE /openms-insight/.gitignore /tmp/openms-insight/
 COPY --from=insight-build /openms-insight/openms_insight /tmp/openms-insight/openms_insight
-# Its dependencies come from requirements.txt, with the versions pinned there
-RUN pip install --no-deps /tmp/openms-insight && rm -rf /tmp/openms-insight
+# Its dependencies come from requirements.txt; this replaces the PyPI release
+RUN pip install --no-deps --force-reinstall /tmp/openms-insight && rm -rf /tmp/openms-insight
 
 # add cron job to the crontab
 RUN echo "0 3 * * * /root/miniforge3/envs/streamlit-env/bin/python /app/clean-up-workspaces.py >> /app/clean-up-workspaces.log 2>&1" | crontab -

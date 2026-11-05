@@ -55,7 +55,6 @@ results:
 pages:
 - content/quickstart.py
 - content/user_guide.py
-- content/TopDown/TopDownUpload.py
 - content/TopDown/TopDownConfigure.py
 - content/TopDown/TopDownRun.py
 - content/TopDown/TopDownViewer.py
@@ -78,6 +77,7 @@ sync:
   - settings.json
   - default-parameters.json
   - presets.json
+  - parameter-names.json
   - README.md
   - content/*
   - src/python-tools/*

@@ -1,7 +1,7 @@
 {
     "app-name": "FLASHApp",
     "github-user": "OpenMS",
-    "version": "1.2.0",
+    "version": "2.0.0-alpha",
     "repository-name": "FLASHApp",
     "legal_links": {
         "impressum": "https://openms.de/impressum",
@@ -59,7 +59,8 @@
         "enabled": true,
         "max_download_gb_online": 50,
         "allowed_hosts": [],
-        "parallel_downloads": 4
+        "parallel_downloads": 4,
+        "pride_example": "PXD078120"
     },
     "structure_view": {
         "alphafold_download": true

@@ -123,7 +123,7 @@ tenacity==9.0.0
     #   streamlit
 toml==0.10.2
     # via streamlit
-tornado==6.5.9
+tornado==6.6
     # via streamlit
 typing-extensions==4.13.0
     # via
@@ -138,6 +138,8 @@ watchdog==6.0.0
     # via streamlit
 xlsxwriter
 scipy>=1.15
+# GO terms of the selected proteins (Viewer: GO enrichment)
+mygene>=3.2
 polars>=1.0.0,<2  # 2.0 removed APIs the parsers use (e.g. LazyFrame.with_row_count)
 
 # Redis Queue dependencies (for online mode)
@@ -151,6 +153,8 @@ timsrust_pyo3==0.4.1
 # Reads app.yaml, the app spec (utils/app_spec.py)
 pyyaml>=6.0
 
-# The sample PCA of the run comparisons (openms-insight PCAPlot, installed
-# with --no-deps, so its dependencies are listed here)
+# The viewers' components (tables, heatmaps, spectra, sequence view).
+# Its dependencies are listed in this file too; mygene and plotly are its
+# `analysis` extra (GO enrichment).
+openms-insight>=0.5.0
 scikit-learn>=1.0

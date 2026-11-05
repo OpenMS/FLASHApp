@@ -231,7 +231,7 @@ def _long(scans, key, channels):
     ).sort('id', 'sample')
 
 
-def build(runs, channels):
+def build(runs, channels, database=None):
     """The levels of an isobaric comparison, {level: (long, annotations)}.
 
     `runs` lists (run name, read_quant frame, read_prsms frame or None);
@@ -308,15 +308,8 @@ def build(runs, channels):
         pl.col('qvalue').min(),
         pl.len().alias('PrSMs'),
         pl.col('Run').n_unique().alias('IdentifiedRuns'),
-    ).with_columns(
-        pl.col('proteoform').alias('id'),
-        # Short enough for a plot label: the protein's name and the start of the sequence
-        (pl.col('accession').str.split('|').list.last().str.replace('_.*$', '') + ' ' + pl.coalesce(
-            pl.when(pl.col('proforma').str.len_chars() > 12)
-            .then(pl.col('proforma').str.slice(0, 12) + '…').otherwise(pl.col('proforma')),
-            pl.col('mass').round(1).cast(pl.Utf8) + ' Da',
-        )).alias('label'),
-    )
+    ).with_columns(pl.col('proteoform').alias('id'))
+    forms = contract.describe_proteoforms(forms, contract.read_sequences(database))
     form_long = _long(identified, 'proteoform', channels).join(
         forms.select('id', pl.col('accession').alias('parent')), on='id', how='left',
     )
