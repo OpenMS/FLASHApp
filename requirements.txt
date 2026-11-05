@@ -156,5 +156,5 @@ pyyaml>=6.0
 # The viewers' components (tables, heatmaps, spectra, sequence view).
 # Its dependencies are listed in this file too; mygene and plotly are its
 # `analysis` extra (GO enrichment).
-openms-insight>=0.5.0
+openms-insight>=0.6.0
 scikit-learn>=1.0

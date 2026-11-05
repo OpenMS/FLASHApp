@@ -229,25 +229,6 @@ RUN python -c "import pyopenms; print('pyOpenMS', pyopenms.__version__, pyopenms
         rm -f "/tmp/$tool.ini" "/tmp/$tool.log"; \
     done
 
-# Build openms-insight, the visualization components of the viewers (quick).
-# Placed after the slow OpenMS build so that changes to openms-insight do not
-# invalidate the OpenMS compile cache; it is installed in the run-app stage.
-# TEMPORARY (develop only): built from openms-insight's development branch
-# (main) and installed over the PyPI release from requirements.txt. Revert this
-# before a FLASHApp release: releases use a published openms-insight version.
-FROM node:21 AS insight-build
-
-ARG INSIGHT_REPO=https://github.com/t0mdavid-m/openms-insight.git
-ARG INSIGHT_REF=main
-
-ADD https://api.github.com/repos/t0mdavid-m/openms-insight/git/refs/heads/$INSIGHT_REF version.json
-
-RUN git clone -b ${INSIGHT_REF} --single-branch ${INSIGHT_REPO} /openms-insight
-WORKDIR /openms-insight/js-component
-RUN npm ci && npm run build
-# The Python package ships the bundle from openms_insight/js-component/dist
-RUN mkdir -p ../openms_insight/js-component && cp -r dist ../openms_insight/js-component/
-
 # Prepare and run streamlit app.
 FROM compile-openms AS run-app
 
@@ -320,14 +301,6 @@ COPY parameter-names.json /app/parameter-names.json
 # For streamlit configuration
 COPY .streamlit/ /app/.streamlit/
 COPY clean-up-workspaces.py /app/clean-up-workspaces.py
-
-# Install openms-insight (built in the insight-build stage above).
-# Only the package, not js-component/node_modules. .gitignore keeps hatch from
-# adding the bundle twice (it is force-included because git ignores it).
-COPY --from=insight-build /openms-insight/pyproject.toml /openms-insight/README.md /openms-insight/LICENSE /openms-insight/.gitignore /tmp/openms-insight/
-COPY --from=insight-build /openms-insight/openms_insight /tmp/openms-insight/openms_insight
-# Its dependencies come from requirements.txt; this replaces the PyPI release
-RUN pip install --no-deps --force-reinstall /tmp/openms-insight && rm -rf /tmp/openms-insight
 
 # add cron job to the crontab
 RUN echo "0 3 * * * /root/miniforge3/envs/streamlit-env/bin/python /app/clean-up-workspaces.py >> /app/clean-up-workspaces.log 2>&1" | crontab -
