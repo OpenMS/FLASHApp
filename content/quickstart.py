@@ -454,7 +454,7 @@ def render_whats_new():
         st.markdown(
             """
             <div class="whats-new">
-                <h3>✨ What's new in FLASHApp 2.0 (alpha)</h3>
+                <h3>✨ What's new in FLASHApp 2.0 (alpha 2)</h3>
                 <div class="whats-new-columns">
                     <div>
                         <h4>One top-down analysis</h4>
