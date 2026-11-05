@@ -25,6 +25,7 @@ async function runWorkflow(t, workflowPage, inputs, identify) {
   await t.open(`${workflowPage}Run`);
   // No settle() here: while the workflow runs, the status fragment reruns the
   // page, which can keep it from going quiet for 120 s. waitForText waits.
+  const started = Date.now();
   await t.page.getByRole("button", { name: "Start Workflow" }).first().click();
   // While the new run is running, its page reruns every second and can still
   // show the previous run's "completed" message as stale elements, so wait
@@ -37,10 +38,15 @@ async function runWorkflow(t, workflowPage, inputs, identify) {
     timeout: RUN_TIMEOUT,
     failOn: ["Errors occurred, check log file."],
   });
+  record(t, `${identify ? "identification" : "deconvolution"} run`, Date.now() - started);
   await t.shot(`${workflowPage}-${identify ? "identify" : "deconvolve"}-finished`);
 }
 
+// Records a time when the e2e helpers time things (template e2e.js).
+const record = (t, what, ms) => (t.record ? t.record(what, ms) : t.log(`${what}: ${ms / 1000} s`));
+
 async function checkViewer(t, viewerPage, experiment, extraSelector) {
+  const opened = Date.now();
   await t.open(viewerPage);
   if (experiment) await t.choose("choose experiment", experiment);
   await t.waitForComponent(".js-plotly-plot, .tabulator");
@@ -64,6 +70,7 @@ async function checkViewer(t, viewerPage, experiment, extraSelector) {
     await t.page.waitForTimeout(2000);
   }
   t.log(`${viewerPage}: ${plots} plots, ${tables} tables in ${t.componentFrames().length} component frame(s)`);
+  record(t, `${viewerPage} ${experiment || ""}: plots and tables drawn`, Date.now() - opened);
   await t.shot(`${viewerPage}-${experiment || "default"}`);
   if (plots === 0 || tables === 0) {
     t.log((await text()).slice(0, 2000));
