@@ -34,6 +34,7 @@ wf.show_execution_section()
 next_steps(
     'topdown',
     ('viewer', 'Look at each run, or pick a comparison of runs in the experiment selector.'),
+    ('download', 'Take the result files of every run with you: TSV, mzML and msalign, one ZIP per run.'),
 )
 
 save_params(params)

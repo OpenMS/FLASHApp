@@ -14,12 +14,15 @@ PAGES = {
         'configure': ('content/TopDown/TopDownConfigure.py', 'Describe experiment', '⚙️'),
         'run': ('content/TopDown/TopDownRun.py', 'Run analysis', '🚀'),
         'viewer': ('content/TopDown/TopDownViewer.py', 'Viewer', '👀'),
+        'download': ('content/TopDown/TopDownDownload.py', 'Download results', '⬇️'),
     },
 }
 
 
 def page_link(tool, key, label=None):
     path, default_label, icon = PAGES[tool][key]
+    if key == 'download' and st.session_state.get('location') == 'local':
+        default_label, icon = 'Export results', '📤'
     try:
         st.page_link(path, label=label or default_label, icon=icon)
     except KeyError:

@@ -1,147 +1,86 @@
 import streamlit as st
 
 from pathlib import Path
-from io import BytesIO
-from zipfile import ZipFile, ZIP_DEFLATED
 
-from src.common.common import page_setup, export_files, export_folder_input
+from src.common.common import page_setup, export_folder_input
+from src.common.guide import next_steps, page_intro
+from src.common import result_download as rd
 from src.workflow.FileManager import FileManager
+from src import former_examples
 
 
 page_setup()
 
 # A local install exports each result set to a folder on disk instead of
 # downloading it as a ZIP.
-local = st.session_state.location == "local"
-st.title('Export' if local else 'Download')
-if local:
-    export_dir = export_folder_input('results-export')
+local = rd.is_local()
+st.title('Export results' if local else 'Download results')
+page_intro(
+    ("Copy the result files of your runs to a folder on this computer: one folder per run."
+     if local else
+     "Download the result files of your runs: one ZIP per run, or every run at once.")
+    + " A run holds the deconvolved masses and spectra (TSV, mzML, msalign and feature files), "
+    "with **Identify proteoforms** on also the proteins, PrSMs, tags and annotated fragments, "
+    "and the parameters it ran with. The run shown in the **Viewer** can also be "
+    f"{'exported' if local else 'downloaded'} there with its **{rd.verb()}** button."
+)
 
+# A workspace from an earlier release gets today's example runs (once), as in the Viewer
+former_examples.add_example_results(Path(st.session_state['workspace'], 'cache'))
 file_manager = FileManager(
     st.session_state["workspace"],
     Path(st.session_state['workspace'], 'cache')
 )
+experiments = rd.downloadable_runs(file_manager)
 
-targets = [
-    'out_tsv', 'spec1_tsv', 'spec2_tsv', 'spec3_tsv', 'spec4_tsv', 'quant_tsv', 
-    'toppic_ms1_msalign', 'toppic_ms1_feature', 'toppic_ms2_msalign', 
-    'toppic_ms2_feature', 'out_deconv_mzML', 'anno_annotated_mzML', 
-    'FD_parameters_json', 'FTnT_parameters_json', 'tags_tsv', 'protein_tsv',
-    'prsms_tsv', 'annotated_tsv', 'fragments_tsv',
-]
-experiments = file_manager.get_results_list(targets, partial=True)
-
-# Show error if no content is available for download
 if len(experiments) == 0:
-    st.error('No results to show yet. Please run a workflow first!')
-else:
-    # Table Header
-    columns = st.columns([1.1, 1, 1])
-    columns[0].write('**Name**')
-    columns[1].write('**Export**' if local else '**Download**')
-    columns[2].write('**Delete Result Set**')
+    st.error('No results yet. Run the analysis first!')
+    next_steps('topdown', ('run', 'Start the analysis of your runs.'))
+    st.stop()
 
-    # Table Body
-    for i, experiment in enumerate(experiments):
-        st.divider()
-        columns = st.columns([0.1, 1, 1, 1])
-        current_name = file_manager.get_display_name(experiment)
-        
-        # Initialize edit mode session state for this experiment
-        edit_mode_key = f"edit_mode_{experiment}"
-        if edit_mode_key not in st.session_state:
-            st.session_state[edit_mode_key] = False
-        
-        # Display Name or Edit Input
-        with columns[1]:
+export_dir = export_folder_input('results-export') if local else None
+rd.all_runs_button(file_manager, experiments, export_dir)
+
+for i, experiment in enumerate(experiments):
+    current_name = file_manager.get_display_name(experiment)
+    files = rd.result_files(file_manager, experiment)
+    edit_mode_key = f"edit_mode_{experiment}"
+    if edit_mode_key not in st.session_state:
+        st.session_state[edit_mode_key] = False
+
+    with st.container(border=True):
+        name_col, download_col, delete_col = st.columns([3, 1.2, 0.5], vertical_alignment='center')
+        with name_col:
             if st.session_state[edit_mode_key]:
-                # Edit mode: Show text input with current display name
-                new_name = st.text_input(
-                    "New name",
-                    value=current_name,
-                    key=f"input_{experiment}",
-                    label_visibility="collapsed"
-                )
-            else:
-                st.write(current_name)
-        
-        # Edit/Save Button
-        with columns[0]:
-            if st.session_state[edit_mode_key]:
-                # Show save button in edit mode
-                if st.button("💾", key=f"save_{experiment}", help="Save new name", use_container_width=True):
-                    new_name = st.session_state.get(f"input_{experiment}", "").strip()
-                    
-                    # Validate input
-                    if not new_name:
-                        st.error("Name cannot be empty")
-                    elif len(new_name) > 100:
-                        st.error("Name is too long (max 100 characters)")
-                    else:
-                        # Attempt to rename
-                        success = file_manager.rename_dataset(experiment, new_name)
-                        if success:
-                            st.success(f"Renamed to: {new_name}")
+                with st.container(horizontal=True, vertical_alignment='bottom'):
+                    st.text_input("New name", value=current_name, key=f"input_{experiment}")
+                    if st.button("Save", key=f"save_{experiment}", icon=':material/save:'):
+                        new_name = st.session_state.get(f"input_{experiment}", "").strip()
+                        if not new_name:
+                            st.error("Name cannot be empty")
+                        elif len(new_name) > 100:
+                            st.error("Name is too long (max 100 characters)")
+                        elif file_manager.rename_dataset(experiment, new_name):
                             st.session_state[edit_mode_key] = False
                             st.rerun()
                         else:
                             st.error("Failed to rename dataset")
             else:
-                # Show edit button in normal mode
-                if st.button("✏️", key=f"edit_{experiment}", help="Edit name", use_container_width=True):
-                    st.session_state[edit_mode_key] = True
-                    st.rerun()
-        
-        # Download
-        with columns[2]:
-            if local:
-                # One click copies the result set to <export folder>/<name>.
-                if st.button('📤 Export', key=i, use_container_width=True):
-                    export_files(
-                        [
-                            (Path(filepath), Path(filepath).name)
-                            for filepath in file_manager.get_all_files_except(
-                                experiment, ['download_archive']
-                            ).values()
-                        ],
-                        Path(export_dir, current_name),
-                    )
-                clicked = False
-            else:
-                button_placeholder = st.empty()
-                # Show placeholder button before download is prepared
-                clicked = button_placeholder.button('Prepare Download', key=i, use_container_width=True)
-            if clicked:
-                button_placeholder.empty()
-                with st.spinner():
-                    # Create ZIP file
-                    if not file_manager.result_exists(
-                        experiment, 'download_archive'
-                    ):
-                        zip_buffer = BytesIO()
-                        with ZipFile(zip_buffer, 'w', ZIP_DEFLATED) as f:
-                            for filepath in file_manager.get_all_files_except(
-                                experiment, ['download_archive']
-                            ).values():
-                                f.write(filepath, arcname=Path(filepath).name)
-                        zip_buffer.seek(0)
-                        file_manager.store_file(
-                            experiment, 'download_archive', zip_buffer, 
-                            file_name='download_archive.zip'
-                        )
-                    out_zip = file_manager.get_results(
-                        experiment, ['download_archive']
-                    )['download_archive']
-                    # Show download button after ZIP file was created
-                    with open(out_zip, 'rb') as f:
-                        button_placeholder.download_button(
-                            "Download ⬇️", f, 
-                            file_name = f'{current_name}.zip',
-                            use_container_width=True
-                        )
-
-        # Delete
-        with columns[3]:
-            if st.button(f"🗑️ {current_name}", use_container_width=True):
+                with st.container(horizontal=True, vertical_alignment='center'):
+                    st.markdown(f"**{current_name}**")
+                    if st.button("", key=f"edit_{experiment}", icon=':material/edit:',
+                                 help="Rename", type='tertiary'):
+                        st.session_state[edit_mode_key] = True
+                        st.rerun()
+            st.caption(f"{len(files)} files, {rd.format_size(rd.total_size(files))}")
+        message_area = st.container()
+        with download_col:
+            rd.run_button(file_manager, experiment, i, export_dir,
+                          label=None if local else 'Download ZIP', message_area=message_area)
+        with delete_col:
+            if st.button("", key=f"delete_{experiment}", icon=':material/delete:',
+                         help=f"Delete {current_name} and its results", width='stretch'):
                 file_manager.remove_results(experiment)
                 st.rerun()
+        with st.expander('Files'):
+            rd.file_table(files)

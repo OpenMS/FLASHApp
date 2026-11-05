@@ -42,7 +42,7 @@ env:
   APP_NAME: FLASHApp
   # Prefix of the installer names: <INSTALLER_NAME>-Setup.exe,
   # -macOS-arm64.dmg, -Linux-x86_64.AppImage (src/common/installers.py links them).
-  INSTALLER_NAME: FLASHApp-1.2.0
+  INSTALLER_NAME: FLASHApp-2.0.0-alpha
   # Define needed TOPP tools here. FileConverter converts Thermo .raw input
   # (CommandExecutor.convert_to_mzml) with share/OpenMS/THIRDPARTY/ThermoRawFileParser.
   TOPP_TOOLS: "FLASHDeconv FLASHTnT FLASHAnnotator DecoyDatabase FileConverter"
@@ -92,8 +92,10 @@ jobs:
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "desktop build: $run" >> "$GITHUB_STEP_SUMMARY"
 
-  # TEMPORARY: openms-insight is built from source until a release after 0.4.0
-  # includes t0mdavid-m/openms-insight#21; then add it to requirements.txt instead.
+  # TEMPORARY (develop only): openms-insight is built from its development
+  # branch (main) and installed over the PyPI release from requirements.txt.
+  # Revert this commit before a FLASHApp release: releases use a published
+  # openms-insight version.
   build-openms-insight:
     needs: scope
     if: needs.scope.outputs.run == 'true'
@@ -114,7 +116,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: 't0mdavid-m/openms-insight'
-        ref: 'claude/project-thread-hxjbbs'
+        ref: 'main'
         path: 'openms-insight'
 
     - name: Build the Vue bundle and the wheel
@@ -229,8 +231,8 @@ jobs:
         else
           py="electron/payload/python-$PYTHON_VERSION/bin/python3"
         fi
-        # openms-insight's dependencies come from requirements.txt
-        "$py" -m pip install --no-deps --no-warn-script-location --disable-pip-version-check openms-insight-wheel/*.whl
+        # TEMPORARY: openms-insight from main over the release in requirements.txt
+        "$py" -m pip install --no-deps --force-reinstall --no-warn-script-location --disable-pip-version-check openms-insight-wheel/*.whl
         "$py" -c 'import openms_insight; print("openms_insight", openms_insight.__version__)'
         if [[ $RUNNER_OS != macOS ]]; then
           # polars' default wheel needs AVX2 and more; the LTS build runs on

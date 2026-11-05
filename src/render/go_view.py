@@ -68,13 +68,21 @@ def _digest(*parts):
     return hashlib.md5(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
-def _result(file_manager, selected, background):
-    """The enrichment of a selection, computed once per session."""
+def _result(file_manager, selected, background, universe=None):
+    """The enrichment of a selection, computed once per session. The GO
+    terms of the proteins are looked up once, by the workflow or by the first
+    selection of results from an earlier build; a selection only runs the
+    tests."""
     store = st.session_state.setdefault('flash_go_results', {})
     digest = _digest(sorted(selected), sorted(background))
     if digest not in store:
-        with st.spinner(f'Looking up the GO terms of {len(set(selected) | set(background))} proteins…'):
-            store[digest] = go_terms.enrichment(file_manager, selected, background)
+        pool = list(universe if universe is not None else background) + list(selected)
+        if go_terms.index_ready(file_manager, pool):
+            message = 'Testing GO terms…'
+        else:
+            message = f'Looking up the GO terms of {len(set(pool))} proteins…'
+        with st.spinner(message):
+            store[digest] = go_terms.enrichment(file_manager, selected, background, universe=universe)
         while len(store) > _RESULTS_KEPT:
             store.pop(next(iter(store)))
     return digest, store[digest]
@@ -125,7 +133,8 @@ def _clear(state_manager, identifier):
     state_manager.clear_selection(identifier)
 
 
-def _render(file_manager, scope, state_manager, identifier, selected, background, key, picked_line):
+def _render(file_manager, scope, state_manager, identifier, selected, background, key, picked_line,
+            universe=None):
     if state_manager.get_selection(identifier):
         head, clear = st.columns([5, 1], vertical_alignment='center')
         head.markdown(picked_line)
@@ -137,7 +146,7 @@ def _render(file_manager, scope, state_manager, identifier, selected, background
         st.info(picked_line)
     if not selected:
         return
-    digest, (result, error, labels) = _result(file_manager, selected, background)
+    digest, (result, error, labels) = _result(file_manager, selected, background, universe)
     if error:
         st.warning(error + ' Proteins already looked up are used; try again when the network is back.')
     if not result['fg_count']:
@@ -173,7 +182,7 @@ def render_run(file_manager, dataset_id, state_manager, key):
     """GO enrichment of the proteins picked in a run, against all its
     identified proteins."""
     selected = [a for a in (state_manager.get_selection(go_terms.RUN_SET) or []) if a]
-    background = go_terms.run_background(file_manager, dataset_id)
+    background = go_terms.stored_run_background(file_manager, dataset_id)
     if not background:
         st.info('This run has no identified proteins.')
         return
@@ -205,4 +214,5 @@ def render_comparison(session, state_manager, key):
     _render(
         session.file_manager, _digest('comparison', session.dataset_id, session.level), state_manager,
         go_terms.COMPARISON_SET, selected, background, key, line,
+        universe=go_terms.comparison_universe(session),
     )

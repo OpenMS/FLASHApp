@@ -1,3 +1,4 @@
+import inspect
 import json
 import time
 
@@ -16,10 +17,13 @@ from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
 from src.quant.run import CONSENSUS_EXCLUDE, compare_isobaric, compare_runs
 from src import flashida
+from src import former_examples
 from src.workflow.WorkflowManager import WorkflowManager
+from src.workflow.StreamlitUI import editor_table
 
-# Example inputs shipped with the default demo workspace: one run per default
-# layout of the Viewer, named after the analysis it shows. Their results are
+# Example inputs shipped with the default demo workspace, named after the
+# analysis they show. All of them are listed: the upload treats any other file
+# as the user's own and then removes the example copies. Their results are
 # in the demo workspace's cache (example-data/build_examples.py).
 EXAMPLE_DIR = 'example-data/workspaces/default/flashtnt/input-files/mzML-files'
 EXAMPLE_DATA = [
@@ -27,6 +31,13 @@ EXAMPLE_DATA = [
     f'{EXAMPLE_DIR}/Deconvolution-only_ProteinMix_LC-MS.mzML',
     # Native top-down MS2 spectrum of E. coli GapA, identified (Native preset)
     f'{EXAMPLE_DIR}/Native-identified_GapA_HCD.mzML',
+    # Label-free comparison: E. coli lysate with a spike-in at 1x and 0.1x
+    f'{EXAMPLE_DIR}/Label-free_SpikeIn-1x_R1.mzML',
+    f'{EXAMPLE_DIR}/Label-free_SpikeIn-1x_R2.mzML',
+    f'{EXAMPLE_DIR}/Label-free_SpikeIn-0.1x_R1.mzML',
+    f'{EXAMPLE_DIR}/Label-free_SpikeIn-0.1x_R2.mzML',
+    # TMT 10-plex of a HeLa ratio mix
+    f'{EXAMPLE_DIR}/Isobaric_TMT10_HeLa-Ratio.mzML',
 ]
 
 # Valueless TOPP switches (registerFlag_ in the tool source), emitted as a bare
@@ -101,24 +112,28 @@ def samples_and_groups(workflow, quant, identify):
         workflow.ui.experimental_design('mzML-files', name='Samples', suggest=True)
     elif quant == analysis.ISOBARIC:
         isobaric_samples(workflow)
-    else:
-        st.caption('No quantification chosen: nothing to describe here.')
 
 
 def isobaric_samples(workflow):
     """The sample and condition of each label (channel) of the chosen plex."""
     plex = analysis.plex(workflow.current_params())
-    channels = isobaric.load_channels(workflow.workflow_dir, plex)
     st.caption('The sample and condition of each label. A label without a condition is not tested.')
+    # Drawn from the labels as first read, not as saved after each edit: a
+    # new table would make a new editor that drops the edit just made
+    editor_key = f'isobaric_channels_{plex}'
+    channels = editor_table(
+        st.session_state, editor_key,
+        lambda: isobaric.load_channels(workflow.workflow_dir, plex).to_pandas(),
+    )
     edited = st.data_editor(
-        channels.to_pandas(),
+        channels,
         column_config={
             'channel': st.column_config.TextColumn('Label', disabled=True),
             'sample': st.column_config.TextColumn('Sample'),
             'condition': st.column_config.TextColumn('Condition'),
         },
         hide_index=True, use_container_width=True, num_rows='fixed',
-        key=f'isobaric_channels_{plex}',
+        key=editor_key,
     )
     saved = isobaric.save_channels(workflow.workflow_dir, pl.from_pandas(edited), plex)
     conditions = {c for c in saved['condition'] if c}
@@ -156,12 +171,23 @@ COMPARE_KEY = analysis.COMPARE_KEY
 IDENTIFY_HELP = (
     'Search the fragmentation spectra against a protein database (FLASHTnT), so that masses '
     'become proteoforms and proteins. Needs MS/MS spectra and a database (FASTA). Switch it '
-    'off for MS1-only or intact-mass runs, or when no database fits the sample.'
+    'off to deconvolve the runs only, e.g. LC-MS/MS (DDA) runs without a fitting database, MS1-only '
+    'or intact-mass runs; label-free and isobaric quantification then compare the masses.'
 )
 
 # FLASHDeconv parameters the workflow sets itself
 # -quant follows label-free quantification, -iq:type the label choice
 FLASHDECONV_EXCLUDE = ['ida_log', 'quant', 'iq:type']
+# Output and file options: in the "All parameters" dialog, not on the page
+FLASHDECONV_ADVANCED = ['keep_empty_out', 'write_detail', 'FD:scan_commands']
+FLASHTNT_ADVANCED = ['ex:var_mod_file']
+
+
+def _advanced(ui, names):
+    """advanced_parameters for input_TOPP, where the template has it."""
+    if 'advanced_parameters' in inspect.signature(ui.input_TOPP).parameters:
+        return {'advanced_parameters': names}
+    return {}
 
 # FLASHDeconv's outputs: (parameter, file name in the run's folder)
 FLASHDECONV_OUTPUTS = [
@@ -195,7 +221,10 @@ def adopt_legacy_inputs(workspace, workflow_dir):
     present = {p.name for p in target.iterdir() if p.name != 'external_files.txt'}
     if external.exists():
         present |= {Path(line).name for line in external.read_text().splitlines() if line.strip()}
-    adopted = [p for p in paths if p.name not in present]
+    # The former workflow's example run is not adopted: today's examples
+    # take its place.
+    adopted = [p for p in paths if p.name not in present
+               and not former_examples.is_example(p, EXAMPLE_DATA)]
     if adopted:
         with open(external, 'a') as f:
             for p in adopted:
@@ -220,6 +249,10 @@ class TopDownWorkflow(WorkflowManager):
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
         self.tool_name = 'FLASHTaggerViewer'
         adopt_legacy_inputs(st.session_state["workspace"], self.workflow_dir)
+        # A workspace from an earlier release still holds that release's
+        # example runs, which would keep today's examples out.
+        former_examples.retire(Path(self.workflow_dir, 'input-files', 'mzML-files'), EXAMPLE_DATA,
+                               Path(self.workflow_dir, former_examples.MARKER))
         # The Native and Lysate presets are applied by the Sample choice of
         # Your analysis, not by buttons of their own
         # (a module-level function: the workflow object is pickled for its run)
@@ -319,8 +352,9 @@ class TopDownWorkflow(WorkflowManager):
                     "fasta-file", name='Protein database', multiple=False, reactive=True,
                     upload=dict(file_types=DATABASE_TYPES, fallback=EXAMPLE_DATABASE, uniprot=True),
                 )
-                self._sample_type_choice(current_sample)
-                self._recommend_sample_type(current_sample)
+            # The sample presets are always offered, and warn when they do not fit
+            self._sample_type_choice(current_sample)
+            self._recommend_sample_type(current_sample)
 
             quant = self._choice(
                 analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
@@ -334,6 +368,8 @@ class TopDownWorkflow(WorkflowManager):
                     help='The isobaric labelling reagent of the samples (FLASHDeconv -iq:type).',
                 )
 
+            self._preset_fit_warning(identify, quant, current_sample)
+
             params = self.current_params()
             selected = params.get('mzML-files') or []
             selected = [selected] if isinstance(selected, str) else selected
@@ -343,28 +379,53 @@ class TopDownWorkflow(WorkflowManager):
                 quant, analysis.plex(params),
             ), icon='🧭')
 
+    def _preset_fit_warning(self, identify, quant, current_sample) -> None:
+        """Warn when the sample preset, or the preset applied last, sets
+        settings of steps the chosen analysis does not run."""
+        pm = self.parameter_manager
+        presets = pm.load_presets()
+        shown = []
+        applied, _ = pm.applied_preset_status()
+        for name in (current_sample, applied):
+            if name and name in presets and name not in shown:
+                shown.append(name)
+        for name in shown:
+            note = analysis.preset_note(name, presets[name], identify, quant)
+            if note is None:
+                continue
+            level, text = note
+            if level == 'warning':
+                st.warning(text, icon='⚠️')
+            else:
+                st.caption(text)
+
     @st.fragment
     def configure(self) -> None:
         params = self.current_params()
         identify = bool(params.get(IDENTIFY_KEY, True))
         quant = analysis.quantification(params)
-        # One tab per analysis step, in the order they run
-        steps = ["Samples and groups", "Deconvolution"]
+        # One tab per step the chosen analysis runs, in the order they run
+        steps = []
+        if quant != analysis.NO_QUANT:
+            steps += ["Samples and groups"]
+        steps += ["Deconvolution"]
         if identify:
             steps += ["Identification", "Fragment annotation"]
         if quant == analysis.LABEL_FREE:
             steps += ["Linking runs"]
-        t = st.tabs([f"**{i} · {step}**" for i, step in enumerate(steps, start=1)])
-        with t[0]:
-            samples_and_groups(self, quant, identify)
-        with t[1]:
+        t = dict(zip(steps, st.tabs([f"**{i} · {step}**" for i, step in enumerate(steps, start=1)])))
+        if "Samples and groups" in t:
+            with t["Samples and groups"]:
+                samples_and_groups(self, quant, identify)
+        with t["Deconvolution"]:
             exclude = FLASHDECONV_EXCLUDE + ([] if quant == analysis.ISOBARIC else ['iq:'])
             self.ui.input_TOPP(
                 'FLASHDeconv', exclude_parameters=exclude, display_subsections=True,
                 display_tool_name=False, flag_parameters=FLASHDECONV_FLAGS,
+                **_advanced(self.ui, FLASHDECONV_ADVANCED),
             )
         if identify:
-            with t[2]:
+            with t["Identification"]:
                 self.ui.input_TOPP(
                     'FLASHTnT',
                     # fd: holds FLASHDeconv's parameters for a raw -in; the workflow
@@ -374,13 +435,14 @@ class TopDownWorkflow(WorkflowManager):
                     display_tool_name=False,
                     custom_defaults={'tag:min_length': 4, 'tag:max_length': 4},
                     flag_parameters=FLASHTNT_FLAGS,
+                    **_advanced(self.ui, FLASHTNT_ADVANCED),
                 )
                 # Decoy database size (set with the sample type)
                 self.ui.input_widget(
-                    'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=True,
+                    'few_proteins', name='Do you expect <100 Proteins?', widget_type='checkbox', default=False,
                     help='FASTA databases without decoys get shuffled decoys (FLASHTnT needs them for the FDR). If set, the decoy database will be 10 times larger than the target database for better FDR estimation resolution. This increases the runtime significantly. PEFF databases and FASTA files that already contain DECOY_ entries are used as they are.'
                 )
-            with t[3]:
+            with t["Fragment annotation"]:
                 # FLASHAnnotator Configuration (ion types follow FLASHTnT)
                 self.ui.input_TOPP(
                     'FLASHAnnotator',
@@ -390,7 +452,7 @@ class TopDownWorkflow(WorkflowManager):
                     flag_parameters=FLASHANNOTATOR_FLAGS,
                 )
         if quant == analysis.LABEL_FREE:
-            with t[-1]:
+            with t["Linking runs"]:
                 comparison_settings(self)
 
     def _recommend_sample_type(self, current) -> None:
@@ -447,7 +509,7 @@ class TopDownWorkflow(WorkflowManager):
             copyfile(database, out_db)
             return
         # If few proteins are present increase decoy size
-        few = self.executor.parameter_manager.get_parameters_from_json().get('few_proteins', True)
+        few = self.executor.parameter_manager.get_parameters_from_json().get('few_proteins', False)
         ratio = 10 if few else 1
         self.logger.log(f"-> Creating decoy database with target:decoy ratio 1:{ratio}...")
         if not self.executor.run_topp(
@@ -525,6 +587,25 @@ class TopDownWorkflow(WorkflowManager):
             logger=self.logger
         )
 
+    def _prepare_go_terms(self, dataset_ids):
+        """Look up the GO terms of the identified proteins and store each
+        run's term index, so the Viewer's GO enrichment cell only runs the
+        tests when proteins are selected. A failure (no network) is logged and
+        the cell looks the terms up itself later."""
+        from src.render import go_terms
+        if not dataset_ids:
+            return
+        self.logger.log('-> Looking up GO terms of the identified proteins...')
+        for dataset_id in dataset_ids:
+            try:
+                count, error = go_terms.precompute_run(self.file_manager, dataset_id)
+            except Exception as e:  # never fail a run over GO terms
+                count, error = 0, f'GO terms were not prepared ({type(e).__name__}: {e}).'
+            if error:
+                self.logger.log(f'{dataset_id}: {error} The Viewer looks them up when they are needed.')
+            elif count:
+                self.logger.log(f'{dataset_id}: GO terms of {count} proteins prepared.', 1)
+
     def _parse_isobaric(self, dataset_id, plex):
         """The reporter ions of every fragmentation spectrum, for the Viewer."""
         stored = self.file_manager.get_results(dataset_id, ['quant_tsv'], partial=True).get('quant_tsv')
@@ -554,6 +635,9 @@ class TopDownWorkflow(WorkflowManager):
                     'Please select a database, or switch off Identify proteoforms to deconvolve only.'
                 )
                 return False
+        # The Run page lists every run as waiting, running (with its tool), done or failed
+        progress = self.executor.progress
+        progress.start_samples([basename(str(p).rstrip('/\\')) for p in in_mzmls])
         # Thermo .raw / Bruker .d input becomes mzML here; mzML passes through.
         in_mzmls = self.executor.convert_to_mzml(in_mzmls)
         if in_mzmls is None:
@@ -570,51 +654,56 @@ class TopDownWorkflow(WorkflowManager):
         dataset_ids = []
         errors = []
         # Process files in sequence
-        for in_mzml in in_mzmls:
+        for index, in_mzml in enumerate(in_mzmls):
             try:
-                # Generate a temporary output folder
-                current_base = splitext(basename(in_mzml))[0]
-                current_time = time.strftime("%Y%m%d-%H%M%S")
-                dataset_id = '%s_%s' % (current_base, current_time)
-                folder_path = join(base_path, 'FLASHAppOutput', dataset_id)
-                if exists(folder_path):
+                with progress.sample(index):
+                    # Generate a temporary output folder
+                    current_base = splitext(basename(in_mzml))[0]
+                    current_time = time.strftime("%Y%m%d-%H%M%S")
+                    dataset_id = '%s_%s' % (current_base, current_time)
+                    folder_path = join(base_path, 'FLASHAppOutput', dataset_id)
+                    if exists(folder_path):
+                        rmtree(folder_path)
+                    makedirs(folder_path)
+
+                    self.logger.log(f'Processing {current_base}:')
+                    self.logger.log("-> Running FLASHDeconv...")
+                    io = {'in': [in_mzml]}
+                    io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
+                    if not self.executor.run_topp(
+                        'FLASHDeconv', input_output=io,
+                        custom_params=deconv_params,
+                    ):
+                        raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
+
+                    if identify:
+                        self._identify(in_mzml, folder_path, database, current_base)
+
+                    self.logger.log("-> Processing Results...")
+                    parsing = progress.start_step('Processing results', [])
+                    # Store all files
+                    for file in listdir(folder_path):
+                        self.file_manager.store_file(
+                            dataset_id, str(file).replace('.', '_'),
+                            Path(folder_path, file), file_name=file
+                        )
+                    self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters')
+                    if identify:
+                        self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
+                    self._parse(dataset_id, identify)
+                    if quant == analysis.ISOBARIC:
+                        self._parse_isobaric(dataset_id, plex)
+
+                    progress.end_step(parsing)
+                    # Remove temporary folder
                     rmtree(folder_path)
-                makedirs(folder_path)
-
-                self.logger.log(f'Processing {current_base}:')
-                self.logger.log("-> Running FLASHDeconv...")
-                io = {'in': [in_mzml]}
-                io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
-                if not self.executor.run_topp(
-                    'FLASHDeconv', input_output=io,
-                    custom_params=deconv_params,
-                ):
-                    raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
-
-                if identify:
-                    self._identify(in_mzml, folder_path, database, current_base)
-
-                self.logger.log("-> Processing Results...")
-                # Store all files
-                for file in listdir(folder_path):
-                    self.file_manager.store_file(
-                        dataset_id, str(file).replace('.', '_'),
-                        Path(folder_path, file), file_name=file
-                    )
-                self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters')
-                if identify:
-                    self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
-                self._parse(dataset_id, identify)
-                if quant == analysis.ISOBARIC:
-                    self._parse_isobaric(dataset_id, plex)
-
-                # Remove temporary folder
-                rmtree(folder_path)
-                dataset_ids.append(dataset_id)
+                    dataset_ids.append(dataset_id)
             except Exception as e:
                 errors.append(e)
         if errors:
             raise ExceptionGroup("Errors during processing", errors)
+        if identify:
+            self._prepare_go_terms(dataset_ids)
 
         tool = 'flashtnt' if identify else 'flashdeconv'
         if quant == analysis.ISOBARIC:
