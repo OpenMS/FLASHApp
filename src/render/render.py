@@ -26,7 +26,8 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import (
-    go_terms, hierarchy_data, insight_data, modifications, prsm_data, prsm_overview, qc_data, validation_data,
+    envelope_overlay, go_terms, hierarchy_data, insight_data, modifications, prsm_data, prsm_overview,
+    qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
@@ -822,6 +823,12 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 float_precision='float64',
             ),
         )
+        # The raw peaks of the selected mass get its theoretical isotope envelope
+        if view in ('annotated', 'ladder') and hasattr(component, 'set_envelope'):
+            mass = state_manager.get_selection('mass')
+            component.set_envelope(mass, envelope_overlay.selected_mass_envelope(
+                fm, ds, state_manager.get_selection(scan_identifier), mass,
+            ))
         if view == 'ladder':
             tag = _selected_tag(fm, ds, state_manager)
             if tag is None:
