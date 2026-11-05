@@ -19,9 +19,9 @@ from src import flashida
 from src.workflow.WorkflowManager import WorkflowManager
 
 # Example inputs shipped with the default demo workspace, named after the
-# analysis they show, each in the folder of its example (the label-free one
-# with a subfolder per condition, which the Samples table takes over). All of
-# them are listed: the upload treats any other file as the user's own and then
+# analysis they show, each in the folder of its kind of analysis (the
+# Samples table reads the label-free example's conditions, 1x and 0.1x, from
+# the names in its folder). All of them are listed: the upload treats any other file as the user's own and then
 # removes the example copies. Their results are in the demo workspace's cache
 # (example-data/build_examples.py); the demo workspace holds the same folders
 # in flashtnt/input-folders.json.
@@ -32,10 +32,10 @@ EXAMPLE_FOLDERS = {
     # Native top-down MS2 spectrum of E. coli GapA, identified (Native preset)
     'Native-identified_GapA_HCD.mzML': 'Native identification',
     # Label-free comparison: E. coli lysate with a spike-in at 1x and 0.1x
-    'Label-free_SpikeIn-1x_R1.mzML': 'Label-free comparison/Spike-in 1x',
-    'Label-free_SpikeIn-1x_R2.mzML': 'Label-free comparison/Spike-in 1x',
-    'Label-free_SpikeIn-0.1x_R1.mzML': 'Label-free comparison/Spike-in 0.1x',
-    'Label-free_SpikeIn-0.1x_R2.mzML': 'Label-free comparison/Spike-in 0.1x',
+    'Label-free_SpikeIn-1x_R1.mzML': 'Label-free comparison',
+    'Label-free_SpikeIn-1x_R2.mzML': 'Label-free comparison',
+    'Label-free_SpikeIn-0.1x_R1.mzML': 'Label-free comparison',
+    'Label-free_SpikeIn-0.1x_R2.mzML': 'Label-free comparison',
     # TMT 10-plex of a HeLa ratio mix
     'Isobaric_TMT10_HeLa-Ratio.mzML': 'TMT 10-plex',
 }
@@ -110,7 +110,7 @@ def samples_and_groups(workflow, quant, identify):
     condition of each run. Isobaric: the sample and condition of each label."""
     if quant == analysis.LABEL_FREE:
         st.caption('The condition of each run, e.g. *control* and *treated*. Runs sorted into folders '
-                   '(📂 Browse beside MS data) take the folder as their condition.')
+                   '(📂 Browse beside MS data) take the folder as their condition, or the groups their file names show within the folder.')
         workflow.ui.experimental_design('mzML-files', name='Samples', suggest=True)
     elif quant == analysis.ISOBARIC:
         isobaric_samples(workflow)

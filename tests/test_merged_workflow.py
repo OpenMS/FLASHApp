@@ -60,17 +60,17 @@ def test_every_example_run_is_an_example():
 
 def test_every_example_run_is_in_its_folder():
     # A new workspace (a copy of the demo) and examples copied back in after
-    # "Clear" show the same folders, and the label-free example's subfolders
-    # are its conditions.
+    # "Clear" show the same folders, and the names in the label-free folder
+    # give its conditions.
     from src.Workflow import EXAMPLE_DIR, EXAMPLE_FOLDERS
     from src.workflow.InputFolders import design_rows, load_folders
     demo = Path(EXAMPLE_DIR).parents[1]
     assert load_folders(demo, 'mzML-files') == EXAMPLE_FOLDERS
     label_free = [n for n in EXAMPLE_FOLDERS if n.startswith('Label-free_')]
-    rows = design_rows(label_free, EXAMPLE_FOLDERS)
+    rows = design_rows(label_free, EXAMPLE_FOLDERS, suggest=True)
     assert {n: rows[n].group for n in label_free} == {
-        'Label-free_SpikeIn-1x_R1.mzML': 'Spike-in 1x', 'Label-free_SpikeIn-1x_R2.mzML': 'Spike-in 1x',
-        'Label-free_SpikeIn-0.1x_R1.mzML': 'Spike-in 0.1x', 'Label-free_SpikeIn-0.1x_R2.mzML': 'Spike-in 0.1x',
+        'Label-free_SpikeIn-1x_R1.mzML': '1x', 'Label-free_SpikeIn-1x_R2.mzML': '1x',
+        'Label-free_SpikeIn-0.1x_R1.mzML': '0.1x', 'Label-free_SpikeIn-0.1x_R2.mzML': '0.1x',
     }
 
 
