@@ -35,7 +35,7 @@ Python is pinned to **3.11** (matches the Docker runtime). `GITHUB_TOKEN` is req
 
 ### openms-insight
 
-The viewers need `openms_insight` importable. It comes from PyPI (`openms-insight>=0.5.0` in `requirements.txt`) in the Docker images, the desktop apps and local installs. A feature that needs an unreleased openms-insight change may build it from a branch for a while, but a release requires a published version. The unit tests do not import it.
+The viewers need `openms_insight` importable. It comes from PyPI (`openms-insight>=0.6.0` in `requirements.txt`) in the Docker images, the desktop apps and local installs. A feature that needs an unreleased openms-insight change may build it from a branch for a while, but a release requires a published version. The unit tests do not import it.
 
 `.streamlit/config.toml` → `developmentMode = false` for production builds.
 
