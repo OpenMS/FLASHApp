@@ -78,7 +78,7 @@ def test_no_spectra():
     assert list(links.schema) == list(linked_spectra.LINK_SCHEMA)
 
 
-DEMO = Path('example-data/workspaces/default/flashdeconv/cache')
+DEMO = Path('example-data/workspaces/default/cache')
 
 
 @pytest.mark.skipif(not DEMO.exists(), reason='demo workspace not present')
@@ -101,5 +101,9 @@ def test_demo_workspace(tmp_path):
         # Every precursor spectrum is an MS1 spectrum
         assert all(levels[s] == 1 for s in links['survey_idx'].drop_nulls())
         # FLASHDeconv found most precursor masses in their precursor spectrum
-        ms2 = links.filter(pl.col('scan_idx').is_in([i for i, lvl in levels.items() if lvl > 1]))
-        assert ms2['survey_mass_idx'].is_not_null().sum() > ms2.height / 2
+        # (a run without MS1 spectra has none)
+        if 1 in levels.values():
+            ms2 = links.filter(pl.col('scan_idx').is_in([i for i, lvl in levels.items() if lvl > 1]))
+            assert ms2['survey_mass_idx'].is_not_null().sum() > ms2.height / 2
+        else:
+            assert links['survey_idx'].is_null().all()
