@@ -61,25 +61,27 @@ MAX_PENDING = 2000
 
 def _default_worker_count():
     """Return the worker-pool size. Order of precedence:
-    1. FLASH_POSTPROC_WORKERS env var (clamped to ≥1)
-    2. settings.json max_threads (if present and > 0), capped at cpu_count-1 and 8
-    3. min(cpu_count - 1, 8)
+    1. FLASH_POSTPROC_WORKERS env var (clamped to >=1)
+    2. settings.json max_threads.local as a number (> 0), capped at the usable
+       CPUs minus one and at 8
+    3. min(usable CPUs minus one, 8); also for "auto" / null / -1
+
+    Usable CPUs respect a container's CPU limit (settings_io).
     """
     env_val = os.environ.get('FLASH_POSTPROC_WORKERS')
     if env_val:
         return max(1, int(env_val))
-    cpu = (os.cpu_count() or 2) - 1
+    from src.workflow.settings_io import default_thread_count, resolve_thread_setting
+    cpu = default_thread_count()
     try:
         settings_path = Path(__file__).resolve().parents[2] / 'settings.json'
         if settings_path.exists():
             raw = json.loads(settings_path.read_text())
             mt = raw.get('max_threads', 0)
             # max_threads may be a dict ({"local": N, "online": N}) or a plain int.
-            if isinstance(mt, dict):
-                n = mt.get('local', 0)
-            else:
-                n = mt
-            if n and n > 0:
+            n = mt.get('local', 'auto') if isinstance(mt, dict) else mt
+            n = int(resolve_thread_setting(n))
+            if n > 0:
                 return min(n, cpu, 8)
     except Exception:
         pass
