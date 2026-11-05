@@ -52,8 +52,8 @@
         "workflows": {"flashtnt": "src.Workflow:TopDownWorkflow"}
     },
     "max_threads": {
-        "local": 4,
-        "online": 2
+        "local": "auto",
+        "online": "auto"
     },
     "data_import": {
         "enabled": true,

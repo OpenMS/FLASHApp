@@ -3,10 +3,10 @@ import pyopenms as poms
 from pathlib import Path
 import shutil
 import filecmp
-import zipfile
 import subprocess
 from typing import Any, Callable, Dict, List, Literal, Union
 import json
+import math
 import os
 import sys
 import importlib.util
@@ -15,6 +15,7 @@ from io import BytesIO
 import pandas as pd
 import zipfile
 from datetime import datetime
+
 
 from src.common.common import (
     OS_PLATFORM,
@@ -56,19 +57,44 @@ from src.workflow.ExperimentalDesign import (
     to_openms_design,
 )
 from src.workflow.vendor_files import extract_bruker_zip, has_type
+from src.workflow.settings_io import (
+    default_thread_count,
+    resolve_thread_setting,
+    usable_cpu_count,
+)
 from src.data_import import ui as data_import_ui
 from src.workflow.ParameterManager import (
     InvalidParameterFileError,
     ParameterManager,
     TransientParameterFileError,
 )
+from src.workflow.parameter_names import display_name as _display_name
 
 
-def _matches_topp_parameter(pattern: str, key: bytes) -> bool:
+def _txt(value) -> str:
+    """Text from pyOpenMS: bytes up to pyOpenMS 3.5, str from 3.6 (nanobind)."""
+    return value.decode() if isinstance(value, bytes) else str(value)
+
+
+def _tags(param, key) -> list[str]:
+    """A parameter's tags as str, whichever pyOpenMS gave them."""
+    return [_txt(t) for t in param.getTags(key)]
+
+
+def _valid_strings(entry) -> list[str]:
+    """A parameter's allowed strings. pyOpenMS 3.6 raises TypeError when asked
+    for those of a boolean parameter, which is a checkbox and has none."""
+    if isinstance(entry.value, bool):
+        return []
+    return [_txt(v) for v in entry.valid_strings]
+
+
+def _matches_topp_parameter(pattern: str, key) -> bool:
     """
     Match an include/exclude pattern against a TOPP parameter key.
 
-    Key format: b"ToolName:1:section:subsection:param_name"
+    Key format: "ToolName:1:section:subsection:param_name" (bytes before
+    pyOpenMS 3.6)
 
     A pattern matches the end of the parameter path, bounded by ':' or the
     start of the path ("tol" matches "FD:tol"). A pattern ending in ':' names
@@ -76,7 +102,7 @@ def _matches_topp_parameter(pattern: str, key: bytes) -> bool:
     parameter under "fd:", but not "FD:" or "algorithm:fd:").
     """
     pattern = pattern.lstrip(":")  # Strip legacy leading colon
-    key_str = key.decode()
+    key_str = _txt(key)
 
     # Extract param path after "ToolName:1:"
     parts = key_str.split(":")
@@ -170,15 +196,6 @@ def editor_table(state, editor_key: str, table, fits=None):
     return kept
 
 
-def _rerun_here():
-    """Rerun the fragment (or dialog) drawing the widget, so a dialog stays open;
-    the whole page when it is drawn outside one."""
-    try:
-        st.rerun(scope="fragment")
-    except st.errors.StreamlitAPIException:
-        st.rerun()
-
-
 class StreamlitUI:
     """
     Provides an interface for Streamlit applications to handle file uploads,
@@ -237,13 +254,13 @@ class StreamlitUI:
         # create the files dir
         files_dir.mkdir(exist_ok=True, parents=True)
 
-        # if fallback is not None:
-        #     # check if only fallback files are in files_dir, if yes, reset the directory before adding new files
-        #     if [Path(f).name for f in Path(files_dir).iterdir()] == [
-        #         Path(f).name for f in fallback
-        #     ]:
-        #         shutil.rmtree(files_dir)
-        #         files_dir.mkdir()
+        if fallback is not None:
+            # check if only fallback files are in files_dir, if yes, reset the directory before adding new files
+            if [Path(f).name for f in Path(files_dir).iterdir()] == [
+                Path(f).name for f in fallback
+            ]:
+                shutil.rmtree(files_dir)
+                files_dir.mkdir()
 
         if not name:
             name = key.replace("-", " ")
@@ -320,7 +337,6 @@ class StreamlitUI:
                                     fh.write(f.getbuffer())
                         if not failed:
                             st.success("Successfully added uploaded files!")
-                            _rerun_here()
                     else:
                         st.error("Nothing to add, please upload file.")
         else:
@@ -371,8 +387,8 @@ class StreamlitUI:
                                     f_handle.write(f"{f}\n")
                         my_bar.empty()
                         st.success("Successfully added files!")
+
                         st.session_state["previous_dir"] = Path(local_files[0]).parent
-                        _rerun_here()
 
         # Local file upload option: via directory path
         if st.session_state.location == "local":
@@ -442,7 +458,6 @@ class StreamlitUI:
                                     f_handle.write(f"{f}\n")
                         my_bar.empty()
                         st.success("Successfully copied files!")
-                        _rerun_here()
 
             if not TK_AVAILABLE:
                 c2.warning(
@@ -1329,7 +1344,9 @@ class StreamlitUI:
                 min_value=min_value,
                 max_value=max_value,
                 step=step_size,
-                format=None,
+                # "%g" keeps every decimal the user types; Streamlit's float
+                # default "%0.2f" rounds to two.
+                format="%g" if number_type is float else None,
                 key=key,
                 help=help,
                 on_change=on_change,
@@ -1473,6 +1490,7 @@ class StreamlitUI:
         custom_defaults: dict = {},
         tool_instance_name: str = None,
         reactive: bool = False,
+        advanced_parameters: List[str] = [],
     ) -> None:
         """
         Generates input widgets for TOPP tool parameters dynamically based on the tool's
@@ -1500,18 +1518,25 @@ class StreamlitUI:
                 section to re-render, enabling conditional UI based on this widget's
                 value. Use when downstream UI depends on a parameter value (e.g.,
                 TMT type driving channel count). Default is False.
+            advanced_parameters (List[str], optional): Parameters to treat as
+                advanced although the tool does not tag them so: they are left
+                off the page and reached through the "All parameters" dialog,
+                like the tool's own advanced ones (e.g. output options). A name
+                ending in ":" matches a whole top-level section.
         """
         if reactive:
             self._input_TOPP_impl(
                 topp_tool_name, num_cols, exclude_parameters, include_parameters,
                 flag_parameters, display_tool_name, display_subsections,
                 display_subsection_tabs, custom_defaults, tool_instance_name,
+                advanced_parameters,
             )
         else:
             self._input_TOPP_fragmented(
                 topp_tool_name, num_cols, exclude_parameters, include_parameters,
                 flag_parameters, display_tool_name, display_subsections,
                 display_subsection_tabs, custom_defaults, tool_instance_name,
+                advanced_parameters,
             )
 
     @st.fragment
@@ -1527,11 +1552,13 @@ class StreamlitUI:
         display_subsection_tabs: bool = False,
         custom_defaults: dict = {},
         tool_instance_name: str = None,
+        advanced_parameters: List[str] = [],
     ) -> None:
         self._input_TOPP_impl(
             topp_tool_name, num_cols, exclude_parameters, include_parameters,
             flag_parameters, display_tool_name, display_subsections,
             display_subsection_tabs, custom_defaults, tool_instance_name,
+            advanced_parameters,
         )
 
     def _read_params_for_update(self, tool_instance_name: str) -> dict:
@@ -1606,6 +1633,26 @@ class StreamlitUI:
             # stubbed out; re-raise rather than fall through to the write.
             raise
 
+    def _topp_tool_unavailable(self, topp_tool_name: str) -> None:
+        """Say why a TOPP tool's parameters cannot be shown: missing, or failing."""
+        from src.workflow.ParameterManager import INI_TOOL_MISSING
+
+        reason = getattr(self.parameter_manager, "ini_errors", {}).get(
+            topp_tool_name, INI_TOOL_MISSING
+        )
+        if reason == INI_TOOL_MISSING:
+            st.error(
+                f"TOPP tool **'{topp_tool_name}'** not found. The OpenMS TOPP "
+                "tools are not installed here, or not on the PATH of this app."
+            )
+            return
+        st.error(
+            f"TOPP tool **'{topp_tool_name}'** is installed but could not "
+            "write its parameters, so they cannot be shown."
+        )
+        with st.expander("Tool output"):
+            st.code(reason, language=None)
+
     def _input_TOPP_impl(
         self,
         topp_tool_name: str,
@@ -1618,6 +1665,7 @@ class StreamlitUI:
         display_subsection_tabs: bool = False,
         custom_defaults: dict = {},
         tool_instance_name: str = None,
+        advanced_parameters: List[str] = [],
     ) -> None:
         """Internal implementation of input_TOPP - contains all the widget logic."""
         # Default instance name to the tool name when not provided
@@ -1651,7 +1699,7 @@ class StreamlitUI:
         # Create pristine ini file (never mutated with custom defaults)
         ini_file_path = Path(self.parameter_manager.ini_dir, f"{topp_tool_name}.ini")
         if not self.parameter_manager.create_ini(topp_tool_name):
-            st.error(f"TOPP tool **'{topp_tool_name}'** not found.")
+            self._topp_tool_unavailable(topp_tool_name)
             return
 
         # Seed custom defaults into params.json under _defaults key
@@ -1686,8 +1734,8 @@ class StreamlitUI:
             key
             for key in param.keys()
             if not (
-                b"input file" in param.getTags(key)
-                or b"output file" in param.getTags(key)
+                "input file" in _tags(param, key)
+                or "output file" in _tags(param, key)
                 or any([_matches_topp_parameter(k, key) for k in excluded_keys])
             )
         ]
@@ -1703,36 +1751,43 @@ class StreamlitUI:
         params = []
         for key in valid_keys:
             entry = param.getEntry(key)
+            friendly = _display_name(
+                topp_tool_name, _txt(key).split(":1:", 1)[-1], tool_instance_name
+            )
             p = {
-                "name": entry.name.decode(),
+                "name": _txt(entry.name),
+                "friendly": friendly,
                 "key": key,
                 "value": entry.value,
                 "original_is_list": isinstance(entry.value, list),
-                "valid_strings": [v.decode() for v in entry.valid_strings],
-                "description": entry.description.decode(),
-                "advanced": (b"advanced" in param.getTags(key)),
+                "valid_strings": _valid_strings(entry),
+                "description": _txt(entry.description),
+                "advanced": (
+                    "advanced" in _tags(param, key)
+                    or any(_matches_topp_parameter(k, key) for k in advanced_parameters)
+                ),
                 "non_included": key not in included_keys,
                 "section_description": param.getSectionDescription(
-                    ":".join(key.decode().split(":")[:-1])
+                    ":".join(_txt(key).split(":")[:-1])
                 ),
             }
             # Parameter sections and subsections as string (e.g. "section:subsection")
             if display_subsections:
                 p["sections"] = ":".join(
-                    p["key"].decode().split(":1:")[1].split(":")[:-1]
+                    _txt(p["key"]).split(":1:")[1].split(":")[:-1]
                 )
             params.append(p)
 
         # Build ini_params dict for three-layer merge
         ini_params = {}
         for p in params:
-            name = p["key"].decode().split(":1:")[1]
+            name = _txt(p["key"]).split(":1:")[1]
             ini_params[name] = p["value"]
 
         # Resolve effective values: ini < _defaults < user overrides
         merged = self.parameter_manager.get_merged_params(tool_instance_name, ini_params=ini_params)
         for p in params:
-            name = p["key"].decode().split(":1:")[1]
+            name = _txt(p["key"]).split(":1:")[1]
             if name in merged:
                 p["value"] = merged[name]
             # Ensure list parameters stay as lists after loading from JSON
@@ -1805,36 +1860,71 @@ class StreamlitUI:
         def show_subsection_header(section: str, display_subsections: bool):
             # Display section name and help text (section description) if required
             if section and display_subsections:
+                description = section_descriptions.get(section)
+                friendly = _display_name(topp_tool_name, section, tool_instance_name)
+                if friendly:
+                    # The app's own heading; the help keeps the tool's name
+                    st.markdown(
+                        f"**{friendly['name']}**",
+                        help=(friendly["help"] or description or "")
+                        + f"\n\nSection `{section}` of {topp_tool_name}.",
+                    )
+                    return
                 parts = section.split(":")
                 st.markdown(
                     ":".join(parts[:-1])
                     + (":" if len(parts) > 1 else "")
                     + f"**{parts[-1]}**",
-                    help=(
-                        section_descriptions[section]
-                        if section in section_descriptions
-                        else None
-                    ),
+                    help=description,
                 )
 
         def display_TOPP_params(params: dict, num_cols):
             """Displays individual TOPP parameters in given number of columns"""
-            cols = st.columns(num_cols)
+
+            def is_text_area(p):
+                value = p["value"]
+                if isinstance(value, str) and "\n" in value:
+                    return True
+                return isinstance(value, list) and not p["valid_strings"]
+
+            # Free-text lists (multi-line text areas) come after the other
+            # inputs of a section, so every row holds inputs of one height and
+            # they can line up at the bottom: a label that wraps onto a second
+            # line no longer pushes its input below its neighbours'.
+            text_areas = [p for p in params if is_text_area(p)]
+            params = [p for p in params if not is_text_area(p)] + text_areas
+
+            def new_row():
+                return st.columns(num_cols, vertical_alignment="bottom")
+
+            cols = new_row()
             i = 0
             for p in params:
+                if i and text_areas and p is text_areas[0]:
+                    # The text areas start a row of their own
+                    i = 0
+                    cols = new_row()
                 # get key and name – use tool_instance_name in session state key
-                key_str = p['key'].decode()
+                key_str = _txt(p['key'])
                 if tool_instance_name != topp_tool_name:
                     key_str = key_str.replace(f"{topp_tool_name}:1:", f"{tool_instance_name}:1:", 1)
                 key = f"{self.parameter_manager.topp_param_prefix}{key_str}"
                 name = p["name"]
+                if p.get("friendly"):
+                    # The app's own name for it; the help keeps the tool's
+                    # name, which logs, presets and the tool's docs use.
+                    name = p["friendly"]["name"]
+                    p["description"] = (
+                        (p["friendly"]["help"] or p["description"])
+                        + f"\n\nParameter `{_txt(p['key']).split(':1:', 1)[-1]}`"
+                        + f" of {topp_tool_name}."
+                    )
                 try:
                     # sometimes strings with newline, handle as list
                     if isinstance(p["value"], str) and "\n" in p["value"]:
                         p["value"] = p["value"].split("\n")
                     # bools
                     if isinstance(p["value"], bool):
-                        cols[i].markdown("##")
                         cols[i].checkbox(
                             name,
                             value=(
@@ -1870,12 +1960,22 @@ class StreamlitUI:
 
                     # floats
                     elif isinstance(p["value"], float):
+                        value = float(p["value"])
+                        # Streamlit's default "%0.2f" rounds what the user
+                        # types to two decimals, which makes tolerances such as
+                        # 0.015 Da impossible to enter. "%g" shows the value as
+                        # typed, and small defaults step in their own decade.
+                        step = (
+                            10.0 ** math.floor(math.log10(abs(value)))
+                            if 0 < abs(value) < 1
+                            else 1.0
+                        )
                         cols[i].number_input(
                             name,
-                            value=float(p["value"]),
-                            step=1.0,
+                            value=value,
+                            step=step,
+                            format="%g",
                             help=p["description"],
-                            format="%0.5f",
                             key=key,
                         )
 
@@ -1922,7 +2022,7 @@ class StreamlitUI:
                     i += 1
                     if i == num_cols:
                         i = 0
-                        cols = st.columns(num_cols)
+                        cols = new_row()
                 except Exception as e:
                     cols[i].error(f"Error in parameter **{p['name']}**.")
                     print('Error parsing "' + p["name"] + '": ' + str(e))
@@ -1958,7 +2058,7 @@ class StreamlitUI:
         custom = stored.get("_defaults", {}).get(tool_instance_name, {})
         rows = []
         for p in params:
-            name = p["key"].decode().split(":1:")[1]
+            name = _txt(p["key"]).split(":1:")[1]
             value = p["value"]
             if isinstance(value, list):
                 value = [v.decode() if isinstance(v, bytes) else v for v in value]
@@ -2004,13 +2104,14 @@ class StreamlitUI:
         ] + list(exclude_parameters)
         rows = []
         for key in param.keys():
-            tags = param.getTags(key)
-            if b"input file" in tags or b"output file" in tags:
+            tags = _tags(param, key)
+            if "input file" in tags or "output file" in tags:
                 continue
             if any(_matches_topp_parameter(k, key) for k in excluded):
                 continue
             entry = param.getEntry(key)
-            name = key.decode().split(":1:")[1]
+            name = _txt(key).split(":1:")[1]
+            friendly = _display_name(topp_tool_name, name, tool_instance_name)
             default = defaults.get(name, entry.value)
             value = user.get(name, default)
             if isinstance(entry.value, list):
@@ -2020,13 +2121,19 @@ class StreamlitUI:
             rows.append(
                 {
                     "name": name,
-                    "label": entry.name.decode(),
+                    "label": friendly["name"] if friendly else _txt(entry.name),
+                    "friendly": bool(friendly),
                     "section": ":".join(name.split(":")[:-1]),
-                    "description": entry.description.decode(),
+                    "description": (
+                        (friendly["help"] or _txt(entry.description))
+                        if friendly
+                        else _txt(entry.description)
+                    ),
+                    "tool_description": _txt(entry.description),
                     "value": value,
                     "default": default,
-                    "valid_strings": [v.decode() for v in entry.valid_strings],
-                    "advanced": b"advanced" in tags,
+                    "valid_strings": _valid_strings(entry),
+                    "advanced": "advanced" in tags,
                     "is_list": isinstance(entry.value, list),
                 }
             )
@@ -2071,7 +2178,9 @@ class StreamlitUI:
             r
             for r in rows
             if all(
-                w in f"{r['name']} {r['description']}".lower() for w in words
+                w
+                in f"{r['label']} {r['name']} {r['description']} {r['tool_description']}".lower()
+                for w in words
             )
             and (not only_changed or not same(r["value"], r["default"]))
         ]
@@ -2151,13 +2260,22 @@ class StreamlitUI:
                 st.session_state[k] = as_widget_value(r, v)
 
         c_label, c_value, c_actions = st.columns([5, 4, 3], vertical_alignment="center")
-        section = f":gray[{row['section']}:]" if row["section"] else ""
         marker = " :orange[●]" if changed else ""
-        c_label.markdown(
-            f"{section}**{row['label']}**{marker}"
-            + (" :gray[· advanced]" if row["advanced"] else ""),
-            help=row["description"] or None,
-        )
+        if row.get("friendly"):
+            # The app's name first, the tool's own name beside it, so both
+            # read the same as on the page and in the tool's documentation.
+            c_label.markdown(
+                f"**{row['label']}**{marker} :gray[· {row['name']}]"
+                + (" :gray[· advanced]" if row["advanced"] else ""),
+                help=row["description"] or None,
+            )
+        else:
+            section = f":gray[{row['section']}:]" if row["section"] else ""
+            c_label.markdown(
+                f"{section}**{row['label']}**{marker}"
+                + (" :gray[· advanced]" if row["advanced"] else ""),
+                help=row["description"] or None,
+            )
         if changed:
             c_label.caption(f"default: {_short(default)}")
 
@@ -2680,14 +2798,25 @@ class StreamlitUI:
         # Display threads configuration for local mode only
         if not st.session_state.settings.get("online_deployment", False):
             max_threads_config = st.session_state.settings.get("max_threads", {})
-            default_threads = max_threads_config.get("local", 4)
+            default_threads = resolve_thread_setting(
+                max_threads_config.get("local", "auto")
+            )
+            try:
+                default_threads = max(1, int(default_threads))
+            except (TypeError, ValueError):
+                default_threads = default_thread_count()
             self.input_widget(
                 key="max_threads",
                 default=default_threads,
                 name="Threads",
                 widget_type="number",
                 min_value=1,
-                help="Maximum threads for parallel processing. Threads are distributed between parallel commands and per-tool thread allocation."
+                help=(
+                    "Maximum threads for parallel processing. Threads are "
+                    "distributed between parallel commands and per-tool thread "
+                    f"allocation. Default: all CPUs of this computer but one "
+                    f"({usable_cpu_count()} usable, so {default_thread_count()})."
+                ),
             )
 
         # Display preset buttons if presets are available for this workflow
@@ -3074,7 +3203,7 @@ class StreamlitUI:
             # Check if the job result indicates success or failure
             job_result = status.get("result")
             if job_result and isinstance(job_result, dict) and job_result.get("success") is False:
-                st.error("**Status: Completed with errors**")
+                st.error(f"**Status: Completed with errors**")
                 error_msg = job_result.get("error", "Unknown error")
                 if error_msg:
                     with st.expander("Error Details", expanded=True):
@@ -3097,6 +3226,8 @@ class StreamlitUI:
             st.code(f"""Job ID: {status.get('job_id', 'N/A')}
 Submitted: {status.get('enqueued_at', 'N/A')}
 Started: {status.get('started_at', 'N/A')}""")
+
+
 
     def results_section(self, custom_results_function) -> None:
         custom_results_function()
@@ -3320,27 +3451,10 @@ Started: {status.get('started_at', 'N/A')}""")
     def export_parameters_markdown(self):
         markdown = []
 
-        tools_to_citations = {
-            'FLASHDeconv' : 'Jeong, Kyowon, et al. "FLASHDeconv: Ultrafast, High-Quality Feature Deconvolution for Top-Down Proteomics." (2020) [https://doi.org/10.1016/j.cels.2020.01.003](https://doi.org/10.1016/j.cels.2020.01.003).'
-        }
-        citation_position = 4
-
         url = f"https://github.com/{st.session_state.settings['github-user']}/{st.session_state.settings['repository-name']}"
         tools = [p.stem for p in Path(self.parameter_manager.ini_dir).iterdir()]
-        tool_text = []
-        cited_tools = []
-        for tool in tools:
-            if tool in tools_to_citations:
-                tool_text.append(f'{tool} [{citation_position}]')
-                cited_tools.append(tool)
-                citation_position += 1
-            else:
-                tool_text.append(tool)
-        if len(tool_text) > 1:
-            tool_text = ", ".join(tool_text[:-1]) + " and " + tool_text[-1]
-        else:
-            # No .ini files yet when the TOPP tools are not installed.
-            tool_text = tool_text[0] if tool_text else ""
+        if len(tools) > 1:
+            tools = ", ".join(tools[:-1]) + " and " + tools[-1]
 
         result = subprocess.run(
             "FileFilter --help", shell=True, text=True, capture_output=True
@@ -3350,18 +3464,14 @@ Started: {status.get('started_at', 'N/A')}""")
             version = result.stderr.split("Version: ")[1].split("-")[0]
 
         markdown.append(
-            f"""Data was processed using **{st.session_state.settings['app-name']}** ([{url}]({url})) [1], a web application based on the OpenMS WebApps framework [2].
-OpenMS ([https://www.openms.org](https://www.openms.org)) is a free and open-source software for LC-MS data analysis [3].
-The workflow includes the **OpenMS {version}** TOPP tool{'s' if len(tools) > 1 else ''} {tool_text} as well as Python scripts. Non-default parameters are listed in the supplementary section below.
+            f"""Data was processed using **{st.session_state.settings['app-name']}** ([{url}]({url})), a web application based on the OpenMS WebApps framework [1].
+OpenMS ([https://www.openms.de](https://www.openms.de)) is a free and open-source software for LC-MS data analysis [2].
+The workflow includes the **OpenMS {version}** TOPP tools {tools} as well as Python scripts. Non-default parameters are listed in the supplementary section below.
 
-[1] Müller, Tom David, et al. "FLASHApp: Interactive Data Analysis and Visualization for Top-Down Proteomics." (2025) [https://doi.org/10.1002/pmic.70042](https://doi.org/10.1002/pmic.70042).
+[1] Müller, Tom David, et al. "OpenMS WebApps: Building User-Friendly Solutions for MS Analysis." (2025) [https://doi.org/10.1021/acs.jproteome.4c00872](https://doi.org/10.1021/acs.jproteome.4c00872).
 \\
-[2] Müller, Tom David, et al. "OpenMS WebApps: Building User-Friendly Solutions for MS Analysis." (2025) [https://doi.org/10.1021/acs.jproteome.4c00872](https://doi.org/10.1021/acs.jproteome.4c00872).
-\\
-[3] Pfeuffer, Julianus, et al. "OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data." (2024) [https://doi.org/10.1038/s41592-024-02197-7](https://doi.org/10.1038/s41592-024-02197-7)."""
+[2] Pfeuffer, Julianus, et al. "OpenMS 3 enables reproducible analysis of large-scale mass spectrometry data." (2024) [https://doi.org/10.1038/s41592-024-02197-7](https://doi.org/10.1038/s41592-024-02197-7).
+"""
         )
-        for i, cited_tool in enumerate(cited_tools):
-            markdown.append(f'\\\n[{i+4}] {tools_to_citations[cited_tool]}  ')
-        markdown.append('\n')
         markdown.append(self.non_default_params_summary())
         return "\n".join(markdown)
