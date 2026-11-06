@@ -87,3 +87,79 @@ def rows(file_manager, identified, sample_type, index=0, labelled=False):
         experiments = layout[0]
         return experiments[index] if index < len(experiments) else experiments[0]
     return default_rows(file_manager, identified, sample_type, index, labelled)
+
+
+# ---- Views: the Viewer's view bar (the template's layout manager) ----------
+#
+# The ready-made views are the three defaults. The user's own views, their
+# order and the runs shown are kept in <workspace>/layouts/viewer.json. Until a
+# view is picked or saved there, every experiment keeps the default of its run
+# (``default_rows``) and the bar marks the view of the first run's kind.
+
+DECONVOLUTION_VIEW = 'deconvolution'
+SAMPLE_VIEWS = {'Native': 'native', 'Lysate': 'lysate'}
+
+
+def views_path(workspace):
+    from pathlib import Path
+    return Path(workspace, 'layouts', 'viewer.json')
+
+
+def presets(file_manager):
+    """The ready-made views: the deconvolution default, then the identification
+    defaults by sample type."""
+    return [
+        {'name': DECONVOLUTION_VIEW, 'label': 'Deconvolution', 'layout': deconvolution_default(file_manager),
+         'help': 'Spectra and their deconvolved masses: heatmap, scan and mass tables, spectra, 3D S/N plot.'},
+        {'name': SAMPLE_VIEWS['Native'], 'label': 'Native', 'layout': TNT_DEFAULT_LAYOUTS['Native'],
+         'help': 'Identifications of native or purified proteins: each proteoform in depth, with its '
+                 'sequence, structure and tags.'},
+        {'name': SAMPLE_VIEWS['Lysate'], 'label': 'Lysate', 'layout': TNT_DEFAULT_LAYOUTS['Lysate'],
+         'help': 'Identifications of a lysate: proteins, proteoforms and PrSMs, browsed protein by protein.'},
+    ]
+
+
+def default_view(identified, sample_type):
+    """The ready-made view that is the default of a run."""
+    return SAMPLE_VIEWS.get(sample_type, SAMPLE_VIEWS['Native']) if identified else DECONVOLUTION_VIEW
+
+
+def adopt_saved_layout(file_manager, workspace):
+    """Move a layout saved with the former Edit layout into the views file, once.
+
+    The views file then shows it as the view it matches, or as "My layout".
+    """
+    from src.layout_manager import save_layout
+    path = views_path(workspace)
+    if path.exists():
+        return
+    layout = saved(file_manager)
+    if layout:
+        save_layout(path, layout[0], layout[1])
+
+
+def view_rows(file_manager, workspace, identified, sample_type, index=0, labelled=False):
+    """Rows experiment ``index`` shows, or None while no view is picked or saved.
+
+    A ready-made view gets the reporter ions of a run quantified with isobaric
+    labels, as the defaults do.
+    """
+    from src.layout_manager import load_layout, load_views
+    path = views_path(workspace)
+    if load_layout(path) is None:
+        return None
+    state = load_views(path, components(file_manager), presets(file_manager), deconvolution_default(file_manager))
+    current = next(v for v in state['views'] if v['name'] == state['current'])
+    rows = [list(r) for r in current['rows']]
+    if labelled and current['preset']:
+        rows = with_reporters(rows, REPORTER_AFTER)
+    return rows
+
+
+def experiments_shown(workspace):
+    """(number of experiments, side by side) of the views file, or None."""
+    from src.layout_manager import load_layout
+    stored = load_layout(views_path(workspace))
+    if stored is None:
+        return None
+    return len(stored[0]), stored[1]
