@@ -698,6 +698,16 @@ def _modification_picker_library():
     return [{'id': e['id'], 'mass': e['mass'], 'site': e['site']} for e in modifications.library()]
 
 
+def _sequence_view_options(component):
+    """Options of a sequence view, each when the installed openms-insight
+    supports it: the residue menus offer the whole modification library, and
+    the shown proteoform can be copied as ProForma."""
+    if hasattr(component, 'set_variable_modification_library'):
+        component.set_variable_modification_library(_modification_picker_library())
+    if hasattr(component, 'set_proforma_copy'):
+        component.set_proforma_copy()
+
+
 @st.cache_data(max_entries=4, show_spinner=False)
 def _sequence_data(sequence, mod_ids):
     fixed_mods = {'fixed_modifications': list(mod_ids)}
@@ -831,9 +841,7 @@ def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, en
     else:
         _set_selected_tag(component, fm, ds, state_manager)
     component.set_edit_identifier(EDIT_IDENTIFIER)
-    # The residue menus offer the same library as the "Change sequence" dialog
-    if hasattr(component, 'set_variable_modification_library'):
-        component.set_variable_modification_library(_modification_picker_library())
+    _sequence_view_options(component)
     return component
 
 
@@ -1159,6 +1167,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
             )
             _set_selected_tag(component, fm, ds, state_manager)
+            _sequence_view_options(component)
             if hasattr(component, 'set_edit_identifier'):
                 component.set_edit_identifier(EDIT_IDENTIFIER)
             return component, {}
@@ -1185,6 +1194,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             component.set_modification_picker(
                 _modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids
             )
+        _sequence_view_options(component)
         return component, {}
 
     if comp_name == 'structure_view':
