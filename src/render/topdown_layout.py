@@ -1,11 +1,13 @@
-"""The one layout of the Viewer: deconvolution and identification components
-in one combined view, and the default each experiment starts from.
+"""The Viewer's views: deconvolution and identification components in one
+combined view, and the default each experiment starts from.
 
-Once a layout is saved (Edit layout), every experiment shows it. Until then
-each experiment starts from the default that fits its run: an identified run
-from the identification default of its sample type (Native or Lysate), a run
-deconvolved only from the deconvolution default. A layout saved in one of the
-two former Viewers stays the default of its kind.
+Every earlier default is a view. The ready-made views are the built-in
+defaults: Deconvolution (with the sequence view once a sequence is set), Native
+and Lysate, each with the reporter ions of a run with isobaric labels. A layout
+saved in one of the two former Viewers becomes "My deconvolution layout" or "My
+identification layout" and stays the default of its kind; one saved with the
+former Edit layout dialog becomes the current view. Until a view is picked,
+each experiment starts from the default that fits its run.
 """
 
 from src.render.layout_editor import get_saved_layout
@@ -119,23 +121,65 @@ def presets(file_manager):
     ]
 
 
-def default_view(identified, sample_type):
-    """The ready-made view that is the default of a run."""
+# The layouts the former Viewers saved become views of the user's own, named
+# after the Viewer they come from
+LEGACY_VIEWS = {False: ('custom-deconvolution', 'My deconvolution layout'),
+                True: ('custom-identification', 'My identification layout')}
+
+
+def default_view(identified, sample_type, file_manager=None):
+    """The view that is the default of a run: the layout the former Viewer of
+    its kind saved, else the ready-made view of its analysis."""
+    legacy = get_saved_layout(file_manager, LEGACY_LAYOUT_DATASET[identified]) if file_manager else None
+    if legacy:
+        from src.layout_manager import match_preset
+        return (match_preset([legacy[0][0]], presets(file_manager), components(file_manager))
+                or LEGACY_VIEWS[identified][0])
     return SAMPLE_VIEWS.get(sample_type, SAMPLE_VIEWS['Native']) if identified else DECONVOLUTION_VIEW
 
 
 def adopt_saved_layout(file_manager, workspace):
-    """Move a layout saved with the former Edit layout into the views file, once.
+    """Move the layouts saved before the view bar into the views file, once.
 
-    The views file then shows it as the view it matches, or as "My layout".
+    Every earlier default stays reachable: the ready-made views are the
+    built-in defaults, a layout saved in a former Viewer (deconvolution or
+    identification) becomes "My deconvolution layout" or "My identification
+    layout", and one saved with Edit layout becomes the current view (the
+    ready-made view it matches, or "My layout"). Without an Edit layout one,
+    nothing counts as picked, so every run keeps the default of its kind.
     """
-    from src.layout_manager import save_layout
+    from src.layout_manager import load_views, match_preset
     path = views_path(workspace)
     if path.exists():
         return
+    comps = components(file_manager)
+    ready = presets(file_manager)
+    own = []
+    for identified in (False, True):
+        legacy = get_saved_layout(file_manager, LEGACY_LAYOUT_DATASET[identified])
+        if not legacy or match_preset([legacy[0][0]], ready, comps):
+            continue
+        name, label = LEGACY_VIEWS[identified]
+        own.append({'name': name, 'label': label, 'rows': legacy[0][0], 'in_bar': True})
+    import json
+    data = {'views': [{'name': p['name'], 'in_bar': True} for p in ready]}
     layout = saved(file_manager)
     if layout:
+        # The view the saved layout shows, as the template migrates it
+        from src.layout_manager import save_layout
         save_layout(path, layout[0], layout[1])
+        state = load_views(path, comps, ready, deconvolution_default(file_manager))
+        data = json.loads(path.read_text())
+        data['current'] = state['current']
+        data['views'] = [{'name': v['name'], 'in_bar': v['in_bar'],
+                          **({} if v['preset'] else {'label': v['label'], 'rows': v['rows']})}
+                         for v in state['views']]
+        own = [v for v in own if all(v['rows'] != w['rows'] for w in state['views'])]
+    elif not own:
+        return
+    data['views'] += own
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=1))
 
 
 def view_rows(file_manager, workspace, identified, sample_type, index=0, labelled=False):

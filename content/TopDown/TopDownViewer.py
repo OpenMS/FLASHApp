@@ -47,8 +47,8 @@ def experiment_layout(index, dataset_id):
     if picked is not None:
         return picked
     if topdown_layout.has_legacy(file_manager, identified):
-        name = 'identified runs' if identified else 'deconvolved runs'
-        text = f"The layout saved earlier for {name}."
+        name = 'identified runs' if identified else 'runs deconvolved only'
+        text = f"The layout saved earlier for {name} (the view **{topdown_layout.LEGACY_VIEWS[identified][1]}**)."
     elif identified:
         sample = analysis.SAMPLE_LABELS[kind].lower()
         text = f"Default layout for {sample}, as this run was searched."
@@ -151,7 +151,7 @@ def view_selector():
     view_bar(
         topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
         topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager),
-        key='topdown_view', default_view=topdown_layout.default_view(identified, kind),
+        key='topdown_view', default_view=topdown_layout.default_view(identified, kind, file_manager),
         max_experiments=MAX_EXPERIMENTS, target='the Viewer',
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
