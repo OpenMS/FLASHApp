@@ -49,8 +49,7 @@ wf.analysis_section()
 wf.show_parameter_section()
 
 # Opens Run analysis and starts the analysis there at once
-st.markdown('---')
-wf.show_run_button(PAGES['topdown']['run'][0], label='Run analysis',
+wf.show_run_button(PAGES['topdown']['run'][0], label='Run analysis', summary=wf.run_bar_summary(),
                    help='Save these settings, open Run analysis and start the analysis of the selected runs.')
 
 save_params(params)
