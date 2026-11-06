@@ -32,6 +32,7 @@ from src.render import (
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
 from src.render.layout_editor.catalog import DECONV_COMPONENTS, ISOBARIC_COMPONENTS, TNT_COMPONENTS
+from src.render import proteoform_edits
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -226,6 +227,20 @@ HEATMAPS = {
 # selection stays (FLASHViewer's tables behaved so)
 # Selection the sequence view's dialog writes its fixed modifications to
 FIXED_MODS_IDENTIFIER = 'fixed_mods'
+# Selection the identification sequence view writes its edits to (see
+# src.render.proteoform_edits)
+EDIT_IDENTIFIER = 'sequence_edit'
+# The fragment ions the sequence view matched, marked on the spectra; left out
+# with an openms-insight release without it
+FRAGMENT_MATCHES_IDENTIFIER = 'fragment_matches'
+FRAGMENT_MARKS = hasattr(DeconvolvedSpectrum, 'set_fragment_matches_identifier')
+
+
+def _spectrum_key(column):
+    """Keyword arguments naming the column of a sequence view's data that holds
+    the scan index of its spectrum, so the spectra mark its fragment ions only
+    on that spectrum."""
+    return {'spectrum_key_column': column} if FRAGMENT_MARKS else {}
 
 RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
@@ -697,8 +712,10 @@ def _modification_picker_library():
 def _sequence_view_options(component):
     """Options of a sequence view, each when the installed openms-insight
     supports it: the residue menus offer the whole modification library, the
-    shown proteoform can be copied as ProForma, and the "Change sequence"
-    dialog reads ProForma."""
+    shown proteoform can be copied as ProForma, the "Change sequence" dialog
+    reads ProForma, and the matched fragment ions are marked on the spectra."""
+    if FRAGMENT_MARKS:
+        component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     if hasattr(component, 'set_variable_modification_library'):
         component.set_variable_modification_library(_modification_picker_library())
     if hasattr(component, 'set_proforma_copy'):
@@ -715,6 +732,72 @@ def _sequence_data(sequence, mod_ids):
     return json.loads(json.dumps(data, default=float))
 
 
+def _search_entry(file_manager, dataset_id, proteoform):
+    """The sequence view entry of a proteoform as the search reported it, or None."""
+    if proteoform is None:
+        return None
+    rows = (
+        insight_data.proteoform_sequences(file_manager, dataset_id)
+        .filter(pl.col('proteoform_index') == int(proteoform))
+        .head(1)
+        .collect()
+        .to_dicts()
+    )
+    return rows[0] if rows else None
+
+
+@st.cache_data(max_entries=16, show_spinner=False)
+def _edited_entry_data(edit_json, search_json):
+    edit = json.loads(edit_json)
+    search = json.loads(search_json) if search_json else None
+    data = proteoform_edits.entry(
+        edit, search,
+        lambda sequence: getFragmentDataFromSeq(sequence, fixed_mods={'fixed_modifications': []}),
+    )
+    # Plain floats: the entry is part of the component configuration
+    return json.loads(json.dumps(data, default=float))
+
+
+def _edited_proteoform(file_manager, dataset_id, state_manager):
+    """The selected proteoform as the user edited it in the sequence view
+    (applying the edit the view wrote last), or None while it shows the
+    search result. Returns (proteoform index, entry, sequence changed)."""
+    proteoform = state_manager.get_selection('protein')
+    edits = proteoform_edits.load(file_manager, dataset_id)
+    edit = state_manager.get_selection(EDIT_IDENTIFIER)
+    search = None
+    # The edit stays in the selection (every view holds it and would send it
+    # back if cleared): its nonce is applied once per session, to the
+    # proteoform shown when it was made, so it never reaches another
+    # proteoform or dataset
+    nonce = edit.get('nonce') if isinstance(edit, dict) else None
+    fresh = nonce is not None and nonce != st.session_state.get('_proteoform_edit_nonce')
+    if fresh:
+        st.session_state['_proteoform_edit_nonce'] = nonce
+    if fresh and nonce != edits.get(proteoform_edits.NONCE):
+        search = _search_entry(file_manager, dataset_id, proteoform)
+        new = proteoform_edits.apply(edits, edit, proteoform, search)
+        if new is not None:
+            file_manager.store_data(dataset_id, proteoform_edits.RESULT, new)
+            edits = new
+    if proteoform is None or int(proteoform) not in edits:
+        return None
+    if search is None:
+        search = _search_entry(file_manager, dataset_id, proteoform)
+    edit = edits[int(proteoform)]
+    search_json = json.dumps(
+        {k: search.get(k) for k in ('sequence', 'observed_mass', 'coverage', 'maxCoverage')}
+        if search else None, default=float,
+    )
+    try:
+        data = _edited_entry_data(json.dumps(edit, sort_keys=True), search_json)
+    except Exception as error:  # pyOpenMS refuses the residues
+        st.warning(f'The edited sequence could not be used: {error}')
+        return None
+    changed = search is None or list(search.get('sequence') or []) != list(edit['sequence'])
+    return int(proteoform), data, changed
+
+
 def _selected_tag(file_manager, dataset_id, state_manager):
     """The row of the selected sequence tag, or None."""
     tag_index = state_manager.get_selection('tag')
@@ -728,6 +811,54 @@ def _selected_tag(file_manager, dataset_id, state_manager):
         .collect()
     )
     return rows.row(0, named=True) if rows.height else None
+
+
+def _set_selected_tag(component, file_manager, dataset_id, state_manager):
+    tag = _selected_tag(file_manager, dataset_id, state_manager)
+    # Tags FLASHTnT could not place on the proteoform have no positions
+    if tag is None or tag['StartPos'] is None or tag['EndPos'] is None:
+        component.set_tag(None)
+    else:
+        component.set_tag(int(tag['StartPos']), int(tag['EndPos']))
+
+
+def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, entry, changed):
+    """The identification sequence view of a proteoform the user edited: its
+    spectrum matched against the edited sequence and modifications, with the
+    button that resets it to the search result."""
+    name = f'{comp_name}-{tool}-edited-{proteoform}'
+    sources = ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings',
+               'out_deconv_mzML']
+    component = _component(
+        ProteinSequenceView, name, fm, ds, sources,
+        lambda: dict(
+            # Only this proteoform's spectrum: the cache is rebuilt per edit
+            data=insight_data.with_fragmentation(
+                insight_data.proteoform_sequences(fm, ds)
+                .filter(pl.col('proteoform_index') == proteoform),
+                _scan_methods(fm, ds), 'scan_idx',
+            ),
+            filters={'protein': 'proteoform_index'}, sequence=entry,
+            mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
+            fragmentation_column='fragmentation',
+            settings=fm.get_results(ds, ['settings'])['settings'],
+            entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
+            **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
+        ),
+        extra=entry, required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
+    )
+    # Earlier edits of this proteoform are not shown again
+    keep = f'{name}-{_stamp(fm, ds, sources, entry)}'
+    for old in Path(fm.cache_path, 'insight', ds).glob(f'{name}-*'):
+        if old.name != keep:
+            shutil.rmtree(old, ignore_errors=True)
+    if changed:
+        component.set_tag(None)
+    else:
+        _set_selected_tag(component, fm, ds, state_manager)
+    component.set_edit_identifier(EDIT_IDENTIFIER)
+    _sequence_view_options(component)
+    return component
 
 
 def _hierarchy_table(comp_name, file_manager, dataset_id):
@@ -872,6 +1003,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 float_precision='float64',
             ),
         )
+        # The fragment ions the sequence view matched on this spectrum
+        if FRAGMENT_MARKS:
+            component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
         # The raw peaks of the selected mass get its theoretical isotope envelope
         if view in ('annotated', 'ladder') and hasattr(component, 'set_envelope'):
             mass = state_manager.get_selection('mass')
@@ -1027,6 +1161,11 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name == 'sequence_view':
         # The proteoform of an identified run, else the sequence set in the view
         if tool == 'flashtnt' or (tool == 'topdown' and fm.result_exists(ds, 'protein_dfs')):
+            # Editing needs an openms-insight whose view writes edits
+            editable = hasattr(ProteinSequenceView, 'set_edit_identifier')
+            edited = _edited_proteoform(fm, ds, state_manager) if editable else None
+            if edited is not None:
+                return _edited_sequence_view(comp_name, tool, fm, ds, state_manager, *edited), {}
             component = _component(
                 ProteinSequenceView, f'{comp_name}-{tool}', fm, ds,
                 ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings',
@@ -1042,17 +1181,14 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     fragmentation_column='fragmentation',
                     settings=fm.get_results(ds, ['settings'])['settings'],
                     entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
-                    **SEQUENCE_VIEW_OPTIONS,
+                    **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
                 ),
                 required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
             )
-            tag = _selected_tag(fm, ds, state_manager)
-            # Tags FLASHTnT could not place on the proteoform have no positions
-            if tag is None or tag['StartPos'] is None or tag['EndPos'] is None:
-                component.set_tag(None)
-            else:
-                component.set_tag(int(tag['StartPos']), int(tag['EndPos']))
+            _set_selected_tag(component, fm, ds, state_manager)
             _sequence_view_options(component)
+            if hasattr(component, 'set_edit_identifier'):
+                component.set_edit_identifier(EDIT_IDENTIFIER)
             return component, {}
 
         sequence = _deconv_sequence(fm, state_manager)
@@ -1067,7 +1203,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 filters={'scan': 'index'}, sequence=sequence,
                 mass_identifier='mass', aa_identifier='aa', sequence_identifier='sequence',
                 fragmentation_column='fragmentation',
-                **SEQUENCE_VIEW_OPTIONS,
+                **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('index'),
             ),
             extra=sequence, required=['sequence_view'],
         )
