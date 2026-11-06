@@ -258,6 +258,8 @@ PROTEIN_GROUP_COLUMNS = [
      'headerTooltip': 'Proteins numbered by their best score.'},
     {'title': 'Accession', 'field': 'accession', 'widthGrow': 2, 'tooltip': True},
     {'title': 'Description', 'field': 'description', **_HIDDEN},
+    {'title': 'Mass shifts', 'field': 'mass_shifts', 'widthGrow': 2, 'tooltip': True, **_HIDDEN,
+     'headerTooltip': 'Mass shifts of its proteoforms with the modification they match ("?": none).'},
     {'title': 'Forms', 'field': 'proteoforms', 'sorter': 'number', 'minWidth': 92,
      'headerTooltip': 'Number of distinct proteoforms (ProForma strings) identified for the protein.'},
     {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'minWidth': 92,
@@ -279,6 +281,9 @@ PROTEOFORM_COLUMNS = [
     {'title': 'Mass', 'field': 'mass', 'sorter': 'number', **_MASS, **_HIDDEN,
      'headerTooltip': 'Proteoform mass of its best PrSM.'},
     {'title': 'Mods', 'field': 'modifications', 'sorter': 'number', **_HIDDEN},
+    {'title': 'Mass shifts', 'field': 'mass_shifts', 'widthGrow': 2, 'tooltip': True,
+     'headerTooltip': 'Mass shifts of the proteoform with the modification they match ("?": none). '
+                      'Pick a shift in the Mass shifts component to list the proteoforms carrying it.'},
     {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'minWidth': 92},
     {'title': 'Score', 'field': 'best_score', 'sorter': 'number', **_HIDDEN,
      'headerTooltip': 'Best score of its PrSMs.'},
@@ -296,6 +301,8 @@ PROTEOFORM_PRSM_COLUMNS = [
     {'title': 'Fragments', 'field': 'MatchingFragments', 'sorter': 'number', 'minWidth': 112,
      'headerTooltip': 'Number of matched fragments.'},
     {'title': 'Score', 'field': 'Score', 'sorter': 'number', 'minWidth': 92},
+    {'title': 'Mass shifts', 'field': 'mass_shifts', 'widthGrow': 2, 'tooltip': True, **_HIDDEN,
+     'headerTooltip': 'Mass shifts of the PrSM with the modification they match ("?": none).'},
     {'title': 'q-value', 'field': 'qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
      'headerTooltip': 'Proteoform-level q-value. Only PrSMs at q ≤ 0.01 are counted.'},
 ]
@@ -861,6 +868,24 @@ def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, en
     return component
 
 
+# A mass shift picked in the Mass shifts component narrows the protein,
+# proteoform and PrSM tables to the rows carrying it, besides their protein →
+# proteoform filters; with no shift picked they show every row. Needs an
+# openms-insight with ALL (list-column filters); older builds leave it out.
+_ALL_ROWS = getattr(openms_insight, 'ALL', None)
+_SHIFT_FILTER = (
+    dict(filters={'mass_shift': 'shift_ids'}, filter_defaults={'mass_shift': _ALL_ROWS})
+    if _ALL_ROWS is not None else {}
+)
+
+
+def _with_shift_filter(filters):
+    if not _SHIFT_FILTER:
+        return dict(filters=filters)
+    return dict(filters={**filters, **_SHIFT_FILTER['filters']},
+                filter_defaults=_SHIFT_FILTER['filter_defaults'])
+
+
 def _hierarchy_table(comp_name, file_manager, dataset_id):
     """One level of the protein → proteoform → PrSM tables and its height.
     Selecting a proteoform or PrSM selects its (best) PrSM in the other
@@ -870,6 +895,19 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
     with the most), up to TABLE_HEIGHT."""
     hits = hierarchy_data.prsms(file_manager, dataset_id)
     with_qvalues = hierarchy_data.has_qvalues(hits)
+
+    def with_shifts(rows, key):
+        # The mass shifts column and the shift ids the selected mass shift
+        # filters on (empty for a row without one); built with the cache only
+        groups, _, shifts = mass_shifts.summary(mass_shifts.prsm_shifts(hits))
+        if key not in shifts.columns:
+            shifts = shifts.join(hits.select('index', key), on='index', how='left')
+        return (
+            rows.join(mass_shifts.shift_labels(groups, shifts, key), on=key, how='left')
+            .join(mass_shifts.shift_ids(shifts, key), on=key, how='left')
+            .with_columns(pl.col('shift_ids').fill_null(pl.lit([], dtype=pl.List(pl.Int64))))
+        )
+
     common = dict(
         reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
         pagination=False, float_precision='float64',
@@ -880,31 +918,31 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
     )
     if comp_name == 'protein_group_table':
         build = lambda: dict(
-            data=hierarchy_data.protein_groups_from(hits).lazy(),
+            data=with_shifts(hierarchy_data.protein_groups_from(hits), 'protein_group').lazy(),
             column_definitions=_hierarchy_columns(PROTEIN_GROUP_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('Proteins', hierarchy_data.key_figures(hits)['proteins']),
             index_field='protein_group', go_to_fields=['accession'],
             interactivity={'protein_group': 'protein_group'},
-            multi_select={go_terms.RUN_SET: 'accession'}, **common,
+            multi_select={go_terms.RUN_SET: 'accession'}, **_SHIFT_FILTER, **common,
         )
     elif comp_name == 'proteoform_table':
         build = lambda: dict(
-            data=hierarchy_data.proteoforms_from(hits).lazy(),
+            data=with_shifts(hierarchy_data.proteoforms_from(hits), 'proteoform_id').lazy(),
             column_definitions=_hierarchy_columns(PROTEOFORM_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('Proteoforms', hierarchy_data.key_figures(hits)['proteoforms']),
             index_field='proteoform_id', go_to_fields=['proteoform'],
-            filters={'protein_group': 'protein_group'},
+            **_with_shift_filter({'protein_group': 'protein_group'}),
             interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     else:
         build = lambda: dict(
-            data=hierarchy_data.prsm_rows_from(hits).lazy(),
+            data=with_shifts(hierarchy_data.prsm_rows_from(hits), 'index').lazy(),
             column_definitions=_hierarchy_columns(PROTEOFORM_PRSM_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('PrSMs', hierarchy_data.key_figures(hits)['prsms']),
             index_field='index', go_to_fields=['Scan'],
-            filters={'proteoform': 'proteoform_id'},
+            **_with_shift_filter({'proteoform': 'proteoform_id'}),
             interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
@@ -1328,23 +1366,14 @@ _SHIFT_COLUMNS = [
      'headerTooltip': 'Residues the modification is defined on in Unimod.'},
     {'title': 'Other matches', 'field': 'other', 'widthGrow': 2, 'tooltip': True},
 ]
-_SHIFT_PRSM_COLUMNS = [
-    {'title': 'Scan', 'field': 'Scan', 'sorter': 'number', 'width': 80},
-    {'title': 'Accession', 'field': 'accession', 'widthGrow': 2, 'tooltip': True},
-    {'title': 'Shift (Da)', 'field': 'shift', 'sorter': 'number', 'hozAlign': 'right', **_fixed(4)},
-    {'title': 'Position', 'field': 'site', 'width': 90,
-     'headerTooltip': 'Residue of the shift in the protein, or the range it could not be narrowed down from.'},
-    {'title': 'Proteoform', 'field': 'Proforma', 'widthGrow': 3, 'tooltip': True},
-    {'title': 'RT (s)', 'field': 'RetentionTime', 'sorter': 'number', 'hozAlign': 'right', **_fixed(1)},
-    {'title': 'Score', 'field': 'Score', 'sorter': 'number', 'hozAlign': 'right', **_fixed(1)},
-]
 
 
 def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
     """The mass shifts FLASHTnT placed on the identified proteoforms: a
-    histogram, the recurring shifts with the Unimod modifications they match,
-    and the PrSMs of the shift picked in either. Picking a PrSM selects its
-    proteoform in the other cells."""
+    histogram and the recurring shifts with the Unimod modifications they
+    match, linked to each other. A picked shift narrows the protein,
+    proteoform and PrSM tables to the rows carrying it; clicking it again in
+    the table unpicks it."""
     sources = ['protein_dfs', 'scan_table']
     try:
         for name_tag in sources:
@@ -1384,26 +1413,14 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
             data=groups.lazy(), column_definitions=_SHIFT_COLUMNS,
             index_field='shift_id', interactivity={'mass_shift': 'shift_id'},
             title='Mass shifts', initial_sort=[{'column': 'prsms', 'dir': 'desc'}],
-            reclick=RECLICK, scroll_position=SCROLL, layout='fitColumns',
-        ),
-    )
-    prsm_table = _component(
-        Table, 'mass_shift_prsms', file_manager, dataset_id, sources,
-        lambda: dict(
-            data=prsms.lazy(), column_definitions=_SHIFT_PRSM_COLUMNS,
-            index_field='row_id', filters={'mass_shift': 'shift_id'},
-            interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
-            multi_select={go_terms.RUN_SET: 'accession'},
-            on_select=_IDENTIFICATION_ON_SELECT,
-            title='PrSMs of the selected shift', initial_sort=[{'column': 'Score', 'dir': 'desc'}],
-            reclick=RECLICK, scroll_position=SCROLL, layout='fitColumns',
+            # Clicking the picked shift again unpicks it, so the protein,
+            # proteoform and PrSM tables list every row again
+            reclick='deselect', default_row=-1, scroll_position=SCROLL, layout='fitColumns',
         ),
     )
     plot(key=f'{key}_histogram', state_manager=state_manager, height=360)
     shift_table(key=f'{key}_shifts', state_manager=state_manager,
                 height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
-    prsm_table(key=f'{key}_prsms', state_manager=state_manager,
-               height=min(TABLE_HEIGHT, 90 + 34 * max(1, int(groups['prsms'].max() or 1))))
 
 
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):

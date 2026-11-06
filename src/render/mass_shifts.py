@@ -283,3 +283,41 @@ def summary(shifts: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFr
         .alias('label'),
     ).select(list(HISTOGRAM_SCHEMA)).cast(HISTOGRAM_SCHEMA)
     return groups, histogram, prsms
+
+
+def shift_ids(prsms: pl.DataFrame, key: str) -> pl.DataFrame:
+    """The shift groups (``shift_id``) of each ``key`` as a list, the column
+    the protein → proteoform → PrSM tables are filtered on by the selected
+    mass shift. Keys without a shift are left out."""
+    if not prsms.height:
+        return pl.DataFrame(schema={key: pl.Int64, 'shift_ids': pl.List(pl.Int64)})
+    return (
+        prsms.select(key, 'shift_id').unique().sort('shift_id')
+        .group_by(key, maintain_order=True).agg(pl.col('shift_id').alias('shift_ids'))
+        .cast({key: pl.Int64, 'shift_ids': pl.List(pl.Int64)})
+    )
+
+
+def shift_labels(groups: pl.DataFrame, prsms: pl.DataFrame, key: str) -> pl.DataFrame:
+    """The mass shifts of each ``key`` ('index' for a PrSM, 'proteoform_id'
+    for a proteoform) as one text, such as "+15.99 Oxidation; +42.01 Acetyl"
+    ("?" for a shift without interpretation), for a column of the
+    protein → proteoform → PrSM tables. Keys without a shift are left out."""
+    if not prsms.height:
+        return pl.DataFrame(schema={key: pl.Int64, 'mass_shifts': pl.String})
+    names = groups.select(
+        'shift_id',
+        pl.when(pl.col('interpretation') == '').then(pl.lit('?'))
+        .otherwise(pl.col('interpretation')).alias('name'),
+    )
+    return (
+        prsms.join(names, on='shift_id', how='left')
+        .with_columns(
+            (pl.col('shift').map_elements(lambda v: f'{v:+.2f}', return_dtype=pl.String)
+             + ' ' + pl.col('name')).alias('label')
+        )
+        .sort('shift')
+        .group_by(key, maintain_order=True)
+        .agg(pl.col('label').unique(maintain_order=True).str.join('; ').alias('mass_shifts'))
+        .cast({key: pl.Int64})
+    )

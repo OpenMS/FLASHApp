@@ -96,3 +96,37 @@ def test_lysate_demo(tmp_path):
     top = groups.row(0, named=True)
     assert top['interpretation'] == 'Oxidation'
     assert set(prsms['index']) <= set(hits['index'])
+    by_protein = mass_shifts.shift_labels(
+        groups, prsms.join(hits.select('index', 'protein_group'), on='index'), 'protein_group')
+    assert by_protein['mass_shifts'].str.contains('Oxidation').any()
+
+
+def test_shift_labels_per_prsm_and_proteoform():
+    hits = _hits([
+        {'ModMass': '15.9949;42.0106'},
+        {'ModMass': '83.826'},
+        {},
+    ])
+    groups, _, shifts = mass_shifts.summary(mass_shifts.prsm_shifts(hits))
+    by_prsm = dict(mass_shifts.shift_labels(groups, shifts, 'index').iter_rows())
+    assert by_prsm == {0: '+15.99 Oxidation; +42.01 Acetyl', 1: '+83.83 ?'}
+    by_form = mass_shifts.shift_labels(groups, shifts, 'proteoform_id')
+    assert by_form.schema == pl.Schema({'proteoform_id': pl.Int64, 'mass_shifts': pl.String})
+    empty = mass_shifts.shift_labels(*mass_shifts.summary(mass_shifts.prsm_shifts(_hits([{}])))[::2], 'index')
+    assert empty.height == 0
+
+
+def test_shift_ids_per_prsm_for_the_shift_filter():
+    hits = _hits([
+        {'ModMass': '15.9949;42.0106'},
+        {'ModMass': '15.9949'},
+        {},
+    ])
+    groups, _, shifts = mass_shifts.summary(mass_shifts.prsm_shifts(hits))
+    ids = mass_shifts.shift_ids(shifts, 'index')
+    assert ids.schema == pl.Schema({'index': pl.Int64, 'shift_ids': pl.List(pl.Int64)})
+    by_prsm = {row['index']: row['shift_ids'] for row in ids.to_dicts()}
+    oxidation = groups.filter(pl.col('interpretation') == 'Oxidation')['shift_id'][0]
+    assert set(by_prsm) == {0, 1}
+    assert len(by_prsm[0]) == 2 and oxidation in by_prsm[0]
+    assert by_prsm[1] == [oxidation]
