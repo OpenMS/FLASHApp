@@ -59,12 +59,28 @@ jobs:
           set -euxo pipefail
           deb=$(find openms-out -name '*.deb' | head -n 1)
           [ -n "$deb" ] || { echo "::error::no OpenMS package for ${{ steps.sha.outputs.sha }} (has the desktop build built it?)"; ls -R openms-out || true; exit 1; }
-          sudo apt-get update
-          sudo apt-get install -y "./$deb"
+          # Unpacked, not installed: the deb ships headers that collide with
+          # runner packages (sqlite3.h); its dependencies come from apt, as in
+          # electron/scripts/stage-openms.sh.
+          root="$RUNNER_TEMP/openms"
+          dpkg-deb -x "$deb" "$root"
+          sudo apt-get update -q
           # libOpenMS also links QtNetwork, which the deb does not declare.
-          sudo apt-get install -y libqt6network6 || sudo apt-get install -y libqt5network5 || true
-          FLASHDeconv --help 2>&1 | head -n 5 || true
-          which FLASHDeconv FLASHTnT FLASHAnnotator DecoyDatabase FLASHQuantConsensus
+          sudo apt-get satisfy -y -q "$(dpkg-deb -f "$deb" Depends), libqt6network6t64 | libqt6network6"
+          bin=$(dirname "$(find "$root" -type f -path '*/bin/FLASHDeconv' | head -n 1)")
+          share=$(dirname "$(find "$root" -type d -path '*/share/OpenMS/CHEMISTRY' | head -n 1)")
+          libs=$(find "$root" -name '*.so*' \( -type f -o -type l \) -exec dirname {} \; | sort -u | paste -sd:)
+          # An rpath, not LD_LIBRARY_PATH, which would also hand the deb's
+          # libOpenMS to pyOpenMS.
+          sudo apt-get install -y -q patchelf
+          for f in "$bin"/* $(find "$root" -name '*.so*' -type f); do
+            patchelf --force-rpath --set-rpath "$libs" "$f" 2>/dev/null || true
+          done
+          { echo "PATH=$bin:$PATH"; echo "OPENMS_DATA_PATH=$share"; } >> "$GITHUB_ENV"
+          for t in FLASHDeconv FLASHTnT FLASHAnnotator DecoyDatabase FLASHQuantConsensus; do
+            if ldd "$bin/$t" | grep 'not found'; then exit 1; fi
+          done
+          OPENMS_DATA_PATH=$share "$bin/FLASHDeconv" --help 2>&1 | head -n 8 || true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -74,8 +90,6 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run the examples
         run: |
-          export OPENMS_DATA_PATH=$(dirname "$(find /usr /opt -path '*share/OpenMS/CHEMISTRY' -type d 2>/dev/null | head -n 1)")
-          echo "OPENMS_DATA_PATH=$OPENMS_DATA_PATH"
           python .github/scripts/compare_openms_builds.py run results-${{ matrix.build }}
       - uses: actions/upload-artifact@v4
         if: always()
