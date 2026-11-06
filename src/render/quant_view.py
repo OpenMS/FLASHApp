@@ -77,6 +77,12 @@ def added_comparison(file_manager, workflow_dir):
     return None
 
 
+def comparison_runs(file_manager, dataset_id):
+    """The dataset ids of the runs a comparison compares."""
+    manifest = file_manager.get_results(dataset_id, ['quant_manifest'])['quant_manifest']
+    return list(manifest.get('runs') or [])
+
+
 def comparison_tool(file_manager, dataset_id):
     """'flashtnt' for a comparison of identified runs, else 'flashdeconv'."""
     manifest = file_manager.get_results(dataset_id, ['quant_manifest'])['quant_manifest']

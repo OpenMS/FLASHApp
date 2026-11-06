@@ -253,6 +253,8 @@ class TopDownWorkflow(WorkflowManager):
     FLASHDeconv workflow are adopted on first use.
     """
     share_cache = True
+    # Start analysis (settings adding files to an experiment) opens the Run page
+    run_page = Path('content', 'TopDown', 'TopDownRun.py')
 
     def __init__(self) -> None:
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)

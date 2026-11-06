@@ -140,27 +140,47 @@ def more_files_settings(params, changes, reusable):
     return params, changes, False
 
 
-def _follow_up(workspace, file_manager, dataset_id, changes, note, more_files=False):
+def _follow_up(workspace, file_manager, dataset_id, changes, note, more_files=False, runs=None):
+    """Open Describe experiment with the settings of ``dataset_id`` and ``changes``.
+
+    ``more_files`` adds the files picked there to its experiment: the runs
+    ``runs`` (default the run itself; the runs of a comparison) join the new
+    comparison as they are when they fit the settings, else their files are
+    processed again with the new ones.
+    """
     from src.Workflow import TopDownWorkflow  # the page set up the workspace already
     from src.quant.run import reusable_runs
 
-    params, _ = run_settings(workspace, file_manager, dataset_id)
+    runs = list(runs or [dataset_id])
+    params, _ = run_settings(workspace, file_manager, runs[0])
     name = file_manager.get_display_name(dataset_id)
     if not more_files:
         TopDownWorkflow().start_from(params, changes, name=name, page=CONFIGURE_PAGE, note=note)
         return
-    own = params.get('mzML-files', [])
+    own = []
+    for run in runs:
+        source = input_file(workspace, run)
+        if source is not None:
+            own.append(source)
+    own = list(dict.fromkeys(own))
     params, changes, adds = more_files_settings(
         params, changes,
-        lambda identify, quant, plex: bool(reusable_runs(file_manager, [dataset_id], identify, quant, plex)),
+        lambda identify, quant, plex: len(reusable_runs(file_manager, runs, identify, quant, plex)) == len(runs),
     )
     if not adds:
-        # This run's file is processed again with the files added in the Browse dialog
+        # The experiment's files are processed again with the files added in the Browse dialog
         params['mzML-files'] = list(dict.fromkeys(_current_files(workspace) + own))
     TopDownWorkflow().start_from(
         params, changes, name=name, page=CONFIGURE_PAGE, note=note,
-        adds_to=[dataset_id] if adds else None, files=own if adds else None,
+        adds_to=runs if adds else None, files=own if adds else None,
+        files_key='mzML-files' if adds else None,
     )
+
+
+def add_files(workspace, file_manager, dataset_id, runs=None):
+    """Process more files with the settings of ``dataset_id`` (a run, or a
+    comparison of ``runs``) and compare them with it."""
+    _follow_up(workspace, file_manager, dataset_id, {}, 'to add more files', more_files=True, runs=runs)
 
 
 def options(workspace, file_manager, dataset_id, missing):

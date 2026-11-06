@@ -198,9 +198,27 @@ def view_selector():
     )
 
 
+def add_files_button(dataset_id, runs=None):
+    """Add files: process more files with the settings of the shown run (or
+    comparison) and compare them with it."""
+    if dataset_id is None:
+        return
+    if st.button('Add files', icon=':material/library_add:', key=f'add_files_{dataset_id}', width='content',
+                 help='Process more files with these settings and compare them with this experiment'):
+        missing_analysis.add_files(workspace, file_manager, dataset_id, runs=runs)
+
+
+def comparison_buttons():
+    shown = st.session_state[selection_key(0)]
+    quant_view.buttons(file_manager, shown)
+    add_files_button(shown, runs=quant_view.comparison_runs(file_manager, shown))
+
+
 def edit_layout(index=0):
     tool_results_button()
     shown = st.session_state.get(selection_key(index))
+    if index == 0 and shown in results:
+        add_files_button(shown)
     if downloadable:
         result_download.viewer_button(file_manager, shown if shown in downloadable else None)
 
@@ -215,7 +233,7 @@ count, side_by_side = topdown_layout.experiments_shown(workspace) or (1, False)
 experiments = [None] * count
 
 if comparison_selected():
-    selector(0, display_names, lambda: quant_view.buttons(file_manager, st.session_state[selection_key(0)]))
+    selector(0, display_names, comparison_buttons)
     # A comparison spans its runs, so it fills the page on its own
     shown = st.session_state[selection_key(0)]
     quant_view.render(file_manager, shown, quant_view.view_rows(file_manager, workspace, shown))
