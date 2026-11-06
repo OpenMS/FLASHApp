@@ -16,6 +16,7 @@ DECONV_COMPONENTS = [
     {'name': 'mass_table', 'label': 'Mass table', 'group': 'Tables', 'requires': 'scan_table'},
     {'name': 'deconv_spectrum', 'label': 'Deconvolved spectrum', 'group': 'Spectra & plots', 'requires': 'scan_table'},
     {'name': 'anno_spectrum', 'label': 'Raw spectrum', 'group': 'Spectra & plots', 'requires': 'scan_table'},
+    {'name': 'survey_spectrum', 'label': 'Precursor spectrum (MS1)', 'group': 'Spectra & plots', 'requires': 'scan_table'},
     {'name': '3D_SN_plot', 'label': '3D S/N plot', 'group': 'Spectra & plots', 'requires': 'mass_table'},
     {'name': 'fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
     {'name': 'chromatogram', 'label': 'Chromatogram (TIC, base peak, deconvolved)', 'group': 'Spectra & plots'},
@@ -44,6 +45,7 @@ TNT_COMPONENTS = [
     {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     # Internal fragment map is disabled for FLASHTnT for now.
     {'name': 'combined_spectrum', 'label': 'Sequence tag view', 'group': 'Sequence', 'requires': 'tag_table'},
+    {'name': 'survey_spectrum', 'label': 'Precursor spectrum (MS1)', 'group': 'Spectra & plots', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'id_fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
     {'name': 'chromatogram', 'label': 'Chromatogram (TIC, base peak, deconvolved)', 'group': 'Spectra & plots'},
     {'name': 'fragment_error_plot', 'label': 'Fragment mass errors', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
@@ -77,7 +79,7 @@ def _combined():
     by_name = {}
     for component in DECONV_COMPONENTS + TNT_COMPONENTS:
         by_name.setdefault(component['name'], dict(component))
-    for name in ('mass_table', 'tag_table', 'deconv_spectrum', 'anno_spectrum', 'isotope_envelope', 'precursor_xic'):
+    for name in ('mass_table', 'tag_table', 'deconv_spectrum', 'anno_spectrum', 'survey_spectrum', 'isotope_envelope', 'precursor_xic'):
         by_name[name].update(requires=_SELECTS_SCAN, requires_label=_SELECTS_SCAN_LABEL)
     # The proteoform of an identified run, or the sequence set in the view
     by_name['sequence_view'].update(

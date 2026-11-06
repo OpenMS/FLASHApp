@@ -114,7 +114,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # No automatic `latest`: on a tag push metadata-action would add a
           # plain `latest` beside the tags below. `latest` is set only by the
-          # raw rule below.
+          # raw rule (main pushes of the full image).
           flavor: |
             latest=false
           tags: |

@@ -203,7 +203,14 @@ RUN cp -r openms-build/lib /openms/lib
 ENV LD_LIBRARY_PATH="/openms/lib/:/root/miniforge3/envs/streamlit-env/lib"
 
 # Copy share folder, add to PATH, remove source directory.
-RUN cp -r OpenMS/share/OpenMS /openms/share
+# From OpenMS 3.6 on the TOPP tool registry (share/OpenMS/TOOLS/*.tsv) is
+# generated into the build directory, not kept in the source tree. Without it
+# every TOPP tool aborts on start ("The TOPP tool registry ... is empty"), so
+# it is copied next to the source share.
+RUN cp -r OpenMS/share/OpenMS /openms/share \
+    && if [ -d openms-build/share/OpenMS/TOOLS ]; then \
+        mkdir -p /openms/share/TOOLS && cp -r openms-build/share/OpenMS/TOOLS/. /openms/share/TOOLS/; \
+    fi
 RUN rm -rf OpenMS
 ENV OPENMS_DATA_PATH="/openms/share/"
 
@@ -213,26 +220,14 @@ RUN rm -rf openms-build
 # Check that pyOpenMS loads and finds its data, and that the TOPP tools run.
 RUN python -c "import pyopenms; print('pyOpenMS', pyopenms.__version__, pyopenms.EmpiricalFormula('C6H12O6').getMonoWeight())" \
     && test -x /openms/bin/FileInfo \
-    && ! ldd /openms/bin/FileInfo | grep 'not found'
-
-# Build openms-insight, the visualization components of the viewers (quick).
-# Placed after the slow OpenMS build so that changes to openms-insight do not
-# invalidate the OpenMS compile cache; it is installed in the run-app stage.
-# TEMPORARY (develop only): built from openms-insight's development branch
-# (main) and installed over the PyPI release from requirements.txt. Revert this
-# before a FLASHApp release: releases use a published openms-insight version.
-FROM node:21 AS insight-build
-
-ARG INSIGHT_REPO=https://github.com/t0mdavid-m/openms-insight.git
-ARG INSIGHT_REF=main
-
-ADD https://api.github.com/repos/t0mdavid-m/openms-insight/git/refs/heads/$INSIGHT_REF version.json
-
-RUN git clone -b ${INSIGHT_REF} --single-branch ${INSIGHT_REPO} /openms-insight
-WORKDIR /openms-insight/js-component
-RUN npm ci && npm run build
-# The Python package ships the bundle from openms_insight/js-component/dist
-RUN mkdir -p ../openms_insight/js-component && cp -r dist ../openms_insight/js-component/
+    && ! ldd /openms/bin/FileInfo | grep 'not found' \
+    && for tool in FileInfo FeatureFinderMetabo; do \
+        "$tool" -write_ini "/tmp/$tool.ini" > "/tmp/$tool.log" 2>&1; \
+        if [ ! -s "/tmp/$tool.ini" ]; then \
+            echo "$tool -write_ini failed:"; cat "/tmp/$tool.log"; exit 1; \
+        fi; \
+        rm -f "/tmp/$tool.ini" "/tmp/$tool.log"; \
+    done
 
 # Prepare and run streamlit app.
 FROM compile-openms AS run-app
@@ -256,13 +251,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends mono-complete \
 COPY requirements.txt conda-requirements.tx[t] /tmp/app-env/
 # A line ending in `# [x86_64]` or `# [aarch64]` is installed only on that
 # machine (`uname -m`), for tools conda-forge builds for one architecture.
+# The env's Python is pinned: a tool's dependencies may otherwise let the
+# solver swap CPython for another build (sirius-ms pulled in GraalPy, whose
+# ssl module pip cannot use).
 RUN touch /tmp/app-env/conda-requirements.txt \
     && awk -v arch="$(uname -m)" ' \
         /#[[:space:]]*\[[a-z0-9_]+\][[:space:]]*$/ { tag = $0; sub(/.*\[/, "", tag); sub(/\].*/, "", tag); if (tag != arch) next } \
         { sub(/#.*/, ""); if ($0 ~ /[^[:space:]]/) print }' \
         /tmp/app-env/conda-requirements.txt > /tmp/app-env/conda-specs.txt \
     && if [ -s /tmp/app-env/conda-specs.txt ]; then \
-        mamba install -y -n streamlit-env -c conda-forge --file /tmp/app-env/conda-specs.txt; \
+        py="$(python -c 'import platform; print(platform.python_version())')"; \
+        mamba install -y -n streamlit-env -c conda-forge --file /tmp/app-env/conda-specs.txt "python=${py}=*_cpython"; \
     fi && rm -rf /tmp/app-env
 
 # Create Redis data directory. Default 0755 root-owned is enough: the docker
@@ -297,18 +296,11 @@ COPY app.py /app/app.py
 COPY settings.json /app/settings.json
 COPY default-parameters.json /app/default-parameters.json
 COPY presets.json /app/presets.json
+COPY parameter-names.json /app/parameter-names.json
 
 # For streamlit configuration
 COPY .streamlit/ /app/.streamlit/
 COPY clean-up-workspaces.py /app/clean-up-workspaces.py
-
-# Install openms-insight (built in the insight-build stage above).
-# Only the package, not js-component/node_modules. .gitignore keeps hatch from
-# adding the bundle twice (it is force-included because git ignores it).
-COPY --from=insight-build /openms-insight/pyproject.toml /openms-insight/README.md /openms-insight/LICENSE /openms-insight/.gitignore /tmp/openms-insight/
-COPY --from=insight-build /openms-insight/openms_insight /tmp/openms-insight/openms_insight
-# Its dependencies come from requirements.txt; this replaces the PyPI release
-RUN pip install --no-deps --force-reinstall /tmp/openms-insight && rm -rf /tmp/openms-insight
 
 # add cron job to the crontab
 RUN echo "0 3 * * * /root/miniforge3/envs/streamlit-env/bin/python /app/clean-up-workspaces.py >> /app/clean-up-workspaces.log 2>&1" | crontab -
