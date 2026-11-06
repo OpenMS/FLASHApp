@@ -2,7 +2,8 @@
 
 from src.render.layout_editor.catalog import (
     DECONV_COMPONENTS, DECONV_DEFAULT_LAYOUT, DECONV_SEQUENCE_COMPONENTS,
-    TNT_COMPONENTS, TNT_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS, requirements, validate_layout,
+    TNT_COMPONENTS, TNT_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS, TOPDOWN_COMPONENTS, requirements,
+    validate_layout,
 )
 
 
@@ -10,7 +11,9 @@ def test_default_layouts_are_valid():
     assert validate_layout([DECONV_DEFAULT_LAYOUT], DECONV_COMPONENTS) == ''
     assert validate_layout([DECONV_DEFAULT_LAYOUT + [['sequence_view']]],
                            DECONV_COMPONENTS + DECONV_SEQUENCE_COMPONENTS) == ''
-    assert validate_layout([TNT_DEFAULT_LAYOUT], TNT_COMPONENTS) == ''
+    # The identification defaults serve the combined Viewer, whose catalog
+    # has the spectra too
+    assert validate_layout([TNT_DEFAULT_LAYOUT], TOPDOWN_COMPONENTS) == ''
 
 
 def test_names_are_unique_per_catalog():
@@ -44,7 +47,7 @@ def test_same_component_allowed_in_different_experiments():
 
 def test_native_and_lysate_layouts_are_valid():
     for layout in TNT_DEFAULT_LAYOUTS.values():
-        assert validate_layout([layout], TNT_COMPONENTS) == ''
+        assert validate_layout([layout], TOPDOWN_COMPONENTS) == ''
 
 
 def test_a_requirement_can_be_met_by_either_component():

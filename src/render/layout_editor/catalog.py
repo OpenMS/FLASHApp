@@ -107,11 +107,15 @@ DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
 # FLASHTnT defaults by sample type (src/sample_type.py): a native or targeted
 # run has few spectra, each worth inspecting in depth; a lysate run has many
 # identifications, browsed protein by protein.
-TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['structure_view'], ['tag_table'], ['combined_spectrum']]
+# The raw and the deconvolved spectrum below the sequence view show the
+# fragment ions it matched.
+TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['anno_spectrum', 'deconv_spectrum'],
+                     ['structure_view'], ['tag_table'], ['combined_spectrum']]
 TNT_LYSATE_LAYOUT = [
     ['protein_group_table', 'proteoform_table', 'proteoform_prsm_table'],
     ['proteoform_heatmap'],
     ['sequence_view'],
+    ['anno_spectrum', 'deconv_spectrum'],
     ['fragment_error_plot', 'precursor_xic'],
     ['id_fdr_plot', 'id_qc'],
     ['go_enrichment'],

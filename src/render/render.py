@@ -230,6 +230,17 @@ FIXED_MODS_IDENTIFIER = 'fixed_mods'
 # Selection the identification sequence view writes its edits to (see
 # src.render.proteoform_edits)
 EDIT_IDENTIFIER = 'sequence_edit'
+# The fragment ions the sequence view matched, marked on the spectra; left out
+# with an openms-insight release without it
+FRAGMENT_MATCHES_IDENTIFIER = 'fragment_matches'
+FRAGMENT_MARKS = hasattr(DeconvolvedSpectrum, 'set_fragment_matches_identifier')
+
+
+def _spectrum_key(column):
+    """Keyword arguments naming the column of a sequence view's data that holds
+    the scan index of its spectrum, so the spectra mark its fragment ions only
+    on that spectrum."""
+    return {'spectrum_key_column': column} if FRAGMENT_MARKS else {}
 
 RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
@@ -700,8 +711,11 @@ def _modification_picker_library():
 
 def _sequence_view_options(component):
     """Options of a sequence view, each when the installed openms-insight
-    supports it: the residue menus offer the whole modification library, and
-    the shown proteoform can be copied as ProForma."""
+    supports it: the residue menus offer the whole modification library, the
+    shown proteoform can be copied as ProForma, and the matched fragment ions
+    are marked on the spectra."""
+    if FRAGMENT_MARKS:
+        component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     if hasattr(component, 'set_variable_modification_library'):
         component.set_variable_modification_library(_modification_picker_library())
     if hasattr(component, 'set_proforma_copy'):
@@ -827,7 +841,7 @@ def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, en
             fragmentation_column='fragmentation',
             settings=fm.get_results(ds, ['settings'])['settings'],
             entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
-            **SEQUENCE_VIEW_OPTIONS,
+            **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
         ),
         extra=entry, required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
     )
@@ -987,6 +1001,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 float_precision='float64',
             ),
         )
+        # The fragment ions the sequence view matched on this spectrum
+        if FRAGMENT_MARKS:
+            component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
         # The raw peaks of the selected mass get its theoretical isotope envelope
         if view in ('annotated', 'ladder') and hasattr(component, 'set_envelope'):
             mass = state_manager.get_selection('mass')
@@ -1162,7 +1179,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     fragmentation_column='fragmentation',
                     settings=fm.get_results(ds, ['settings'])['settings'],
                     entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
-                    **SEQUENCE_VIEW_OPTIONS,
+                    **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
                 ),
                 required=['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
             )
@@ -1184,7 +1201,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 filters={'scan': 'index'}, sequence=sequence,
                 mass_identifier='mass', aa_identifier='aa', sequence_identifier='sequence',
                 fragmentation_column='fragmentation',
-                **SEQUENCE_VIEW_OPTIONS,
+                **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('index'),
             ),
             extra=sequence, required=['sequence_view'],
         )
