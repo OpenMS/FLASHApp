@@ -72,23 +72,11 @@ def test_run_settings_are_the_ones_the_run_was_made_with(tmp_path):
     assert not has_file  # its input file is not in this workspace
 
 
-def test_options_rerun_add_files_and_bring_in_a_run_that_has_it(tmp_path):
+def test_options_only_process_more_files(tmp_path):
     file_manager = _file_manager(tmp_path)
-    runs = ['example_deconvolution', 'example_native_identified', 'example_isobaric']
     labels = [o['label'] for o in missing_analysis.options(
-        tmp_path, file_manager, 'example_deconvolution', [IDENTIFICATION], {'name': 'native'},
-        runs=runs, selection_key=lambda i: f'sel{i}', view_args=None)]
-    assert labels == [
-        'Run Example: deconvolution only (protein mix, LC-MS) again with identification',
-        'Process more files with these settings',
-        'Show Example: native, identified (GapA)',
-        'Compare side by side with Example: native, identified (GapA)',
-    ]
-    # In the second experiment of a comparison there is nothing to put beside it
-    second = missing_analysis.options(
-        tmp_path, file_manager, 'example_deconvolution', [IDENTIFICATION], None,
-        runs=runs, selection_key=lambda i: f'sel{i}', view_args=None, index=1)
-    assert not any(o['label'].startswith('Compare') for o in second)
+        tmp_path, file_manager, 'example_deconvolution', [IDENTIFICATION])]
+    assert labels == ['Process more files with these settings']
 
 
 def test_more_files_compare_the_added_files_with_the_run(tmp_path):

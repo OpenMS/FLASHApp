@@ -119,12 +119,7 @@ def missing_options(missing, view):
     dataset_id = st.session_state.get(selection_key(index))
     if dataset_id not in results:
         return []
-    return missing_analysis.options(
-        workspace, file_manager, dataset_id, missing, view, runs=results, selection_key=selection_key,
-        view_args=(topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
-                   topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager)),
-        index=index,
-    )
+    return missing_analysis.options(workspace, file_manager, dataset_id, missing)
 
 
 def experiment(index):

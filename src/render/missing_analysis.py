@@ -3,15 +3,12 @@
 A run deconvolved only has no identifications, a run without isobaric labels no
 reporter ions. Views needing them are locked in the view bar (the components'
 ``needs`` in ``layout_editor/catalog.py``), and a click, or the **Add …** button
-of such a component, opens a dialog with these choices:
-
-- run this run again with the missing analysis: the Describe experiment page
-  opens with the settings the run was made with (its FLASHDeconv and FLASHTnT
-  parameters, its input file) and the analysis switched on;
-- process more files with these settings: only the added files are processed,
-  and this run is compared with them in one comparison, as it is if it was
-  processed with what the new start does (else its file is processed again);
-- show a run that has it, alone or side by side with this one.
+of such a component, opens a dialog that offers one thing: process more files
+with this run's settings and the missing analysis switched on. Only the added
+files are processed, and this run is compared with them in one comparison,
+computed in the Viewer, as it is if it was processed with what the new start
+does (else its file is processed again with them, so picking no new file runs
+this run again with the analysis).
 """
 
 import json
@@ -21,7 +18,6 @@ from pathlib import Path
 import streamlit as st
 
 from src import analysis
-from src.layout_manager.layout import select_view, load_views, save_views
 from src.render.layout_editor.catalog import IDENTIFICATION, ISOBARIC
 
 CONFIGURE_PAGE = Path('content', 'TopDown', 'TopDownConfigure.py')
@@ -167,24 +163,7 @@ def _follow_up(workspace, file_manager, dataset_id, changes, note, more_files=Fa
     )
 
 
-def _show(view_args, selection_key, index, dataset_id, view, side_by_side):
-    """Show ``dataset_id`` (with ``view``): in experiment ``index``, or beside it."""
-    path, components, presets, default = view_args
-    if side_by_side:
-        state = load_views(path, components, presets, default)
-        state.update(experiments=2, side_by_side=True)
-        if view:
-            state['current'] = view
-        save_views(path, state)
-        st.session_state[selection_key(1)] = dataset_id
-        return
-    st.session_state[selection_key(index)] = dataset_id
-    if view:
-        select_view(path, view, components, presets, default)
-
-
-def options(workspace, file_manager, dataset_id, missing, view, *, runs, selection_key,
-            view_args, index=0):
+def options(workspace, file_manager, dataset_id, missing):
     """The dialog's choices for run ``dataset_id`` lacking the analyses ``missing``."""
     labels = ' and '.join(ANALYSES[m]['label'].lower() for m in missing)
     changes = {}
@@ -192,44 +171,14 @@ def options(workspace, file_manager, dataset_id, missing, view, *, runs, selecti
         changes.update(_SWITCH_ON.get(name, {}))
     _, has_file = run_settings(workspace, file_manager, dataset_id)
     name = file_manager.get_display_name(dataset_id)
-    choices = [{
-        'label': f'Run {name} again with {labels}',
-        'icon': ':material/play_circle:',
-        'help': ("Opens Describe experiment with the settings this run was made with and "
-                 f"{labels} switched on. The new run is kept next to this one."
-                 + ('' if has_file else " Its input file is no longer in the workspace: pick it again.")
-                 + (" Check the protein database there." if IDENTIFICATION in missing else "")),
-        'on_click': lambda: _follow_up(workspace, file_manager, dataset_id, changes,
-                                       f'with {labels} switched on'),
-    }, {
+    return [{
         'label': 'Process more files with these settings',
         'icon': ':material/library_add:',
         'help': (f"Opens Describe experiment with the settings of {name} and {labels} switched on, to pick "
                  f"files to add. The Viewer then compares them with {name} in one comparison, computed "
-                 "here; a run processed without these settings is processed again with them."),
+                 "here; a run processed without these settings is processed again with them."
+                 + ('' if has_file else " Its input file is no longer in the workspace: pick it again.")
+                 + (" Check the protein database there." if IDENTIFICATION in missing else "")),
         'on_click': lambda: _follow_up(workspace, file_manager, dataset_id, changes,
                                        f'with {labels} switched on, for more files', more_files=True),
     }]
-    view_name = view['name'] if view else None
-    having = [r for r in runs if r != dataset_id
-              and set(missing) <= (available(file_manager, r) or set())]
-    for other in having[:1]:
-        other_name = file_manager.get_display_name(other)
-        choices.append({
-            'label': f'Show {other_name}',
-            'icon': ':material/swap_horiz:',
-            'help': f"{other_name} was processed with {labels}.",
-            'primary': False,
-            'on_click': lambda other=other: _show(view_args, selection_key, index, other, view_name, False),
-        })
-    if having and index == 0:
-        other = having[0]
-        other_name = file_manager.get_display_name(other)
-        choices.append({
-            'label': f'Compare side by side with {other_name}',
-            'icon': ':material/splitscreen_right:',
-            'help': f"Shows {name} and {other_name} next to each other in this view.",
-            'primary': False,
-            'on_click': lambda: _show(view_args, selection_key, index, other, view_name, True),
-        })
-    return choices
