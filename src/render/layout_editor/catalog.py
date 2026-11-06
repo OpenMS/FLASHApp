@@ -133,8 +133,16 @@ QUANT_COMPONENTS = [
      'requires_label': 'the comparison table, the volcano plot or the clustered heatmap'},
     {'name': 'quant_diagnostics', 'label': 'Comparison diagnostics', 'group': 'Quality control'},
 ]
+# Label-free: runs compared feature by feature, each entry followed run by run
 QUANT_DEFAULT_LAYOUT = [
     ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca'], ['quant_go'],
+]
+QUANT_LABEL_FREE_LAYOUT = QUANT_DEFAULT_LAYOUT
+# Isobaric labels (TMT, iTRAQ): the samples of one pooled set, so how they
+# cluster and whether their channels are balanced come before single entries
+QUANT_ISOBARIC_LAYOUT = [
+    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_pca', 'quant_heatmap'],
+    ['quant_diagnostics'], ['quant_go'],
 ]
 
 MAX_EXPERIMENTS = 5

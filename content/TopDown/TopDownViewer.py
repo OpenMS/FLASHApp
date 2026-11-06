@@ -7,7 +7,9 @@ view is picked, each experiment shows the default of its run: the
 deconvolution default for a run deconvolved only, the Native or Lysate
 identification default for an identified run, as it was searched
 (src/render/topdown_layout.py). Every component of an experiment shares one
-selection, so a scan or proteoform stays selected when the view changes.
+selection, so a scan or proteoform stays selected when the view changes. A
+comparison of runs has a view bar of its own: Label-free, TMT, iTRAQ and
+the user's own comparison views (src/render/quant_view.py).
 """
 
 import streamlit as st
@@ -120,6 +122,7 @@ file_manager = FileManager(
     Path(st.session_state['workspace'], 'cache')
 )
 quant_view.migrate_layout(file_manager)
+quant_view.adopt_saved_layout(file_manager, workspace)
 topdown_layout.adopt_saved_layout(file_manager, workspace)
 
 # Every deconvolved run, of which some were identified, then the comparisons
@@ -171,7 +174,9 @@ def edit_layout(index=0):
         result_download.viewer_button(file_manager, shown if shown in downloadable else None)
 
 
-if not comparison_selected():
+if comparison_selected():
+    quant_view.view_selector(file_manager, workspace, st.session_state[selection_key(0)])
+else:
     view_selector()
 # The views file sets the number of experiments (and side by side); without
 # one, a single experiment
@@ -181,7 +186,8 @@ experiments = [None] * count
 if comparison_selected():
     selector(0, display_names, lambda: quant_view.buttons(file_manager, st.session_state[selection_key(0)]))
     # A comparison spans its runs, so it fills the page on its own
-    quant_view.render(file_manager, st.session_state[selection_key(0)])
+    shown = st.session_state[selection_key(0)]
+    quant_view.render(file_manager, shown, quant_view.view_rows(file_manager, workspace, shown))
 
 elif len(experiments) == 2 and side_by_side:
     c1, c2 = st.columns(2)
