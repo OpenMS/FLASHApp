@@ -696,12 +696,15 @@ def _modification_picker_library():
 
 def _sequence_view_options(component):
     """Options of a sequence view, each when the installed openms-insight
-    supports it: the residue menus offer the whole modification library, and
-    the shown proteoform can be copied as ProForma."""
+    supports it: the residue menus offer the whole modification library, the
+    shown proteoform can be copied as ProForma, and the "Change sequence"
+    dialog reads ProForma."""
     if hasattr(component, 'set_variable_modification_library'):
         component.set_variable_modification_library(_modification_picker_library())
     if hasattr(component, 'set_proforma_copy'):
         component.set_proforma_copy()
+    if hasattr(component, 'set_proforma_input'):
+        component.set_proforma_input()
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
