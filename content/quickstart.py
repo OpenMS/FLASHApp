@@ -1,6 +1,7 @@
 import streamlit as st
 
 from src.common.common import page_setup, themed_asset, v_space
+from src.common.contributors import render_contributors
 from src.common.installers import render_installer_buttons
 
 page_setup(page="main")
@@ -533,6 +534,8 @@ def main():
     render_workflow_flow()
 
     render_whats_new()
+
+    render_contributors()
     
 
 main()
