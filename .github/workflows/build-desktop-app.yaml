@@ -104,7 +104,7 @@ jobs:
     with:
       # Same branch as the Docker image (Dockerfile OPENMS_BRANCH); it has
       # FLASHAnnotator. Built on all three platforms once per commit.
-      openms: ${{ inputs.openms || 't0mdavid-m/OpenMS@FDmerge' }}
+      openms: ${{ inputs.openms || 't0mdavid-m/OpenMS@FDmerge-3.6' }}
 
   # One job for all three platforms: the same steps stage OpenMS, Python and
   # the app into electron/payload, then a single packaging step turns it into

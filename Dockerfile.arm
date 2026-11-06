@@ -19,7 +19,7 @@
 FROM ubuntu:24.04 AS setup-build-system
 # FDmerge: the OpenMS branch with FLASHAnnotator (same as the desktop build).
 ARG OPENMS_REPO=https://github.com/t0mdavid-m/OpenMS.git
-ARG OPENMS_BRANCH=FDmerge
+ARG OPENMS_BRANCH=FDmerge-3.6
 ARG PORT=8501
 # GitHub repository whose latest release supplies the bundled Windows
 # installer. Empty: `github-user` and `repository-name` from settings.json,
