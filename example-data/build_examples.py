@@ -10,12 +10,14 @@ and a display name that says what the example shows.
 The label-free example uses four runs of the FLASHQuant SpikeIn dataset
 (MassIVE MSV000091923 / PXD042169: the six-protein mix spiked into an E. coli
 lysate at relative amounts 1 (A) and 1/10 (F), two replicates each). The
-isobaric example uses one fraction of the ratio sample of PXD078120 (HeLa
-proteoforms labelled intact with TMT 10-plex reagents, six channels mixed
-1:1:2:2:4:4). A missing input is downloaded and cut to a short retention-time
-window with FileFilter, so the repository stays small.
+isobaric example uses one run of the ratio sample of PXD055510 (Matzanke,
+Kaulich et al., J Proteome Res 2025: E. coli proteoforms labelled at their
+cysteines with iodoTMT sixplex, channels 126 to 131 mixed 8:4:1:1:4:8, the
+two-scan method). A missing input is downloaded (a Thermo RAW file is
+converted with FileConverter) and cut to a short retention-time window with
+FileFilter, so the repository stays small.
 
-It needs the TOPP tools (FileFilter, FLASHDeconv, DecoyDatabase, FLASHTnT,
+It needs the TOPP tools (FileConverter, FileFilter, FLASHDeconv, DecoyDatabase, FLASHTnT,
 FLASHAnnotator, FLASHQuantConsensus) on PATH, so run it inside the FLASHApp image from the repository root:
 
     docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/openms/flashapp:latest \
@@ -43,25 +45,27 @@ INPUTS = DEMO / 'flashtnt' / 'input-files'
 DATABASE = INPUTS / 'fasta-file' / 'example_database.fasta'
 
 MASSIVE = 'https://massive.ucsd.edu/ProteoSAFe/DownloadResultFile?forceDownload=true&file=f.MSV000091923/peak/'
-PRIDE = 'https://ftp.pride.ebi.ac.uk/pride/data/archive/2026/08/PXD078120/'
+PRIDE = 'https://ftp.pride.ebi.ac.uk/pride/data/archive/2025/05/PXD055510/'
 # Retention time window kept of the SpikeIn runs (seconds): spike-in proteins
 # and E. coli background elute here
 SPIKEIN_RT = (3990, 4140)
-# Of the TMT fraction: a stretch dense in spectra with all six reporter ions
-TMT_RT = (6380, 6680)
+# Of the TMT run: None keeps the five minutes with the most fragmentation
+# spectra that hold all six reporter ions (reporter_window)
+TMT_RT = None
+TMT_WINDOW = 300
 # Example input -> (URL of the run it is cut from, retention time window kept)
 SOURCES = {
     'Label-free_SpikeIn-1x_R1.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_A_R1.mzML', SPIKEIN_RT),
     'Label-free_SpikeIn-1x_R2.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_A_R2.mzML', SPIKEIN_RT),
     'Label-free_SpikeIn-0.1x_R1.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_F_R1.mzML', SPIKEIN_RT),
     'Label-free_SpikeIn-0.1x_R2.mzML': (MASSIVE + '20220414_Ecoli_ProtMix_F_R2.mzML', SPIKEIN_RT),
-    'Isobaric_TMT10_HeLa-Ratio.mzML': (PRIDE + 'Ratio_F50.mzML', TMT_RT),
+    'Isobaric_TMT6_Ecoli-Ratio.mzML': (
+        PRIDE + 'Ecoli_ratio_iodoTMTsix_PEPPI-40_2scan_peptideMode_highres_r1.raw', TMT_RT),
 }
-# The channels of the TMT example: sample and condition (its relative amount);
-# 128N, 130N, 130C and 131 were not used
+# The channels of the TMT example: sample and condition (its relative amount)
 TMT_CHANNELS = {
-    '126': ('1x_a', '1x'), '127N': ('1x_b', '1x'), '127C': ('2x_a', '2x'),
-    '128C': ('2x_b', '2x'), '129N': ('4x_a', '4x'), '129C': ('4x_b', '4x'),
+    '126': ('8x_a', '8x'), '127': ('4x_a', '4x'), '128': ('1x_a', '1x'),
+    '129': ('1x_b', '1x'), '130': ('4x_b', '4x'), '131': ('8x_b', '8x'),
 }
 
 # Each example: the input files, its analysis parameters, and the dataset id
@@ -92,12 +96,12 @@ EXAMPLES = [
         'comparison': ('example_label_free', 'Example: label-free comparison (spike-in 1x vs 0.1x)'),
     },
     {
-        'files': ['Isobaric_TMT10_HeLa-Ratio.mzML'],
-        'params': {'identify': False, 'quantification': 'isobaric', 'isobaric-plex': 'tmt10plex'},
+        'files': ['Isobaric_TMT6_Ecoli-Ratio.mzML'],
+        'params': {'identify': False, 'quantification': 'isobaric', 'isobaric-plex': 'tmt6plex'},
         'channels': TMT_CHANNELS,
-        'runs': [('example_isobaric', 'Example: TMT 10-plex, deconvolution only (HeLa, ratio mix)')],
-        'comparison': ('example_isobaric_comparison', 'Example: TMT comparison (1x vs 2x vs 4x)'),
-        # Every protein is mixed 1:2:4, so normalizing the channels to a
+        'runs': [('example_isobaric', 'Example: TMT 6-plex, deconvolution only (E. coli, ratio mix)')],
+        'comparison': ('example_isobaric_comparison', 'Example: TMT comparison (8x vs 4x vs 1x)'),
+        # Every protein is mixed 8:4:1, so normalizing the channels to a
         # common median would remove the very difference the example shows
         'comparison_settings': {'postproc-normalization': 'None'},
     },
@@ -136,18 +140,59 @@ def trim(source, target, rt):
         shutil.move(out, target)
 
 
+def reporter_window(mzml, width=TMT_WINDOW, tolerance=0.005):
+    """The `width` seconds of `mzml` with the most fragmentation spectra that
+    hold every reporter ion of the TMT example."""
+    import bisect
+    import pyopenms as oms
+    from src.quant import isobaric
+    reporters = [mz for _, mz in isobaric.PLEXES['tmt6plex'][1]]
+    times = []
+
+    def complete(spectrum):
+        mzs, _ = spectrum.get_peaks()
+        for mz in reporters:
+            i = bisect.bisect_left(mzs, mz - tolerance)
+            if i == len(mzs) or mzs[i] > mz + tolerance:
+                return False
+        return True
+
+    experiment = oms.MSExperiment()
+    oms.MzMLFile().load(str(mzml), experiment)
+    for spectrum in experiment:
+        if spectrum.getMSLevel() == 2 and complete(spectrum):
+            times.append(spectrum.getRT())
+    if not times:
+        raise SystemExit(f'{mzml}: no spectrum holds all six reporter ions')
+    best, start = 0, times[0]
+    for i, rt in enumerate(times):
+        count = bisect.bisect_right(times, rt + width) - i
+        if count > best:
+            best, start = count, rt
+    print(f'TMT window: {start:.0f}-{start + width:.0f} s, {best} of {len(times)} spectra '
+          'with all reporter ions', flush=True)
+    return (int(start), int(start + width))
+
+
 def fetch(name):
     """Download the run behind example input `name` and keep its window."""
     url, rt = SOURCES[name]
     target = INPUTS / 'mzML-files' / name
     if target.exists():
-        trim(target, target, rt)
+        if rt is not None:
+            trim(target, target, rt)
         return
     with tempfile.TemporaryDirectory() as tmp:
         full = Path(tmp, 'full.mzML')
         print(f'Downloading {url}', flush=True)
-        download(url, full)
-        trim(full, target, rt)
+        if url.endswith('.raw'):
+            raw = Path(tmp, 'full.raw')
+            download(url, raw)
+            subprocess.run(['FileConverter', '-in', str(raw), '-out', str(full)], check=True)
+            raw.unlink()
+        else:
+            download(url, full)
+        trim(full, target, rt if rt is not None else reporter_window(full))
     print(f'{name}: {target.stat().st_size / 1e6:.1f} MB', flush=True)
 
 

@@ -39,8 +39,8 @@ EXAMPLE_FOLDERS = {
     'Label-free_SpikeIn-1x_R2.mzML': 'Label-free comparison',
     'Label-free_SpikeIn-0.1x_R1.mzML': 'Label-free comparison',
     'Label-free_SpikeIn-0.1x_R2.mzML': 'Label-free comparison',
-    # TMT 10-plex of a HeLa ratio mix
-    'Isobaric_TMT10_HeLa-Ratio.mzML': 'TMT 10-plex',
+    # iodoTMT sixplex of an E. coli ratio mix
+    'Isobaric_TMT6_Ecoli-Ratio.mzML': 'TMT 6-plex',
 }
 # Example file -> its folder, as upload_widget(fallback=...) takes it
 EXAMPLE_DATA = {f'{EXAMPLE_DIR}/{name}': folder for name, folder in EXAMPLE_FOLDERS.items()}
