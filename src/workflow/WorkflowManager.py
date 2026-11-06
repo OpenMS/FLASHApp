@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Optional
 from .Logger import Logger
@@ -5,7 +6,7 @@ from .ParameterManager import ParameterManager
 from .CommandExecutor import CommandExecutor
 from .StreamlitUI import StreamlitUI
 from .FileManager import FileManager
-from .RunManager import RunManager, FINISHED, FAILED, CANCELLED, RUNNING
+from .RunManager import RunManager, FINISHED, FAILED, CANCELLED, RUNNING, FOLLOW_UP_KEY, FOLLOW_UP_FILE, apply_settings
 import multiprocessing
 import shutil
 import subprocess
@@ -93,10 +94,24 @@ class WorkflowManager:
         self.parameter_manager.save_parameters()
         if self.multi_run:
             self._new_run()
+        else:
+            self._settle_follow_up()
         if self._queue_manager and self._queue_manager.is_available:
             self._start_workflow_queued()
         else:
             self._start_workflow_local()
+
+    def _settle_follow_up(self) -> None:
+        """Without run folders: the start keeps which result it follows (for the
+        processing report), and the next settings start fresh."""
+        params = self.parameter_manager.get_parameters_from_json()
+        info = params.pop(FOLLOW_UP_KEY, None)
+        sidecar = Path(self.workflow_dir, FOLLOW_UP_FILE)
+        if isinstance(info, dict):
+            sidecar.write_text(json.dumps(info), encoding="utf-8")
+            self.parameter_manager.write_parameters(params)
+        else:
+            sidecar.unlink(missing_ok=True)
 
     def _new_run(self) -> None:
         """Create the run this start writes into, and show it on the results pages."""
@@ -104,8 +119,57 @@ class WorkflowManager:
 
         name = st.session_state.pop(run_name_key(self.runs), "")
         self.run_id = self.runs.new_run(name, Path(self.workflow_dir, "params.json"))
+        # The run keeps which run it follows; the next settings start fresh
+        params = self.parameter_manager.get_parameters_from_json()
+        if params.pop(FOLLOW_UP_KEY, None) is not None:
+            self.parameter_manager.write_parameters(params)
         self._use_run(self.run_id)
         set_selected_run(self.runs, self.run_id)
+
+    def follow_up(
+        self,
+        run_id: str,
+        changes: Optional[dict] = None,
+        page=None,
+        note: str = "",
+    ) -> bool:
+        """Set up the next run from the settings ``run_id`` was started with.
+
+        For an analysis a run is missing (identification after deconvolution
+        only), more files, or a comparison with other runs: the parameters the
+        user set for that run, and its experimental design, become the
+        workflow's again, with ``changes`` on top (params.json keys, e.g.
+        ``{"identify": True}`` or ``{"mzML-files": [...]}``; a TOPP tool's dict is
+        merged). The configure page then says which run it starts from and
+        ``note`` (what changed). ``page`` switches there (``st.switch_page``).
+        Returns False if the run recorded no parameters.
+        """
+        if not self.multi_run or not self.runs.restore_settings(run_id, changes, note):
+            return False
+        self._reload_settings(page)
+        return True
+
+    def start_from(
+        self,
+        params: dict,
+        changes: Optional[dict] = None,
+        name: str = "",
+        page=None,
+        note: str = "",
+    ) -> None:
+        """``follow_up`` for an app without run folders: start from ``params``.
+
+        ``params`` are the settings the earlier result was made with (as the
+        app stored them), ``name`` names that result on the configure page.
+        """
+        apply_settings(self.workflow_dir, params, changes, {"name": name, "note": note})
+        self._reload_settings(page)
+
+    def _reload_settings(self, page=None) -> None:
+        self.params = self.parameter_manager.get_parameters_from_json()
+        self.parameter_manager.clear_parameter_session_state()
+        if page is not None:
+            st.switch_page(page)
 
     def _use_run(self, run_id: str) -> None:
         """Point results_dir (and the FileManager) at a run."""

@@ -338,6 +338,7 @@ class TopDownWorkflow(WorkflowManager):
         """Your analysis: the runs, whether and how they are identified and
         quantified, and what a start will do. Drawn above the parameters, not
         in a fragment: the tabs of configure() follow these choices."""
+        self.ui.follow_up_notice()
         with st.container(border=True):
             st.markdown('##### Your analysis')
             # reactive: drawn in the page itself, so a change reruns the page

@@ -1,0 +1,199 @@
+"""What the Viewer offers when a view needs an analysis the shown run was not processed with.
+
+A run deconvolved only has no identifications, a run without isobaric labels no
+reporter ions. Views needing them are locked in the view bar (the components'
+``needs`` in ``layout_editor/catalog.py``), and a click, or the **Add …** button
+of such a component, opens a dialog with these choices:
+
+- run this run again with the missing analysis: the Describe experiment page
+  opens with the settings the run was made with (its FLASHDeconv and FLASHTnT
+  parameters, its input file) and the analysis switched on;
+- process more files with these settings;
+- show a run that has it, alone or side by side with this one.
+"""
+
+import json
+import re
+from pathlib import Path
+
+import streamlit as st
+
+from src import analysis
+from src.layout_manager.layout import select_view, load_views, save_views
+from src.render.layout_editor.catalog import IDENTIFICATION, ISOBARIC
+
+CONFIGURE_PAGE = Path('content', 'TopDown', 'TopDownConfigure.py')
+WORKFLOW_DIR = 'flashtnt'
+
+ANALYSES = {
+    IDENTIFICATION: {
+        'label': 'identification',
+        'help': ('FLASHTnT searches a protein database for the proteoforms of the deconvolved masses '
+                 '(**Identify proteoforms** on the Describe experiment page).'),
+    },
+    ISOBARIC: {
+        'label': 'isobaric labels',
+        'help': ('FLASHDeconv measures the reporter ions of TMT or iTRAQ labels '
+                 '(**Quantification: Isobaric labels** on the Describe experiment page).'),
+    },
+}
+
+# What switching an analysis on changes in the workflow's parameters
+_SWITCH_ON = {
+    IDENTIFICATION: {analysis.IDENTIFY_KEY: True},
+    ISOBARIC: {analysis.QUANT_KEY: analysis.ISOBARIC},
+}
+
+
+def available(file_manager, dataset_id):
+    """The analyses run ``dataset_id`` was processed with (None: not a run)."""
+    if dataset_id is None:
+        return None
+    has = set()
+    if file_manager.result_exists(dataset_id, 'protein_dfs'):
+        has.add(IDENTIFICATION)
+    if file_manager.result_exists(dataset_id, 'isobaric_dfs'):
+        has.add(ISOBARIC)
+    return has
+
+
+# The example runs of the demo workspace and the input file each was made from
+# (``EXAMPLES`` in ``example-data/build_examples.py``)
+EXAMPLE_INPUTS = {
+    'example_deconvolution': 'Deconvolution-only_ProteinMix_LC-MS',
+    'example_native_identified': 'Native-identified_GapA_HCD',
+    'example_lysate_identified': 'Label-free_SpikeIn-1x_R1',
+    'example_isobaric': 'Isobaric_TMT6_Ecoli-Ratio',
+}
+
+_TIME_SUFFIX = re.compile(r'_\d{8}-\d{6}$')
+
+
+def _base_name(dataset_id):
+    """The input file's name without extension: dataset ids are ``<name>_<time>``."""
+    if dataset_id in EXAMPLE_INPUTS:
+        return EXAMPLE_INPUTS[dataset_id]
+    return _TIME_SUFFIX.sub('', dataset_id)
+
+
+def input_file(workspace, dataset_id):
+    """The workflow's input file run ``dataset_id`` was made from, if it is still there."""
+    folder = Path(workspace, WORKFLOW_DIR, 'input-files', 'mzML-files')
+    candidates = []
+    if folder.is_dir():
+        candidates = [p for p in folder.iterdir() if p.name != 'external_files.txt']
+        external = Path(folder, 'external_files.txt')
+        if external.exists():
+            candidates += [Path(line.strip()) for line in external.read_text().splitlines() if line.strip()]
+    base = _base_name(dataset_id)
+    for path in candidates:
+        if Path(str(path).rstrip('/\\')).stem == base:
+            return str(path)
+    return None
+
+
+def _current_files(workspace):
+    try:
+        params = json.loads(Path(workspace, WORKFLOW_DIR, 'params.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return []
+    files = params.get('mzML-files') or []
+    return [files] if isinstance(files, str) else list(files)
+
+
+def run_settings(workspace, file_manager, dataset_id):
+    """The workflow's parameters as run ``dataset_id`` was made with them.
+
+    The workflow's current settings (database, samples), with the FLASHDeconv
+    and FLASHTnT parameters stored with the run and its input file.
+    """
+    try:
+        params = json.loads(Path(workspace, WORKFLOW_DIR, 'params.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        params = {}
+    for tool, name in (('FLASHDeconv', 'FD_parameters'), ('FLASHTnT', 'FTnT_parameters')):
+        if file_manager.result_exists(dataset_id, name):
+            params[tool] = dict(file_manager.get_results(dataset_id, [name])[name] or {})
+    params[analysis.IDENTIFY_KEY] = IDENTIFICATION in (available(file_manager, dataset_id) or set())
+    source = input_file(workspace, dataset_id)
+    if source is not None:
+        params['mzML-files'] = [source]
+    return params, source is not None
+
+
+def _follow_up(workspace, file_manager, dataset_id, changes, note, more_files=False):
+    from src.Workflow import TopDownWorkflow  # the page set up the workspace already
+    current = _current_files(workspace)
+    params, _ = run_settings(workspace, file_manager, dataset_id)
+    if more_files:
+        # The files selected now, and this run's: add more in the Browse dialog
+        params['mzML-files'] = list(dict.fromkeys(current + params.get('mzML-files', [])))
+    TopDownWorkflow().start_from(
+        params, changes, name=file_manager.get_display_name(dataset_id), page=CONFIGURE_PAGE, note=note,
+    )
+
+
+def _show(view_args, selection_key, index, dataset_id, view, side_by_side):
+    """Show ``dataset_id`` (with ``view``): in experiment ``index``, or beside it."""
+    path, components, presets, default = view_args
+    if side_by_side:
+        state = load_views(path, components, presets, default)
+        state.update(experiments=2, side_by_side=True)
+        if view:
+            state['current'] = view
+        save_views(path, state)
+        st.session_state[selection_key(1)] = dataset_id
+        return
+    st.session_state[selection_key(index)] = dataset_id
+    if view:
+        select_view(path, view, components, presets, default)
+
+
+def options(workspace, file_manager, dataset_id, missing, view, *, runs, selection_key,
+            view_args, index=0):
+    """The dialog's choices for run ``dataset_id`` lacking the analyses ``missing``."""
+    labels = ' and '.join(ANALYSES[m]['label'].lower() for m in missing)
+    changes = {}
+    for name in missing:
+        changes.update(_SWITCH_ON.get(name, {}))
+    _, has_file = run_settings(workspace, file_manager, dataset_id)
+    name = file_manager.get_display_name(dataset_id)
+    choices = [{
+        'label': f'Run {name} again with {labels}',
+        'icon': ':material/play_circle:',
+        'help': ("Opens Describe experiment with the settings this run was made with and "
+                 f"{labels} switched on. The new run is kept next to this one."
+                 + ('' if has_file else " Its input file is no longer in the workspace: pick it again.")
+                 + (" Check the protein database there." if IDENTIFICATION in missing else "")),
+        'on_click': lambda: _follow_up(workspace, file_manager, dataset_id, changes,
+                                       f'with {labels} switched on'),
+    }, {
+        'label': 'Process more files with these settings',
+        'icon': ':material/library_add:',
+        'help': f"Opens Describe experiment with the settings of {name} and {labels} switched on, to add files.",
+        'on_click': lambda: _follow_up(workspace, file_manager, dataset_id, changes,
+                                       f'with {labels} switched on, for more files', more_files=True),
+    }]
+    view_name = view['name'] if view else None
+    having = [r for r in runs if r != dataset_id
+              and set(missing) <= (available(file_manager, r) or set())]
+    for other in having[:1]:
+        other_name = file_manager.get_display_name(other)
+        choices.append({
+            'label': f'Show {other_name}',
+            'icon': ':material/swap_horiz:',
+            'help': f"{other_name} was processed with {labels}.",
+            'primary': False,
+            'on_click': lambda other=other: _show(view_args, selection_key, index, other, view_name, False),
+        })
+    if having and index == 0:
+        other = having[0]
+        other_name = file_manager.get_display_name(other)
+        choices.append({
+            'label': f'Compare side by side with {other_name}',
+            'icon': ':material/splitscreen_right:',
+            'help': f"Shows {name} and {other_name} next to each other in this view.",
+            'primary': False,
+            'on_click': lambda: _show(view_args, selection_key, index, other, view_name, True),
+        })
+    return choices

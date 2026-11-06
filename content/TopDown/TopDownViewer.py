@@ -22,7 +22,8 @@ from src import analysis, former_examples, sample_type
 from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
-from src.layout_manager import view_bar
+from src.layout_manager import request_analysis, view_bar
+from src.render import missing_analysis
 from src.render import quant_view
 from src.render.tool_results import tool_results_button
 from src.common import result_download
@@ -100,6 +101,32 @@ def selector(index, names, with_button=None):
             with_button()
 
 
+VIEW_KEY = 'topdown_view'
+MISSING_INDEX = 'topdown_missing_experiment'
+
+
+def add_missing(index):
+    """The button of a component whose run lacks its analysis: the view bar's dialog."""
+    def on_missing(missing, component):
+        st.session_state[MISSING_INDEX] = index
+        request_analysis(VIEW_KEY, missing, component=component)
+    return on_missing
+
+
+def missing_options(missing, view):
+    """What the dialog offers for the run of the experiment that asked."""
+    index = st.session_state.get(MISSING_INDEX, 0) if view is None else 0
+    dataset_id = st.session_state.get(selection_key(index))
+    if dataset_id not in results:
+        return []
+    return missing_analysis.options(
+        workspace, file_manager, dataset_id, missing, view, runs=results, selection_key=selection_key,
+        view_args=(topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
+                   topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager)),
+        index=index,
+    )
+
+
 def experiment(index):
     """Draw experiment `index` below its selector."""
     dataset_id = st.session_state.get(selection_key(index))
@@ -107,7 +134,7 @@ def experiment(index):
         return
     render_grid(
         dataset_id, experiment_layout(index, dataset_id), file_manager, TOOL,
-        selection_key(index), f'flash_viewer_grid_{index}',
+        selection_key(index), f'flash_viewer_grid_{index}', on_missing=add_missing(index),
     )
 
 
@@ -154,7 +181,9 @@ def view_selector():
     view_bar(
         topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
         topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager),
-        key='topdown_view', default_view=topdown_layout.default_view(identified, kind, file_manager),
+        key=VIEW_KEY, default_view=topdown_layout.default_view(identified, kind, file_manager),
+        available=missing_analysis.available(file_manager, first if first in display_id_to_name else None),
+        analyses=missing_analysis.ANALYSES, unavailable_options=missing_options,
         max_experiments=MAX_EXPERIMENTS, target='the Viewer',
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "

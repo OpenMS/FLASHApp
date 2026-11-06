@@ -75,6 +75,19 @@ ISOBARIC_COMPONENTS = [
 ]
 
 
+# What a run needs to have been processed with for a component (``needs``):
+# the identification components have nothing to show for a run deconvolved
+# only (the sequence view then shows the sequence set in the view), the
+# reporter ion components nothing without isobaric labels. The Viewer locks
+# the views that need what the shown run lacks and offers to add it.
+IDENTIFICATION = 'identification'
+ISOBARIC = 'isobaric'
+IDENTIFICATION_ONLY = (
+    {c['name'] for c in TNT_COMPONENTS} - {c['name'] for c in DECONV_COMPONENTS} - {'sequence_view'}
+)
+ISOBARIC_ONLY = {c['name'] for c in ISOBARIC_COMPONENTS}
+
+
 def _combined():
     by_name = {}
     for component in DECONV_COMPONENTS + TNT_COMPONENTS:
@@ -88,6 +101,10 @@ def _combined():
     )
     by_name.update({c['name']: dict(c) for c in ISOBARIC_COMPONENTS})
     by_name['reporter_ions'].update(requires=_SELECTS_SCAN + ['reporter_table'], requires_label=_SELECTS_SCAN_LABEL + ' or the reporter ion table')
+    for name in IDENTIFICATION_ONLY:
+        by_name[name]['needs'] = IDENTIFICATION
+    for name in ISOBARIC_ONLY:
+        by_name[name]['needs'] = ISOBARIC
     by_name['fdr_plot']['label'] = 'Score distribution plot (masses)'
     by_name['id_fdr_plot']['label'] = 'Score distribution plot (identifications)'
     groups = [

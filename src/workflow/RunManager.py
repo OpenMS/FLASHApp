@@ -26,6 +26,11 @@ from pathlib import Path
 from typing import Optional
 
 RUN_FILE = "run.json"
+DESIGN_FILE = "experimental-design.tsv"
+# params.json key naming the run whose settings the next run starts from
+FOLLOW_UP_KEY = "_follow_up"
+# Without run folders: what the last start followed (WorkflowManager.start_from)
+FOLLOW_UP_FILE = "last-follow-up.json"
 MAX_NAME_LENGTH = 100
 # Largest unpacked size import_zip() accepts by default
 MAX_IMPORT_BYTES = 20 * 1024**3
@@ -124,7 +129,32 @@ class RunManager:
         self._write(run_id, {"name": name, "created": _now(), "status": RUNNING})
         if params_file is not None and Path(params_file).exists():
             shutil.copy2(params_file, self.params_file(run_id))
+        # The experimental design is part of the run's settings too
+        design = Path(self.workflow_dir, DESIGN_FILE)
+        if design.exists():
+            shutil.copy2(design, Path(self.run_dir(run_id), DESIGN_FILE))
         return run_id
+
+    def restore_settings(self, run_id: str, changes: Optional[dict] = None,
+                         note: str = "") -> bool:
+        """Make a run's parameters (and experimental design) the workflow's again.
+
+        The next run then starts from exactly the settings ``run_id`` used,
+        with ``changes`` on top (top-level keys of params.json; a dict value,
+        such as one TOPP tool's parameters, is merged into the stored one).
+        ``FOLLOW_UP_KEY`` records which run it follows, for the configure page
+        and the processing report. False if the run recorded no parameters.
+        """
+        run = self.get(run_id)
+        params = self.params(run_id)
+        if run is None or not params:
+            return False
+        apply_settings(self.workflow_dir, params, changes,
+                       {"run": run_id, "name": run.get("name", run_id), "note": note})
+        design = Path(self.run_dir(run_id), DESIGN_FILE)
+        if design.exists():
+            shutil.copy2(design, Path(self.workflow_dir, DESIGN_FILE))
+        return True
 
     def finish(self, run_id: Optional[str], status: str) -> None:
         """Record how a run ended and keep a copy of its logs."""
@@ -178,7 +208,19 @@ class RunManager:
                     fnmatch(part, p) for part in rel.parts for p in exclude
                 ):
                     zf.write(path, rel)
+            self._write_report(zf, run_id)
         return zip_path
+
+    def _write_report(self, zf: zipfile.ZipFile, run_id: str) -> None:
+        """Add the run's processing report (Markdown) to its ZIP, if it recorded tool calls."""
+        from .processing_report import REPORT_NAME, report_for, to_markdown
+
+        try:
+            report = report_for(self.workflow_dir, run_id)
+        except (OSError, ValueError, KeyError, TypeError):
+            return
+        if report["steps"]:
+            zf.writestr(f"{REPORT_NAME}.md", to_markdown(report))
 
     def import_zip(
         self, source, name: str = "", max_bytes: int = MAX_IMPORT_BYTES
@@ -374,6 +416,31 @@ class RunManager:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(run, f, indent=2)
         tmp.replace(path)
+
+
+def apply_settings(workflow_dir: Path, params: dict, changes: Optional[dict] = None,
+                   follow_up: Optional[dict] = None) -> dict:
+    """Write ``params`` with ``changes`` on top as the workflow's params.json.
+
+    A dict value of ``changes`` (one TOPP tool's parameters) is merged into the
+    stored one. ``follow_up`` (``{"run"?, "name", "note"}``) is kept under
+    ``FOLLOW_UP_KEY`` for the configure page and the processing report.
+    Returns what was written.
+    """
+    params = dict(params)
+    params.pop(FOLLOW_UP_KEY, None)
+    for key, value in (changes or {}).items():
+        if isinstance(value, dict) and isinstance(params.get(key), dict):
+            params[key] = {**params[key], **value}
+        else:
+            params[key] = value
+    if follow_up:
+        params[FOLLOW_UP_KEY] = dict(follow_up)
+    target = Path(workflow_dir, "params.json")
+    tmp = target.with_name(f".params-{uuid.uuid4().hex}.json")
+    tmp.write_text(json.dumps(params, indent=4), encoding="utf-8")
+    tmp.replace(target)
+    return params
 
 
 def _now() -> str:
