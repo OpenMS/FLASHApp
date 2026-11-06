@@ -20,7 +20,7 @@ def render_download_section():
             """
             <div class="fa-downloads-title">⬇️ Download FLASHApp</div>
             <div class="fa-downloads-text">
-                Run FLASHApp on your own computer: the same analysis and Viewer,
+                Run FLASHApp on your own computer: the same analysis and results,
                 on files that stay on your disk, with no upload.
             </div>
             """,
@@ -350,7 +350,7 @@ FLOW_STEPS = [
      "content/TopDown/TopDownConfigure.py"),
     ("🚀", "Run analysis", "Deconvolve, identify, quantify",
      "content/TopDown/TopDownRun.py"),
-    ("👀", "Viewer", "Explore spectra, masses, proteoforms",
+    ("👀", "Explore results", "Spectra, masses, proteoforms",
      "content/TopDown/TopDownViewer.py"),
     ("⬇️", "Download", "Result files of every run",
      "content/TopDown/TopDownDownload.py"),
@@ -462,13 +462,13 @@ def render_whats_new():
                         <ul>
                             <li>Deconvolution, proteoform identification and label-free or TMT quantification in one workflow.</li>
                             <li>Pick runs in a file selector with folders, import public PRIDE datasets, or download a UniProt proteome as the database.</li>
-                            <li>Example results for every analysis are ready in the Viewer.</li>
+                            <li>Example results for every analysis are ready in Explore results.</li>
                         </ul>
                     </div>
                     <div>
-                        <h4>A more flexible Viewer</h4>
+                        <h4>A more flexible results page</h4>
                         <ul>
-                            <li>Arrange the Viewer in a layout window with a searchable component list.</li>
+                            <li>Arrange the results page in a layout window with a searchable component list.</li>
                             <li>New views: chromatogram, proteoform heatmap and GO enrichment of selected proteins.</li>
                         </ul>
                     </div>

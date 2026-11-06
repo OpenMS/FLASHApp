@@ -26,11 +26,12 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import (
-    envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, modifications, prsm_data,
-    prsm_overview, qc_data, validation_data,
+    envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
+    prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
+from src.common.plot_style import spectrum_styling
 from src.render.layout_editor.catalog import DECONV_COMPONENTS, ISOBARIC_COMPONENTS, TNT_COMPONENTS
 from src.render import proteoform_edits
 from src.render.sequence import getFragmentDataFromSeq
@@ -47,7 +48,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
-        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__,
+        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__,
         str(Path(__file__).with_name('quant_cells.py')),
     ):
         try:
@@ -210,8 +211,6 @@ SURVEY, SURVEY_MASS, SURVEY_FOR = 'survey', 'survey_mass', 'survey_for'
 SEQUENCE_VIEW_OPTIONS = dict(
     mass_column='MonoMass', precursor_mass_column='PrecursorMass',
     annotation_title='FLASHAnnotator', svg_filename='FLASHViewer-sequence',
-    # FLASHViewer's dialog button colour
-    accent_color='#6200EE',
 )
 
 HEATMAPS = {
@@ -258,6 +257,8 @@ PROTEIN_GROUP_COLUMNS = [
      'headerTooltip': 'Proteins numbered by their best score.'},
     {'title': 'Accession', 'field': 'accession', 'widthGrow': 2, 'tooltip': True},
     {'title': 'Description', 'field': 'description', **_HIDDEN},
+    {'title': 'Mass shifts', 'field': 'mass_shifts', 'widthGrow': 2, 'tooltip': True, **_HIDDEN,
+     'headerTooltip': 'Mass shifts of its proteoforms with the modification they match ("?": none).'},
     {'title': 'Forms', 'field': 'proteoforms', 'sorter': 'number', 'minWidth': 92,
      'headerTooltip': 'Number of distinct proteoforms (ProForma strings) identified for the protein.'},
     {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'minWidth': 92,
@@ -279,6 +280,9 @@ PROTEOFORM_COLUMNS = [
     {'title': 'Mass', 'field': 'mass', 'sorter': 'number', **_MASS, **_HIDDEN,
      'headerTooltip': 'Proteoform mass of its best PrSM.'},
     {'title': 'Mods', 'field': 'modifications', 'sorter': 'number', **_HIDDEN},
+    {'title': 'Mass shifts', 'field': 'mass_shifts', 'widthGrow': 2, 'tooltip': True,
+     'headerTooltip': 'Mass shifts of the proteoform with the modification they match ("?": none). '
+                      'Pick a shift in the Mass shifts component to list the proteoforms carrying it.'},
     {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'minWidth': 92},
     {'title': 'Score', 'field': 'best_score', 'sorter': 'number', **_HIDDEN,
      'headerTooltip': 'Best score of its PrSMs.'},
@@ -296,6 +300,8 @@ PROTEOFORM_PRSM_COLUMNS = [
     {'title': 'Fragments', 'field': 'MatchingFragments', 'sorter': 'number', 'minWidth': 112,
      'headerTooltip': 'Number of matched fragments.'},
     {'title': 'Score', 'field': 'Score', 'sorter': 'number', 'minWidth': 92},
+    {'title': 'Mass shifts', 'field': 'mass_shifts', 'widthGrow': 2, 'tooltip': True, **_HIDDEN,
+     'headerTooltip': 'Mass shifts of the PrSM with the modification they match ("?": none).'},
     {'title': 'q-value', 'field': 'qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
      'headerTooltip': 'Proteoform-level q-value. Only PrSMs at q ≤ 0.01 are counted.'},
 ]
@@ -572,7 +578,7 @@ def _isotope_envelope(comp_name, file_manager, dataset_id, tool):
             x_column='mass', y_column='abundance', title='Isotope Envelope Fit',
             title_top='Observed (all charges)', title_bottom='Averagine',
             x_label='Mass (Da)', y_label='Relative abundance',
-            styling={'unhighlightedColor': '#3366CC'},
+            styling=spectrum_styling(),
         ),
     )
 
@@ -861,6 +867,24 @@ def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, en
     return component
 
 
+# A mass shift picked in the Mass shifts component narrows the protein,
+# proteoform and PrSM tables to the rows carrying it, besides their protein →
+# proteoform filters; with no shift picked they show every row. Needs an
+# openms-insight with ALL (list-column filters); older builds leave it out.
+_ALL_ROWS = getattr(openms_insight, 'ALL', None)
+_SHIFT_FILTER = (
+    dict(filters={'mass_shift': 'shift_ids'}, filter_defaults={'mass_shift': _ALL_ROWS})
+    if _ALL_ROWS is not None else {}
+)
+
+
+def _with_shift_filter(filters):
+    if not _SHIFT_FILTER:
+        return dict(filters=filters)
+    return dict(filters={**filters, **_SHIFT_FILTER['filters']},
+                filter_defaults=_SHIFT_FILTER['filter_defaults'])
+
+
 def _hierarchy_table(comp_name, file_manager, dataset_id):
     """One level of the protein → proteoform → PrSM tables and its height.
     Selecting a proteoform or PrSM selects its (best) PrSM in the other
@@ -870,6 +894,19 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
     with the most), up to TABLE_HEIGHT."""
     hits = hierarchy_data.prsms(file_manager, dataset_id)
     with_qvalues = hierarchy_data.has_qvalues(hits)
+
+    def with_shifts(rows, key):
+        # The mass shifts column and the shift ids the selected mass shift
+        # filters on (empty for a row without one); built with the cache only
+        groups, _, shifts = mass_shifts.summary(mass_shifts.prsm_shifts(hits))
+        if key not in shifts.columns:
+            shifts = shifts.join(hits.select('index', key), on='index', how='left')
+        return (
+            rows.join(mass_shifts.shift_labels(groups, shifts, key), on=key, how='left')
+            .join(mass_shifts.shift_ids(shifts, key), on=key, how='left')
+            .with_columns(pl.col('shift_ids').fill_null(pl.lit([], dtype=pl.List(pl.Int64))))
+        )
+
     common = dict(
         reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
         pagination=False, float_precision='float64',
@@ -880,31 +917,31 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
     )
     if comp_name == 'protein_group_table':
         build = lambda: dict(
-            data=hierarchy_data.protein_groups_from(hits).lazy(),
+            data=with_shifts(hierarchy_data.protein_groups_from(hits), 'protein_group').lazy(),
             column_definitions=_hierarchy_columns(PROTEIN_GROUP_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('Proteins', hierarchy_data.key_figures(hits)['proteins']),
             index_field='protein_group', go_to_fields=['accession'],
             interactivity={'protein_group': 'protein_group'},
-            multi_select={go_terms.RUN_SET: 'accession'}, **common,
+            multi_select={go_terms.RUN_SET: 'accession'}, **_SHIFT_FILTER, **common,
         )
     elif comp_name == 'proteoform_table':
         build = lambda: dict(
-            data=hierarchy_data.proteoforms_from(hits).lazy(),
+            data=with_shifts(hierarchy_data.proteoforms_from(hits), 'proteoform_id').lazy(),
             column_definitions=_hierarchy_columns(PROTEOFORM_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('Proteoforms', hierarchy_data.key_figures(hits)['proteoforms']),
             index_field='proteoform_id', go_to_fields=['proteoform'],
-            filters={'protein_group': 'protein_group'},
+            **_with_shift_filter({'protein_group': 'protein_group'}),
             interactivity={'proteoform': 'proteoform_id', 'protein': 'best_index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
         )
     else:
         build = lambda: dict(
-            data=hierarchy_data.prsm_rows_from(hits).lazy(),
+            data=with_shifts(hierarchy_data.prsm_rows_from(hits), 'index').lazy(),
             column_definitions=_hierarchy_columns(PROTEOFORM_PRSM_COLUMNS, with_qvalues),
             title=hierarchy_data.level_title('PrSMs', hierarchy_data.key_figures(hits)['prsms']),
             index_field='index', go_to_fields=['Scan'],
-            filters={'proteoform': 'proteoform_id'},
+            **_with_shift_filter({'proteoform': 'proteoform_id'}),
             interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
             multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT, **common,
@@ -1001,6 +1038,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 drilldown_title='Augmented Annotated Spectrum',
                 **SPECTRUM_COLUMNS,
                 float_precision='float64',
+                styling=spectrum_styling(),
             ),
         )
         # The fragment ions the sequence view matched on this spectrum
@@ -1044,6 +1082,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 drilldown_title='Precursor Spectrum (MS1)',
                 **SPECTRUM_COLUMNS,
                 float_precision='float64',
+                styling=spectrum_styling(),
             ),
         )
         # The m/z range isolated for the selected spectrum (none for an MS1
@@ -1108,8 +1147,6 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 toggle_filters=[{
                     'label': 'Best per spectrum', 'column': 'is_best', 'group_column': 'Scan',
-                    # FLASHViewer's checkbox colour
-                    'color': '#6200EE',
                 }],
                 interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
                 multi_select={go_terms.RUN_SET: 'accession'},
@@ -1130,7 +1167,6 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 filters={'protein': 'proteoform_index'},
                 toggle_filters=[{
                     'label': 'Matched masses only', 'column': 'matched', 'default': False,
-                    'color': '#6200EE',
                 }],
                 # A row selects its mass: the spectra highlight it and the
                 # Sequence View shows its fragment
@@ -1312,6 +1348,79 @@ def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
                 )
 
 
+# Mass shifts of the identified proteoforms (src/render/mass_shifts.py)
+_SHIFT_COLUMNS = [
+    {'title': 'Shift (Da)', 'field': 'shift', 'sorter': 'number', 'hozAlign': 'right', **_fixed(4),
+     'headerTooltip': 'Median of the mass shifts in this group.'},
+    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'hozAlign': 'right', 'width': 80},
+    {'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number', 'hozAlign': 'right', 'width': 110},
+    {'title': 'Interpretation', 'field': 'interpretation', 'widthGrow': 2, 'tooltip': True,
+     'headerTooltip': 'Closest common Unimod modification of this mass, '
+                      f'within {mass_shifts.MATCH_TOLERANCE * 1000:g} mDa; '
+                      'a match after missing the monoisotopic peak says so.'},
+    {'title': 'Unimod Δ (Da)', 'field': 'unimod', 'sorter': 'number', 'hozAlign': 'right', **_fixed(4)},
+    {'title': 'Deviation (mDa)', 'field': 'deviation', 'sorter': 'number', 'hozAlign': 'right', **_fixed(1)},
+    {'title': 'Residues', 'field': 'residues', 'tooltip': True,
+     'headerTooltip': 'Residues the modification is defined on in Unimod.'},
+    {'title': 'Other matches', 'field': 'other', 'widthGrow': 2, 'tooltip': True},
+]
+
+
+def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
+    """The mass shifts FLASHTnT placed on the identified proteoforms: a
+    histogram and the recurring shifts with the Unimod modifications they
+    match, linked to each other. A picked shift narrows the protein,
+    proteoform and PrSM tables to the rows carrying it; clicking it again in
+    the table unpicks it."""
+    sources = ['protein_dfs', 'scan_table']
+    try:
+        for name_tag in sources:
+            if insight_data.result_path(file_manager, dataset_id, name_tag) is None:
+                raise MissingResult(name_tag)
+    except MissingResult as e:
+        st.info(f'This dataset has no data for this view ({e}).')
+        return
+    hits = hierarchy_data.prsms(file_manager, dataset_id)
+    groups, histogram, prsms = mass_shifts.summary(mass_shifts.prsm_shifts(hits))
+    if not groups.height:
+        st.info('No identified proteoform of this run carries a mass shift.')
+        return
+    shifted = prsms['index'].n_unique()
+    columns = st.columns(3)
+    columns[0].metric('PrSMs with a mass shift', f'{shifted:,} of {hits.height:,}')
+    columns[1].metric('Shifts', f'{groups.height:,}', help='Groups of shifts within '
+                      f'{mass_shifts.CLUSTER_GAP * 1000:g} mDa of each other.')
+    columns[2].metric(
+        'Unexplained', f"{(groups['interpretation'] == '').sum():,}",
+        help='Shifts with no Unimod modification of that mass, '
+             'also one isotope peak off.',
+    )
+    plot = _component(
+        LinePlot, 'mass_shift_histogram', file_manager, dataset_id, sources,
+        lambda: dict(
+            data=histogram.lazy(), x_column='delta', y_column='prsms',
+            highlight_column='peak', annotation_column='label',
+            interactivity={'mass_shift': 'shift_id'},
+            title='Mass shifts of the identified proteoforms',
+            x_label='Mass shift (Da)', y_label='PrSMs',
+        ),
+    )
+    shift_table = _component(
+        Table, 'mass_shift_table', file_manager, dataset_id, sources,
+        lambda: dict(
+            data=groups.lazy(), column_definitions=_SHIFT_COLUMNS,
+            index_field='shift_id', interactivity={'mass_shift': 'shift_id'},
+            title='Mass shifts', initial_sort=[{'column': 'prsms', 'dir': 'desc'}],
+            # Clicking the picked shift again unpicks it, so the protein,
+            # proteoform and PrSM tables list every row again
+            reclick='deselect', default_row=-1, scroll_position=SCROLL, layout='fitColumns',
+        ),
+    )
+    plot(key=f'{key}_histogram', state_manager=state_manager, height=360)
+    shift_table(key=f'{key}_shifts', state_manager=state_manager,
+                height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
+
+
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None):
     missing = []
     if (
@@ -1339,6 +1448,9 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, 
         return
     if comp_name == 'id_qc':
         _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        return
+    if comp_name == 'mass_shifts':
+        _render_mass_shifts(file_manager, dataset_id, state_manager, key)
         return
     if comp_name == 'go_enrichment':
         from src.render import go_view

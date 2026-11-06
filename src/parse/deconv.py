@@ -4,7 +4,6 @@ import numpy as np
 
 from src.parse.masstable import parseFLASHDeconvOutput, getMSSignalDF, getSpectraTableDF
 from src.render.compression import downsample_heatmap, compute_compression_levels
-from scipy.stats import gaussian_kde
 
 # One row per scan with heavy array-valued cells; small row groups so per-scan
 # pushdown reads only the matching group(s) instead of the whole file.
@@ -218,6 +217,7 @@ def parseDeconv(
 
 
 def fdr_density_distribution(df):
+    from scipy.stats import gaussian_kde  # imported here: scipy.stats takes half a second to import
 
     # Find density targets
     target_qscores = df[df['TargetDecoyType'] == 0]['Qscore'].dropna()

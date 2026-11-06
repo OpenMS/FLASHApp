@@ -391,6 +391,19 @@ class TopDownWorkflow(WorkflowManager):
                 quant, analysis.plex(params),
             ), icon='🧭')
 
+    def run_bar_summary(self) -> str:
+        """The line beside the Run analysis button: what will run."""
+        params = self.current_params()
+        selected = params.get('mzML-files') or []
+        selected = [selected] if isinstance(selected, str) else selected
+        database = params.get('fasta-file')
+        text = analysis.summary(
+            len(selected), self.identifying(), self._current_sample_type(),
+            database if isinstance(database, str) else None,
+            analysis.quantification(params), analysis.plex(params),
+        )
+        return f'{text} Settings are saved when the analysis starts.'
+
     def _preset_fit_warning(self, identify, quant, current_sample) -> None:
         """Warn when the sample preset, or the preset applied last, sets
         settings of steps the chosen analysis does not run."""
@@ -614,7 +627,7 @@ class TopDownWorkflow(WorkflowManager):
             except Exception as e:  # never fail a run over GO terms
                 count, error = 0, f'GO terms were not prepared ({type(e).__name__}: {e}).'
             if error:
-                self.logger.log(f'{dataset_id}: {error} The Viewer looks them up when they are needed.')
+                self.logger.log(f'{dataset_id}: {error} They are looked up when Explore results needs them.')
             elif count:
                 self.logger.log(f'{dataset_id}: GO terms of {count} proteins prepared.', 1)
 
