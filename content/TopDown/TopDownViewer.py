@@ -148,12 +148,6 @@ display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id i
 display_name_to_id.update(comparison_names)
 display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items()}
 
-# Opened with Explore results on Run analysis: show what that start made
-if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False):
-    newest = analysis.newest_result(list(results) + list(comparison_ids))
-    if newest is not None:
-        st.session_state[selection_key(0)] = newest
-
 
 
 def view_selector():
@@ -164,7 +158,7 @@ def view_selector():
         topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
         topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager),
         key='topdown_view', default_view=topdown_layout.default_view(identified, kind, file_manager),
-        max_experiments=MAX_EXPERIMENTS, target='the results page',
+        max_experiments=MAX_EXPERIMENTS, target='the Viewer',
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
             "to 3 components per row; ready-made views can be duplicated. Add experiments to compare "
@@ -182,6 +176,12 @@ def edit_layout(index=0):
     if downloadable:
         result_download.viewer_button(file_manager, shown if shown in downloadable else None)
 
+
+# Opened with Explore results on Run analysis: show what that start made
+if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False):
+    newest = analysis.newest_result(list(results) + list(comparison_ids))
+    if newest is not None:
+        st.session_state[selection_key(0)] = newest
 
 if comparison_selected():
     quant_view.view_selector(file_manager, workspace, st.session_state[selection_key(0)])
