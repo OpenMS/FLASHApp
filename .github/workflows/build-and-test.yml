@@ -806,9 +806,15 @@ jobs:
         run: |
           helm repo add traefik https://traefik.github.io/charts
           helm repo update
+          # `service.type` is NOT a key in this chart and never has been - the
+          # Service type lives at `service.spec.type`, defaulting to
+          # LoadBalancer. The old --set was a silent no-op that nothing caught,
+          # because a port-forward works against a LoadBalancer Service too.
+          # renovate: datasource=helm registryUrl=https://traefik.github.io/charts depName=traefik
           helm install traefik traefik/traefik \
+            --version 41.3.0 \
             --namespace traefik --create-namespace \
-            --set service.type=ClusterIP
+            --set service.spec.type=ClusterIP
           kubectl -n traefik wait --for=condition=available deployment/traefik --timeout=120s
 
       - name: Deploy with Kustomize (full manifests, no filter)
