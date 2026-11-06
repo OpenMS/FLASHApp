@@ -1393,6 +1393,7 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
             data=prsms.lazy(), column_definitions=_SHIFT_PRSM_COLUMNS,
             index_field='row_id', filters={'mass_shift': 'shift_id'},
             interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+            multi_select={go_terms.RUN_SET: 'accession'},
             on_select=_IDENTIFICATION_ON_SELECT,
             title='PrSMs of the selected shift', initial_sort=[{'column': 'Score', 'dir': 'desc'}],
             reclick=RECLICK, scroll_position=SCROLL, layout='fitColumns',
