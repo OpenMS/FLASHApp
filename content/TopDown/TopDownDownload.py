@@ -21,7 +21,7 @@ page_intro(
      "Download the result files of your runs: one ZIP per run, or every run at once.")
     + " A run holds the deconvolved masses and spectra (TSV, mzML, msalign and feature files), "
     "with **Identify proteoforms** on also the proteins, PrSMs, tags and annotated fragments, "
-    "and the parameters it ran with. The run shown in the **Viewer** can also be "
+    "and the parameters it ran with. The run shown on **Explore results** can also be "
     f"{'exported' if local else 'downloaded'} there with its **{rd.verb()}** button."
 )
 

@@ -26,8 +26,11 @@ from src.layout_manager import view_bar
 from src.render import quant_view
 from src.render.tool_results import tool_results_button
 from src.common import result_download
+from src.workflow.StreamlitUI import latest_results_key
 
 TOOL = 'topdown'
+# TopDownWorkflow's folder in the workspace
+WORKFLOW_DIR = 'flashtnt'
 
 
 def selection_key(index):
@@ -145,6 +148,12 @@ display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id i
 display_name_to_id.update(comparison_names)
 display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items()}
 
+# Opened with Explore results on Run analysis: show what that start made
+if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False):
+    newest = analysis.newest_result(list(results) + list(comparison_ids))
+    if newest is not None:
+        st.session_state[selection_key(0)] = newest
+
 
 
 def view_selector():
@@ -155,7 +164,7 @@ def view_selector():
         topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
         topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager),
         key='topdown_view', default_view=topdown_layout.default_view(identified, kind, file_manager),
-        max_experiments=MAX_EXPERIMENTS, target='the Viewer',
+        max_experiments=MAX_EXPERIMENTS, target='the results page',
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
             "to 3 components per row; ready-made views can be duplicated. Add experiments to compare "

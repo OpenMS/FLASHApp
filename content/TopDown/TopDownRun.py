@@ -3,7 +3,7 @@ import streamlit as st
 from src import analysis
 from src.Workflow import TopDownWorkflow
 from src.common.common import page_setup, save_params
-from src.common.guide import next_steps, page_intro
+from src.common.guide import PAGES, next_steps, page_intro
 
 
 params = page_setup()
@@ -15,7 +15,7 @@ page_intro(
     "Start the analysis and follow its progress. Every selected run is deconvolved and, with "
     "**Identify proteoforms** on, searched in turn; with a **Quantification** chosen on Describe experiment, "
     "the samples are then compared. You can close this page and come back later with the same workspace.\n\n"
-    "Each run is kept as an experiment of the **Viewer**, and a comparison as an entry "
+    "Each run is kept as an experiment on **Explore results**, and a comparison as an entry "
     "**Comparison: ...** in its experiment selector."
 )
 
@@ -29,7 +29,7 @@ st.info(
     icon='🧭',
 )
 
-wf.show_execution_section()
+wf.show_execution_section(results_page=PAGES['topdown']['viewer'][0], results_label='Explore results')
 
 next_steps(
     'topdown',

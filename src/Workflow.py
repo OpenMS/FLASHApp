@@ -607,7 +607,7 @@ class TopDownWorkflow(WorkflowManager):
             except Exception as e:  # never fail a run over GO terms
                 count, error = 0, f'GO terms were not prepared ({type(e).__name__}: {e}).'
             if error:
-                self.logger.log(f'{dataset_id}: {error} The Viewer looks them up when they are needed.')
+                self.logger.log(f'{dataset_id}: {error} They are looked up when Explore results needs them.')
             elif count:
                 self.logger.log(f'{dataset_id}: GO terms of {count} proteins prepared.', 1)
 
