@@ -16,6 +16,10 @@ from src.quant import contract, isobaric, session
 from src.workflow import ExperimentalDesign
 
 TOOL = 'FLASHQuantConsensus'
+# Stored with every run: the analysis it was processed with and its mzML, so a
+# later start that processes more files can compare it with the new ones
+# without processing it again
+SETTINGS_KEY = 'analysis_settings'
 # Written by the workflow itself
 CONSENSUS_EXCLUDE = ['in', 'in_feature', 'in_id', 'out', 'out_id', 'out_mbr_detail']
 
@@ -44,6 +48,47 @@ def design_of(workflow_dir, selected_files, mzmls):
     return {run_name(m): by_name.get(run_name(m), ('', i + 1)) for i, m in enumerate(mzmls)}
 
 
+def run_record(identify, quant, plex, mzml, design=None):
+    """What ``SETTINGS_KEY`` stores for a run: its analysis, its mzML and its
+    condition and replicate in the Samples table (``design``: (condition, replicate))."""
+    condition, replicate = design or ('', 1)
+    return {
+        'identify': bool(identify), 'quantification': quant,
+        'plex': plex if quant == 'isobaric' else None,
+        'mzml': str(mzml), 'condition': condition, 'replicate': int(replicate),
+    }
+
+
+def matches(record, identify, quant, plex):
+    """True if a run stored with ``record`` has what a start with these
+    settings needs from it: the same quantification (and labels), and
+    identifications if the start identifies."""
+    if not isinstance(record, dict):
+        return False
+    if identify and not record.get('identify'):
+        return False
+    if record.get('quantification') != quant:
+        return False
+    return quant != 'isobaric' or record.get('plex') == plex
+
+
+def reusable_runs(file_manager, dataset_ids, identify, quant, plex):
+    """[(dataset id, record)] of the runs ``dataset_ids`` that a start with
+    these settings can compare with its own runs as they are (their mzML
+    still there), in that order. The others are left out."""
+    found = []
+    for dataset_id in dataset_ids or []:
+        try:
+            if not file_manager.result_exists(dataset_id, SETTINGS_KEY):
+                continue
+            record = file_manager.get_results(dataset_id, [SETTINGS_KEY])[SETTINGS_KEY]
+        except Exception:  # an unknown or damaged run
+            continue
+        if matches(record, identify, quant, plex) and Path(record.get('mzml', '')).is_file():
+            found.append((dataset_id, record))
+    return found
+
+
 def database_of(workflow):
     """The FASTA the runs were searched against (None without one)."""
     try:
@@ -52,10 +97,12 @@ def database_of(workflow):
         return None
 
 
-def compare_runs(workflow, tool, dataset_ids, mzmls, selected_files, prsm_key=None):
+def compare_runs(workflow, tool, dataset_ids, mzmls, selected_files, prsm_key=None, design=None):
     """Run FLASHQuantConsensus over the stored runs `dataset_ids` (with their
     `mzmls`, in the same order) and store the comparison. `prsm_key` names the
     stored PrSM tsv of each run (FLASHTnT) to add proteoforms and proteins.
+    `design` (run name -> (condition, replicate)) gives the runs of an earlier
+    start that are not in today's Samples table their place.
 
     Returns the comparison's dataset id, or None when the step failed.
     """
@@ -91,7 +138,7 @@ def compare_runs(workflow, tool, dataset_ids, mzmls, selected_files, prsm_key=No
         file_manager.store_file(dataset_id, 'identifications_tsv', Path(out_id), file_name='identifications.tsv')
     session.store(
         file_manager, dataset_id, levels, runs,
-        design_of(workflow.workflow_dir, selected_files, mzmls),
+        {**design_of(workflow.workflow_dir, selected_files, mzmls), **(design or {})},
         {'runs': list(dataset_ids), 'tool': TOOL}, tool,
     )
     rmtree(folder, ignore_errors=True)

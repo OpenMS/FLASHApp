@@ -89,3 +89,45 @@ def test_options_rerun_add_files_and_bring_in_a_run_that_has_it(tmp_path):
         tmp_path, file_manager, 'example_deconvolution', [IDENTIFICATION], None,
         runs=runs, selection_key=lambda i: f'sel{i}', view_args=None, index=1)
     assert not any(o['label'].startswith('Compare') for o in second)
+
+
+def test_more_files_compare_the_added_files_with_the_run(tmp_path):
+    from src import analysis
+    from src.quant.run import matches, reusable_runs, run_record
+
+    mzml = Path(tmp_path, 'a.mzML')
+    mzml.write_text('')
+    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    record = run_record(True, analysis.LABEL_FREE, None, mzml, ('control', 1))
+    file_manager.store_data('a_20260101-000000', 'analysis_settings', record)
+
+    # A run processed with what the start needs joins the comparison as it is
+    assert reusable_runs(file_manager, ['a_20260101-000000', 'unknown'], True, analysis.LABEL_FREE, None) \
+        == [('a_20260101-000000', record)]
+    # Not when the start needs what the run was not processed with
+    assert not matches(record, True, analysis.ISOBARIC, 'tmt6plex')
+    assert matches(run_record(False, analysis.LABEL_FREE, None, mzml), False, analysis.LABEL_FREE, None)
+    assert not matches(run_record(False, analysis.LABEL_FREE, None, mzml), True, analysis.LABEL_FREE, None)
+
+    # Processing more files quantifies: the files are compared with the run
+    params, changes, adds = missing_analysis.more_files_settings(
+        {'mzML-files': ['a.mzML'], analysis.IDENTIFY_KEY: True}, {}, lambda *a: True)
+    assert adds and params['mzML-files'] == []
+    assert changes == {analysis.QUANT_KEY: analysis.LABEL_FREE}
+    # A run without the analysis switched on now is processed again with the new files
+    params, changes, adds = missing_analysis.more_files_settings(
+        {'mzML-files': ['a.mzML'], analysis.IDENTIFY_KEY: False}, {analysis.IDENTIFY_KEY: True}, lambda *a: False)
+    assert not adds and params['mzML-files'] == ['a.mzML']
+
+
+def test_the_viewer_finds_the_comparison_of_added_files(tmp_path, monkeypatch):
+    from src.render import quant_view
+
+    workflow_dir = Path(tmp_path, 'flashtnt')
+    workflow_dir.mkdir()
+    file_manager = type('FM', (), {'get_results': lambda self, d, k: {'quant_manifest': {
+        'comparison_2': {'runs': ['a', 'b', 'c']}, 'comparison_1': {'runs': ['b', 'c']}}[d]}})()
+    monkeypatch.setattr(quant_view, 'comparisons', lambda fm, tool=None: ['comparison_2', 'comparison_1'])
+    assert quant_view.added_comparison(file_manager, workflow_dir) is None
+    Path(workflow_dir, 'last-follow-up.json').write_text(json.dumps({'adds_to': ['a']}))
+    assert quant_view.added_comparison(file_manager, workflow_dir) == 'comparison_2'

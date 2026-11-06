@@ -8,7 +8,9 @@ of such a component, opens a dialog with these choices:
 - run this run again with the missing analysis: the Describe experiment page
   opens with the settings the run was made with (its FLASHDeconv and FLASHTnT
   parameters, its input file) and the analysis switched on;
-- process more files with these settings;
+- process more files with these settings: only the added files are processed,
+  and this run is compared with them in one comparison, as it is if it was
+  processed with what the new start does (else its file is processed again);
 - show a run that has it, alone or side by side with this one.
 """
 
@@ -121,15 +123,47 @@ def run_settings(workspace, file_manager, dataset_id):
     return params, source is not None
 
 
+def more_files_settings(params, changes, reusable):
+    """The settings, changes and runs added to of Process more files.
+
+    The added files are compared with this run, so the start quantifies
+    (label-free unless the run has labels). ``reusable(identify, quant, plex)``
+    says if the run can join that comparison as it is: then only the files
+    picked now are processed; else its own file is processed again with them.
+    Returns (params, changes, adds_to).
+    """
+    changes = dict(changes)
+    merged = {**params, **changes}
+    if analysis.quantification(merged) == analysis.NO_QUANT:
+        changes[analysis.QUANT_KEY] = analysis.LABEL_FREE
+        merged[analysis.QUANT_KEY] = analysis.LABEL_FREE
+    params = dict(params)
+    if reusable(merged.get(analysis.IDENTIFY_KEY, True), analysis.quantification(merged), analysis.plex(merged)):
+        params['mzML-files'] = []
+        return params, changes, True
+    return params, changes, False
+
+
 def _follow_up(workspace, file_manager, dataset_id, changes, note, more_files=False):
     from src.Workflow import TopDownWorkflow  # the page set up the workspace already
-    current = _current_files(workspace)
+    from src.quant.run import reusable_runs
+
     params, _ = run_settings(workspace, file_manager, dataset_id)
-    if more_files:
-        # The files selected now, and this run's: add more in the Browse dialog
-        params['mzML-files'] = list(dict.fromkeys(current + params.get('mzML-files', [])))
+    name = file_manager.get_display_name(dataset_id)
+    if not more_files:
+        TopDownWorkflow().start_from(params, changes, name=name, page=CONFIGURE_PAGE, note=note)
+        return
+    own = params.get('mzML-files', [])
+    params, changes, adds = more_files_settings(
+        params, changes,
+        lambda identify, quant, plex: bool(reusable_runs(file_manager, [dataset_id], identify, quant, plex)),
+    )
+    if not adds:
+        # This run's file is processed again with the files added in the Browse dialog
+        params['mzML-files'] = list(dict.fromkeys(_current_files(workspace) + own))
     TopDownWorkflow().start_from(
-        params, changes, name=file_manager.get_display_name(dataset_id), page=CONFIGURE_PAGE, note=note,
+        params, changes, name=name, page=CONFIGURE_PAGE, note=note,
+        adds_to=[dataset_id] if adds else None, files=own if adds else None,
     )
 
 
@@ -170,7 +204,9 @@ def options(workspace, file_manager, dataset_id, missing, view, *, runs, selecti
     }, {
         'label': 'Process more files with these settings',
         'icon': ':material/library_add:',
-        'help': f"Opens Describe experiment with the settings of {name} and {labels} switched on, to add files.",
+        'help': (f"Opens Describe experiment with the settings of {name} and {labels} switched on, to pick "
+                 f"files to add. The Viewer then compares them with {name} in one comparison, computed "
+                 "here; a run processed without these settings is processed again with them."),
         'on_click': lambda: _follow_up(workspace, file_manager, dataset_id, changes,
                                        f'with {labels} switched on, for more files', more_files=True),
     }]

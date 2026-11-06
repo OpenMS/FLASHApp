@@ -118,9 +118,11 @@ class WorkflowManager:
         from .run_widgets import run_name_key, set_selected_run
 
         name = st.session_state.pop(run_name_key(self.runs), "")
-        self.run_id = self.runs.new_run(name, Path(self.workflow_dir, "params.json"))
-        # The run keeps which run it follows; the next settings start fresh
         params = self.parameter_manager.get_parameters_from_json()
+        info = params.get(FOLLOW_UP_KEY)
+        adds_to = info.get("adds_to") if isinstance(info, dict) else None
+        self.run_id = self.runs.new_run(name, Path(self.workflow_dir, "params.json"), adds_to=adds_to)
+        # The run keeps which run it follows; the next settings start fresh
         if params.pop(FOLLOW_UP_KEY, None) is not None:
             self.parameter_manager.write_parameters(params)
         self._use_run(self.run_id)
@@ -132,6 +134,7 @@ class WorkflowManager:
         changes: Optional[dict] = None,
         page=None,
         note: str = "",
+        add_files: Optional[str] = None,
     ) -> bool:
         """Set up the next run from the settings ``run_id`` was started with.
 
@@ -143,8 +146,13 @@ class WorkflowManager:
         merged). The configure page then says which run it starts from and
         ``note`` (what changed). ``page`` switches there (``st.switch_page``).
         Returns False if the run recorded no parameters.
+
+        ``add_files`` (the params.json key of the input files) is for more
+        files: that key starts empty, and the next run adds the files picked
+        then to ``run_id``'s experiment, which the results pages show as one
+        (``RunManager.experiment``), so the earlier files are not processed again.
         """
-        if not self.multi_run or not self.runs.restore_settings(run_id, changes, note):
+        if not self.multi_run or not self.runs.restore_settings(run_id, changes, note, add_files):
             return False
         self._reload_settings(page)
         return True
@@ -156,14 +164,34 @@ class WorkflowManager:
         name: str = "",
         page=None,
         note: str = "",
+        adds_to: Optional[list] = None,
+        files: Optional[list] = None,
     ) -> None:
         """``follow_up`` for an app without run folders: start from ``params``.
 
         ``params`` are the settings the earlier result was made with (as the
         app stored them), ``name`` names that result on the configure page.
+        ``adds_to`` (the app's ids of earlier results, with their input
+        ``files``) is for more files: the next run then adds to them, and
+        ``execution()`` reads them with ``self.follow_up_info()``.
         """
-        apply_settings(self.workflow_dir, params, changes, {"name": name, "note": note})
+        info = {"name": name, "note": note}
+        if adds_to:
+            info.update(adds_to=list(adds_to), files=list(files or []))
+        apply_settings(self.workflow_dir, params, changes, info)
         self._reload_settings(page)
+
+    def follow_up_info(self) -> dict:
+        """What the running start follows (``start_from``), for ``execution()``.
+
+        Without run folders the start keeps it apart from params.json (so the
+        next settings start fresh); empty when the start followed nothing.
+        """
+        try:
+            info = json.loads(Path(self.workflow_dir, FOLLOW_UP_FILE).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return info if isinstance(info, dict) else {}
 
     def _reload_settings(self, page=None) -> None:
         self.params = self.parameter_manager.get_parameters_from_json()

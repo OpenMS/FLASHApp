@@ -172,6 +172,13 @@ display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id i
 display_name_to_id.update(comparison_names)
 display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items()}
 
+# After Process more files, the comparison of the earlier runs with the added
+# ones is shown (once), in place of the runs one by one
+added = quant_view.added_comparison(file_manager, Path(workspace, missing_analysis.WORKFLOW_DIR))
+if added and st.session_state.get('_viewer_added_comparison') != added:
+    st.session_state['_viewer_added_comparison'] = added
+    st.session_state[selection_key(0)] = added
+
 
 
 def view_selector():
