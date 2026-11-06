@@ -694,6 +694,16 @@ def _modification_picker_library():
     return [{'id': e['id'], 'mass': e['mass'], 'site': e['site']} for e in modifications.library()]
 
 
+def _sequence_view_options(component):
+    """Options of a sequence view, each when the installed openms-insight
+    supports it: the residue menus offer the whole modification library, and
+    the shown proteoform can be copied as ProForma."""
+    if hasattr(component, 'set_variable_modification_library'):
+        component.set_variable_modification_library(_modification_picker_library())
+    if hasattr(component, 'set_proforma_copy'):
+        component.set_proforma_copy()
+
+
 @st.cache_data(max_entries=4, show_spinner=False)
 def _sequence_data(sequence, mod_ids):
     fixed_mods = {'fixed_modifications': list(mod_ids)}
@@ -1039,6 +1049,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 component.set_tag(None)
             else:
                 component.set_tag(int(tag['StartPos']), int(tag['EndPos']))
+            _sequence_view_options(component)
             return component, {}
 
         sequence = _deconv_sequence(fm, state_manager)
@@ -1063,6 +1074,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
             component.set_modification_picker(
                 _modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids
             )
+        _sequence_view_options(component)
         return component, {}
 
     if comp_name == 'structure_view':
