@@ -6,6 +6,7 @@ follows them and the Viewer picks its default layout from them.
 Streamlit-free.
 """
 
+import re
 from pathlib import Path
 
 from src import sample_type
@@ -191,3 +192,21 @@ def preset_note(key, preset, identify, quant):
             'these settings apply once **Identify proteoforms** is on.'
         )
     return 'warning', preset_warning(SAMPLE_LABELS.get(key, key), preset, identify, quant)
+
+
+_STAMP = re.compile(r'(\d{8}-\d{6})$')
+
+
+def newest_result(dataset_ids):
+    """The dataset a start made last: runs are ``<file>_<YYYYmmdd-HHMMSS>``,
+    comparisons ``comparison_<YYYYmmdd-HHMMSS>``; a comparison wins a tie, as it
+    is made after its runs. None when no id carries a time (only examples)."""
+    best = None
+    for dataset_id in dataset_ids:
+        match = _STAMP.search(str(dataset_id))
+        if not match:
+            continue
+        rank = (match.group(1), str(dataset_id).startswith('comparison_'))
+        if best is None or rank > best[0]:
+            best = (rank, dataset_id)
+    return best[1] if best else None

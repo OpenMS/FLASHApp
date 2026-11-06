@@ -26,8 +26,11 @@ from src.layout_manager import view_bar
 from src.render import quant_view
 from src.render.tool_results import tool_results_button
 from src.common import result_download
+from src.workflow.StreamlitUI import latest_results_key
 
 TOOL = 'topdown'
+# TopDownWorkflow's folder in the workspace
+WORKFLOW_DIR = 'flashtnt'
 
 
 def selection_key(index):
@@ -173,6 +176,12 @@ def edit_layout(index=0):
     if downloadable:
         result_download.viewer_button(file_manager, shown if shown in downloadable else None)
 
+
+# Opened with Explore results on Run analysis: show what that start made
+if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False):
+    newest = analysis.newest_result(list(results) + list(comparison_ids))
+    if newest is not None:
+        st.session_state[selection_key(0)] = newest
 
 if comparison_selected():
     quant_view.view_selector(file_manager, workspace, st.session_state[selection_key(0)])

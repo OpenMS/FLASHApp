@@ -2,7 +2,7 @@ import streamlit as st
 
 from src.Workflow import TopDownWorkflow
 from src.common.common import page_setup, save_params
-from src.common.guide import next_steps, page_intro
+from src.common.guide import PAGES, page_intro
 
 
 params = page_setup()
@@ -48,9 +48,8 @@ No data at hand? Example runs and a database are used until you add your own.
 wf.analysis_section()
 wf.show_parameter_section()
 
-next_steps(
-    'topdown',
-    ('run', 'Start the analysis of the selected runs.'),
-)
+# Opens Run analysis and starts the analysis there at once
+wf.show_run_button(PAGES['topdown']['run'][0], label='Run analysis', summary=wf.run_bar_summary(),
+                   help='Save these settings, open Run analysis and start the analysis of the selected runs.')
 
 save_params(params)

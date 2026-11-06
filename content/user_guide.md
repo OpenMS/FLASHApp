@@ -3,8 +3,8 @@
 FLASHApp turns top-down MS data into proteoform masses, identifications and, if you like, a comparison of your samples. Every analysis follows the same three pages under **Top-down analysis** in the sidebar:
 
 1. **Describe experiment**: your MS runs, a protein database to identify proteoforms, and what you want to learn, in the **Your analysis** box.
-2. **Run analysis**: one click, then follow the progress.
-3. **Viewer**: every run, and every comparison of samples, laid out for the analysis you chose.
+2. **Run analysis**: press **Run analysis** at the end of *Describe experiment*; the run starts right away and you follow its progress.
+3. **Explore results**: every run, and every comparison of samples, laid out for the analysis you chose.
 
 The short videos below walk through each step with example data. No knowledge of the tools behind FLASHApp is needed to follow them.
 
@@ -51,7 +51,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
    - **Cloud data** imports them from a link (an object store, OneDrive, Zenodo or Figshare).
    - **Import from PRIDE** reanalyses a public dataset: enter its accession (for example `PXD055510`, intact TMT-labelled proteins) and press **Look up**. Its MS runs go to **MS data** and a FASTA it includes to **Protein database**; untick what you do not need, then **Import**. When a run is there both as mzML and as a RAW file, only the mzML is ticked.
 
-   Without files of your own, a small example data set is used. The **Viewer** already holds the results of every example, each named after the analysis it shows: *Example: deconvolution only* (an LC-MS/MS run of a protein standard mix), *Example: native, identified* (a native top-down spectrum of E. coli GapA), *Example: lysate, identified* and *Example: label-free comparison (spike-in 1x vs 0.1x)* (four short runs of a six-protein mix spiked into an E. coli lysate at two amounts, from the FLASHQuant SpikeIn dataset, MassIVE MSV000091923), and *Example: TMT 6-plex, deconvolution only* and *Example: TMT comparison (8x vs 4x vs 1x)* (five minutes of one run of an E. coli lysate labelled at its cysteines with iodoTMT sixplex and mixed 8:4:1:1:4:8, PRIDE PXD055510, Matzanke, Kaulich et al., J Proteome Res 2025).
+   Without files of your own, a small example data set is used. The **Explore results** already holds the results of every example, each named after the analysis it shows: *Example: deconvolution only* (an LC-MS/MS run of a protein standard mix), *Example: native, identified* (a native top-down spectrum of E. coli GapA), *Example: lysate, identified* and *Example: label-free comparison (spike-in 1x vs 0.1x)* (four short runs of a six-protein mix spiked into an E. coli lysate at two amounts, from the FLASHQuant SpikeIn dataset, MassIVE MSV000091923), and *Example: TMT 6-plex, deconvolution only* and *Example: TMT comparison (8x vs 4x vs 1x)* (five minutes of one run of an E. coli lysate labelled at its cysteines with iodoTMT sixplex and mixed 8:4:1:1:4:8, PRIDE PXD055510, Matzanke, Kaulich et al., J Proteome Res 2025).
 3. Switch **Identify proteoforms** on or off, pick the **Protein database** (a **FASTA** or **PEFF** file, added the same way with **📂 Browse**, whose **UniProt proteome** tab also finds the proteome of your organism by name or taxonomy ID and downloads it; FLASHApp adds the decoy sequences it needs) and the **Sample** type, and choose the **Quantification** (see the table above). Identification is optional: LC-MS/MS (DDA) runs can be deconvolved only, or compared label-free, without a database. The **Sample** type is always offered; it sets how proteoforms are identified, so without identification it changes nothing until **Identify proteoforms** is switched on.
 4. The numbered tabs below follow the steps of the analysis you chose; a step the analysis does not run has no tab:
    - **Samples and groups** (with quantification only): which sample belongs to which condition (see below).
@@ -67,17 +67,17 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ## **2️⃣ Run analysis**
 
-1. Open **Top-down analysis › Run analysis**. The box at the top repeats the analysis you chose.
-2. Press **Start Workflow**. The log shows each run as it is processed. You can close the page and come back with the same workspace.
-3. When it finishes, open the **Viewer**.
+1. Press **Run analysis** at the end of **Describe experiment**. The **Run analysis** page opens and the analysis starts at once; the box at the top repeats the analysis you chose. (**Start Workflow** on that page starts it again later.)
+2. The log shows each run as it is processed. You can close the page and come back with the same workspace.
+3. When it finishes, press **Explore results**.
 
 ---
 
-## **3️⃣ Viewer**
+## **3️⃣ Explore results**
 
-The Viewer shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows. **💡 Add tool results** shows the output of a FLASHDeconv or FLASHTnT run made outside FLASHApp.
+**Explore results** shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows. **💡 Add tool results** shows the output of a FLASHDeconv or FLASHTnT run made outside FLASHApp.
 
-@video guide-2-viewer.mp4 | Explore a run in the Viewer and arrange your own layout
+@video guide-2-viewer.mp4 | Explore a run and arrange your own layout
 
 Until you save your own layout, each run opens in the layout made for its analysis:
 

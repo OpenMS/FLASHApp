@@ -3,7 +3,7 @@
 Each workflow page opens with ``page_intro`` (what the page is for and, folded
 away, the background a newcomer needs) and ends with ``next_steps`` (where to
 go from here), so a workflow reads as one path: Describe experiment (which
-also takes the files), Run analysis, Viewer.
+also takes the files), Run analysis, Explore results.
 """
 
 import streamlit as st
@@ -13,7 +13,7 @@ PAGES = {
     'topdown': {
         'configure': ('content/TopDown/TopDownConfigure.py', 'Describe experiment', '⚙️'),
         'run': ('content/TopDown/TopDownRun.py', 'Run analysis', '🚀'),
-        'viewer': ('content/TopDown/TopDownViewer.py', 'Viewer', '👀'),
+        'viewer': ('content/TopDown/TopDownViewer.py', 'Explore results', '👀'),
         'download': ('content/TopDown/TopDownDownload.py', 'Download results', '⬇️'),
     },
 }
