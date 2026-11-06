@@ -7,7 +7,6 @@ from src.render.sequence_data_store import build_table, ROW_GROUP_SIZE
 
 from io import StringIO
 from pyopenms import AASequence
-from scipy.stats import gaussian_kde
 
 from src.parse.masstable import parseFLASHTaggerOutput
 from src.parse.annotator import (
@@ -257,6 +256,8 @@ def _density(values):
     """Kernel density of `values` on 200 points between their minimum and
     maximum. Empty (columns x, y) when there are fewer than two distinct
     values, as a kernel density needs some spread."""
+    from scipy.stats import gaussian_kde  # imported here: scipy.stats takes half a second to import
+
     values = np.asarray(values, dtype=float)
     values = values[np.isfinite(values)]
     if np.unique(values).size < 2:
