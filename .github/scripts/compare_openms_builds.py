@@ -164,6 +164,16 @@ def as_float(s):
         return None
 
 
+def same_rows(a, b):
+    """Whether two frames hold the same rows, whatever their order."""
+    def rows(f):
+        return sorted(repr(r) for r in f.iter_rows())
+    try:
+        return rows(a) == rows(b)
+    except Exception:  # noqa: BLE001 - an unorderable value: compare by position
+        return False
+
+
 def compare_frames(a, b):
     """Column-by-column differences of two polars frames, aligned by row."""
     import polars as pl
@@ -177,6 +187,10 @@ def compare_frames(a, b):
             notes.append(f'**columns removed {gone}, added {new}**')
         else:
             notes.append('columns reordered')
+    if a.height == b.height and ca == cb and not a.equals(b) and same_rows(a, b):
+        # The same rows in another order (ties in a sort, a hash map's order):
+        # comparing them by position would report every shifted row.
+        return notes + ['same rows in another order'], {}
     n = min(a.height, b.height)
     cols = {}
     for c in [c for c in ca if c in cb]:
