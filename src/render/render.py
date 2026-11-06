@@ -8,6 +8,7 @@ rebuilt when the results it was built from change.
 """
 
 import hashlib
+import inspect
 import json
 import shutil
 import threading
@@ -227,6 +228,9 @@ RECLICK = 'unhighlight'
 # A selected row is scrolled to the top of its table, a clicked row only when cut
 # off
 SCROLL = 'top'
+# Previous / Next row buttons on the tables of spectra, masses, PrSMs and tags.
+# Left out with an openms-insight release that does not have the option.
+ROW_STEP = {'row_step': True} if 'row_step' in inspect.signature(Table).parameters else {}
 # Identification levels: proteins, the proteoforms of a protein,
 # the PrSMs of a proteoform (src/render/hierarchy_data.py)
 _QVALUE = {'formatter': 'fixed', 'formatterParams': {'precision': 4, 'minLength': 0, 'placeholders': {'NaN': '-'}}}
@@ -757,6 +761,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 index_field='index', go_to_fields=['index', 'Scan'],
                 interactivity={'scan': 'index'}, on_select={'mass': 0},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
+                **ROW_STEP,
             ),
         ), {'height': TABLE_HEIGHT}
 
@@ -799,6 +804,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 # selected until a mass or another scan is clicked
                 default_row_selects=False,
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
+                **ROW_STEP,
             ),
         ), {'height': TABLE_HEIGHT}
 
@@ -901,6 +907,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 multi_select={go_terms.RUN_SET: 'accession'},
                 on_select={'tag': None, 'aa': None, 'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True, pagination=False, float_precision='float64',
+                **ROW_STEP,
             ),
             required=['protein_dfs', 'scan_table'],
         ), {'height': TABLE_HEIGHT}
@@ -941,6 +948,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 interactivity={'tag': 'TagIndex'}, on_select={'mass': None},
                 reclick=RECLICK, scroll_position=SCROLL, reset_sort=True,
                 reset_sort_on=['protein'], pagination=False, float_precision='float64',
+                **ROW_STEP,
             ),
         ), {'height': TABLE_HEIGHT}
 
