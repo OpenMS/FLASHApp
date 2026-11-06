@@ -31,6 +31,7 @@ from src.render import (
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
+from src.common.plot_style import spectrum_styling
 from src.render.layout_editor.catalog import DECONV_COMPONENTS, ISOBARIC_COMPONENTS, TNT_COMPONENTS
 from src.render import proteoform_edits
 from src.render.sequence import getFragmentDataFromSeq
@@ -210,8 +211,6 @@ SURVEY, SURVEY_MASS, SURVEY_FOR = 'survey', 'survey_mass', 'survey_for'
 SEQUENCE_VIEW_OPTIONS = dict(
     mass_column='MonoMass', precursor_mass_column='PrecursorMass',
     annotation_title='FLASHAnnotator', svg_filename='FLASHViewer-sequence',
-    # FLASHViewer's dialog button colour
-    accent_color='#6200EE',
 )
 
 HEATMAPS = {
@@ -572,7 +571,7 @@ def _isotope_envelope(comp_name, file_manager, dataset_id, tool):
             x_column='mass', y_column='abundance', title='Isotope Envelope Fit',
             title_top='Observed (all charges)', title_bottom='Averagine',
             x_label='Mass (Da)', y_label='Relative abundance',
-            styling={'unhighlightedColor': '#3366CC'},
+            styling=spectrum_styling(),
         ),
     )
 
@@ -1001,6 +1000,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 drilldown_title='Augmented Annotated Spectrum',
                 **SPECTRUM_COLUMNS,
                 float_precision='float64',
+                styling=spectrum_styling(),
             ),
         )
         # The fragment ions the sequence view matched on this spectrum
@@ -1044,6 +1044,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 drilldown_title='Precursor Spectrum (MS1)',
                 **SPECTRUM_COLUMNS,
                 float_precision='float64',
+                styling=spectrum_styling(),
             ),
         )
         # The m/z range isolated for the selected spectrum (none for an MS1
@@ -1108,8 +1109,6 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 initial_sort=[{'column': 'Score', 'dir': 'desc'}],
                 toggle_filters=[{
                     'label': 'Best per spectrum', 'column': 'is_best', 'group_column': 'Scan',
-                    # FLASHViewer's checkbox colour
-                    'color': '#6200EE',
                 }],
                 interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
                 multi_select={go_terms.RUN_SET: 'accession'},
@@ -1130,7 +1129,6 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 filters={'protein': 'proteoform_index'},
                 toggle_filters=[{
                     'label': 'Matched masses only', 'column': 'matched', 'default': False,
-                    'color': '#6200EE',
                 }],
                 # A row selects its mass: the spectra highlight it and the
                 # Sequence View shows its fragment
