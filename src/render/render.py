@@ -26,8 +26,8 @@ from openms_insight import (
 from openms_insight.core.cache import CacheMissError
 
 from src.render import (
-    envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, modifications, prsm_data,
-    prsm_overview, qc_data, validation_data,
+    envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
+    prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
@@ -47,7 +47,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
-        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__,
+        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__,
         str(Path(__file__).with_name('quant_cells.py')),
     ):
         try:
@@ -1312,6 +1312,99 @@ def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
                 )
 
 
+# Mass shifts of the identified proteoforms (src/render/mass_shifts.py)
+_SHIFT_COLUMNS = [
+    {'title': 'Shift (Da)', 'field': 'shift', 'sorter': 'number', 'hozAlign': 'right', **_fixed(4),
+     'headerTooltip': 'Median of the mass shifts in this group.'},
+    {'title': 'PrSMs', 'field': 'prsms', 'sorter': 'number', 'hozAlign': 'right', 'width': 80},
+    {'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number', 'hozAlign': 'right', 'width': 110},
+    {'title': 'Interpretation', 'field': 'interpretation', 'widthGrow': 2, 'tooltip': True,
+     'headerTooltip': 'Closest common Unimod modification of this mass, '
+                      f'within {mass_shifts.MATCH_TOLERANCE * 1000:g} mDa; '
+                      'a match after missing the monoisotopic peak says so.'},
+    {'title': 'Unimod Δ (Da)', 'field': 'unimod', 'sorter': 'number', 'hozAlign': 'right', **_fixed(4)},
+    {'title': 'Deviation (mDa)', 'field': 'deviation', 'sorter': 'number', 'hozAlign': 'right', **_fixed(1)},
+    {'title': 'Residues', 'field': 'residues', 'tooltip': True,
+     'headerTooltip': 'Residues the modification is defined on in Unimod.'},
+    {'title': 'Other matches', 'field': 'other', 'widthGrow': 2, 'tooltip': True},
+]
+_SHIFT_PRSM_COLUMNS = [
+    {'title': 'Scan', 'field': 'Scan', 'sorter': 'number', 'width': 80},
+    {'title': 'Accession', 'field': 'accession', 'widthGrow': 2, 'tooltip': True},
+    {'title': 'Shift (Da)', 'field': 'shift', 'sorter': 'number', 'hozAlign': 'right', **_fixed(4)},
+    {'title': 'Position', 'field': 'site', 'width': 90,
+     'headerTooltip': 'Residue of the shift in the protein, or the range it could not be narrowed down from.'},
+    {'title': 'Proteoform', 'field': 'Proforma', 'widthGrow': 3, 'tooltip': True},
+    {'title': 'RT (s)', 'field': 'RetentionTime', 'sorter': 'number', 'hozAlign': 'right', **_fixed(1)},
+    {'title': 'Score', 'field': 'Score', 'sorter': 'number', 'hozAlign': 'right', **_fixed(1)},
+]
+
+
+def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
+    """The mass shifts FLASHTnT placed on the identified proteoforms: a
+    histogram, the recurring shifts with the Unimod modifications they match,
+    and the PrSMs of the shift picked in either. Picking a PrSM selects its
+    proteoform in the other cells."""
+    sources = ['protein_dfs', 'scan_table']
+    try:
+        for name_tag in sources:
+            if insight_data.result_path(file_manager, dataset_id, name_tag) is None:
+                raise MissingResult(name_tag)
+    except MissingResult as e:
+        st.info(f'This dataset has no data for this view ({e}).')
+        return
+    hits = hierarchy_data.prsms(file_manager, dataset_id)
+    groups, histogram, prsms = mass_shifts.summary(mass_shifts.prsm_shifts(hits))
+    if not groups.height:
+        st.info('No identified proteoform of this run carries a mass shift.')
+        return
+    shifted = prsms['index'].n_unique()
+    columns = st.columns(3)
+    columns[0].metric('PrSMs with a mass shift', f'{shifted:,} of {hits.height:,}')
+    columns[1].metric('Shifts', f'{groups.height:,}', help='Groups of shifts within '
+                      f'{mass_shifts.CLUSTER_GAP * 1000:g} mDa of each other.')
+    columns[2].metric(
+        'Unexplained', f"{(groups['interpretation'] == '').sum():,}",
+        help='Shifts with no Unimod modification of that mass, '
+             'also one isotope peak off.',
+    )
+    plot = _component(
+        LinePlot, 'mass_shift_histogram', file_manager, dataset_id, sources,
+        lambda: dict(
+            data=histogram.lazy(), x_column='delta', y_column='prsms',
+            highlight_column='peak', annotation_column='label',
+            interactivity={'mass_shift': 'shift_id'},
+            title='Mass shifts of the identified proteoforms',
+            x_label='Mass shift (Da)', y_label='PrSMs',
+        ),
+    )
+    shift_table = _component(
+        Table, 'mass_shift_table', file_manager, dataset_id, sources,
+        lambda: dict(
+            data=groups.lazy(), column_definitions=_SHIFT_COLUMNS,
+            index_field='shift_id', interactivity={'mass_shift': 'shift_id'},
+            title='Mass shifts', initial_sort=[{'column': 'prsms', 'dir': 'desc'}],
+            reclick=RECLICK, scroll_position=SCROLL, layout='fitColumns',
+        ),
+    )
+    prsm_table = _component(
+        Table, 'mass_shift_prsms', file_manager, dataset_id, sources,
+        lambda: dict(
+            data=prsms.lazy(), column_definitions=_SHIFT_PRSM_COLUMNS,
+            index_field='row_id', filters={'mass_shift': 'shift_id'},
+            interactivity={'protein': 'index', 'pscan': 'scan_idx', 'scan': 'scan_idx'},
+            on_select=_IDENTIFICATION_ON_SELECT,
+            title='PrSMs of the selected shift', initial_sort=[{'column': 'Score', 'dir': 'desc'}],
+            reclick=RECLICK, scroll_position=SCROLL, layout='fitColumns',
+        ),
+    )
+    plot(key=f'{key}_histogram', state_manager=state_manager, height=360)
+    shift_table(key=f'{key}_shifts', state_manager=state_manager,
+                height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
+    prsm_table(key=f'{key}_prsms', state_manager=state_manager,
+               height=min(TABLE_HEIGHT, 90 + 34 * max(1, int(groups['prsms'].max() or 1))))
+
+
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
     if (
         tool == 'topdown' and comp_name in IDENTIFICATION_ONLY
@@ -1330,6 +1423,9 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
         return
     if comp_name == 'id_qc':
         _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        return
+    if comp_name == 'mass_shifts':
+        _render_mass_shifts(file_manager, dataset_id, state_manager, key)
         return
     if comp_name == 'go_enrichment':
         from src.render import go_view
