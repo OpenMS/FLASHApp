@@ -2,7 +2,9 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from scipy.stats import binned_statistic_2d
+# scipy.stats is imported in downsample_heatmap, where it is used: importing it
+# takes half a second or more, which the Viewer paid on its first load after
+# every restart (src.render.insight_data imports this module).
 
 
 def compute_compression_levels(minimal_size, total_amount, logger=None):
@@ -67,6 +69,8 @@ def downsample_heatmap(data, max_datapoints=20000, rt_bins=400, mz_bins=50, logg
     rt_array = sorted_data['rt'].to_numpy()
     intensity_array = sorted_data['intensity'].to_numpy()
     
+    from scipy.stats import binned_statistic_2d
+
     # Use scipy for binning (still needed for the specific binning logic)
     count, _, __, mapping = binned_statistic_2d(
         mass_array, rt_array, intensity_array, 'count',
