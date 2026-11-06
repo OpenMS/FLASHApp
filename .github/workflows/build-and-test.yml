@@ -694,8 +694,18 @@ jobs:
           kubectl wait -n openms --for=condition=ready pod -l app=${SLUG},component=redis --timeout=60s
 
       - name: Verify Redis Service is reachable
+        # A Ready pod can still refuse the first connection for a few seconds
+        # while its Service endpoint propagates, so retry before failing. The
+        # test pod carries a worker's labels: k8s/base/redis-networkpolicy.yaml
+        # admits only this app's streamlit, rq-worker and sync pods.
         run: |
-          kubectl run redis-test -n openms --image=redis:7-alpine --rm -i --restart=Never -- redis-cli -h ${SLUG}-redis.openms.svc.cluster.local ping
+          kubectl run redis-test -n openms --image=redis:7.4.12-alpine --restart=Never \
+            --labels="app=${SLUG},component=rq-worker" --command -- \
+            sh -c 'for i in $(seq 1 15); do redis-cli -h '"${SLUG}"'-redis.openms.svc.cluster.local ping | grep -q PONG && echo PONG && exit 0; sleep 2; done; exit 1'
+          kubectl wait -n openms --for=jsonpath='{.status.phase}'=Succeeded pod/redis-test --timeout=90s \
+            || { kubectl logs -n openms redis-test || true; kubectl delete pod -n openms redis-test --wait=false; exit 1; }
+          kubectl logs -n openms redis-test
+          kubectl delete pod -n openms redis-test --wait=false
 
       - name: Verify all deployments are available
         run: |
@@ -806,10 +816,19 @@ jobs:
         run: |
           helm repo add traefik https://traefik.github.io/charts
           helm repo update
+          # The Service type lives at `service.spec.type`; chart 41 rejects
+          # the old `service.type` key.
+          # renovate: datasource=helm registryUrl=https://traefik.github.io/charts depName=traefik
           helm install traefik traefik/traefik \
+            --version 41.3.0 \
             --namespace traefik --create-namespace \
-            --set service.type=ClusterIP
+            --set service.spec.type=ClusterIP
           kubectl -n traefik wait --for=condition=available deployment/traefik --timeout=120s
+          SVC_TYPE=$(kubectl -n traefik get svc traefik -o jsonpath='{.spec.type}')
+          if [ "$SVC_TYPE" != "ClusterIP" ]; then
+            echo "::error::traefik Service is ${SVC_TYPE}, not ClusterIP; the chart's values path for the Service type has moved again"
+            exit 1
+          fi
 
       - name: Deploy with Kustomize (full manifests, no filter)
         run: |
