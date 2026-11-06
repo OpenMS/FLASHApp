@@ -808,7 +808,8 @@ jobs:
           helm repo update
           helm install traefik traefik/traefik \
             --namespace traefik --create-namespace \
-            --set service.type=ClusterIP
+            --version 41.3.0 \
+            --set service.spec.type=ClusterIP
           kubectl -n traefik wait --for=condition=available deployment/traefik --timeout=120s
 
       - name: Deploy with Kustomize (full manifests, no filter)
