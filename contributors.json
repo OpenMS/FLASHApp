@@ -1,0 +1,50 @@
+{
+  "repository": "FLASHApp",
+  "name": "FLASHApp",
+  "groups": [
+    {
+      "title": "This app",
+      "people": [
+        "t0mdavid-m",
+        "JeeH-K",
+        "KyowonJeong",
+        "drewbudd",
+        "AyeshaFerozAsad"
+      ]
+    },
+    {
+      "title": "OpenMS tools and workflows behind this app",
+      "people": [
+        "KyowonJeong",
+        "t0mdavid-m",
+        "JeeH-K",
+        "okohlbacher",
+        "poshul",
+        "JKVISION1101",
+        "cbielow",
+        "timosachsenberg"
+      ]
+    },
+    {
+      "title": "Interactive visualizations (OpenMS-Insight)",
+      "people": [
+        "t0mdavid-m",
+        "hjn0415a",
+        "JKVISION1101"
+      ]
+    }
+  ],
+  "names": {
+    "AyeshaFerozAsad": "Ayesha Feroz",
+    "cbielow": "Chris Bielow",
+    "drewbudd": "Andrew Almaguer",
+    "hjn0415a": "Yoo HoJun",
+    "JeeH-K": "Jihyung Kim",
+    "JKVISION1101": "Jaekwan Kim",
+    "KyowonJeong": "Kyowon Jeong",
+    "okohlbacher": "Oliver Kohlbacher",
+    "poshul": "Samuel Wein",
+    "t0mdavid-m": "Tom David Müller",
+    "timosachsenberg": "Timo Sachsenberg"
+  }
+}
