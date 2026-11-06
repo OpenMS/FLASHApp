@@ -880,8 +880,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
 
     if comp_name == 'survey_spectrum':
         # FLASHTnT spectra follow the spectrum of the selected proteoform
-        _follow_selected_spectrum(fm, ds, state_manager, 'pscan' if tool == 'flashtnt' else 'scan')
-        return _component(
+        scan_identifier = 'pscan' if tool == 'flashtnt' else 'scan'
+        _follow_selected_spectrum(fm, ds, state_manager, scan_identifier)
+        component = _component(
             DeconvolvedSpectrum, f'{comp_name}-{tool}', fm, ds, ['combined_spectrum', 'scan_table'],
             lambda: dict(
                 data=insight_data.spectra(fm, ds, 'combined_spectrum'),
@@ -891,7 +892,15 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 **SPECTRUM_COLUMNS,
                 float_precision='float64',
             ),
-        ), {}
+        )
+        # The m/z range isolated for the selected spectrum (none for an MS1
+        # spectrum); left out with an openms-insight release without it
+        if hasattr(component, 'set_isolation_window'):
+            window = linked_spectra.isolation_window_of(
+                fm, ds, state_manager.get_selection(scan_identifier),
+            )
+            component.set_isolation_window(*(window or (None, None, None)))
+        return component, {}
 
     if comp_name == '3D_SN_plot':
         return _component(

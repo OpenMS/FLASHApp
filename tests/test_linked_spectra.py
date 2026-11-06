@@ -107,3 +107,52 @@ def test_demo_workspace(tmp_path):
             assert ms2['survey_mass_idx'].is_not_null().sum() > ms2.height / 2
         else:
             assert links['survey_idx'].is_null().all()
+
+
+def _precursor(mz, lower, upper, target=None):
+    oms = pytest.importorskip('pyopenms')
+    precursor = oms.Precursor()
+    precursor.setMZ(mz)
+    precursor.setIsolationWindowLowerOffset(lower)
+    precursor.setIsolationWindowUpperOffset(upper)
+    if target is not None:
+        precursor.setMetaValue(linked_spectra.TARGET_MZ_KEY, target)
+    return precursor
+
+
+def test_precursor_window_around_the_target():
+    assert linked_spectra.precursor_window(_precursor(1301.77, 2.5, 2.5, 1302.49)) == pytest.approx(
+        (1299.99, 1304.99, 1302.49)
+    )
+    # Without a target, around the precursor m/z
+    assert linked_spectra.precursor_window(_precursor(800.0, 1.0, 2.0)) == pytest.approx((799.0, 802.0, 800.0))
+    # No offsets: no window
+    assert linked_spectra.precursor_window(_precursor(800.0, 0.0, 0.0)) is None
+
+
+def test_isolation_windows_of_a_missing_file(tmp_path):
+    assert linked_spectra.isolation_windows(tmp_path / 'missing.mzML') == ()
+
+
+@pytest.mark.skipif(not DEMO.exists(), reason='demo workspace not present')
+def test_demo_isolation_windows(tmp_path):
+    pytest.importorskip('pyopenms')
+    from src.workflow.FileManager import FileManager
+
+    cache = tmp_path / 'cache'
+    cache.mkdir()
+    shutil.copy(DEMO / 'cache.db', cache / 'cache.db')
+    (cache / 'files').symlink_to(DEMO.resolve() / 'files')
+    file_manager = FileManager(cache, cache)
+    dataset_id = 'example_deconvolution'
+    scans = pl.read_parquet(file_manager.get_result_path(dataset_id, 'scan_table'))
+    levels = dict(zip(scans['index'].cast(pl.Int64), scans['MSLevel']))
+    for scan_idx, level in levels.items():
+        window = linked_spectra.isolation_window_of(file_manager, dataset_id, scan_idx)
+        if level == 1:
+            assert window is None
+        else:
+            lower, upper, target = window
+            assert lower < target < upper
+            assert upper - lower == pytest.approx(5.0)
+    assert linked_spectra.isolation_window_of(file_manager, dataset_id, None) is None

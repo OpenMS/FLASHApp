@@ -10,9 +10,14 @@ The link comes from FLASHDeconv's results: `PrecursorScan` of the 3D S/N plot
 data names the precursor spectrum, else the last MS1 spectrum before the
 fragmentation spectrum is taken. The precursor mass is the mass of the
 precursor spectrum within 0.01 Da of the fragmentation spectrum's precursor
-mass, as the 3D S/N plot pairs them. Like insight_data, the module is free of
+mass, as the 3D S/N plot pairs them. The isolation window of a fragmentation
+spectrum (target m/z and offsets, from the precursor of the deconvolved mzML)
+is marked on its precursor spectrum. Like insight_data, the module is free of
 Streamlit and openms-insight.
 """
+
+from functools import lru_cache
+from pathlib import Path
 
 import polars as pl
 
@@ -130,3 +135,70 @@ def survey_of(links, scan_idx):
     if row.is_empty():
         return None, None
     return row['survey_idx'][0], row['survey_mass_idx'][0]
+
+
+TARGET_MZ_KEY = 'isolation window target m/z'
+
+
+def precursor_window(precursor):
+    """(lower m/z, upper m/z, target m/z) isolated for a precursor, or None
+    when the spectrum file gives no window. The target is the isolation
+    window target m/z, else the precursor m/z."""
+    lower = precursor.getIsolationWindowLowerOffset()
+    upper = precursor.getIsolationWindowUpperOffset()
+    if not lower > 0 and not upper > 0:
+        return None
+    target = None
+    if precursor.metaValueExists(TARGET_MZ_KEY):
+        try:
+            target = float(precursor.getMetaValue(TARGET_MZ_KEY))
+        except (TypeError, ValueError):
+            target = None
+    if target is None or not target > 0:
+        target = precursor.getMZ()
+    if not target > 0:
+        return None
+    return (target - lower, target + upper, target)
+
+
+@lru_cache(maxsize=16)
+def _isolation_windows(path, size, mtime_ns):  # pylint: disable=unused-argument
+    import pyopenms as oms  # pylint: disable=import-outside-toplevel
+
+    options = oms.PeakFileOptions()
+    options.setFillData(False)
+    mzml = oms.MzMLFile()
+    mzml.setOptions(options)
+    experiment = oms.MSExperiment()
+    mzml.load(path, experiment)
+    windows = []
+    for spectrum in experiment:
+        precursors = spectrum.getPrecursors() if spectrum.getMSLevel() > 1 else []
+        windows.append(precursor_window(precursors[0]) if precursors else None)
+    return tuple(windows)
+
+
+def isolation_windows(path):
+    """Isolation window of every spectrum of an mzML file, by spectrum index
+    (None for MS1 spectra and spectra without one). Reads spectra metadata only,
+    cached per file version. An empty tuple when the file is missing or
+    unreadable."""
+    path = Path(path)
+    try:
+        stat = path.stat()
+        return _isolation_windows(str(path), stat.st_size, stat.st_mtime_ns)
+    except Exception:  # pylint: disable=broad-except
+        return ()
+
+
+def isolation_window_of(file_manager, dataset_id, scan_idx):
+    """(lower, upper, target) m/z isolated for a spectrum of a dataset, or
+    None (MS1 spectrum, no window, or no deconvolved mzML stored)."""
+    if scan_idx is None:
+        return None
+    path = insight_data.result_path(file_manager, dataset_id, 'out_deconv_mzML')
+    if path is None:
+        return None
+    windows = isolation_windows(path)
+    scan_idx = int(scan_idx)
+    return windows[scan_idx] if 0 <= scan_idx < len(windows) else None
