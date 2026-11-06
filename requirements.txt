@@ -109,7 +109,7 @@ rpds-py==0.24.0
     #   referencing
 six==1.17.0
     # via python-dateutil
-smmap==5.0.2
+smmap==5.0.3
     # via gitdb
 streamlit==1.54.0
     # via
