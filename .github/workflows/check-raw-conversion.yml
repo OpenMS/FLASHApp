@@ -27,7 +27,7 @@ jobs:
           - platform: Windows-x86_64
             runner: windows-2022
           - platform: macOS-arm64
-            runner: macos-14
+            runner: macos-15
           - platform: Linux-x86_64
             runner: ubuntu-24.04
     runs-on: ${{ matrix.runner }}
@@ -56,7 +56,7 @@ jobs:
       - name: Convert
         run: |
           set +e -uo pipefail
-          p="$APP_PAYLOAD"
+          p="$APP_PAYLOAD"; command -v cygpath >/dev/null && p=$(cygpath -u "$p")
           # The shell's environment (electron/src/payload.js appEnvironment)
           export OPENMS_DATA_PATH="$p/share/OpenMS"
           extra="$p"
