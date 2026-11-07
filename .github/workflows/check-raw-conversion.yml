@@ -52,10 +52,10 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/Angiotensin_AllScans.raw" "$RAW_URL"
-          echo "$RAW_SHA256  $RUNNER_TEMP/Angiotensin_AllScans.raw" | shasum -a 256 -c
+          echo "$RAW_SHA256  $RUNNER_TEMP/Angiotensin_AllScans.raw" | if command -v sha256sum >/dev/null; then sha256sum -c; else shasum -a 256 -c; fi
       - name: Convert
         run: |
-          set -uo pipefail
+          set +e -uo pipefail
           p="$APP_PAYLOAD"
           # The shell's environment (electron/src/payload.js appEnvironment)
           export OPENMS_DATA_PATH="$p/share/OpenMS"
@@ -118,7 +118,7 @@ jobs:
           chmod -R a+rwX data
       - name: Convert
         run: |
-          set -uo pipefail
+          set +e -uo pipefail
           img=ghcr.io/openms/flashapp:latest
           docker pull -q "$img"
           docker image inspect "$img" --format '{{.Created}} {{index .Config.Labels "org.opencontainers.image.revision"}}'
