@@ -22,6 +22,10 @@ import streamlit as st
 from src import analysis
 from src.render.layout_editor.catalog import IDENTIFICATION, ISOBARIC
 
+# Not a component's need: what the locked **Comparison** of a run compared
+# with none asks for (the Viewer's Single run | Comparison switch)
+COMPARISON = 'comparison'
+
 CONFIGURE_PAGE = Path('content', 'TopDown', 'TopDownConfigure.py')
 WORKFLOW_DIR = 'flashtnt'
 
@@ -35,6 +39,11 @@ ANALYSES = {
         'label': 'isobaric labels',
         'help': ('FLASHDeconv measures the reporter ions of TMT or iTRAQ labels '
                  '(**Quantification: Isobaric labels** on the Describe experiment page).'),
+    },
+    COMPARISON: {
+        'label': 'more runs',
+        'help': ('A comparison puts the quantities of several runs side by side, so this run needs '
+                 'more files processed with its settings to be compared with.'),
     },
 }
 
@@ -229,6 +238,15 @@ def add_identification(workspace, file_manager, dataset_id):
 def options(workspace, file_manager, dataset_id, missing):
     """The dialog's choices for run ``dataset_id`` lacking the analyses ``missing``."""
     name = file_manager.get_display_name(dataset_id)
+    if list(missing) == [COMPARISON]:
+        return [{
+            'label': 'Process more files with these settings',
+            'icon': ':material/library_add:',
+            'help': (f"Opens Describe experiment with the settings of {name}, to pick files to add. "
+                     f"The Viewer then compares them with {name}, with label-free quantification "
+                     "switched on if it was off."),
+            'on_click': lambda: add_files(workspace, file_manager, dataset_id),
+        }]
     if list(missing) == [IDENTIFICATION]:
         _, has_file = run_settings(workspace, file_manager, dataset_id)
         return [{

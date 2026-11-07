@@ -221,6 +221,8 @@ PENDING = '_viewer_pending'
 LAST_RUN = '_viewer_last_run'
 TOO_FEW = '_viewer_too_few_runs'
 SHOW_COMPARISON, SHOW_RUN = 'Comparison', 'Single run'
+LOCKED_KEY = 'viewer_show_locked'
+LOCKED_COMPARISON = 'Comparison :material/add_circle:'
 
 
 def stored_runs(comparison_id):
@@ -265,6 +267,13 @@ def _on_experiment(groups):
 # (apply_pending), whose file manager is the current one.
 def _on_show(comparison_id, members):
     st.session_state[PENDING] = ('show', comparison_id, members, st.session_state.get(SHOW_KEY))
+
+
+def _on_locked_comparison():
+    """Comparison of a run compared with none: the dialog to process more files."""
+    st.session_state[LOCKED_KEY] = SHOW_RUN
+    st.session_state[MISSING_INDEX] = 0
+    request_analysis(VIEW_KEY, [missing_analysis.COMPARISON], component='Comparison')
 
 
 def _on_run(comparison_id, members):
@@ -330,14 +339,21 @@ def experiment_bar():
         if comparison:
             st.session_state[SHOW_KEY] = SHOW_COMPARISON if shown == opens_on else SHOW_RUN
             st.segmented_control(
-                'show', [SHOW_COMPARISON, SHOW_RUN], key=SHOW_KEY, on_change=_on_show, args=(opens_on, members),
-                help='**Comparison**: the quantities of its runs side by side. '
-                     '**Single run**: the spectra, masses and proteoforms of one of them.',
+                'show', [SHOW_RUN, SHOW_COMPARISON], key=SHOW_KEY, on_change=_on_show, args=(opens_on, members),
+                help='**Single run**: the spectra, masses and proteoforms of one of its runs. '
+                     '**Comparison**: the quantities of its runs side by side.',
             )
             if shown != opens_on:
                 names = [file_manager.get_display_name(r) for r in members]
                 st.session_state[RUN_KEY] = display_id_to_name.get(shown)
                 st.selectbox('run', names, key=RUN_KEY, on_change=_on_run, args=(opens_on, members))
+        else:
+            st.session_state[LOCKED_KEY] = SHOW_RUN
+            st.segmented_control(
+                'show', [SHOW_RUN, LOCKED_COMPARISON], key=LOCKED_KEY, on_change=_on_locked_comparison,
+                help='This run is compared with no other run: process more files with its settings '
+                     'to compare them.',
+            )
         add_files_menu(shown, runs=members if shown == opens_on and comparison else None)
         if shown not in comparison_ids and downloadable:
             result_download.viewer_button(file_manager, shown if shown in downloadable else None)
@@ -369,17 +385,19 @@ if st.session_state.get(selection_key(0)) not in display_id_to_name:
     first_groups = experiment_groups()
     st.session_state[selection_key(0)] = next(iter(first_groups.values()))[0]
 
-if comparison_selected():
-    quant_view.view_selector(file_manager, workspace, st.session_state[selection_key(0)])
-else:
-    view_selector()
 # The views file sets the number of experiments (and side by side); without
 # one, a single experiment
 count, side_by_side = topdown_layout.experiments_shown(workspace) or (1, False)
 experiments = [None] * count
 
+# The experiment first, then the views of what it shows below it
+experiment_bar()
 if comparison_selected():
-    experiment_bar()
+    quant_view.view_selector(file_manager, workspace, st.session_state[selection_key(0)])
+else:
+    view_selector()
+
+if comparison_selected():
     # A comparison spans its runs, so it fills the page on its own
     shown = st.session_state[selection_key(0)]
     quant_view.render(file_manager, shown, quant_view.view_rows(file_manager, workspace, shown))
@@ -387,14 +405,12 @@ if comparison_selected():
 elif len(experiments) == 2 and side_by_side:
     c1, c2 = st.columns(2)
     with c1:
-        experiment_bar()
         experiment(0)
     with c2:
         selector(1, run_names)
         experiment(1)
 
 else:
-    experiment_bar()
     experiment(0)
     for exp_index in range(1, len(experiments)):
         st.divider()
