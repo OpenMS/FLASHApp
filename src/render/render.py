@@ -8,6 +8,7 @@ rebuilt when the results it was built from change.
 """
 
 import hashlib
+import inspect
 import json
 import shutil
 import threading
@@ -170,6 +171,10 @@ PROTEIN_COLUMNS = [
     {'title': 'Q-Value (Proteoform Level)', 'field': 'ProteoformLevelQvalue', 'sorter': 'number',
      **_DASH_FOR_MISSING,
      'headerTooltip': 'The confidence value of the protein match at the proteoform level.'},
+    {'title': 'Q-Value (Protein Level)', 'field': 'ProteinLevelQvalue', 'sorter': 'number',
+     **_DASH_FOR_MISSING, **_HIDDEN,
+     'headerTooltip': 'The confidence value of the protein match at the protein level: '
+                      'the estimated share of false proteins among proteins scoring at least as well.'},
 ]
 
 TAG_COLUMNS = [
@@ -267,6 +272,9 @@ PROTEIN_GROUP_COLUMNS = [
      'headerTooltip': 'Best score of its PrSMs.'},
     {'title': 'q-value', 'field': 'best_qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
      'headerTooltip': 'Lowest proteoform-level q-value of its PrSMs. Only PrSMs at q ≤ 0.01 are counted.'},
+    {'title': 'Protein q', 'field': 'best_protein_qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
+     'headerTooltip': 'Protein-level q-value: the estimated share of false proteins among proteins '
+                      'scoring at least as well.'},
 ]
 PROTEOFORM_COLUMNS = [
     {'title': '#', 'field': 'proteoform_id', 'sorter': 'number', 'width': 44,
@@ -288,6 +296,8 @@ PROTEOFORM_COLUMNS = [
      'headerTooltip': 'Best score of its PrSMs.'},
     {'title': 'q-value', 'field': 'best_qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
      'headerTooltip': 'Lowest proteoform-level q-value of its PrSMs. Only PrSMs at q ≤ 0.01 are counted.'},
+    {'title': 'Protein q', 'field': 'best_protein_qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
+     **_HIDDEN, 'headerTooltip': 'Protein-level q-value of its protein.'},
 ]
 PROTEOFORM_PRSM_COLUMNS = [
     {'title': 'Scan', 'field': 'Scan', 'sorter': 'number', 'minWidth': 84},
@@ -304,7 +314,10 @@ PROTEOFORM_PRSM_COLUMNS = [
      'headerTooltip': 'Mass shifts of the PrSM with the modification they match ("?": none).'},
     {'title': 'q-value', 'field': 'qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
      'headerTooltip': 'Proteoform-level q-value. Only PrSMs at q ≤ 0.01 are counted.'},
+    {'title': 'Protein q', 'field': 'protein_qvalue', 'sorter': 'number', 'minWidth': 96, **_QVALUE,
+     **_HIDDEN, 'headerTooltip': 'Protein-level q-value of its protein.'},
 ]
+_QVALUE_FIELDS = ('best_qvalue', 'qvalue', 'best_protein_qvalue', 'protein_qvalue')
 
 
 def _hierarchy_columns(columns, with_qvalues):
@@ -312,9 +325,24 @@ def _hierarchy_columns(columns, with_qvalues):
     if with_qvalues:
         return columns
     return [
-        {**column, 'visible': False} if column['field'] in ('best_qvalue', 'qvalue') else column
+        {**column, 'visible': False} if column['field'] in _QVALUE_FIELDS else column
         for column in columns
     ]
+
+
+# Proteoform- and protein-level q-values can each be cut at a threshold in a
+# table's filter dialog, one click for the usual ones. Left out with an
+# openms-insight release without one-sided number filters.
+_QVALUE_THRESHOLDS = [0.01, 0.05]
+_NUMERIC_FILTERS = 'numeric_filters' in inspect.signature(Table.__init__).parameters
+
+
+def _qvalue_filters(*fields):
+    if not _NUMERIC_FILTERS:
+        return {}
+    return {'numeric_filters': {
+        field: {'op': '<=', 'suggestions': list(_QVALUE_THRESHOLDS)} for field in fields
+    }}
 
 
 # Rows of 33 px below the title bar and header; one table never exceeds TABLE_HEIGHT
@@ -919,6 +947,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
         build = lambda: dict(
             data=with_shifts(hierarchy_data.protein_groups_from(hits), 'protein_group').lazy(),
             column_definitions=_hierarchy_columns(PROTEIN_GROUP_COLUMNS, with_qvalues),
+            **(_qvalue_filters('best_qvalue', 'best_protein_qvalue') if with_qvalues else {}),
             title=hierarchy_data.level_title('Proteins', hierarchy_data.key_figures(hits)['proteins']),
             index_field='protein_group', go_to_fields=['accession'],
             interactivity={'protein_group': 'protein_group'},
@@ -928,6 +957,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
         build = lambda: dict(
             data=with_shifts(hierarchy_data.proteoforms_from(hits), 'proteoform_id').lazy(),
             column_definitions=_hierarchy_columns(PROTEOFORM_COLUMNS, with_qvalues),
+            **(_qvalue_filters('best_qvalue', 'best_protein_qvalue') if with_qvalues else {}),
             title=hierarchy_data.level_title('Proteoforms', hierarchy_data.key_figures(hits)['proteoforms']),
             index_field='proteoform_id', go_to_fields=['proteoform'],
             **_with_shift_filter({'protein_group': 'protein_group'}),
@@ -939,6 +969,7 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
         build = lambda: dict(
             data=with_shifts(hierarchy_data.prsm_rows_from(hits), 'index').lazy(),
             column_definitions=_hierarchy_columns(PROTEOFORM_PRSM_COLUMNS, with_qvalues),
+            **(_qvalue_filters('qvalue', 'protein_qvalue') if with_qvalues else {}),
             title=hierarchy_data.level_title('PrSMs', hierarchy_data.key_figures(hits)['prsms']),
             index_field='index', go_to_fields=['Scan'],
             **_with_shift_filter({'proteoform': 'proteoform_id'}),
@@ -1141,6 +1172,8 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     prsm_overview.protein_overview(fm, ds), on='index', how='left', maintain_order='left',
                 ),
                 column_definitions=PROTEIN_COLUMNS, title='Protein Table',
+                **(_qvalue_filters('ProteoformLevelQvalue', 'ProteinLevelQvalue')
+                   if hierarchy_data.has_qvalues(insight_data.proteins(fm, ds).collect()) else {}),
                 # A button per row opens the whole row, hidden columns included
                 row_overview="Scan {Scan}: {accession}",
                 index_field='index', go_to_fields=['Scan', 'accession'],
