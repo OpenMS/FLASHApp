@@ -44,18 +44,24 @@
     },
     "flashtnt": {
         "Lysate": {
-            "_description": "LC-MS/MS of a cell lysate: MS1 surveys, many spectra, one proteoform per spectrum mostly (FLASHTnT default search). Generated decoys match the target database in size.",
+            "_description": "LC-MS/MS of a cell lysate: MS1 surveys, many spectra, one proteoform per spectrum mostly (FLASHTnT default search). Fragments are annotated from the termini only (no internal fragments). Generated decoys match the target database in size.",
             "FLASHTnT": {
                 "native": false
+            },
+            "FLASHAnnotator": {
+                "algorithm:internal_ions": "false"
             },
             "_general": {
                 "few_proteins": false
             }
         },
         "Native": {
-            "_description": "Native or targeted top-down: one or a few spectra, often several proteins per spectrum, no MS1 survey (FLASHTnT -native). Generated decoys are 10 times the target database, for a finer FDR on few proteins.",
+            "_description": "Native or targeted top-down: one or a few spectra, often several proteins per spectrum, no MS1 survey (FLASHTnT -native). Internal fragments are annotated too. Generated decoys are 10 times the target database, for a finer FDR on few proteins.",
             "FLASHTnT": {
                 "native": true
+            },
+            "FLASHAnnotator": {
+                "algorithm:internal_ions": "true"
             },
             "_general": {
                 "few_proteins": true

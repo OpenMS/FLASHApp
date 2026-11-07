@@ -52,7 +52,7 @@ TNT_COMPONENTS = [
     {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
-    {'name': 'id_qc', 'label': 'Identification QC (IDs and fragment error over time)', 'group': 'Quality control'},
+    {'name': 'id_qc', 'label': 'Identification QC (scores, IDs over time, coverage, fragment error)', 'group': 'Quality control'},
     {'name': 'proteoform_heatmap', 'label': 'Proteoform heatmap (PrSMs by RT and mass)', 'group': 'Heatmaps'},
     {'name': 'mass_shifts', 'label': 'Mass shifts (modifications of the proteoforms)', 'group': 'Spectra & plots'},
     {'name': 'go_enrichment', 'label': 'GO enrichment of the selected proteins', 'group': 'Functional analysis',
@@ -135,7 +135,7 @@ TNT_LYSATE_LAYOUT = [
     ['sequence_view'],
     ['anno_spectrum', 'deconv_spectrum'],
     ['fragment_error_plot', 'precursor_xic'],
-    ['id_fdr_plot', 'id_qc'],
+    ['id_qc'],
     ['go_enrichment'],
 ]
 TNT_DEFAULT_LAYOUT = TNT_NATIVE_LAYOUT
@@ -153,7 +153,15 @@ QUANT_COMPONENTS = [
     {'name': 'quant_go', 'label': 'GO enrichment of the selected entries', 'group': 'Functional analysis',
      'requires': ('quant_table', 'quant_volcano', 'quant_heatmap'),
      'requires_label': 'the comparison table, the volcano plot or the clustered heatmap'},
-    {'name': 'quant_diagnostics', 'label': 'Comparison diagnostics', 'group': 'Quality control'},
+    {'name': 'quant_missing_values', 'label': 'Missing values', 'group': 'Quality control'},
+    {'name': 'quant_imputed_values', 'label': 'Imputed values', 'group': 'Quality control'},
+    {'name': 'quant_normalization', 'label': 'Normalization', 'group': 'Quality control'},
+    {'name': 'quant_pvalues', 'label': 'p-value distribution', 'group': 'Quality control'},
+]
+# The four plots above, which the layouts saved before they were split name
+# together (src/render/quant_view.py, split_diagnostics)
+QUANT_DIAGNOSTICS = [
+    ['quant_missing_values', 'quant_imputed_values'], ['quant_normalization', 'quant_pvalues'],
 ]
 # Label-free: runs compared feature by feature, each entry followed run by run
 QUANT_DEFAULT_LAYOUT = [
@@ -164,7 +172,7 @@ QUANT_LABEL_FREE_LAYOUT = QUANT_DEFAULT_LAYOUT
 # cluster and whether their channels are balanced come before single entries
 QUANT_ISOBARIC_LAYOUT = [
     ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_pca', 'quant_heatmap'],
-    ['quant_diagnostics'], ['quant_go'],
+    *QUANT_DIAGNOSTICS, ['quant_go'],
 ]
 
 MAX_EXPERIMENTS = 5

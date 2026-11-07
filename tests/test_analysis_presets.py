@@ -56,3 +56,9 @@ def test_other_presets_still_warn():
     level, _ = analysis.preset_note('Native', {'FLASHQuantConsensus': {'a': 1}, **PRESETS['Native']},
                                     False, analysis.NO_QUANT)
     assert level == 'warning'
+
+
+def test_internal_fragments_follow_the_sample_type():
+    # A lysate is annotated from the termini only; native top-down with internal fragments too
+    assert PRESETS['Lysate']['FLASHAnnotator']['algorithm:internal_ions'] == 'false'
+    assert PRESETS['Native']['FLASHAnnotator']['algorithm:internal_ions'] == 'true'

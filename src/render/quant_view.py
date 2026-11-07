@@ -20,7 +20,7 @@ from src.quant import isobaric
 from src.quant.session import LEVEL_NAMES, QuantSession, comparisons
 from src.render.layout_editor import get_saved_layout
 from src.render.layout_editor.catalog import (
-    QUANT_COMPONENTS, QUANT_DEFAULT_LAYOUT, QUANT_ISOBARIC_LAYOUT, QUANT_LABEL_FREE_LAYOUT,
+    QUANT_COMPONENTS, QUANT_DEFAULT_LAYOUT, QUANT_DIAGNOSTICS, QUANT_ISOBARIC_LAYOUT, QUANT_LABEL_FREE_LAYOUT,
 )
 from src.render.layout_editor.dialogs import _own_file_manager
 
@@ -89,10 +89,47 @@ def comparison_tool(file_manager, dataset_id):
     return manifest.get('tool') or 'flashdeconv'
 
 
+# The plots behind the steps of the comparison were one component with a
+# switch between them; layouts saved then name it.
+LEGACY_DIAGNOSTICS = 'quant_diagnostics'
+
+
+def split_diagnostics(rows):
+    """``rows`` with the former diagnostics component replaced by its four
+    plots, two per row, below what else its row held."""
+    out = []
+    for row in rows:
+        if LEGACY_DIAGNOSTICS not in row:
+            out.append(row)
+            continue
+        rest = [name for name in row if name != LEGACY_DIAGNOSTICS]
+        if rest:
+            out.append(rest)
+        out.extend(list(r) for r in QUANT_DIAGNOSTICS)
+    return out
+
+
+def migrate_views(path):
+    """Split the former diagnostics component in the saved comparison views, once."""
+    import json
+    try:
+        data = json.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict) or LEGACY_DIAGNOSTICS not in json.dumps(data):
+        return
+    for view in data.get('views') or []:
+        if isinstance(view, dict) and isinstance(view.get('rows'), list):
+            view['rows'] = split_diagnostics(view['rows'])
+    if isinstance(data.get('layout'), list):
+        data['layout'] = [split_diagnostics(experiment) for experiment in data['layout']]
+    Path(path).write_text(json.dumps(data, indent=1))
+
+
 def layout(file_manager):
     """The layout saved with the former Edit layout dialog, else the default."""
     saved = get_saved_layout(file_manager, LAYOUT_DATASET)
-    return saved[0][0] if saved else QUANT_DEFAULT_LAYOUT
+    return split_diagnostics(saved[0][0]) if saved else QUANT_DEFAULT_LAYOUT
 
 
 LABEL_FREE_VIEW = 'label-free'
@@ -113,7 +150,7 @@ def presets():
                  'sample similarity and GO enrichment.'},
         {'name': ISOBARIC_VIEW, 'label': 'TMT, iTRAQ', 'layout': QUANT_ISOBARIC_LAYOUT,
          'help': 'The labelled samples of one set (TMT, iTRAQ): volcano plot, comparison table, how the '
-                 'samples cluster and the diagnostics of each step, then GO enrichment.'},
+                 'samples cluster, missing values, imputation, normalization and p-values, then GO enrichment.'},
     ]
 
 
@@ -125,7 +162,7 @@ def is_isobaric(file_manager, dataset_id):
 
 def _legacy_rows(file_manager):
     saved = get_saved_layout(file_manager, LAYOUT_DATASET)
-    return saved[0][0] if saved else None
+    return split_diagnostics(saved[0][0]) if saved else None
 
 
 def default_view(file_manager, dataset_id=None):
@@ -160,6 +197,7 @@ def view_rows(file_manager, workspace, dataset_id):
     """The rows a comparison shows: the picked view, else the default of its kind."""
     from src.layout_manager import load_layout, load_views
     path = views_path(workspace)
+    migrate_views(path)
     state = load_views(path, QUANT_COMPONENTS, presets(), QUANT_LABEL_FREE_LAYOUT)
     name = state['current'] if load_layout(path) is not None else default_view(file_manager, dataset_id)
     view = next((v for v in state['views'] if v['name'] == name), state['views'][0])
@@ -169,6 +207,7 @@ def view_rows(file_manager, workspace, dataset_id):
 def view_selector(file_manager, workspace, dataset_id):
     """The view bar of a comparison."""
     from src.layout_manager import view_bar
+    migrate_views(views_path(workspace))
     view_bar(
         views_path(workspace), QUANT_COMPONENTS, presets(), QUANT_LABEL_FREE_LAYOUT,
         key='comparison_view', default_view=default_view(file_manager, dataset_id),

@@ -72,11 +72,82 @@ def test_run_settings_are_the_ones_the_run_was_made_with(tmp_path):
     assert not has_file  # its input file is not in this workspace
 
 
-def test_options_only_process_more_files(tmp_path):
+def test_options_add_identification_to_the_run_and_process_more_files_for_labels(tmp_path):
     file_manager = _file_manager(tmp_path)
+    name = file_manager.get_display_name('example_deconvolution')
     labels = [o['label'] for o in missing_analysis.options(
         tmp_path, file_manager, 'example_deconvolution', [IDENTIFICATION])]
+    assert labels == [f'Add identification to {name}']
+    labels = [o['label'] for o in missing_analysis.options(
+        tmp_path, file_manager, 'example_deconvolution', [ISOBARIC])]
     assert labels == ['Process more files with these settings']
+
+
+def _capture_start(monkeypatch):
+    started = {}
+
+    class Workflow:
+        def start_from(self, params, changes=None, **kwargs):
+            started.update(params=params, changes=changes, **kwargs)
+
+    import src.Workflow
+    monkeypatch.setattr(src.Workflow, 'TopDownWorkflow', Workflow)
+    return started
+
+
+def test_add_identification_locks_the_runs_file_and_reuses_its_deconvolution(tmp_path, monkeypatch):
+    from src import analysis
+
+    file_manager = _file_manager(tmp_path)
+    folder = Path(tmp_path, 'flashtnt', 'input-files', 'mzML-files')
+    folder.mkdir(parents=True)
+    source = Path(folder, 'Deconvolution-only_ProteinMix_LC-MS.mzML')
+    source.touch()
+    Path(folder, 'other.mzML').touch()
+    Path(tmp_path, 'flashtnt', 'params.json').write_text(json.dumps(
+        {'fasta-file': 'db.fasta', 'mzML-files': [str(Path(folder, 'other.mzML'))],
+         analysis.QUANT_KEY: analysis.LABEL_FREE}))
+    started = _capture_start(monkeypatch)
+
+    missing_analysis.add_identification(tmp_path, file_manager, 'example_deconvolution')
+
+    assert started['same_files'] == 'mzML-files' and started['files'] == [str(source)]
+    assert started['keep'] == ['FLASHDeconv'] and started['reuses'] == ['example_deconvolution']
+    # Identification on, the quantification as the run was processed (none)
+    assert started['changes'][analysis.IDENTIFY_KEY] is True
+    assert started['changes'][analysis.QUANT_KEY] == analysis.NO_QUANT
+    assert started['params']['fasta-file'] == 'db.fasta'
+
+
+def test_add_identification_without_the_runs_file_picks_files_again(tmp_path, monkeypatch):
+    started = _capture_start(monkeypatch)
+    missing_analysis.add_identification(tmp_path, _file_manager(tmp_path), 'example_deconvolution')
+    assert 'same_files' not in started and 'keep' not in started
+
+
+def test_execution_reuses_the_runs_deconvolution(tmp_path):
+    import shutil
+    from src.Workflow import TopDownWorkflow
+
+    cache = Path(tmp_path, 'cache')
+    shutil.copytree(DEMO / 'cache', cache)
+    workflow = object.__new__(TopDownWorkflow)  # as tasks.execute_workflow builds it
+    workflow.workflow_dir = Path(tmp_path, 'flashtnt')
+    workflow.workflow_dir.mkdir()
+    workflow.file_manager = FileManager(tmp_path, cache)
+    assert workflow._reused_deconvolution(1) == [None]
+
+    Path(workflow.workflow_dir, 'last-follow-up.json').write_text(json.dumps(
+        {'name': 'x', 'same_files': 'mzML-files', 'files': ['a.mzML'], 'kept': ['FLASHDeconv'],
+         'reuses': ['example_deconvolution']}))
+    assert workflow._reused_deconvolution(1) == ['example_deconvolution']
+    assert workflow._reused_deconvolution(2) == [None, None]  # files and runs do not pair up
+
+    out = Path(tmp_path, 'out')
+    out.mkdir()
+    assert workflow._copy_deconvolution('example_deconvolution', out)
+    assert {'out_deconv.mzML', 'anno_annotated.mzML', 'spec1.tsv', 'out.tsv'} <= {p.name for p in out.iterdir()}
+    assert not workflow._copy_deconvolution('unknown_run', Path(tmp_path, 'out2'))
 
 
 def test_more_files_compare_the_added_files_with_the_run(tmp_path):

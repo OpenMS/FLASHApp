@@ -69,3 +69,41 @@ def test_former_layout_equal_to_a_preset_adds_no_view(tmp_path):
     quant_view.adopt_saved_layout(fm, tmp_path)
     assert not quant_view.views_path(tmp_path).exists()
     assert quant_view.default_view(fm, 'comparison_lfq') == quant_view.ISOBARIC_VIEW
+
+
+def test_diagnostics_are_four_components():
+    names = {c['name'] for c in QUANT_COMPONENTS}
+    assert 'quant_diagnostics' not in names
+    split = {n for row in quant_view.QUANT_DIAGNOSTICS for n in row}
+    assert split == {'quant_missing_values', 'quant_imputed_values', 'quant_normalization', 'quant_pvalues'}
+    assert split <= names
+    from src.render import quant_cells
+    assert names == set(quant_cells.BUILDERS)
+
+
+def test_split_diagnostics_keeps_the_rest_of_its_row():
+    rows = [['quant_table'], ['quant_pca', 'quant_diagnostics'], ['quant_go']]
+    assert quant_view.split_diagnostics(rows) == [
+        ['quant_table'], ['quant_pca'],
+        ['quant_missing_values', 'quant_imputed_values'], ['quant_normalization', 'quant_pvalues'],
+        ['quant_go'],
+    ]
+
+
+def test_saved_views_with_diagnostics_show_the_four_plots(tmp_path):
+    path = quant_view.views_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    own = [['quant_table'], ['quant_diagnostics']]
+    path.write_text(json.dumps({
+        'current': 'mine', 'layout': [own], 'side_by_side': False,
+        'views': [{'name': 'mine', 'label': 'Mine', 'rows': own, 'in_bar': True}],
+    }))
+    fm = _Results()
+    rows = quant_view.view_rows(fm, tmp_path, 'comparison_lfq')
+    assert rows == [['quant_table'], *quant_view.QUANT_DIAGNOSTICS]
+    assert 'quant_diagnostics' not in path.read_text()
+
+
+def test_former_layout_with_diagnostics_is_split(tmp_path):
+    fm = _Results(layout=[['quant_table'], ['quant_diagnostics']])
+    assert quant_view.layout(fm) == [['quant_table'], *quant_view.QUANT_DIAGNOSTICS]
