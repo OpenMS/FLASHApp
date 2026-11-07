@@ -505,9 +505,8 @@ def _proteoform_heatmap(comp_name, file_manager, dataset_id):
 
 def _fdr_plot(comp_name, file_manager, dataset_id):
     if comp_name == 'id_fdr_plot':
-        target, decoy = 'density_id_target', 'density_id_decoy'
-    else:
-        target, decoy = 'density_target', 'density_decoy'
+        return _id_score_plot(comp_name, file_manager, dataset_id)
+    target, decoy = 'density_target', 'density_decoy'
     return _component(
         SeriesPlot, comp_name, file_manager, dataset_id, [target, decoy],
         lambda: dict(
@@ -522,6 +521,24 @@ def _fdr_plot(comp_name, file_manager, dataset_id):
         ),
         required=[target],
     )
+
+
+def _id_score_plot(comp_name, file_manager, dataset_id):
+    """Score distribution of the identified proteoforms, targets and (when
+    FLASHTnT kept them) decoys. The q-values of the reported hits are almost
+    all 0, so their distribution left the plot empty."""
+    def build():
+        data = insight_data.id_score_densities(file_manager, dataset_id)
+        kinds = data.select(pl.col('kind').n_unique()).collect().item()
+        return dict(
+            data=data, x_column='x', y_column='y', series_column='kind',
+            series_names={'target': 'Targets', 'decoy': 'Decoys'},
+            series_colors={'target': 'green', 'decoy': 'red'},
+            mode='lines', title='Identification Scores', x_label='Score', y_label='Density',
+            show_legend=kinds > 1, fixed_y_range=True, svg_filename='FLASHViewer-identification-scores',
+            float_precision='float64',
+        )
+    return _component(SeriesPlot, comp_name, file_manager, dataset_id, ['protein_dfs'], build)
 
 
 # Ion type colours of the fragment error plot: prefix ions blue, suffix ions red
@@ -1317,21 +1334,27 @@ ID_QC_PLOTS = [
 ]
 
 
-def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
-    """A panel of run-level plots, two per row; plots whose results are
-    missing are left out."""
+def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key, per_row=2):
+    """A panel of run-level plots, `per_row` per row (one when the panel
+    shares its row of the layout, so no plot gets squeezed); plots whose
+    results are missing are left out."""
     components = []
     for name, builder, sources, title, x_label, y_label, mode, y_range in plots:
+        def build(builder=builder, name=name, title=title, x_label=x_label,
+                  y_label=y_label, mode=mode, y_range=y_range):
+            data = builder(file_manager, dataset_id)
+            # A legend for one series only repeats the axis title
+            series = data.lazy().select(pl.col('series').n_unique()).collect().item()
+            return dict(
+                data=data,
+                x_column='x', y_column='y', series_column='series',
+                mode=mode, title=title, x_label=x_label, y_label=y_label,
+                y_range_mode=y_range, svg_filename=f'FLASHViewer-{name}',
+                show_legend=series > 1,
+            )
         try:
             components.append(_component(
-                SeriesPlot, f'{name}-{tool}', file_manager, dataset_id, sources,
-                lambda builder=builder, name=name, title=title, x_label=x_label,
-                y_label=y_label, mode=mode, y_range=y_range: dict(
-                    data=builder(file_manager, dataset_id),
-                    x_column='x', y_column='y', series_column='series',
-                    mode=mode, title=title, x_label=x_label, y_label=y_label,
-                    y_range_mode=y_range, svg_filename=f'FLASHViewer-{name}',
-                ),
+                SeriesPlot, f'{name}-{tool}', file_manager, dataset_id, sources, build,
                 required=[source for source in sources if source != 'settings'],
             ))
         except MissingResult:
@@ -1339,12 +1362,13 @@ def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key):
     if not components:
         st.info('This dataset has no data for the run QC plots.')
         return
-    for row_start in range(0, len(components), 2):
-        columns = st.columns(2)
-        for offset, component in enumerate(components[row_start:row_start + 2]):
+    for row_start in range(0, len(components), per_row):
+        columns = st.columns(per_row)
+        for offset, component in enumerate(components[row_start:row_start + per_row]):
             with columns[offset]:
                 component(
-                    key=f'{key}_{row_start + offset}', state_manager=state_manager, height=320,
+                    key=f'{key}_{row_start + offset}', state_manager=state_manager,
+                    height=320 if per_row > 1 else 280,
                 )
 
 
@@ -1421,7 +1445,8 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
                 height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
 
 
-def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None):
+def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None,
+                 row_width=1):
     missing = []
     if (
         tool == 'topdown' and comp_name in IDENTIFICATION_ONLY
@@ -1444,10 +1469,12 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, 
         st.info('The internal fragment map is not available yet.')
         return
     if comp_name == 'run_qc':
-        _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key,
+                   per_row=2 if row_width == 1 else 1)
         return
     if comp_name == 'id_qc':
-        _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key)
+        _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key,
+                   per_row=2 if row_width == 1 else 1)
         return
     if comp_name == 'mass_shifts':
         _render_mass_shifts(file_manager, dataset_id, state_manager, key)
@@ -1516,4 +1543,5 @@ def render_grid(
                         _render_cell(
                             comp_name, file_manager, selected_data, tool, state_manager,
                             f'{grid_key}_{row_index}_{col_index}', on_missing,
+                            row_width=len(row),
                         )

@@ -135,3 +135,13 @@ def test_heatmap_levels_none_when_one_is_missing(fd, monkeypatch):
         lambda fm, ds, tag: None if tag == 'ms1_raw_heatmap_200000' else real(fm, ds, tag),
     )
     assert insight_data.heatmap_levels(fd, FD_DATASET, 'ms1_raw_heatmap') is None
+
+
+def test_id_score_densities_draw_the_identified_scores(tmp_path):
+    # The q-values of the reported hits are all 0, the scores spread: the
+    # identification score plot has a curve
+    fm = _file_manager(tmp_path, 'lysate')
+    densities = insight_data.id_score_densities(fm, 'example_lysate_identified').collect()
+    assert densities.height == 200
+    assert set(densities['kind']) == {'target'}
+    assert (densities['y'] > 0).all()
