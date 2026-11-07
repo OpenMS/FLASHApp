@@ -145,3 +145,13 @@ def test_id_score_densities_draw_the_identified_scores(tmp_path):
     assert densities.height == 200
     assert set(densities['kind']) == {'target'}
     assert (densities['y'] > 0).all()
+
+
+def test_sequence_coverage_counts_every_identified_spectrum(tmp_path):
+    from src.render import qc_data
+    fm = _file_manager(tmp_path, 'coverage')
+    points = qc_data.sequence_coverage(fm, 'example_lysate_identified').collect()
+    best = insight_data.proteins(fm, 'example_lysate_identified').filter(pl.col('is_best')).collect()
+    assert points.height == 20
+    assert points['x'].min() > 0 and points['x'].max() < 100
+    assert points['y'].sum() == best.height

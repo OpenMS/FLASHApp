@@ -1327,6 +1327,8 @@ ID_QC_PLOTS = [
     ('qc_identifications', qc_data.identifications_over_time, ['protein_dfs', 'scan_table'],
      'Identifications over Time', 'Retention time (s)', 'PrSMs per minute', 'lines+markers',
      'nonnegative'),
+    ('qc_coverage', qc_data.sequence_coverage, ['protein_dfs', 'scan_table'],
+     'Sequence Coverage', 'Sequence coverage (%)', 'PrSMs', 'lines+markers', 'nonnegative'),
     ('qc_fragment_error', qc_data.fragment_error_over_time,
      ['sequence_data', 'protein_dfs', 'scan_table', 'sequence_view', 'settings'],
      'Fragment Mass Error over Time', 'Retention time (s)', 'Median error (ppm)', 'markers',
@@ -1334,11 +1336,17 @@ ID_QC_PLOTS = [
 ]
 
 
-def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key, per_row=2):
+def _render_qc(plots, file_manager, dataset_id, tool, state_manager, key, per_row=2, leading=()):
     """A panel of run-level plots, `per_row` per row (one when the panel
     shares its row of the layout, so no plot gets squeezed); plots whose
-    results are missing are left out."""
+    results are missing are left out. `leading` builds components drawn
+    first, among the panel's plots."""
     components = []
+    for build_component in leading:
+        try:
+            components.append(build_component())
+        except MissingResult:
+            pass
     for name, builder, sources, title, x_label, y_label, mode, y_range in plots:
         def build(builder=builder, name=name, title=title, x_label=x_label,
                   y_label=y_label, mode=mode, y_range=y_range):
@@ -1446,7 +1454,9 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
 
 
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None,
-                 row_width=1):
+                 row=None):
+    row = row or [comp_name]
+    per_row = 2 if len(row) == 1 else 1
     missing = []
     if (
         tool == 'topdown' and comp_name in IDENTIFICATION_ONLY
@@ -1469,12 +1479,15 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, 
         st.info('The internal fragment map is not available yet.')
         return
     if comp_name == 'run_qc':
-        _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key,
-                   per_row=2 if row_width == 1 else 1)
+        _render_qc(RUN_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key, per_row)
         return
     if comp_name == 'id_qc':
-        _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key,
-                   per_row=2 if row_width == 1 else 1)
+        # The identification score plot leads the panel, unless it has a
+        # cell of its own next to it
+        leading = [] if 'id_fdr_plot' in row else [
+            lambda: _id_score_plot('id_fdr_plot', file_manager, dataset_id)]
+        _render_qc(ID_QC_PLOTS, file_manager, dataset_id, tool, state_manager, key, per_row,
+                   leading=leading)
         return
     if comp_name == 'mass_shifts':
         _render_mass_shifts(file_manager, dataset_id, state_manager, key)
@@ -1543,5 +1556,5 @@ def render_grid(
                         _render_cell(
                             comp_name, file_manager, selected_data, tool, state_manager,
                             f'{grid_key}_{row_index}_{col_index}', on_missing,
-                            row_width=len(row),
+                            row=row,
                         )
