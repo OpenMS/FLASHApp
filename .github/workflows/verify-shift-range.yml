@@ -41,9 +41,9 @@ jobs:
           for v in old new; do
             if [ $v = old ]; then T=/openms/bin/FLASHTnT; export LD_LIBRARY_PATH=/openms/lib:/root/miniforge3/envs/streamlit-env/lib;
             else T=$GITHUB_WORKSPACE/../build/bin/FLASHTnT; export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/../build/lib:/root/miniforge3/envs/streamlit-env/lib; fi
-            /usr/bin/time -v $T -in out_deconv.mzML -in_raw raw.mzML -db database.fasta -tag:min_length 4 -tag:max_length 4 \
+            s=$SECONDS; $T -in out_deconv.mzML -in_raw raw.mzML -db database.fasta -tag:min_length 4 -tag:max_length 4 \
               -out_pro $v-pro.tsv -out_tag $v-tag.tsv -out_prsm $v-prsm.tsv -threads "$(nproc)" > $v.log 2>&1 || (tail -40 $v.log; exit 1)
-            grep -E 'Elapsed|Maximum resident' $v.log
+            echo "$v: $((SECONDS - s)) s"; tail -5 $v.log
           done
           /root/miniforge3/envs/streamlit-env/bin/python - <<'PY'
           import csv
