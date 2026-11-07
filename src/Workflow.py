@@ -15,7 +15,10 @@ from src import analysis, sample_type
 from src.quant import isobaric
 from src.parse.tnt import parseTnT
 from src.parse.deconv import parseDeconv
-from src.quant.run import CONSENSUS_EXCLUDE, compare_isobaric, compare_runs
+from src.quant.run import (
+    CONSENSUS_EXCLUDE, SETTINGS_KEY, compare_isobaric, compare_runs, design_of, reusable_runs, run_name,
+    run_record,
+)
 from src import flashida
 from src import former_examples
 from src.workflow.WorkflowManager import WorkflowManager
@@ -154,7 +157,7 @@ def comparison_settings(workflow):
     )
 
 
-def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None):
+def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None, design=None):
     """The label-free comparison after the per-run loop. False on failure."""
     if analysis.quantification(workflow.params) != analysis.LABEL_FREE:
         return True
@@ -163,6 +166,7 @@ def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None):
         return True
     return compare_runs(
         workflow, tool, dataset_ids, mzmls, workflow.params.get('mzML-files', []), prsm_key=prsm_key,
+        design=design,
     ) is not None
 
 
@@ -249,6 +253,8 @@ class TopDownWorkflow(WorkflowManager):
     FLASHDeconv workflow are adopted on first use.
     """
     share_cache = True
+    # Start analysis (settings adding files to an experiment) opens the Run page
+    run_page = Path('content', 'TopDown', 'TopDownRun.py')
 
     def __init__(self) -> None:
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
@@ -338,6 +344,7 @@ class TopDownWorkflow(WorkflowManager):
         """Your analysis: the runs, whether and how they are identified and
         quantified, and what a start will do. Drawn above the parameters, not
         in a fragment: the tabs of configure() follow these choices."""
+        self.ui.follow_up_notice()
         with st.container(border=True):
             st.markdown('##### Your analysis')
             # reactive: drawn in the page itself, so a change reruns the page
@@ -669,6 +676,15 @@ class TopDownWorkflow(WorkflowManager):
         if quant == analysis.LABEL_FREE:
             deconv_params['quant'] = True
         self.logger.log(f'Analysis: {analysis.name(identify, quant, plex)}.')
+        # Process more files: the earlier runs this start adds files to join
+        # its comparison as they are, without being processed again
+        reused = reusable_runs(
+            self.file_manager, self.follow_up_info().get('adds_to'), identify, quant, plex,
+        )
+        if reused:
+            self.logger.log('Adding the files to the runs ' + ', '.join(d for d, _ in reused)
+                            + ', which are compared with them as they are.')
+        samples = design_of(self.workflow_dir, self.params.get('mzML-files', []), in_mzmls)
         dataset_ids = []
         errors = []
         # Process files in sequence
@@ -711,6 +727,9 @@ class TopDownWorkflow(WorkflowManager):
                     self._parse(dataset_id, identify)
                     if quant == analysis.ISOBARIC:
                         self._parse_isobaric(dataset_id, plex)
+                    self.file_manager.store_data(dataset_id, SETTINGS_KEY, run_record(
+                        identify, quant, plex, in_mzml, samples.get(run_name(in_mzml)),
+                    ))
 
                     progress.end_step(parsing)
                     # Remove temporary folder
@@ -724,11 +743,14 @@ class TopDownWorkflow(WorkflowManager):
             self._prepare_go_terms(dataset_ids)
 
         tool = 'flashtnt' if identify else 'flashdeconv'
+        compared = [d for d, _ in reused] + dataset_ids
+        mzmls = [r['mzml'] for _, r in reused] + list(in_mzmls)
+        design = {run_name(r['mzml']): (r.get('condition', ''), r.get('replicate', 1)) for _, r in reused}
         if quant == analysis.ISOBARIC:
-            return compare_isobaric(self, tool, dataset_ids, plex) is not None
+            return compare_isobaric(self, tool, compared, plex) is not None
         if identify:
-            return run_comparison(self, tool, dataset_ids, in_mzmls, prsm_key='prsms_tsv')
-        return run_comparison(self, tool, dataset_ids, in_mzmls)
+            return run_comparison(self, tool, compared, mzmls, prsm_key='prsms_tsv', design=design)
+        return run_comparison(self, tool, compared, mzmls, design=design)
 
 
 # The former workflows, for queued jobs and the workspace sync of older builds

@@ -231,3 +231,18 @@ def test_run_manager_without_runs(tmp_path):
     at = AppTest.from_function(_manager_script, args=(str(tmp_path),)).run(timeout=30)
     assert not at.exception
     assert "No runs yet" in at.info[0].value
+
+
+def test_deleting_the_first_run_keeps_finished_additions_selectable(tmp_path):
+    runs = RunManager(tmp_path)
+    first = runs.new_run("First")
+    runs.finish(first, FINISHED)
+    failed = runs.new_run("Failed addition", adds_to=first)
+    runs.finish(failed, FAILED)
+    done = runs.new_run("Finished addition", adds_to=first)
+    runs.finish(done, FINISHED)
+
+    assert runs.delete(first)
+    # The finished addition starts the experiment, so the picker still lists it
+    assert [r["id"] for r in runs.experiments()] == [done]
+    assert runs.experiment_root(failed) == done

@@ -58,6 +58,31 @@ def comparison_names(file_manager, tool=None):
     return names
 
 
+def added_comparison(file_manager, workflow_dir):
+    """The newest comparison of a start that processed more files for earlier
+    runs (Process more files) and compared them with the new ones, else None."""
+    import json
+
+    try:
+        info = json.loads(Path(workflow_dir, 'last-follow-up.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    earlier = set(info.get('adds_to') or []) if isinstance(info, dict) else set()
+    if not earlier:
+        return None
+    for dataset_id in comparisons(file_manager):
+        manifest = file_manager.get_results(dataset_id, ['quant_manifest'])['quant_manifest']
+        if earlier <= set(manifest.get('runs') or []):
+            return dataset_id
+    return None
+
+
+def comparison_runs(file_manager, dataset_id):
+    """The dataset ids of the runs a comparison compares."""
+    manifest = file_manager.get_results(dataset_id, ['quant_manifest'])['quant_manifest']
+    return list(manifest.get('runs') or [])
+
+
 def comparison_tool(file_manager, dataset_id):
     """'flashtnt' for a comparison of identified runs, else 'flashdeconv'."""
     manifest = file_manager.get_results(dataset_id, ['quant_manifest'])['quant_manifest']

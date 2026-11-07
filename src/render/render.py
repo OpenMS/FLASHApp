@@ -324,13 +324,13 @@ _HIERARCHY_ROW = 33
 
 _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 
-# Components with nothing to show for a run deconvolved only (the sequence
-# view then shows the sequence set in the view)
-IDENTIFICATION_ONLY = (
-    {c['name'] for c in TNT_COMPONENTS} - {c['name'] for c in DECONV_COMPONENTS} - {'sequence_view'}
+# Components with nothing to show for a run deconvolved only, or without labels
+from src.render.layout_editor.catalog import (  # noqa: E402
+    IDENTIFICATION, IDENTIFICATION_ONLY, ISOBARIC, ISOBARIC_ONLY, TOPDOWN_COMPONENTS,
 )
+from src.layout_manager import missing_note  # noqa: E402
 
-ISOBARIC_ONLY = {c['name'] for c in ISOBARIC_COMPONENTS}
+_COMPONENT_LABELS = {c['name']: c['label'] for c in TOPDOWN_COMPONENTS}
 
 
 def _plex(fm, ds):
@@ -1421,15 +1421,24 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
                 height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
 
 
-def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key):
+def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None):
+    missing = []
     if (
         tool == 'topdown' and comp_name in IDENTIFICATION_ONLY
         and not file_manager.result_exists(dataset_id, 'protein_dfs')
     ):
-        st.info('This run was deconvolved only. Run it with **Identify proteoforms** on to fill this view.')
-        return
+        missing.append(IDENTIFICATION)
     if comp_name in ISOBARIC_ONLY and not file_manager.result_exists(dataset_id, 'isobaric_dfs'):
-        st.info('This run has no reporter ions. Run it with **Quantification: Isobaric labels** to fill this view.')
+        missing.append(ISOBARIC)
+    if missing:
+        if on_missing is not None:
+            from src.render.missing_analysis import ANALYSES
+            missing_note(_COMPONENT_LABELS.get(comp_name, comp_name), missing, ANALYSES, on_missing,
+                         f'{key}_missing', comp_name)
+        elif IDENTIFICATION in missing:
+            st.info('This run was deconvolved only. Run it with **Identify proteoforms** on to fill this view.')
+        else:
+            st.info('This run has no reporter ions. Run it with **Quantification: Isobaric labels** to fill this view.')
         return
     if comp_name == 'internal_fragment_map':
         st.info('The internal fragment map is not available yet.')
@@ -1492,8 +1501,10 @@ def _grid_lock() -> threading.Lock:
 
 def render_grid(
     selected_data, layout_info_per_exp, file_manager, tool, identifier,
-    grid_key='flash_viewer_grid'
+    grid_key='flash_viewer_grid', on_missing=None,
 ):
+    """Draw one experiment. ``on_missing(missing, component)``: the button of the
+    note a component draws when the run lacks the analysis it needs."""
     with _grid_lock():
         state_manager = _state_manager(tool, identifier, selected_data)
         # A click updates every view of the grid in one rerun, not one per view
@@ -1504,5 +1515,5 @@ def render_grid(
                     with col:
                         _render_cell(
                             comp_name, file_manager, selected_data, tool, state_manager,
-                            f'{grid_key}_{row_index}_{col_index}',
+                            f'{grid_key}_{row_index}_{col_index}', on_missing,
                         )

@@ -22,7 +22,8 @@ from src import analysis, former_examples, sample_type
 from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
-from src.layout_manager import view_bar
+from src.layout_manager import request_analysis, view_bar
+from src.render import missing_analysis
 from src.render import quant_view
 from src.render.tool_results import tool_results_button
 from src.common import result_download
@@ -103,6 +104,27 @@ def selector(index, names, with_button=None):
             with_button()
 
 
+VIEW_KEY = 'topdown_view'
+MISSING_INDEX = 'topdown_missing_experiment'
+
+
+def add_missing(index):
+    """The button of a component whose run lacks its analysis: the view bar's dialog."""
+    def on_missing(missing, component):
+        st.session_state[MISSING_INDEX] = index
+        request_analysis(VIEW_KEY, missing, component=component)
+    return on_missing
+
+
+def missing_options(missing, view):
+    """What the dialog offers for the run of the experiment that asked."""
+    index = st.session_state.get(MISSING_INDEX, 0) if view is None else 0
+    dataset_id = st.session_state.get(selection_key(index))
+    if dataset_id not in results:
+        return []
+    return missing_analysis.options(workspace, file_manager, dataset_id, missing)
+
+
 def experiment(index):
     """Draw experiment `index` below its selector."""
     dataset_id = st.session_state.get(selection_key(index))
@@ -110,7 +132,7 @@ def experiment(index):
         return
     render_grid(
         dataset_id, experiment_layout(index, dataset_id), file_manager, TOOL,
-        selection_key(index), f'flash_viewer_grid_{index}',
+        selection_key(index), f'flash_viewer_grid_{index}', on_missing=add_missing(index),
     )
 
 
@@ -148,6 +170,13 @@ display_name_to_id = {file_manager.get_display_name(exp_id): exp_id for exp_id i
 display_name_to_id.update(comparison_names)
 display_id_to_name = {exp_id: name for name, exp_id in display_name_to_id.items()}
 
+# After Process more files, the comparison of the earlier runs with the added
+# ones is shown (once), in place of the runs one by one
+added = quant_view.added_comparison(file_manager, Path(workspace, missing_analysis.WORKFLOW_DIR))
+if added and st.session_state.get('_viewer_added_comparison') != added:
+    st.session_state['_viewer_added_comparison'] = added
+    st.session_state[selection_key(0)] = added
+
 
 
 def view_selector():
@@ -157,7 +186,9 @@ def view_selector():
     view_bar(
         topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
         topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager),
-        key='topdown_view', default_view=topdown_layout.default_view(identified, kind, file_manager),
+        key=VIEW_KEY, default_view=topdown_layout.default_view(identified, kind, file_manager),
+        available=missing_analysis.available(file_manager, first if first in display_id_to_name else None),
+        analyses=missing_analysis.ANALYSES, unavailable_options=missing_options,
         max_experiments=MAX_EXPERIMENTS, target='the Viewer',
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
@@ -170,9 +201,27 @@ def view_selector():
     )
 
 
+def add_files_button(dataset_id, runs=None):
+    """Add files: process more files with the settings of the shown run (or
+    comparison) and compare them with it."""
+    if dataset_id is None:
+        return
+    if st.button('Add files', icon=':material/library_add:', key=f'add_files_{dataset_id}', width='content',
+                 help='Process more files with these settings and compare them with this experiment'):
+        missing_analysis.add_files(workspace, file_manager, dataset_id, runs=runs)
+
+
+def comparison_buttons():
+    shown = st.session_state[selection_key(0)]
+    quant_view.buttons(file_manager, shown)
+    add_files_button(shown, runs=quant_view.comparison_runs(file_manager, shown))
+
+
 def edit_layout(index=0):
     tool_results_button()
     shown = st.session_state.get(selection_key(index))
+    if index == 0 and shown in results:
+        add_files_button(shown)
     if downloadable:
         result_download.viewer_button(file_manager, shown if shown in downloadable else None)
 
@@ -193,7 +242,7 @@ count, side_by_side = topdown_layout.experiments_shown(workspace) or (1, False)
 experiments = [None] * count
 
 if comparison_selected():
-    selector(0, display_names, lambda: quant_view.buttons(file_manager, st.session_state[selection_key(0)]))
+    selector(0, display_names, comparison_buttons)
     # A comparison spans its runs, so it fills the page on its own
     shown = st.session_state[selection_key(0)]
     quant_view.render(file_manager, shown, quant_view.view_rows(file_manager, workspace, shown))
