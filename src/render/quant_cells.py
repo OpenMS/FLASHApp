@@ -382,32 +382,52 @@ def build_heatmap(session, state_manager, key, height):
     )(key=key, state_manager=state_manager, height=height)
 
 
-def build_diagnostics(session, state_manager, key, height=None):
-    """The plots behind each step of the comparison chain."""
+def _frame(session, name):
+    return session.result(name).collect().to_pandas()
+
+
+# The steps of the comparison chain, each a plot of its own in the layout.
+# Saved layouts written before they were split name them together as
+# 'quant_diagnostics' (quant_view.split_diagnostics).
+
+def build_missing_values(session, state_manager, key, height=None):
+    """Where missing values occur: mean intensity of complete entries and of
+    entries with gaps."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    runs = list(session.conditions())
+    show_fig(missingness_vs_intensity(_frame(session, 'filtered'), runs), f'{key}-missing-values')
+
+
+def build_imputed_values(session, state_manager, key, height=None):
+    """The values imputed for the gaps against the measured ones."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    runs = list(session.conditions())
+    show_fig(imputed_value_preview(_frame(session, 'filtered'), _frame(session, 'imputed'), runs),
+             f'{key}-imputed-values')
+
+
+def build_normalization(session, state_manager, key, height=None):
+    """Intensity distribution of each sample before and after normalization."""
     del state_manager, height
     if not _ready(session):
         return
     conditions = session.conditions()
-    runs = list(conditions)
-    filtered = session.result('filtered').collect().to_pandas()
-    imputed = session.result('imputed').collect().to_pandas()
-    normalized = session.result('normalized_wide').collect().to_pandas()
-    statistics = session.result('statistics').collect().to_pandas()
-    settings = session.settings
-    view = st.segmented_control(
-        'Step', ['Missing values', 'Imputed values', 'Normalization', 'p-values'],
-        default='Missing values', key=f'{key}_step', label_visibility='collapsed',
-    ) or 'Missing values'
-    if view == 'Missing values':
-        show_fig(missingness_vs_intensity(filtered, runs), f'{key}-missing-values')
-    elif view == 'Imputed values':
-        show_fig(imputed_value_preview(filtered, imputed, runs), f'{key}-imputed-values')
-    elif view == 'Normalization':
-        show_fig(sample_distributions(
-            imputed, normalized, runs, conditions, after_is_log=settings['postproc-transform'] != 'None',
-        ), f'{key}-run-distributions')
-    else:
-        show_fig(pvalue_histogram(statistics), f'{key}-p-values')
+    show_fig(sample_distributions(
+        _frame(session, 'imputed'), _frame(session, 'normalized_wide'), list(conditions), conditions,
+        after_is_log=session.settings['postproc-transform'] != 'None',
+    ), f'{key}-run-distributions')
+
+
+def build_pvalues(session, state_manager, key, height=None):
+    """Distribution of the p-values of the group comparison."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    show_fig(pvalue_histogram(_frame(session, 'statistics')), f'{key}-p-values')
 
 
 def build_go(session, state_manager, key, height=None):
@@ -428,7 +448,10 @@ BUILDERS = {
     'quant_runs': (build_runs, 300),
     'quant_pca': (build_pca, 480),
     'quant_heatmap': (build_heatmap, 600),
-    'quant_diagnostics': (build_diagnostics, None),
+    'quant_missing_values': (build_missing_values, None),
+    'quant_imputed_values': (build_imputed_values, None),
+    'quant_normalization': (build_normalization, None),
+    'quant_pvalues': (build_pvalues, None),
     'quant_go': (build_go, None),
 }
 
