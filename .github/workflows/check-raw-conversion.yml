@@ -1,0 +1,147 @@
+name: Check raw conversion
+# Temporary: converts a Thermo .raw file with the installed desktop apps of the
+# FDmerge (OpenMS 3.6) build and with the published Docker image, with and
+# without a .NET 8 runtime on the machine.
+on:
+  push:
+    branches: [claude/project-thread-39w2gs]
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+env:
+  APP_NAME: FLASHApp
+  DESKTOP_RUN: "42303685574"   # desktop build of #206 (FDmerge 62615e6b)
+  RAW_URL: http://archive.openms.de/openms/testfiles/Angiotensin_AllScans.raw
+  RAW_SHA256: 3a0236f719e7c91e3c958f57f4e66ae422803ec3e6a997b9af4d2af395332b9f
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Windows-x86_64
+            runner: windows-2022
+          - platform: macOS-arm64
+            runner: macos-14
+          - platform: Linux-x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: OpenMS-App-${{ matrix.platform }}
+          path: installer
+          run-id: ${{ env.DESKTOP_RUN }}
+          github-token: ${{ github.token }}
+      - name: Install the app
+        run: |
+          set -euo pipefail
+          ls -la installer
+          inst=$(find installer -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' \) | head -n 1)
+          electron/scripts/install-app.sh "$inst"
+      - name: Test file
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/Angiotensin_AllScans.raw" "$RAW_URL"
+          echo "$RAW_SHA256  $RUNNER_TEMP/Angiotensin_AllScans.raw" | shasum -a 256 -c
+      - name: Convert
+        run: |
+          set -uo pipefail
+          p="$APP_PAYLOAD"
+          # The shell's environment (electron/src/payload.js appEnvironment)
+          export OPENMS_DATA_PATH="$p/share/OpenMS"
+          extra="$p"
+          [[ -d $p/openms/bin ]] && extra="$extra:$p/openms/bin"
+          for d in "$p"/share/OpenMS/THIRDPARTY/*/; do extra="$extra:${d%/}"; done
+          export PATH="$extra:$PATH"
+          py=$(ls "$p"/python-*/python.exe "$p"/python-*/bin/python3 2>/dev/null | head -n 1)
+          raw="$RUNNER_TEMP/Angiotensin_AllScans.raw"
+          echo "THIRDPARTY: $(ls "$p/share/OpenMS/THIRDPARTY" 2>/dev/null | tr '\n' ' ')"
+          find "$p" -path '*openms_thermo_bridge*' -maxdepth 6 | head -n 20
+          echo "dotnet: $(command -v dotnet || echo none)"; dotnet --list-runtimes 2>/dev/null || true
+          FileConverter --helphelp 2>&1 | grep -A3 'RawToMzML:reader' || true
+          summary=()
+          run() { # <label> <FileConverter args...>
+            local label="$1"; shift
+            local out="$RUNNER_TEMP/$label.mzML"
+            echo "::group::$label: FileConverter $*"
+            FileConverter -in "$raw" -out "$out" "$@" 2>&1 | tail -n 40
+            local code=${PIPESTATUS[0]}
+            local n=0; [[ -f $out ]] && n=$(grep -c '<spectrum ' "$out" || true)
+            echo "::endgroup::"
+            summary+=("| ${{ matrix.platform }} | $label | exit $code | $n spectra |")
+          }
+          app() { # <label>: FLASHApp's own conversion (CommandExecutor.convert_to_mzml)
+            echo "::group::$1: FLASHApp convert_to_mzml"
+            "$py" .github/scripts/check_raw_conversion.py "$p" "$raw" "$RUNNER_TEMP/wf-$1" >"$RUNNER_TEMP/$1.txt" 2>&1
+            local code=$?
+            tail -n 60 "$RUNNER_TEMP/$1.txt"
+            echo "::endgroup::"
+            summary+=("| ${{ matrix.platform }} | $1 (FLASHApp) | exit $code | $(grep -h '^RESULT' "$RUNNER_TEMP/$1.txt" | cut -c9- | cut -d'>' -f1) |")
+          }
+          run with-dotnet-default
+          run with-dotnet-inprocess -RawToMzML:reader inprocess
+          run with-dotnet-external -RawToMzML:reader external
+          app with-dotnet
+          # Remove the runner's .NET, as on a machine without it.
+          case "$RUNNER_OS" in
+            Linux) sudo rm -rf /usr/share/dotnet /usr/lib/dotnet /etc/dotnet "$HOME/.dotnet" ;;
+            macOS) sudo rm -rf /usr/local/share/dotnet /etc/dotnet "$HOME/.dotnet" ;;
+            Windows) mv "/c/Program Files/dotnet" "/c/Program Files/dotnet-off" || true; rm -rf "$HOME/.dotnet" ;;
+          esac
+          hash -r; echo "dotnet after removal: $(command -v dotnet || echo none)"
+          run without-dotnet-default
+          run without-dotnet-external -RawToMzML:reader external
+          app without-dotnet
+          { echo "| Platform | Case | Exit | mzML |"; echo "|---|---|---|---|"; printf '%s\n' "${summary[@]}"; } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test file
+        run: |
+          set -euo pipefail
+          mkdir data
+          curl -fsSL --retry 3 -o data/Angiotensin_AllScans.raw "$RAW_URL"
+          echo "$RAW_SHA256  data/Angiotensin_AllScans.raw" | sha256sum -c
+          chmod -R a+rwX data
+      - name: Convert
+        run: |
+          set -uo pipefail
+          img=ghcr.io/openms/flashapp:latest
+          docker pull -q "$img"
+          docker image inspect "$img" --format '{{.Created}} {{index .Config.Labels "org.opencontainers.image.revision"}}'
+          cat > data/run.sh <<'SH'
+          set -u
+          cd /data
+          echo "dotnet: $(command -v dotnet || echo none)"; echo "mono: $(command -v mono || echo none)"
+          find / -name 'ThermoWrapperManaged*' -not -path '/proc/*' 2>/dev/null | head
+          for c in "default|" "inprocess|-RawToMzML:reader inprocess" "external-mono|-RawToMzML:reader external -RawToMzML:NET_executable mono"; do
+            label=${c%%|*}; args=${c#*|}
+            echo "::group::$label: FileConverter $args"
+            FileConverter -in Angiotensin_AllScans.raw -out "$label.mzML" $args 2>&1 | tail -n 40
+            code=${PIPESTATUS[0]}
+            n=0; [ -f "$label.mzML" ] && n=$(grep -c '<spectrum ' "$label.mzML")
+            echo "::endgroup::"
+            echo "| Docker | $label | exit $code | $n spectra |" >> /data/summary.md
+          done
+          echo "::group::FLASHApp convert_to_mzml"
+          /root/miniforge3/envs/streamlit-env/bin/python /check/check_raw_conversion.py /app /data/Angiotensin_AllScans.raw /data/wf >/data/app.txt 2>&1
+          code=$?
+          tail -n 60 /data/app.txt
+          echo "::endgroup::"
+          echo "| Docker | FLASHApp convert_to_mzml | exit $code | $(grep '^RESULT' /data/app.txt | cut -c9- | cut -d'>' -f1) |" >> /data/summary.md
+          SH
+          docker run --rm -v "$PWD/data:/data" -v "$PWD/.github/scripts:/check:ro" --entrypoint /bin/bash "$img" /data/run.sh
+          { echo "| Platform | Case | Exit | mzML |"; echo "|---|---|---|---|"; cat data/summary.md; } | tee -a "$GITHUB_STEP_SUMMARY"
