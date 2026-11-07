@@ -1,6 +1,6 @@
 # Temporary: builds FLASHTnT from t0mdavid-m/OpenMS#11 and from its FDmerge base
 # in the FLASHApp image, with prints for the IHFA hits, and compares their
-# modification ranges on the lysate example (run 5: the sources of the IHFA path nodes). Removed before merge.
+# modification ranges on the lysate example (run 6: mirrored pairs bound no shift). Removed before merge.
 name: Verify shift ranges
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
           cmake -S src-openms -B ../build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH='/usr/;/usr/local' \
             -DHAS_XSERVER=OFF -DBOOST_USE_STATIC=OFF -DOPENMP=ON -DOPENMS_USE_VCPKG=OFF -DWITH_UV=OFF \
             -DWITH_THERMO_RAW=OFF -DPYOPENMS=OFF > cmake.log 2>&1 || (tail -50 cmake.log; exit 1)
-          for v in new; do
+          for v in new old; do
             if [ $v = old ]; then git -C src-openms checkout -q 62615e6b; fi
             /root/miniforge3/envs/streamlit-env/bin/python .github/workflows/dbg_patch.py $F
             cmake --build ../build --target FLASHTnT -j "$(nproc)" 2>&1 | grep -E 'error|Built target FLASHTnT' || true
