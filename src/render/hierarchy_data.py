@@ -25,6 +25,14 @@ def _with_missing(column):
     return pl.when(pl.col(column) < 0).then(None).otherwise(pl.col(column))
 
 
+def _qvalue(hits, column):
+    """A q-value column with FLASHTnT's -1 as null; all null when the output
+    has no such column (older FLASHTnT versions write no protein level)."""
+    if column not in hits.columns:
+        return pl.lit(None, dtype=pl.Float64)
+    return _with_missing(column)
+
+
 def _undetermined_position(column):
     return pl.when(pl.col(column) <= 0).then(None).otherwise(pl.col(column))
 
@@ -108,6 +116,7 @@ def protein_groups_from(hits):
             pl.len().cast(pl.Int64).alias('prsms'),
             pl.col('Score').max().alias('best_score'),
             _with_missing('ProteoformLevelQvalue').min().alias('best_qvalue'),
+            _qvalue(hits, 'ProteinLevelQvalue').min().alias('best_protein_qvalue'),
             *_best_of(),
         )
         .sort('protein_group')
@@ -127,6 +136,7 @@ def proteoforms_from(hits):
             pl.len().cast(pl.Int64).alias('prsms'),
             pl.col('Score').max().alias('best_score'),
             _with_missing('ProteoformLevelQvalue').min().alias('best_qvalue'),
+            _qvalue(hits, 'ProteinLevelQvalue').min().alias('best_protein_qvalue'),
             *_best_of(),
         )
         .rename({'proteoform_key': 'proteoform'})
@@ -141,6 +151,7 @@ def prsm_rows_from(hits):
         _with_missing('ProteoformMass').alias('ProteoformMass'),
         'MatchingFragments', 'Score',
         _with_missing('ProteoformLevelQvalue').alias('qvalue'),
+        _qvalue(hits, 'ProteinLevelQvalue').alias('protein_qvalue'),
     )
 
 

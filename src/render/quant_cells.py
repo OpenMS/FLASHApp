@@ -94,8 +94,17 @@ def _sample(session):
 
 
 def _table_columns(session, runs):
+    """(column definitions, fields hidden until the viewer turns them on).
+
+    Shown by default: the entity, what changed (change, log2 fold change,
+    adjusted p-value), the identification of a feature when there is one and
+    in how many compared samples it was detected. The rest (mass, RT,
+    sequence details, PrSMs, the status in each sample) is in the column
+    menu and in the row's overview."""
     level = session.level
     noun = _noun(session).capitalize()
+    names = session.annotations().collect_schema().names()
+    hidden = []
     columns = [{'title': noun, 'field': 'Proteoform', 'sorter': 'string',
                 'headerTooltip': {
                     'feature': 'Monoisotopic mass and apex retention time of the consensus feature.',
@@ -104,14 +113,16 @@ def _table_columns(session, runs):
                 }[level]}]
     if level == 'proteoform':
         columns.append({'title': 'Protein', 'field': 'protein_label', 'sorter': 'string'})
-        names = session.annotations().collect_schema().names()
         if 'start' in names:
             columns.append({'title': 'Residues', 'field': 'residues', 'sorter': 'string',
                             'headerTooltip': 'First and last residue of the proteoform in the protein sequence.'})
+            hidden.append('residues')
         if 'shifts' in names:
             columns.append({'title': 'Mass shifts', 'field': 'shifts', 'sorter': 'string',
                             'headerTooltip': 'Mass shifts (Da) at a residue, or within a range when not localized.'})
+            hidden.append('shifts')
         columns.append({'title': 'ProForma', 'field': 'proforma', 'sorter': 'string'})
+        hidden.append('proforma')
     if level == 'protein':
         columns.append({'title': 'Description', 'field': 'description', 'sorter': 'string'})
     columns += [
@@ -122,21 +133,36 @@ def _table_columns(session, runs):
     ]
     if level != 'protein':
         columns.append({'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)})
+        hidden.append('mass')
     if level == 'feature':
         columns.append({'title': 'RT (min)', 'field': 'rt', 'sorter': 'number', **_fixed(2)})
+        hidden.append('rt')
         columns.append({'title': 'Identified as', 'field': 'parent', 'sorter': 'string',
                         'headerTooltip': 'The proteoform of the PrSMs assigned to this feature (FLASHTnT).'})
+        # Empty in every row of a comparison without identification
+        if 'parent' not in names or session.annotations().select(pl.col('parent').is_not_null().any()).collect().item() is not True:
+            hidden.append('parent')
     if level == 'protein':
         columns.append({'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number'})
-    if 'PrSMs' in session.annotations().collect_schema().names():
+        hidden.append('proteoforms')
+    if 'PrSMs' in names:
         columns.append({'title': 'PrSMs', 'field': 'PrSMs', 'sorter': 'number',
                         'headerTooltip': 'PrSMs (FLASHTnT, q-value ≤ 1%) assigned to it in all runs.'})
-    columns.append({'title': 'Detected in', 'field': 'Detected', 'sorter': 'number',
-                    'headerTooltip': 'Runs where it was detected; in the others its value was transferred (match between runs) or is missing.'})
+        hidden.append('PrSMs')
+    sample = _sample(session).lower()
+    columns.append({
+        'title': 'Detected in', 'field': 'Detected', 'sorter': 'number',
+        # "6/8": detected in 6 of the 8 compared samples
+        'formatter': 'money', 'formatterParams': {'symbol': f'/{len(runs)}', 'symbolAfter': True, 'precision': False},
+        'headerTooltip': f'In how many of the {len(runs)} compared {sample}s it was detected; in the others its '
+                         'value was transferred (match between runs) or is missing. '
+                         f'Each {sample} has a column of its own in the column menu.',
+    })
     for run in runs:
         columns.append({'title': run, 'field': run, 'sorter': 'string',
                         'headerTooltip': 'detected; transferred, identified (match between runs, identified in the run); transferred (match between runs); missing'})
-    return columns
+        hidden.append(run)
+    return columns, hidden
 
 
 def build_summary(session, state_manager, key, height=None):
@@ -180,16 +206,23 @@ def _comparison_table(session):
 
 
 def build_table(session, state_manager, key, height):
-    """Every entity of the level, most significant first, with its status in
-    every run."""
+    """Every entity of the level, most significant first: what changed by
+    default, the rest (its status in every compared sample among it) in the
+    column menu and the row's overview."""
     if not _ready(session):
         return
-    runs = session.runs
+    columns, hidden = _table_columns(session, session.compared)
     _component(
         Table, f'quant_table_{session.level}', session.file_manager, session.dataset_id,
         _sources(session, 'statistics') + [f'quant_{session.level}', f'quant_{session.level}_annotations'],
         lambda: dict(
-            data=_comparison_table(session), column_definitions=_table_columns(session, runs),
+            # Hidden as `visible: False` in the definitions, which the cache
+            # keeps: _component loads a cached table with its cache_id only,
+            # so a hidden_columns argument would apply to the first render only
+            data=_comparison_table(session),
+            column_definitions=[{**c, 'visible': False} if c['field'] in hidden else c for c in columns],
+            # The hidden columns of a row, the status in each sample among them
+            row_overview='{Proteoform}',
             title=f'{LEVEL_NAMES[session.level]} of the compared {_sample(session).lower()}s', index_field='ConsensusIndex',
             interactivity={'consensus': 'ConsensusIndex'}, go_to_fields=['Proteoform'],
             # Check boxes pick entries for the GO enrichment cell
@@ -343,8 +376,7 @@ def build_heatmap(session, state_manager, key, height):
             data=session.result('zscores'), id_col='Proteoform', metadata=_metadata(conditions),
             title=f'Most significant {_noun(session, True)} (z-scores, clustered)',
             x_label=f'{_sample(session)}s', y_label=LEVEL_NAMES[session.level],
-            colorscale=[[0, '#6699E0'], [0.5, '#FFFFFF'], [1, '#E06666']],
-            reversescale=False, intensity_label='Z-score', group_colors=colors,
+            intensity_label='Z-score', group_colors=colors,
             multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
         ),
     )(key=key, state_manager=state_manager, height=height)

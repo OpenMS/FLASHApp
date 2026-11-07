@@ -297,6 +297,7 @@ COPY settings.json /app/settings.json
 COPY default-parameters.json /app/default-parameters.json
 COPY presets.json /app/presets.json
 COPY parameter-names.json /app/parameter-names.json
+COPY contributors.json /app/contributors.json
 
 # For streamlit configuration
 COPY .streamlit/ /app/.streamlit/

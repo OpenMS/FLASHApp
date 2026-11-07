@@ -135,3 +135,23 @@ def test_heatmap_levels_none_when_one_is_missing(fd, monkeypatch):
         lambda fm, ds, tag: None if tag == 'ms1_raw_heatmap_200000' else real(fm, ds, tag),
     )
     assert insight_data.heatmap_levels(fd, FD_DATASET, 'ms1_raw_heatmap') is None
+
+
+def test_id_score_densities_draw_the_identified_scores(tmp_path):
+    # The q-values of the reported hits are all 0, the scores spread: the
+    # identification score plot has a curve
+    fm = _file_manager(tmp_path, 'lysate')
+    densities = insight_data.id_score_densities(fm, 'example_lysate_identified').collect()
+    assert densities.height == 200
+    assert set(densities['kind']) == {'target'}
+    assert (densities['y'] > 0).all()
+
+
+def test_sequence_coverage_counts_every_identified_spectrum(tmp_path):
+    from src.render import qc_data
+    fm = _file_manager(tmp_path, 'coverage')
+    points = qc_data.sequence_coverage(fm, 'example_lysate_identified').collect()
+    best = insight_data.proteins(fm, 'example_lysate_identified').filter(pl.col('is_best')).collect()
+    assert points.height == 20
+    assert points['x'].min() > 0 and points['x'].max() < 100
+    assert points['y'].sum() == best.height
