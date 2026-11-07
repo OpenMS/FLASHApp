@@ -353,10 +353,17 @@ class TopDownWorkflow(WorkflowManager):
                 "mzML-files", name='MS data', multiple=True, reactive=True,
                 upload=dict(file_types=MS_DATA_TYPES, fallback=EXAMPLE_DATA, suggest_folders=True),
             )
-            self.ui.input_widget(
-                IDENTIFY_KEY, name='Identify proteoforms', widget_type='checkbox', default=True,
-                help=IDENTIFY_HELP, reactive=True,
-            )
+            kept = self.kept_deconvolution()
+            if kept:
+                # Identification added to a run: its file and deconvolution stay,
+                # so identification is on and the quantification is the run's
+                st.session_state[f'{self.parameter_manager.param_prefix}{IDENTIFY_KEY}'] = True
+                self.params[IDENTIFY_KEY] = True
+            else:
+                self.ui.input_widget(
+                    IDENTIFY_KEY, name='Identify proteoforms', widget_type='checkbox', default=True,
+                    help=IDENTIFY_HELP, reactive=True,
+                )
             identify = self.identifying()
             current_sample = self._current_sample_type()
             if identify:
@@ -368,12 +375,18 @@ class TopDownWorkflow(WorkflowManager):
             self._sample_type_choice(current_sample)
             self._recommend_sample_type(current_sample)
 
-            quant = self._choice(
-                analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
-                analysis.quantification(self.params), 'Quantification',
-                help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
-            )
-            if quant == analysis.ISOBARIC:
+            if kept:
+                quant = analysis.quantification(self.params)
+                st.caption(f'Quantification: **{analysis.QUANT_LABELS[quant]}**'
+                           + (f' ({isobaric.label(analysis.plex(self.params))})' if quant == analysis.ISOBARIC else '')
+                           + f', as {kept} was processed: its deconvolution is reused.')
+            else:
+                quant = self._choice(
+                    analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
+                    analysis.quantification(self.params), 'Quantification',
+                    help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
+                )
+            if quant == analysis.ISOBARIC and not kept:
                 self._choice(
                     analysis.PLEX_KEY, list(isobaric.PLEXES), {p: isobaric.label(p) for p in isobaric.PLEXES},
                     isobaric.DEFAULT_PLEX, 'Labels', selectbox=True,
@@ -390,6 +403,14 @@ class TopDownWorkflow(WorkflowManager):
                 len(selected), identify, current_sample, database if isinstance(database, str) else None,
                 quant, analysis.plex(params),
             ), icon='🧭')
+
+    def kept_deconvolution(self):
+        """The name of the run whose deconvolution the next start reuses
+        (identification added to it, ``missing_analysis.add_identification``), else None."""
+        info = self.ui._follow_up_info()
+        if 'FLASHDeconv' in (info.get('kept') or []) and info.get('reuses'):
+            return info.get('name') or info['reuses'][0]
+        return None
 
     def run_bar_summary(self) -> str:
         """The line beside the Run analysis button: what will run."""
@@ -518,9 +539,10 @@ class TopDownWorkflow(WorkflowManager):
             use_container_width=True,
         )
 
-    def _store_parameters(self, dataset_id, folder_path, tool, name):
+    def _store_parameters(self, dataset_id, folder_path, tool, name, settings=None):
         """Store the parameters `tool` ran with, as data and as a json file."""
-        settings = self.executor.parameter_manager.get_parameters_from_json().get(tool, {})
+        if settings is None:
+            settings = self.executor.parameter_manager.get_parameters_from_json().get(tool, {})
         self.file_manager.store_data(dataset_id, name, settings)
         json_file = Path(folder_path, f'{name}.json')
         with open(json_file, 'w') as f:
@@ -643,6 +665,30 @@ class TopDownWorkflow(WorkflowManager):
         self.file_manager.store_data(dataset_id, 'isobaric_dfs', frame)
         self.file_manager.store_data(dataset_id, 'isobaric_plex', {'plex': plex, 'channels': isobaric.channel_names(plex)})
 
+    def _reused_deconvolution(self, n_files):
+        """[dataset id or None] per input file: the run whose deconvolution a
+        start that adds identification to it reuses (``same_files``, ``keep``)."""
+        info = self.follow_up_info()
+        reuses = list(info.get('reuses') or [])
+        if 'FLASHDeconv' not in (info.get('kept') or []) or len(reuses) != n_files:
+            return [None] * n_files
+        return reuses
+
+    def _copy_deconvolution(self, source, folder_path):
+        """Put the stored FLASHDeconv output of run `source` into `folder_path`.
+        False when it is gone (the run is deconvolved again then)."""
+        keys = {name.replace('.', '_'): name for _, name in FLASHDECONV_OUTPUTS}
+        try:
+            stored = self.file_manager.get_results(source, list(keys), partial=True)
+        except Exception:
+            return False
+        if 'out_deconv_mzML' not in stored or not Path(stored['out_deconv_mzML']).exists():
+            return False
+        for key, path in stored.items():
+            if Path(path).exists():
+                copyfile(path, join(folder_path, keys[key]))
+        return True
+
     def execution(self) -> bool:
         # Get input files
         try:
@@ -684,6 +730,7 @@ class TopDownWorkflow(WorkflowManager):
         if reused:
             self.logger.log('Adding the files to the runs ' + ', '.join(d for d, _ in reused)
                             + ', which are compared with them as they are.')
+        reuse = self._reused_deconvolution(len(in_mzmls))
         samples = design_of(self.workflow_dir, self.params.get('mzML-files', []), in_mzmls)
         dataset_ids = []
         errors = []
@@ -701,14 +748,24 @@ class TopDownWorkflow(WorkflowManager):
                     makedirs(folder_path)
 
                     self.logger.log(f'Processing {current_base}:')
-                    self.logger.log("-> Running FLASHDeconv...")
-                    io = {'in': [in_mzml]}
-                    io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
-                    if not self.executor.run_topp(
-                        'FLASHDeconv', input_output=io,
-                        custom_params=deconv_params,
-                    ):
-                        raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
+                    source = reuse[index]
+                    deconv_settings = None
+                    if source is not None and self._copy_deconvolution(source, folder_path):
+                        # Identification added to a run: its deconvolution is reused
+                        self.logger.log(f"-> Reusing the deconvolution of {source}.")
+                        stored = self.file_manager.get_results(source, ['FD_parameters'], partial=True)
+                        deconv_settings = dict(stored.get('FD_parameters') or {})
+                    else:
+                        if source is not None:
+                            self.logger.log(f"The deconvolution of {source} is gone: deconvolving again.")
+                        self.logger.log("-> Running FLASHDeconv...")
+                        io = {'in': [in_mzml]}
+                        io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
+                        if not self.executor.run_topp(
+                            'FLASHDeconv', input_output=io,
+                            custom_params=deconv_params,
+                        ):
+                            raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
 
                     if identify:
                         self._identify(in_mzml, folder_path, database, current_base)
@@ -721,7 +778,8 @@ class TopDownWorkflow(WorkflowManager):
                             dataset_id, str(file).replace('.', '_'),
                             Path(folder_path, file), file_name=file
                         )
-                    self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters')
+                    self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters',
+                                           settings=deconv_settings)
                     if identify:
                         self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
                     self._parse(dataset_id, identify)
