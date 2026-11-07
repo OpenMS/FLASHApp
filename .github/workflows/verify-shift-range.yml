@@ -1,6 +1,6 @@
 # Temporary: builds FLASHTnT from t0mdavid-m/OpenMS#11 and from its FDmerge base
 # in the FLASHApp image, with prints for the IHFA hits, and compares their
-# modification ranges on the lysate example (run 4: a mass read twice on a path). Removed before merge.
+# modification ranges on the lysate example (run 5: the sources of the IHFA path nodes). Removed before merge.
 name: Verify shift ranges
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
           cmake -S src-openms -B ../build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH='/usr/;/usr/local' \
             -DHAS_XSERVER=OFF -DBOOST_USE_STATIC=OFF -DOPENMP=ON -DOPENMS_USE_VCPKG=OFF -DWITH_UV=OFF \
             -DWITH_THERMO_RAW=OFF -DPYOPENMS=OFF > cmake.log 2>&1 || (tail -50 cmake.log; exit 1)
-          for v in new old; do
+          for v in new; do
             if [ $v = old ]; then git -C src-openms checkout -q 62615e6b; fi
             /root/miniforge3/envs/streamlit-env/bin/python .github/workflows/dbg_patch.py $F
             cmake --build ../build --target FLASHTnT -j "$(nproc)" 2>&1 | grep -E 'error|Built target FLASHTnT' || true
@@ -46,7 +46,7 @@ jobs:
               -out_pro $v-pro.tsv -out_tag $v-tag.tsv -out_prsm $v-prsm.tsv -threads 1 > $v.log 2>&1 || (tail -40 $v.log; exit 1)
             echo "$v: $((SECONDS - s)) s"; grep -v DBG $v.log | tail -5
             echo "--- $v IHFA prints"; grep -c DBG $v.log || true
-            grep -E 'DBGPATH|DBGRANGE' $v.log | head -400
+            grep -E 'DBGPATH|DBGRANGE|DBGSRC' $v.log | head -400
             echo "--- $v IHFA mid nodes"; grep -E 'DBGRANGE|DBGMID' $v.log | head -600
             git -C ../src-openms checkout -q -- .
             cd ..

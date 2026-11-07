@@ -12,3 +12,14 @@ ins = ('{0}if (hit.getAccession().find("IHFA") != std::string::npos) {{ std::cou
 s = s[:m.end()] + ins + s[m.end():]
 open(p, 'w').write(s)
 print("patched")
+# per path: the merged masses, sources and tolerances of each node, and whether it is left out
+key2 = "            for (auto iter = best_path.rbegin(); iter != best_path.rend(); iter++)\n            {\n              if (reread["
+if key2 in s:
+    s = open(p).read()
+    add = ('            if (hit.getAccession().find("IHFA") != std::string::npos) { const auto& rg = hi.node_range_map_[m]; const auto& sr = hi.node_source_map_[m];'
+           ' std::cout << "DBGSRC m " << m << " ranges " << rg.size() << " spec " << t_node_spec.size() << " tols " << hi.tol_spec_map_[m].size() << " sources " << sr.size() << std::endl;'
+           ' for (Size a = 0; a < best_path.size(); a++) { int na = getNodeIndex_(best_path[a], t_pro_masses.size()); std::cout << "DBGSRC node " << na << " mz " << std::to_string(t_node_spec[na].getMZ()) << " tol " << hi.tol_spec_map_[m][na].getIntensity() << " reread " << (int)reread[a] << " src";'
+           ' if (na < (int)rg.size()) for (int k = rg[na].first; k <= rg[na].second; k++) std::cout << " " << sr[k]; std::cout << std::endl; } }\n')
+    s = s.replace(key2, add + key2, 1)
+    open(p, 'w').write(s)
+    print("patched sources")
