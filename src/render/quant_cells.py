@@ -216,8 +216,9 @@ def build_table(session, state_manager, key, height):
         Table, f'quant_table_{session.level}', session.file_manager, session.dataset_id,
         _sources(session, 'statistics') + [f'quant_{session.level}', f'quant_{session.level}_annotations'],
         lambda: dict(
-            # Hidden as `visible: False` in the definitions, which the cached
-            # component keeps (hidden_columns is not restored from the cache)
+            # Hidden as `visible: False` in the definitions, which the cache
+            # keeps: _component loads a cached table with its cache_id only,
+            # so a hidden_columns argument would apply to the first render only
             data=_comparison_table(session),
             column_definitions=[{**c, 'visible': False} if c['field'] in hidden else c for c in columns],
             # The hidden columns of a row, the status in each sample among them
