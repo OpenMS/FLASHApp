@@ -9,12 +9,15 @@ identification default for an identified run, as it was searched
 (src/render/topdown_layout.py). Every component of an experiment shares one
 selection, so a scan or proteoform stays selected when the view changes.
 
-Above the view bar, **Single run | Comparison** picks what is looked at: a
-run of the experiment, with the views above, or a comparison of its runs,
-with its own views (Label-free, TMT, iTRAQ and the user's own comparison
-views, src/render/quant_view.py). Each mode lists only its own datasets and
-remembers the one picked in it.
+**choose experiment** lists every comparison of runs and every run that
+belongs to none. For a comparison, **Comparison | Single run** picks what is
+looked at: the comparison, with its own views (Label-free, TMT, iTRAQ and the
+user's own comparison views, src/render/quant_view.py), and below it the runs
+it compares (remove one to leave it out, ``QuantSession.hidden``) beside Edit
+comparison; or one of its runs, with the run views. **Add files** processes
+more files with the settings shown, or adds tool output made elsewhere.
 """
+
 
 import streamlit as st
 
@@ -29,7 +32,9 @@ from src.render.layout_editor.catalog import MAX_EXPERIMENTS
 from src.layout_manager import request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
-from src.render.tool_results import tool_results_button
+from src.render.tool_results import tool_results_button, tool_results_dialog
+from src.quant.session import QuantSession
+from src.render.layout_editor.dialogs import _own_file_manager
 from src.common import result_download
 from src.workflow.StreamlitUI import latest_results_key
 
@@ -184,7 +189,6 @@ if added and st.session_state.get('_viewer_added_comparison') != added:
     st.session_state[selection_key(0)] = added
 
 
-
 def view_selector():
     """The view bar: the views as many as fit, + for a view of one's own, More and ✏️."""
     first = st.session_state.get(selection_key(0))
@@ -207,97 +211,150 @@ def view_selector():
     )
 
 
-def add_files_button(dataset_id, runs=None):
-    """Add files: process more files with the settings of the shown run (or
-    comparison) and compare them with it."""
-    if dataset_id is None:
-        return
-    if st.button('Add files', icon=':material/library_add:', key=f'add_files_{dataset_id}', width='content',
-                 help='Process more files with these settings and compare them with this experiment'):
-        missing_analysis.add_files(workspace, file_manager, dataset_id, runs=runs)
+# -- experiments: the comparisons and the runs of none ----------------------
+
+EXPERIMENT_KEY = 'viewer_experiment'
+SHOW_KEY = 'viewer_show'
+RUN_KEY = 'viewer_run'
+RUNS_KEY = 'viewer_compared_runs'
+PENDING = '_viewer_pending'
+LAST_RUN = '_viewer_last_run'
+TOO_FEW = '_viewer_too_few_runs'
+SHOW_COMPARISON, SHOW_RUN = 'Comparison', 'Single run'
 
 
-def comparison_buttons():
-    shown = st.session_state[selection_key(0)]
-    quant_view.buttons(file_manager, shown)
-    add_files_button(shown, runs=quant_view.comparison_runs(file_manager, shown))
+def stored_runs(comparison_id):
+    """The runs of this workspace a comparison was made from (matched by
+    their input file, so the example runs count too)."""
+    manifest = file_manager.get_results(comparison_id, ['quant_manifest'])['quant_manifest']
+    names = list((manifest.get('sources') or {}).get('runs') or []) + list(manifest.get('runs') or [])
+    by_input = {missing_analysis._base_name(r): r for r in results}
+    found = [r if r in results else by_input.get(missing_analysis._base_name(r)) for r in names]
+    return [r for r in dict.fromkeys(found) if r is not None]
 
 
-def edit_layout(index=0):
-    tool_results_button()
-    shown = st.session_state.get(selection_key(index))
-    if index == 0 and shown in results:
-        add_files_button(shown)
-    if downloadable:
-        result_download.viewer_button(file_manager, shown if shown in downloadable else None)
+def experiment_groups():
+    """Experiment name -> (the comparison or run it opens on, the runs in it):
+    every comparison, then every run that belongs to none."""
+    groups, grouped = {}, set()
+    for name, comparison_id in comparison_names.items():
+        members = stored_runs(comparison_id)
+        groups[name] = (comparison_id, members)
+        grouped.update(members)
+    for run_id in results:
+        if run_id not in grouped:
+            groups[file_manager.get_display_name(run_id)] = (run_id, [run_id])
+    return groups
 
 
-RUN_MODE, COMPARISON_MODE = 'Single run', 'Comparison'
-MODE_KEY = 'viewer_mode'
-_LAST_SHOWN = {RUN_MODE: '_viewer_last_run', COMPARISON_MODE: '_viewer_last_comparison'}
-_SHOWN_MODE = '_viewer_mode_shown'
-
-
-def _mode_of(dataset_id):
-    if dataset_id in comparison_ids:
-        return COMPARISON_MODE
-    if dataset_id in results:
-        return RUN_MODE
+def experiment_of(shown, groups):
+    """The experiment that holds `shown` (a comparison, or a run)."""
+    for name, (opens_on, members) in groups.items():
+        if shown == opens_on or (opens_on in comparison_ids and shown in members):
+            return name
     return None
 
 
-def _switch_mode():
-    """Single run | Comparison changed: show what was last picked in that mode."""
-    before = st.session_state.get(_SHOWN_MODE, RUN_MODE)
-    mode = st.session_state.get(MODE_KEY)
-    if mode is None:  # a segmented control can be cleared: keep the mode
-        st.session_state[MODE_KEY] = before
+def _on_experiment(groups):
+    name = st.session_state.get(EXPERIMENT_KEY)
+    if name is not None:
+        st.session_state[selection_key(0)] = groups[name][0]
+
+
+# The callbacks below only note what was picked: applied in the script run
+# (apply_pending), whose file manager is the current one.
+def _on_show(comparison_id, members):
+    st.session_state[PENDING] = ('show', comparison_id, members, st.session_state.get(SHOW_KEY))
+
+
+def _on_run(comparison_id, members):
+    st.session_state[PENDING] = ('run', comparison_id, members, st.session_state.get(RUN_KEY))
+
+
+def _on_runs(comparison_id, members):
+    st.session_state[PENDING] = ('runs', comparison_id, members, list(st.session_state.get(RUNS_KEY) or []))
+
+
+def apply_pending():
+    """What was picked in Comparison | Single run, the run, or the runs compared."""
+    pending = st.session_state.pop(PENDING, None)
+    if pending is None:
         return
+    what, comparison_id, members, value = pending
+    if what == 'show':
+        if value == SHOW_RUN and members:
+            last = st.session_state.get(LAST_RUN)
+            st.session_state[selection_key(0)] = last if last in members else members[0]
+        elif value == SHOW_COMPARISON:
+            st.session_state[selection_key(0)] = comparison_id
+        # a cleared segmented control keeps what is shown
+    elif what == 'run' and value in display_name_to_id:
+        st.session_state[selection_key(0)] = st.session_state[LAST_RUN] = display_name_to_id[value]
+    elif what == 'runs':
+        if len(value) < 2:
+            st.session_state[TOO_FEW] = True
+            return
+        session = QuantSession(_own_file_manager(file_manager), comparison_id)
+        session.set_hidden([r for r in session.all_runs if r not in value])
+
+
+def add_files_menu(dataset_id, runs=None):
+    """Add files: process more files with the settings shown, or add the
+    output of FLASHDeconv and FLASHTnT run elsewhere."""
+    with st.popover('Add files', icon=':material/library_add:', width='content'):
+        if dataset_id is not None and st.button(
+            'Process more files', icon=':material/play_circle:', key=f'add_files_{dataset_id}', width='stretch',
+            help='Process more files with these settings and compare them with this experiment',
+        ):
+            missing_analysis.add_files(workspace, file_manager, dataset_id, runs=runs)
+        if st.button('Add tool results', icon=':material/upload_file:', key='add_tool_results', width='stretch',
+                     help='Show the output of FLASHDeconv and FLASHTnT run outside the app'):
+            tool_results_dialog()
+
+
+def experiment_bar():
+    """choose experiment; for a comparison, Comparison | Single run with its
+    run, or below, the runs compared beside Edit comparison."""
+    groups = experiment_groups()
     shown = st.session_state.get(selection_key(0))
-    if shown is not None:
-        st.session_state[_LAST_SHOWN[before]] = shown
-    last = st.session_state.get(_LAST_SHOWN[mode])
-    if _mode_of(last) != mode:
-        pool = list(comparison_ids) if mode == COMPARISON_MODE else list(results)
-        last = (analysis.newest_result(pool) or pool[0]) if pool else None
-    if last is None:
-        st.session_state.pop(selection_key(0), None)
-    else:
-        st.session_state[selection_key(0)] = last
-    st.session_state[_SHOWN_MODE] = mode
-
-
-def mode_switch():
-    """Single run | Comparison: look at one run of the experiment or at a comparison of its runs."""
-    # A selection made elsewhere (Explore results, a comparison just made) sets the mode
-    mode = _mode_of(st.session_state.get(selection_key(0)))
-    if mode is not None:
-        st.session_state[MODE_KEY] = mode
-    elif st.session_state.get(MODE_KEY) not in (RUN_MODE, COMPARISON_MODE):
-        st.session_state[MODE_KEY] = RUN_MODE if results else COMPARISON_MODE
-    st.session_state[_SHOWN_MODE] = st.session_state[MODE_KEY]
-    st.segmented_control(
-        'Show', [RUN_MODE, COMPARISON_MODE], key=MODE_KEY, on_change=_switch_mode,
-        label_visibility='collapsed',
-        help='**Single run**: the spectra, masses and proteoforms of one run. '
-             '**Comparison**: the quantities of several runs side by side, from a start with '
-             'quantification switched on.',
-    )
-
-
-def no_comparison():
-    """Comparison mode without any comparison: say how one is made."""
-    st.info(
-        "No comparison of runs yet. A comparison is made when several files are processed "
-        "with **Quantification** (label-free or isobaric labels) switched on in Describe experiment."
-    )
-    newest = (analysis.newest_result(list(results)) or list(results)[0]) if results else None
-    if newest is not None and st.button(
-        f'Compare {file_manager.get_display_name(newest)} with more files', icon=':material/library_add:',
-        help='Opens Describe experiment with the settings of this run and label-free quantification '
-             'switched on, to pick the files to compare it with',
-    ):
-        missing_analysis.add_files(workspace, file_manager, newest)
+    name = experiment_of(shown, groups)
+    if name is None:
+        name = next(iter(groups))
+        shown = st.session_state[selection_key(0)] = groups[name][0]
+    st.session_state[EXPERIMENT_KEY] = name
+    opens_on, members = groups[name]
+    comparison = opens_on in comparison_ids
+    with st.container(horizontal=True, vertical_alignment='bottom'):
+        st.selectbox('choose experiment', list(groups), key=EXPERIMENT_KEY,
+                     on_change=_on_experiment, args=(groups,))
+        if comparison:
+            st.session_state[SHOW_KEY] = SHOW_COMPARISON if shown == opens_on else SHOW_RUN
+            st.segmented_control(
+                'show', [SHOW_COMPARISON, SHOW_RUN], key=SHOW_KEY, on_change=_on_show, args=(opens_on, members),
+                help='**Comparison**: the quantities of its runs side by side. '
+                     '**Single run**: the spectra, masses and proteoforms of one of them.',
+            )
+            if shown != opens_on:
+                names = [file_manager.get_display_name(r) for r in members]
+                st.session_state[RUN_KEY] = display_id_to_name.get(shown)
+                st.selectbox('run', names, key=RUN_KEY, on_change=_on_run, args=(opens_on, members))
+        add_files_menu(shown, runs=members if shown == opens_on and comparison else None)
+        if shown not in comparison_ids and downloadable:
+            result_download.viewer_button(file_manager, shown if shown in downloadable else None)
+    if comparison and shown == opens_on:
+        session = QuantSession(file_manager, opens_on)
+        with st.container(horizontal=True, vertical_alignment='bottom'):
+            st.session_state[RUNS_KEY] = session.runs
+            st.multiselect(
+                f'{session.sample_noun}s compared', session.all_runs, key=RUNS_KEY,
+                on_change=_on_runs, args=(opens_on, members),
+                help=f'Remove a {session.sample_noun} to leave it out of the comparison; '
+                     'pick it again to bring it back.',
+            )
+            quant_view.buttons(file_manager, opens_on)
+        if st.session_state.pop(TOO_FEW, False):
+            st.warning(f'A comparison needs at least two {session.sample_noun}s. '
+                       'Pick **Single run** to look at one run.')
 
 
 # Opened with Explore results on Run analysis: show what that start made
@@ -306,16 +363,11 @@ if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False
     if newest is not None:
         st.session_state[selection_key(0)] = newest
 
-mode_switch()
-
-if st.session_state[MODE_KEY] == COMPARISON_MODE and not comparison_names:
-    no_comparison()
-    save_params(params)
-    st.stop()
-if st.session_state[MODE_KEY] == RUN_MODE and not run_names:
-    st.info('Every result here is a comparison of runs. Switch to **Comparison** to see it.')
-    save_params(params)
-    st.stop()
+apply_pending()
+# Nothing (or something gone) shown: the first experiment
+if st.session_state.get(selection_key(0)) not in display_id_to_name:
+    first_groups = experiment_groups()
+    st.session_state[selection_key(0)] = next(iter(first_groups.values()))[0]
 
 if comparison_selected():
     quant_view.view_selector(file_manager, workspace, st.session_state[selection_key(0)])
@@ -326,12 +378,8 @@ else:
 count, side_by_side = topdown_layout.experiments_shown(workspace) or (1, False)
 experiments = [None] * count
 
-if st.session_state[MODE_KEY] == COMPARISON_MODE:
-    selector(0, list(comparison_names), comparison_buttons, label='choose comparison',
-             widget_key='selected_comparison_dropdown')
-    if not comparison_selected():
-        save_params(params)
-        st.stop()
+if comparison_selected():
+    experiment_bar()
     # A comparison spans its runs, so it fills the page on its own
     shown = st.session_state[selection_key(0)]
     quant_view.render(file_manager, shown, quant_view.view_rows(file_manager, workspace, shown))
@@ -339,14 +387,14 @@ if st.session_state[MODE_KEY] == COMPARISON_MODE:
 elif len(experiments) == 2 and side_by_side:
     c1, c2 = st.columns(2)
     with c1:
-        selector(0, run_names)
+        experiment_bar()
         experiment(0)
     with c2:
-        selector(1, run_names, lambda: edit_layout(1))
+        selector(1, run_names)
         experiment(1)
 
 else:
-    selector(0, run_names, edit_layout)
+    experiment_bar()
     experiment(0)
     for exp_index in range(1, len(experiments)):
         st.divider()

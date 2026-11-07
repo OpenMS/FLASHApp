@@ -109,8 +109,26 @@ class QuantSession:
         return list(self.manifest['levels'])
 
     @property
-    def runs(self):
+    def all_runs(self):
+        """Every run (or labelled sample) the comparison was made from."""
         return list(self.manifest['runs'])
+
+    @property
+    def hidden(self):
+        """The runs left out of the comparison (``hidden`` in its settings)."""
+        stored = self._get('quant_settings') if self.exists('quant_settings') else {}
+        return [r for r in stored.get('hidden') or [] if r in self.all_runs]
+
+    @property
+    def runs(self):
+        """The runs compared: all but the hidden ones."""
+        hidden = set(self.hidden)
+        return [r for r in self.all_runs if r not in hidden]
+
+    def set_hidden(self, hidden):
+        """Leave `hidden` out of the comparison (the chain runs again, as its settings changed)."""
+        stored = self._get('quant_settings') if self.exists('quant_settings') else {}
+        self.save_settings({**stored, 'hidden': [r for r in self.all_runs if r in set(hidden)]})
 
     @property
     def settings(self):
@@ -130,7 +148,8 @@ class QuantSession:
     def conditions(self):
         """sample -> condition, for the runs with a condition."""
         design = self.design()
-        return {s: c for s, c in zip(design['sample'], design['condition']) if c}
+        hidden = set(self.hidden)
+        return {s: c for s, c in zip(design['sample'], design['condition']) if c and s not in hidden}
 
     def long(self, level=None):
         return self._get(f'quant_{level or self.level}', polars=True)

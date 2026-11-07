@@ -99,6 +99,22 @@ def test_session_reads_back_design_and_level(stored):
     }
 
 
+def test_hidden_runs_are_left_out_and_come_back(stored):
+    quant = session.QuantSession(stored, 'comparison_20260101-120000')
+    first, second = quant.all_runs
+    stamp = quant._stamp(quant.level)
+    quant.set_hidden([second, 'not a run'])
+    assert quant.hidden == [second]
+    assert quant.runs == [first]
+    assert quant.all_runs == [first, second]
+    assert quant.conditions() == {first: 'control'}
+    # Leaving a run out changes what the comparison chain computes
+    assert quant._stamp(quant.level) != stamp
+    quant.set_hidden([])
+    assert quant.runs == [first, second]
+    assert quant.conditions() == {first: 'control', second: 'treated'}
+
+
 def test_two_runs_cannot_be_tested(stored):
     quant = session.QuantSession(stored, 'comparison_20260101-120000')
     assert 'three runs' in quant.problem()
