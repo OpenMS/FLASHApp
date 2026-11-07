@@ -1,15 +1,17 @@
 """The Viewer of the merged workflow: every run in one combined view of its
 deconvolution and identification, and every comparison of runs.
 
-The view bar (the template's layout manager) picks the view all runs show:
-Deconvolution, Native, Lysate or one of the user's own (+ and ✏️). Until a
-view is picked, each experiment shows the default of its run: the
-deconvolution default for a run deconvolved only, the Native or Lysate
-identification default for an identified run, as it was searched
+The view bar (the template's layout manager) lists every view at once:
+Deconvolution, Native, Lysate, the comparison views Label-free and TMT, iTRAQ
+(src/render/quant_view.py), and the user's own (+ and ✏️). A view the shown
+experiment cannot fill (identifications of a run deconvolved only, a
+comparison view for one run, a run view for a comparison) stays listed,
+locked, and offers what fills it. Until a view is picked, each experiment
+shows the default of its run: the deconvolution default for a run
+deconvolved only, the Native or Lysate identification default for an
+identified run, as it was searched, the view of its kind for a comparison
 (src/render/topdown_layout.py). Every component of an experiment shares one
-selection, so a scan or proteoform stays selected when the view changes. A
-comparison of runs has a view bar of its own: Label-free, TMT, iTRAQ and
-the user's own comparison views (src/render/quant_view.py).
+selection, so a scan or proteoform stays selected when the view changes.
 """
 
 import streamlit as st
@@ -120,9 +122,9 @@ def missing_options(missing, view):
     """What the dialog offers for the run of the experiment that asked."""
     index = st.session_state.get(MISSING_INDEX, 0) if view is None else 0
     dataset_id = st.session_state.get(selection_key(index))
-    if dataset_id not in results:
+    if dataset_id not in results and dataset_id not in comparison_ids:
         return []
-    return missing_analysis.options(workspace, file_manager, dataset_id, missing)
+    return missing_analysis.options(workspace, file_manager, dataset_id, missing, selection_key(index))
 
 
 def experiment(index):
@@ -149,6 +151,7 @@ file_manager = FileManager(
 quant_view.migrate_layout(file_manager)
 quant_view.adopt_saved_layout(file_manager, workspace)
 topdown_layout.adopt_saved_layout(file_manager, workspace)
+quant_view.merge_views(workspace)
 
 # Every deconvolved run, of which some were identified, then the comparisons
 results = file_manager.get_results_list(['threedim_SN_plot'])
@@ -180,20 +183,26 @@ if added and st.session_state.get('_viewer_added_comparison') != added:
 
 
 def view_selector():
-    """The view bar: the views as many as fit, + for a view of one's own, More and ✏️."""
+    """The view bar: every view, as many as fit, + for a view of one's own, More and ✏️."""
     first = st.session_state.get(selection_key(0))
-    identified, kind = run_kind(first) if first in display_id_to_name else (False, None)
+    shown = first if first in display_id_to_name else None
+    if shown in comparison_ids:
+        default = quant_view.default_view(file_manager, shown)
+    else:
+        identified, kind = run_kind(shown) if shown is not None else (False, None)
+        default = topdown_layout.default_view(identified, kind, file_manager)
     view_bar(
         topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
         topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager),
-        key=VIEW_KEY, default_view=topdown_layout.default_view(identified, kind, file_manager),
-        available=missing_analysis.available(file_manager, first if first in display_id_to_name else None),
+        key=VIEW_KEY, default_view=default,
+        available=missing_analysis.available(file_manager, shown),
         analyses=missing_analysis.ANALYSES, unavailable_options=missing_options,
+        dataset_label='comparison' if shown in comparison_ids else 'run',
         max_experiments=MAX_EXPERIMENTS, target='the Viewer',
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
             "to 3 components per row; ready-made views can be duplicated. Add experiments to compare "
-            "runs side by side."
+            "runs side by side. Label-free and TMT, iTRAQ show a comparison of runs."
             + ('' if topdown_layout.has_sequence(file_manager) else
                " For a run deconvolved only, add the **Sequence view** and set a sequence there with "
                "**Change sequence**.")
@@ -232,10 +241,7 @@ if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False
     if newest is not None:
         st.session_state[selection_key(0)] = newest
 
-if comparison_selected():
-    quant_view.view_selector(file_manager, workspace, st.session_state[selection_key(0)])
-else:
-    view_selector()
+view_selector()
 # The views file sets the number of experiments (and side by side); without
 # one, a single experiment
 count, side_by_side = topdown_layout.experiments_shown(workspace) or (1, False)
@@ -245,7 +251,8 @@ if comparison_selected():
     selector(0, display_names, comparison_buttons)
     # A comparison spans its runs, so it fills the page on its own
     shown = st.session_state[selection_key(0)]
-    quant_view.render(file_manager, shown, quant_view.view_rows(file_manager, workspace, shown))
+    quant_view.render(file_manager, shown, quant_view.view_rows(file_manager, workspace, shown),
+                      on_missing=add_missing(0))
 
 elif len(experiments) == 2 and side_by_side:
     c1, c2 = st.columns(2)

@@ -167,6 +167,29 @@ QUANT_ISOBARIC_LAYOUT = [
     ['quant_diagnostics'], ['quant_go'],
 ]
 
+
+# The Viewer's one view bar lists every view: those of a run (deconvolution,
+# identification) and those of a comparison of runs. A run's components need
+# ``run``, a comparison's need ``comparison``, so the bar locks the views the
+# shown experiment cannot fill and offers what can (missing_analysis.py).
+RUN = 'run'
+COMPARISON = 'comparison'
+
+
+def _with_need(components, need):
+    out = []
+    for component in components:
+        component = dict(component)
+        have = component.get('needs') or []
+        component['needs'] = [need] + ([have] if isinstance(have, str) else list(have))
+        out.append(component)
+    return out
+
+
+VIEWER_COMPONENTS = _with_need(TOPDOWN_COMPONENTS, RUN) + _with_need(QUANT_COMPONENTS, COMPARISON)
+VIEWER_SEQUENCE_COMPONENTS = _with_need(TOPDOWN_SEQUENCE_COMPONENTS, RUN)
+QUANT_NAMES = {c['name'] for c in QUANT_COMPONENTS}
+
 MAX_EXPERIMENTS = 5
 MAX_COLUMNS = 3
 

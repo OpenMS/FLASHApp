@@ -79,7 +79,8 @@ def test_layouts_of_the_former_viewers_become_views(tmp_path):
                   identification={'layout': [ident], 'side_by_side': False})
     topdown_layout.adopt_saved_layout(fm, tmp_path)
     views = {v['label']: v for v in _views(fm, tmp_path)['views']}
-    assert set(views) == {'Deconvolution', 'Native', 'Lysate', 'My deconvolution layout', 'My identification layout'}
+    assert set(views) == {'Deconvolution', 'Native', 'Lysate', 'Label-free', 'TMT, iTRAQ',
+                          'My deconvolution layout', 'My identification layout'}
     assert views['My deconvolution layout']['rows'] == deconv
     assert views['My identification layout']['rows'] == ident
     # Nothing counts as picked: each run keeps the default of its kind, shown as its view
@@ -108,3 +109,9 @@ def test_every_former_layout_is_kept_next_to_an_edit_layout_one(tmp_path):
     assert next(v for v in state['views'] if v['name'] == state['current'])['label'] == 'My layout'
     # The experiments of the Edit layout one are kept as they were
     assert topdown_layout.experiments_shown(tmp_path) == (2, True)
+
+
+def test_every_view_is_listed_at_once(tmp_path):
+    fm = _Results()
+    labels = [v['label'] for v in _views(fm, tmp_path)['views']]
+    assert labels == ['Deconvolution', 'Native', 'Lysate', 'Label-free', 'TMT, iTRAQ']

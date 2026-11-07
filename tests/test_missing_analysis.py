@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 
 from src.render import missing_analysis
-from src.render.layout_editor.catalog import IDENTIFICATION, ISOBARIC, TOPDOWN_COMPONENTS
+from src.render.layout_editor.catalog import (
+    COMPARISON, IDENTIFICATION, ISOBARIC, QUANT_COMPONENTS, RUN, TOPDOWN_COMPONENTS, VIEWER_COMPONENTS,
+)
 from src.workflow.FileManager import FileManager
 
 DEMO = Path('example-data', 'workspaces', 'default')
@@ -26,10 +28,37 @@ def test_components_name_the_analysis_they_need():
 
 def test_available_reads_what_each_run_was_processed_with(tmp_path):
     file_manager = _file_manager(tmp_path)
-    assert missing_analysis.available(file_manager, 'example_deconvolution') == set()
-    assert missing_analysis.available(file_manager, 'example_native_identified') == {IDENTIFICATION}
-    assert missing_analysis.available(file_manager, 'example_isobaric') == {ISOBARIC}
+    assert missing_analysis.available(file_manager, 'example_deconvolution') == {RUN}
+    assert missing_analysis.available(file_manager, 'example_native_identified') == {RUN, IDENTIFICATION}
+    assert missing_analysis.available(file_manager, 'example_isobaric') == {RUN, ISOBARIC}
+    assert missing_analysis.available(file_manager, 'example_label_free') == {COMPARISON}
     assert missing_analysis.available(file_manager, None) is None
+
+
+def test_the_viewer_lists_the_components_of_runs_and_of_comparisons():
+    needs = {c['name']: c['needs'] for c in VIEWER_COMPONENTS}
+    assert needs['ms1_deconv_heat_map'] == [RUN]
+    assert needs['protein_table'] == [RUN, IDENTIFICATION]
+    assert needs['quant_volcano'] == [COMPARISON]
+    assert len(needs) == len(TOPDOWN_COMPONENTS) + len(QUANT_COMPONENTS)
+
+
+def test_comparisons_and_their_runs_offer_each_other(tmp_path):
+    file_manager = _file_manager(tmp_path)
+    assert missing_analysis.comparison_members(file_manager, 'example_label_free') == ['example_lysate_identified']
+    assert missing_analysis.comparison_members(file_manager, 'example_isobaric_comparison') == ['example_isobaric']
+    # A comparison shows one of its runs for a view of one run
+    options = missing_analysis.options(tmp_path, file_manager, 'example_label_free', [RUN], 'shown')
+    assert [o['label'] for o in options] == ['Show Example: lysate, identified (E. coli + spike-in)']
+    # A run offers the comparison it is part of, and to compare it with more files
+    options = missing_analysis.options(tmp_path, file_manager, 'example_lysate_identified', [COMPARISON], 'shown')
+    assert [o['label'] for o in options] == ['Show Example: label-free comparison (spike-in 1x vs 0.1x)',
+                                             'Process more files with these settings']
+    import streamlit as st
+    options[0]['on_click']()
+    assert st.session_state['shown'] == 'example_label_free'
+    options = missing_analysis.options(tmp_path, file_manager, 'example_deconvolution', [COMPARISON], 'shown')
+    assert [o['label'] for o in options] == ['Process more files with these settings']
 
 
 def test_example_runs_name_the_input_files_they_were_made_from():

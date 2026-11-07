@@ -1,5 +1,10 @@
 """The Viewer's views: deconvolution and identification components in one
-combined view, and the default each experiment starts from.
+combined view, the views of a comparison of runs, and the default each
+experiment starts from.
+
+One view bar lists every view, those of a run and those of a comparison
+(Label-free, TMT, iTRAQ; src/render/quant_view.py). A view the shown
+experiment cannot fill stays listed, locked, and offers what can fill it.
 
 Every earlier default is a view. The ready-made views are the built-in
 defaults: Deconvolution (with the sequence view once a sequence is set), Native
@@ -12,7 +17,7 @@ each experiment starts from the default that fits its run.
 
 from src.render.layout_editor import get_saved_layout
 from src.render.layout_editor.catalog import (
-    DECONV_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS, TOPDOWN_COMPONENTS, TOPDOWN_SEQUENCE_COMPONENTS,
+    DECONV_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS, VIEWER_COMPONENTS, VIEWER_SEQUENCE_COMPONENTS,
 )
 
 LAYOUT_DATASET = 'topdown_layout'
@@ -29,11 +34,12 @@ def has_sequence(file_manager):
 
 
 def components(file_manager):
-    """What Edit layout offers: every component of both kinds, plus the
-    sequence components once a sequence is set in the sequence view."""
+    """What the views editor offers: every component of a run and of a
+    comparison, plus the sequence components once a sequence is set in the
+    sequence view."""
     if has_sequence(file_manager):
-        return TOPDOWN_COMPONENTS + TOPDOWN_SEQUENCE_COMPONENTS
-    return TOPDOWN_COMPONENTS
+        return VIEWER_COMPONENTS + VIEWER_SEQUENCE_COMPONENTS
+    return VIEWER_COMPONENTS
 
 
 def deconvolution_default(file_manager):
@@ -108,8 +114,9 @@ def views_path(workspace):
 
 
 def presets(file_manager):
-    """The ready-made views: the deconvolution default, then the identification
-    defaults by sample type."""
+    """The ready-made views: the deconvolution default, the identification
+    defaults by sample type, then the views of a comparison of runs."""
+    from src.render import quant_view
     return [
         {'name': DECONVOLUTION_VIEW, 'label': 'Deconvolution', 'layout': deconvolution_default(file_manager),
          'help': 'Spectra and their deconvolved masses: heatmap, scan and mass tables, spectra, 3D S/N plot.'},
@@ -118,7 +125,7 @@ def presets(file_manager):
                  'sequence, structure and tags.'},
         {'name': SAMPLE_VIEWS['Lysate'], 'label': 'Lysate', 'layout': TNT_DEFAULT_LAYOUTS['Lysate'],
          'help': 'Identifications of a lysate: proteins, proteoforms and PrSMs, browsed protein by protein.'},
-    ]
+    ] + quant_view.presets()
 
 
 # The layouts the former Viewers saved become views of the user's own, named

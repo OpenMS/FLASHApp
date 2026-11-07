@@ -20,7 +20,7 @@ from src.quant import isobaric
 from src.quant.session import LEVEL_NAMES, QuantSession, comparisons
 from src.render.layout_editor import get_saved_layout
 from src.render.layout_editor.catalog import (
-    QUANT_COMPONENTS, QUANT_DEFAULT_LAYOUT, QUANT_ISOBARIC_LAYOUT, QUANT_LABEL_FREE_LAYOUT,
+    QUANT_COMPONENTS, QUANT_DEFAULT_LAYOUT, QUANT_ISOBARIC_LAYOUT, QUANT_LABEL_FREE_LAYOUT, QUANT_NAMES,
 )
 from src.render.layout_editor.dialogs import _own_file_manager
 
@@ -102,6 +102,8 @@ LEGACY_VIEW = ('custom-comparison', 'My comparison layout')
 
 
 def views_path(workspace):
+    """Where comparison views were kept before the Viewer listed every view in
+    one bar (and where the former layout is adopted, then merged)."""
     return Path(workspace, 'layouts', 'comparison.json')
 
 
@@ -156,29 +158,72 @@ def adopt_saved_layout(file_manager, workspace):
     path.write_text(json.dumps(data, indent=1))
 
 
+def merge_views(workspace):
+    """Move the comparison views of the former bar into the Viewer's views, once.
+
+    The user's own comparison views are added (renamed where a name is taken),
+    ready-made ones keep whether they were in the bar. The file is kept as
+    ``comparison.json.merged``.
+    """
+    import json
+    from src.render import topdown_layout
+    source = views_path(workspace)
+    if not source.exists():
+        return
+    try:
+        old = json.loads(source.read_text())
+    except (OSError, ValueError):
+        old = {}
+    target = topdown_layout.views_path(workspace)
+    try:
+        data = json.loads(target.read_text()) if target.exists() else {}
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    views = [v for v in data.get('views') or [] if isinstance(v, dict) and isinstance(v.get('name'), str)]
+    if not views:
+        # The views of a run first, as the bar lists them
+        views = [{'name': name, 'in_bar': True}
+                 for name in [topdown_layout.DECONVOLUTION_VIEW, *topdown_layout.SAMPLE_VIEWS.values()]]
+    names = {v['name'] for v in views}
+    ready = {p['name'] for p in presets()}
+    for entry in (old.get('views') if isinstance(old, dict) else None) or []:
+        if not isinstance(entry, dict) or not isinstance(entry.get('name'), str):
+            continue
+        entry = dict(entry)
+        if entry['name'] in ready:
+            if entry['name'] not in names:
+                views.append({'name': entry['name'], 'in_bar': bool(entry.get('in_bar', True))})
+                names.add(entry['name'])
+            continue
+        if not entry['name'].startswith('custom-') or not isinstance(entry.get('rows'), list):
+            continue
+        name, n = entry['name'], 1
+        while name in names:
+            n += 1
+            name = f"custom-comparison-{n}" if n > 1 else 'custom-comparison'
+        entry['name'] = name
+        views.append(entry)
+        names.add(name)
+    if views:
+        data['views'] = views
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(data, indent=1))
+    source.replace(source.with_name(source.name + '.merged'))
+
+
 def view_rows(file_manager, workspace, dataset_id):
     """The rows a comparison shows: the picked view, else the default of its kind."""
     from src.layout_manager import load_layout, load_views
-    path = views_path(workspace)
-    state = load_views(path, QUANT_COMPONENTS, presets(), QUANT_LABEL_FREE_LAYOUT)
+    from src.render import topdown_layout
+    path = topdown_layout.views_path(workspace)
+    state = load_views(path, topdown_layout.components(file_manager), topdown_layout.presets(file_manager),
+                       topdown_layout.deconvolution_default(file_manager))
     name = state['current'] if load_layout(path) is not None else default_view(file_manager, dataset_id)
-    view = next((v for v in state['views'] if v['name'] == name), state['views'][0])
+    view = next((v for v in state['views'] if v['name'] == name),
+                next(v for v in state['views'] if v['name'] == LABEL_FREE_VIEW))
     return [list(r) for r in view['rows']]
-
-
-def view_selector(file_manager, workspace, dataset_id):
-    """The view bar of a comparison."""
-    from src.layout_manager import view_bar
-    view_bar(
-        views_path(workspace), QUANT_COMPONENTS, presets(), QUANT_LABEL_FREE_LAYOUT,
-        key='comparison_view', default_view=default_view(file_manager, dataset_id),
-        target='comparisons of runs',
-        help_text=(
-            "Drag a view to order the bar, untick it to keep it under More. These views are used for "
-            "every comparison of runs; your own take up to 3 components per row, ready-made views can "
-            "be duplicated."
-        ),
-    )
 
 
 @st.dialog('Edit comparison', width='large')
@@ -200,8 +245,9 @@ def buttons(file_manager, dataset_id):
         _comparison_dialog(file_manager, dataset_id)
 
 
-def render(file_manager, dataset_id, rows=None):
-    """The comparison grid of the Viewer."""
+def render(file_manager, dataset_id, rows=None, on_missing=None):
+    """The comparison grid of the Viewer. A component of a run in ``rows``
+    draws a note instead, whose button calls ``on_missing(missing, component)``."""
     # openms_insight only where the comparison is drawn, so the layout helpers
     # above import without it (the unit tests do not install it)
     from openms_insight import StateManager, defer_reruns
@@ -226,6 +272,15 @@ def render(file_manager, dataset_id, rows=None):
             columns = st.columns(len(row))
             for col_index, (column, comp_name) in enumerate(zip(columns, row)):
                 with column:
+                    if comp_name not in QUANT_NAMES:
+                        from src.layout_manager import missing_note
+                        from src.render.layout_editor.catalog import RUN, TOPDOWN_COMPONENTS
+                        from src.render.missing_analysis import ANALYSES
+                        labels = {c['name']: c['label'] for c in TOPDOWN_COMPONENTS}
+                        missing_note(labels.get(comp_name, comp_name), [RUN], ANALYSES, on_missing,
+                                     f'quant_{tool}_{level}_{row_index}_{col_index}_missing', comp_name,
+                                     dataset_label='comparison')
+                        continue
                     quant_cells.render_cell(
                         comp_name, session, state_manager, f'quant_{tool}_{level}_{row_index}_{col_index}',
                     )
