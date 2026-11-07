@@ -1,9 +1,11 @@
 """What the Viewer offers when a view needs an analysis the shown run was not processed with.
 
 A run deconvolved only has no identifications, a run without isobaric labels no
-reporter ions. Views needing them are locked in the view bar (the components'
+reporter ions. Views needing them are marked in the view bar (the components'
 ``needs`` in ``layout_editor/catalog.py``), and a click, or the **Add …** button
-of such a component, opens a dialog that offers one thing: process more files
+of such a component, opens a dialog. Identification is added to the run itself
+(``add_identification``: its file locked, its deconvolution reused). For
+isobaric labels, which FLASHDeconv measures, it offers one thing: process more files
 with this run's settings and the missing analysis switched on. Only the added
 files are processed, and this run is compared with them in one comparison,
 computed in the Viewer, as it is if it was processed with what the new start
@@ -183,14 +185,68 @@ def add_files(workspace, file_manager, dataset_id, runs=None):
     _follow_up(workspace, file_manager, dataset_id, {}, 'to add more files', more_files=True, runs=runs)
 
 
+# The tools whose results Add identification takes from the run
+KEPT_FOR_IDENTIFICATION = ['FLASHDeconv']
+
+
+def run_analysis(file_manager, dataset_id):
+    """(quantification, plex) run ``dataset_id`` was processed with."""
+    from src.quant.run import SETTINGS_KEY
+
+    record = None
+    if file_manager.result_exists(dataset_id, SETTINGS_KEY):
+        record = file_manager.get_results(dataset_id, [SETTINGS_KEY])[SETTINGS_KEY]
+    if not isinstance(record, dict):
+        quant = analysis.ISOBARIC if ISOBARIC in (available(file_manager, dataset_id) or set()) else analysis.NO_QUANT
+        return quant, None
+    return record.get('quantification') or analysis.NO_QUANT, record.get('plex')
+
+
+def add_identification(workspace, file_manager, dataset_id):
+    """Identify the proteoforms of run ``dataset_id``: Describe experiment opens
+    with its settings and identification on, its file locked and its
+    deconvolution reused, so only the database and the identification settings
+    can be changed. The new run is kept next to it."""
+    from src.Workflow import TopDownWorkflow  # the page set up the workspace already
+
+    params, _ = run_settings(workspace, file_manager, dataset_id)
+    source = input_file(workspace, dataset_id)
+    name = file_manager.get_display_name(dataset_id)
+    quant, plex = run_analysis(file_manager, dataset_id)
+    changes = {analysis.IDENTIFY_KEY: True, analysis.QUANT_KEY: quant}
+    if plex:
+        changes[analysis.PLEX_KEY] = plex
+    note = 'with identification switched on'
+    if source is None:  # its file is gone: pick it again, and it is deconvolved again
+        TopDownWorkflow().start_from(params, changes, name=name, page=CONFIGURE_PAGE, note=note)
+        return
+    TopDownWorkflow().start_from(
+        params, changes, name=name, page=CONFIGURE_PAGE, note=note,
+        same_files='mzML-files', files=[source], keep=KEPT_FOR_IDENTIFICATION, reuses=[dataset_id],
+    )
+
+
 def options(workspace, file_manager, dataset_id, missing):
     """The dialog's choices for run ``dataset_id`` lacking the analyses ``missing``."""
+    name = file_manager.get_display_name(dataset_id)
+    if list(missing) == [IDENTIFICATION]:
+        _, has_file = run_settings(workspace, file_manager, dataset_id)
+        return [{
+            'label': f'Add identification to {name}',
+            'icon': ':material/add_circle:',
+            'help': (f"Opens Describe experiment with the settings of {name} and identification switched "
+                     "on. Its file stays as it is and its deconvolution is reused, so only the protein "
+                     "database and the identification settings can be changed; the new run is kept "
+                     "next to it."
+                     + ('' if has_file else " Its input file is no longer in the workspace: pick it "
+                        "again, and it is deconvolved again.")),
+            'on_click': lambda: add_identification(workspace, file_manager, dataset_id),
+        }]
     labels = ' and '.join(ANALYSES[m]['label'].lower() for m in missing)
     changes = {}
     for name in missing:
         changes.update(_SWITCH_ON.get(name, {}))
     _, has_file = run_settings(workspace, file_manager, dataset_id)
-    name = file_manager.get_display_name(dataset_id)
     return [{
         'label': 'Process more files with these settings',
         'icon': ':material/library_add:',
