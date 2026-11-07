@@ -326,12 +326,11 @@ _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 
 # Components with nothing to show for a run deconvolved only, or without labels
 from src.render.layout_editor.catalog import (  # noqa: E402
-    COMPARISON, IDENTIFICATION, IDENTIFICATION_ONLY, ISOBARIC, ISOBARIC_ONLY, QUANT_COMPONENTS, QUANT_NAMES,
-    TOPDOWN_COMPONENTS,
+    IDENTIFICATION, IDENTIFICATION_ONLY, ISOBARIC, ISOBARIC_ONLY, TOPDOWN_COMPONENTS,
 )
 from src.layout_manager import missing_note  # noqa: E402
 
-_COMPONENT_LABELS = {c['name']: c['label'] for c in TOPDOWN_COMPONENTS + QUANT_COMPONENTS}
+_COMPONENT_LABELS = {c['name']: c['label'] for c in TOPDOWN_COMPONENTS}
 
 
 def _plex(fm, ds):
@@ -1424,11 +1423,6 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
 
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None):
     missing = []
-    if comp_name in QUANT_NAMES:
-        # A component of a comparison of runs, in a view shown for one run
-        from src.render.missing_analysis import ANALYSES
-        missing_note(_COMPONENT_LABELS[comp_name], [COMPARISON], ANALYSES, on_missing, f'{key}_missing', comp_name)
-        return
     if (
         tool == 'topdown' and comp_name in IDENTIFICATION_ONLY
         and not file_manager.result_exists(dataset_id, 'protein_dfs')

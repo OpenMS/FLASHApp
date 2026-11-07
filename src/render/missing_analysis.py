@@ -9,10 +9,6 @@ files are processed, and this run is compared with them in one comparison,
 computed in the Viewer, as it is if it was processed with what the new start
 does (else its file is processed again with them, so picking no new file runs
 this run again with the analysis).
-
-The bar lists the views of a comparison of runs too: a run shown alone offers
-the comparisons it is part of and to process more files to compare it with,
-and a comparison shown offers its runs for the views of one run.
 """
 
 import json
@@ -22,23 +18,12 @@ from pathlib import Path
 import streamlit as st
 
 from src import analysis
-from src.render.layout_editor.catalog import COMPARISON, IDENTIFICATION, ISOBARIC, RUN
+from src.render.layout_editor.catalog import IDENTIFICATION, ISOBARIC
 
 CONFIGURE_PAGE = Path('content', 'TopDown', 'TopDownConfigure.py')
 WORKFLOW_DIR = 'flashtnt'
 
 ANALYSES = {
-    RUN: {
-        'label': 'one run',
-        'missing': 'This view shows one run, and a comparison spans several: show one of its runs.',
-        'action': 'Show a run',
-    },
-    COMPARISON: {
-        'label': 'a comparison of runs',
-        'action': 'Compare runs',
-        'help': ('FLASHQuantConsensus compares the features of two or more runs (**Quantification: '
-                 'Label-free** or **Isobaric labels** on the Describe experiment page).'),
-    },
     IDENTIFICATION: {
         'label': 'identification',
         'help': ('FLASHTnT searches a protein database for the proteoforms of the deconvolved masses '
@@ -58,18 +43,11 @@ _SWITCH_ON = {
 }
 
 
-def is_comparison(file_manager, dataset_id):
-    return file_manager.result_exists(dataset_id, 'quant_manifest')
-
-
 def available(file_manager, dataset_id):
-    """What experiment ``dataset_id`` can show: ``run`` and the analyses a run
-    was processed with, ``comparison`` for a comparison of runs (None: nothing shown)."""
+    """The analyses run ``dataset_id`` was processed with (None: not a run)."""
     if dataset_id is None:
         return None
-    if is_comparison(file_manager, dataset_id):
-        return {COMPARISON}
-    has = {RUN}
+    has = set()
     if file_manager.result_exists(dataset_id, 'protein_dfs'):
         has.add(IDENTIFICATION)
     if file_manager.result_exists(dataset_id, 'isobaric_dfs'):
@@ -205,78 +183,12 @@ def add_files(workspace, file_manager, dataset_id, runs=None):
     _follow_up(workspace, file_manager, dataset_id, {}, 'to add more files', more_files=True, runs=runs)
 
 
-def comparison_members(file_manager, comparison):
-    """The runs of the Viewer (dataset ids) that comparison ``comparison`` compares.
-
-    The manifest names the runs FLASHQuantConsensus read (``sources``; the
-    fractions of a labelled set); an example run is found by its input file.
-    """
-    manifest = file_manager.get_results(comparison, ['quant_manifest'])['quant_manifest']
-    sources = manifest.get('sources') if isinstance(manifest.get('sources'), dict) else {}
-    compared = list(sources.get('runs') or manifest.get('fractions') or manifest.get('runs') or [])
-    runs = file_manager.get_results_list(['threedim_SN_plot'])
-    out = []
-    for source in compared:
-        base = _TIME_SUFFIX.sub('', str(source))
-        for run in runs:
-            if run not in out and (run == source or _base_name(run) == base):
-                out.append(run)
-    return out
-
-
-def _show(selection_key, dataset_id):
-    def show():
-        st.session_state[selection_key] = dataset_id
-    return show
-
-
-def options(workspace, file_manager, dataset_id, missing, selection_key=None):
-    """The dialog's choices for experiment ``dataset_id`` lacking the analyses ``missing``.
-
-    ``selection_key`` is the session key of the experiment's selector: the
-    choices that show another experiment (a run of the comparison, a
-    comparison the run is part of) set it.
-    """
-    from src.render import quant_view
-    if RUN in missing:
-        # A comparison: the views of one run show one of its runs
-        out = []
-        for run in comparison_members(file_manager, dataset_id) if selection_key is not None else []:
-            out.append({'label': f'Show {file_manager.get_display_name(run)}', 'icon': ':material/visibility:',
-                        'on_click': _show(selection_key, run)})
-        return out
-    out = []
-    if COMPARISON in missing:
-        if selection_key is not None:
-            for name, comparison in quant_view.comparison_names(file_manager).items():
-                if dataset_id in comparison_members(file_manager, comparison):
-                    out.append({'label': f'Show {name}', 'icon': ':material/visibility:',
-                                'help': f'A comparison {file_manager.get_display_name(dataset_id)} is part of.',
-                                'on_click': _show(selection_key, comparison)})
-        missing = [m for m in missing if m != COMPARISON]
-        if not missing:
-            # Process more files compares them with this run (label-free unless it has labels)
-            name = file_manager.get_display_name(dataset_id)
-            _, has_file = run_settings(workspace, file_manager, dataset_id)
-            out.append({
-                'label': 'Process more files with these settings',
-                'icon': ':material/library_add:',
-                'help': (f"Opens Describe experiment with the settings of {name}, to pick files to compare "
-                         f"with it. The Viewer then shows {name} and the added files in one comparison."
-                         + ('' if has_file else " Its input file is no longer in the workspace: pick it again.")),
-                'on_click': lambda: add_files(workspace, file_manager, dataset_id),
-            })
-            return out
-    return out + _process_more(workspace, file_manager, dataset_id, missing)
-
-
-def _process_more(workspace, file_manager, dataset_id, missing):
-    """Process more files with the run's settings and ``missing`` switched on."""
+def options(workspace, file_manager, dataset_id, missing):
+    """The dialog's choices for run ``dataset_id`` lacking the analyses ``missing``."""
     labels = ' and '.join(ANALYSES[m]['label'].lower() for m in missing)
     changes = {}
     for name in missing:
         changes.update(_SWITCH_ON.get(name, {}))
-    name = file_manager.get_display_name(dataset_id)
     _, has_file = run_settings(workspace, file_manager, dataset_id)
     name = file_manager.get_display_name(dataset_id)
     return [{
