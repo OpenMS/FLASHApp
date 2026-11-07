@@ -276,6 +276,7 @@ def _process_more(workspace, file_manager, dataset_id, missing):
     changes = {}
     for name in missing:
         changes.update(_SWITCH_ON.get(name, {}))
+    name = file_manager.get_display_name(dataset_id)
     _, has_file = run_settings(workspace, file_manager, dataset_id)
     name = file_manager.get_display_name(dataset_id)
     return [{
