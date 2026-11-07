@@ -204,3 +204,31 @@ def test_precompute_run_prepares_the_cell(tmp_path, monkeypatch):
     go_terms._INDEXES.clear()
     result, error, _ = go_terms.enrichment(fm, ['sp|P1|A_HUMAN'], ['sp|P1|A_HUMAN', 'sp|P3|C_HUMAN'], fetch=fetch)
     assert error is None and fetch.calls == [] and result['fg_count'] == 1
+
+
+def test_run_terms_counts_every_protein_of_the_run(tmp_path):
+    go_terms._INDEXES.clear()
+    fm = _fm(tmp_path)
+    run = ['sp|P1|A_HUMAN', 'sp|P2|B_HUMAN', 'sp|P3|C_HUMAN', 'sp|Q9|D_HUMAN']
+    annotated, tables, error, labels = go_terms.run_terms(fm, run, fetch=FakeFetch())
+    assert error is None
+    # Q9 has no GO terms
+    assert annotated == 3
+    bp = tables['BP']
+    assert bp['term'].to_list() == ['glycolysis', 'transport']
+    assert bp['count'].to_list() == [2, 2]
+    assert bp['accessions'].to_list() == ['P1;P2', 'P1;P3']
+    assert tables['MF']['term'].to_list() == ['kinase']
+    frame = go_terms.count_frame(tables['CC'], labels, annotated)
+    assert frame['term'].to_list() == ['cytosol', 'membrane']
+    assert frame['proteins'].to_list() == ['A_HUMAN, B_HUMAN', 'C_HUMAN']
+    assert frame['share'].to_list() == pytest.approx([200 / 3, 100 / 3])
+
+
+def test_term_counts_of_part_of_the_index(tmp_path):
+    go_terms._INDEXES.clear()
+    index, _ = go_terms.term_index(_fm(tmp_path), ['P1', 'P2', 'P3', 'P4'], fetch=FakeFetch())
+    annotated, tables = go_terms.term_counts(index, ['P3', 'P4'])
+    assert annotated == 2
+    assert tables['BP']['term'].to_list() == ['translation', 'transport']
+    assert go_terms.count_frame(None, {}, 0).height == 0
