@@ -174,6 +174,30 @@ def fdr_densities(file_manager, dataset_id, target_tag, decoy_tag):
     return pl.concat(frames)
 
 
+def id_score_densities(file_manager, dataset_id):
+    """Densities of the identification scores of the target and the decoy
+    proteoforms (decoys only when FLASHTnT kept them), `kind` telling them
+    apart. A side with fewer than two distinct scores has no curve."""
+    from src.parse.tnt import _density
+
+    hits = scan(file_manager, dataset_id, 'protein_dfs').select(
+        pl.col('Score').cast(pl.Float64),
+        pl.col('accession').cast(pl.String).fill_null('').str.starts_with('DECOY_').alias('decoy'),
+    ).collect()
+    frames = []
+    for kind, is_decoy in (('target', False), ('decoy', True)):
+        density = _density(hits.filter(pl.col('decoy') == is_decoy)['Score'].to_numpy())
+        if len(density):
+            frames.append(pl.DataFrame({
+                'x': density['x'].astype(float).to_numpy(),
+                'y': density['y'].astype(float).to_numpy(),
+                'kind': [kind] * len(density),
+            }))
+    if not frames:
+        return pl.LazyFrame(schema={'x': pl.Float64, 'y': pl.Float64, 'kind': pl.String})
+    return pl.concat(frames).lazy()
+
+
 def _scan_index_of(file_manager, dataset_id, lf):
     """Add scan_idx (the spectrum index) to a frame with a Scan number column."""
     scans = (
