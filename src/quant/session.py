@@ -132,6 +132,13 @@ class QuantSession:
         design = self.design()
         return {s: c for s, c in zip(design['sample'], design['condition']) if c}
 
+    @property
+    def compared(self):
+        """The runs (samples) in the comparison: those with a condition, in
+        run order; every run while none has one."""
+        conditions = self.conditions()
+        return [r for r in self.runs if r in conditions] or self.runs
+
     def long(self, level=None):
         return self._get(f'quant_{level or self.level}', polars=True)
 
@@ -215,7 +222,8 @@ class QuantSession:
     def table(self, level=None):
         """The comparison table of a level: one row per entity with its label,
         annotations, test results and its status in every run (status
-        columns named after the runs)."""
+        columns named after the runs). `Detected` counts the compared runs
+        (`compared`) it was detected in."""
         level = level or self.level
         annotations = self.annotations(level).collect()
         statistics = self.result('statistics', level).collect().select(
@@ -233,7 +241,7 @@ class QuantSession:
             .join(status, on='id', how='left')
             .with_columns(
                 pl.col('p-adj').is_not_null().alias('Tested'),
-                (pl.concat_list([pl.col(r) == 'detected' for r in self.runs]).list.sum()).alias('Detected'),
+                (pl.concat_list([pl.col(r) == 'detected' for r in self.compared]).list.sum()).alias('Detected'),
             )
         )
         return table
