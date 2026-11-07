@@ -46,3 +46,30 @@ print("chromatograms:", a.getNrChromatograms(), "vs", b.getNrChromatograms())
 s, t = a[0], b[0]
 print("spectrum 0 meta A:", s.getKeys() if hasattr(s, "getKeys") else "", "type", s.getType())
 print("spectrum 0 meta B:", t.getKeys() if hasattr(t, "getKeys") else "", "type", t.getType())
+
+# Where do the readers differ?
+extra_zero = extra_nonzero = missing = 0
+extra_int = []
+for i in range(min(na, nb)):
+    ms, is_ = a[i].get_peaks(); mt, it = b[i].get_peaks()
+    sa = set(np.round(ms, 6)); sb = dict(zip(np.round(mt, 6), it))
+    missing += len(sa - set(sb))
+    for m, v in sb.items():
+        if m not in sa:
+            if v == 0: extra_zero += 1
+            else:
+                extra_nonzero += 1; extra_int.append(v / (max(it) or 1))
+print(f"peaks only in A (in-process): {missing}; only in B (mono): {extra_zero} with intensity 0, {extra_nonzero} non-zero")
+if extra_int:
+    print("non-zero extra peaks, intensity relative to base peak: median %.2e, max %.2e" % (np.median(extra_int), max(extra_int)))
+from collections import Counter
+c = Counter()
+for i in range(min(na, nb)):
+    ps, pt = a[i].getPrecursors(), b[i].getPrecursors()
+    if len(ps) != len(pt):
+        c[(a[i].getMSLevel(), len(ps), len(pt), b[i].getMetaValue("filter string") if b[i].metaValueExists("filter string") else "")] += 1
+for k, v in c.most_common(8): print("precursor count differs:", v, "x  MS%d  A %d vs B %d  %s" % k)
+for i in range(min(na, nb)):
+    ps, pt = a[i].getPrecursors(), b[i].getPrecursors()
+    if len(ps) != len(pt):
+        print("example", a[i].getNativeID(), "A:", [(p.getMZ(), p.getCharge(), sorted(p.getActivationMethods())) for p in ps], "B:", [(p.getMZ(), p.getCharge(), sorted(p.getActivationMethods())) for p in pt]); break
