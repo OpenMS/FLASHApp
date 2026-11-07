@@ -1,6 +1,6 @@
 # Temporary: builds FLASHTnT from t0mdavid-m/OpenMS#11 and from its FDmerge base
 # in the FLASHApp image, with prints for the IHFA hits, and compares their
-# modification ranges on the lysate example (run 6: mirrored pairs bound no shift). Removed before merge.
+# modification ranges on the lysate example (run 7: mirrored masses end no range). Removed before merge.
 name: Verify shift ranges
 on:
   push:
