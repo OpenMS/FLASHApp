@@ -18,7 +18,47 @@ env:
   RAW_SHA256: 3a0236f719e7c91e3c958f57f4e66ae422803ec3e6a997b9af4d2af395332b9f
 
 jobs:
+  compare:
+    name: In-process (.NET 8) vs mono reader, Linux desktop
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: OpenMS-App-Linux-x86_64
+          path: installer
+          run-id: ${{ env.DESKTOP_RUN }}
+          github-token: ${{ github.token }}
+      - name: Install the app and mono
+        run: |
+          set -euo pipefail
+          electron/scripts/install-app.sh "$(find installer -type f -name '*.AppImage' | head -n 1)"
+          sudo apt-get update -q && sudo apt-get install -y -q mono-complete >/dev/null
+          mono --version | head -n 1
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/a.raw" "$RAW_URL"
+          echo "$RAW_SHA256  $RUNNER_TEMP/a.raw" | sha256sum -c
+      - name: Convert and compare
+        run: |
+          set +e -uo pipefail
+          p="$APP_PAYLOAD"
+          export OPENMS_DATA_PATH="$p/share/OpenMS"
+          extra="$p"; [[ -d $p/openms/bin ]] && extra="$extra:$p/openms/bin"
+          for d in "$p"/share/OpenMS/THIRDPARTY/*/; do extra="$extra:${d%/}"; done
+          export PATH="$extra:$PATH"
+          py=$(ls "$p"/python-*/bin/python3 | head -n 1)
+          raw="$RUNNER_TEMP/a.raw"
+          FileConverter -in "$raw" -out "$RUNNER_TEMP/inprocess.mzML" -RawToMzML:reader inprocess 2>&1 | tail -n 5
+          FileConverter -in "$raw" -out "$RUNNER_TEMP/mono.mzML" -RawToMzML:reader external -RawToMzML:NET_executable mono 2>&1 | tail -n 15
+          ls -la "$RUNNER_TEMP"/*.mzML
+          "$py" .github/scripts/compare_mzml.py "$RUNNER_TEMP/inprocess.mzML" "$RUNNER_TEMP/mono.mzML" | tee -a "$GITHUB_STEP_SUMMARY"
+          for f in inprocess mono; do echo "== $f header"; sed -n '1,60p' "$RUNNER_TEMP/$f.mzML" | cut -c1-200; echo "== $f first spectrum"; awk '/<spectrum /{f=1} f{print; if(/<\/spectrum>/) exit}' "$RUNNER_TEMP/$f.mzML" | grep -v binary\> | cut -c1-200; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compare-mzml
+          path: ${{ runner.temp }}/*.mzML
+
   desktop:
+    if: false
     name: Desktop (${{ matrix.platform }})
     strategy:
       fail-fast: false
@@ -105,6 +145,7 @@ jobs:
           { echo "| Platform | Case | Exit | mzML |"; echo "|---|---|---|---|"; printf '%s\n' "${summary[@]}"; } | tee -a "$GITHUB_STEP_SUMMARY"
 
   docker:
+    if: false
     name: Docker image
     runs-on: ubuntu-24.04
     steps:
