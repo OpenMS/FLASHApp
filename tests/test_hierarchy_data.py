@@ -84,6 +84,29 @@ def test_without_qvalues_nothing_is_filtered():
     assert figures['cutoff'] is None
 
 
+def test_protein_level_qvalues_beside_proteoform_level():
+    hits = _hits([0.0, 0.005, 0.002, 0.01, 0.008]).with_columns(
+        pl.Series('ProteinLevelQvalue', [0.001, 0.001, 0.001, -1.0, 0.004]),
+    )
+    hits = hierarchy_data.assign_groups(hits)
+    groups = hierarchy_data.protein_groups_from(hits)
+    p1 = groups.filter(pl.col('accession') == 'P1').row(0, named=True)
+    p2 = groups.filter(pl.col('accession') == 'P2').row(0, named=True)
+    assert (p1['best_qvalue'], p1['best_protein_qvalue']) == (0.0, 0.001)
+    # FLASHTnT's -1 (not determined) is left out of the lowest value
+    assert p2['best_protein_qvalue'] == 0.004
+    forms = hierarchy_data.proteoforms_from(hits)
+    assert forms.filter(pl.col('proteoform') == 'MKLV')['best_protein_qvalue'][0] is None
+    rows = hierarchy_data.prsm_rows_from(hits)
+    assert rows.filter(pl.col('Scan') == 14)['protein_qvalue'][0] == 0.004
+
+
+def test_protein_level_qvalues_missing_from_older_output():
+    hits = hierarchy_data.assign_groups(_hits([0.0] * 5))
+    assert hierarchy_data.protein_groups_from(hits)['best_protein_qvalue'].null_count() == 2
+    assert hierarchy_data.prsm_rows_from(hits)['protein_qvalue'].null_count() == 5
+
+
 def test_most_rows_per_table():
     hits = hierarchy_data.assign_groups(_hits())
     assert hierarchy_data.most_rows(hits) == {
