@@ -361,11 +361,11 @@ def experiment_bar():
         session = QuantSession(file_manager, opens_on)
         with st.container(horizontal=True, vertical_alignment='bottom'):
             st.session_state[RUNS_KEY] = session.runs
-            st.multiselect(
-                f'{session.sample_noun}s compared', session.all_runs, key=RUNS_KEY,
+            st.pills(
+                f'{session.sample_noun}s compared', session.all_runs, selection_mode='multi', key=RUNS_KEY,
                 on_change=_on_runs, args=(opens_on, members),
-                help=f'Remove a {session.sample_noun} to leave it out of the comparison; '
-                     'pick it again to bring it back.',
+                help=f'Click a {session.sample_noun} to leave it out of the comparison; '
+                     'click it again to bring it back.',
             )
             quant_view.buttons(file_manager, opens_on)
         if st.session_state.pop(TOO_FEW, False):
