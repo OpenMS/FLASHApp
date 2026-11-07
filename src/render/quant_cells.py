@@ -376,8 +376,7 @@ def build_heatmap(session, state_manager, key, height):
             data=session.result('zscores'), id_col='Proteoform', metadata=_metadata(conditions),
             title=f'Most significant {_noun(session, True)} (z-scores, clustered)',
             x_label=f'{_sample(session)}s', y_label=LEVEL_NAMES[session.level],
-            colorscale=[[0, '#6699E0'], [0.5, '#FFFFFF'], [1, '#E06666']],
-            reversescale=False, intensity_label='Z-score', group_colors=colors,
+            intensity_label='Z-score', group_colors=colors,
             multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
         ),
     )(key=key, state_manager=state_manager, height=height)
