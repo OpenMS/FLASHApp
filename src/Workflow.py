@@ -495,6 +495,9 @@ class TopDownWorkflow(WorkflowManager):
                     exclude_parameters=['ion_type'],
                     display_subsections=True,
                     display_tool_name=False,
+                    # Internal fragments follow the sample type: off for a
+                    # lysate (the default), on with the Native preset
+                    custom_defaults={'algorithm:internal_ions': 'false'},
                     flag_parameters=FLASHANNOTATOR_FLAGS,
                 )
         if quant == analysis.LABEL_FREE:

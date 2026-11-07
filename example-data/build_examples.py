@@ -41,6 +41,7 @@ sys.path.insert(0, str(REPO))
 from src.Workflow import FLASHANNOTATOR_FLAGS, FLASHDECONV_FLAGS, FLASHTNT_FLAGS  # noqa: E402
 
 DEMO = REPO / 'example-data' / 'workspaces' / 'default'
+PRESETS = json.loads((REPO / 'presets.json').read_text())['flashtnt']
 INPUTS = DEMO / 'flashtnt' / 'input-files'
 DATABASE = INPUTS / 'fasta-file' / 'example_database.fasta'
 
@@ -68,6 +69,15 @@ TMT_CHANNELS = {
     '129': ('1x_b', '1x'), '130': ('4x_b', '4x'), '131': ('8x_b', '8x'),
 }
 
+def sample_preset(name):
+    """The settings of a sample preset (presets.json) as parameters: its
+    tools' settings and its general ones, without the description."""
+    preset = PRESETS[name]
+    params = {key: dict(value) for key, value in preset.items() if not key.startswith('_')}
+    params.update(preset.get('_general', {}))
+    return params
+
+
 # Each example: the input files, its analysis parameters, and the dataset id
 # and display name of every result it stores (one per run, then the
 # comparison of a label-free example).
@@ -79,15 +89,14 @@ EXAMPLES = [
     },
     {
         'files': ['Native-identified_GapA_HCD.mzML'],
-        # The Native preset (presets.json)
-        'params': {'identify': True, 'quantification': 'none', 'FLASHTnT': {'native': True}, 'few_proteins': True},
+        # The Native preset (presets.json): -native, internal fragments
+        'params': {'identify': True, 'quantification': 'none', **sample_preset('Native')},
         'runs': [('example_native_identified', 'Example: native, identified (GapA)')],
     },
     {
         'files': [name for name in SOURCES if name.startswith('Label-free_')],
-        # The Lysate preset (presets.json)
-        'params': {'identify': True, 'quantification': 'label-free', 'FLASHTnT': {'native': False},
-                   'few_proteins': False},
+        # The Lysate preset (presets.json): no -native, no internal fragments
+        'params': {'identify': True, 'quantification': 'label-free', **sample_preset('Lysate')},
         'conditions': ['Spike-in 1x', 'Spike-in 1x', 'Spike-in 0.1x', 'Spike-in 0.1x'],
         'replicates': [1, 2, 1, 2],
         # The first run is the lysate example. The comparison keeps its own
