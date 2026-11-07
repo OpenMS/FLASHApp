@@ -10,12 +10,14 @@ identification default for an identified run, as it was searched
 selection, so a scan or proteoform stays selected when the view changes.
 
 **choose experiment** lists every comparison of runs and every run that
-belongs to none. For a comparison, **Comparison | Single run** picks what is
-looked at: the comparison, with its own views (Label-free, TMT, iTRAQ and the
-user's own comparison views, src/render/quant_view.py), and below it the runs
-it compares (remove one to leave it out, ``QuantSession.hidden``) beside Edit
-comparison; or one of its runs, with the run views. **Add files** processes
-more files with the settings shown, or adds tool output made elsewhere.
+belongs to none. For a comparison, **Single run | Comparison** picks what is
+looked at: one of its runs, with the run views, or the comparison, with its
+own views (Label-free, TMT, iTRAQ and the user's own comparison views,
+src/render/quant_view.py) and **Edit comparison**, whose **Compared** column
+leaves runs out (``QuantSession.hidden``). For a run of no comparison,
+Comparison is locked and offers to process more files. The view bar is below
+this row. **Add files** processes more files with the settings shown, or adds
+tool output made elsewhere.
 """
 
 
@@ -33,8 +35,6 @@ from src.layout_manager import request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
 from src.render.tool_results import tool_results_button, tool_results_dialog
-from src.quant.session import QuantSession
-from src.render.layout_editor.dialogs import _own_file_manager
 from src.common import result_download
 from src.workflow.StreamlitUI import latest_results_key
 
@@ -216,10 +216,8 @@ def view_selector():
 EXPERIMENT_KEY = 'viewer_experiment'
 SHOW_KEY = 'viewer_show'
 RUN_KEY = 'viewer_run'
-RUNS_KEY = 'viewer_compared_runs'
 PENDING = '_viewer_pending'
 LAST_RUN = '_viewer_last_run'
-TOO_FEW = '_viewer_too_few_runs'
 SHOW_COMPARISON, SHOW_RUN = 'Comparison', 'Single run'
 LOCKED_KEY = 'viewer_show_locked'
 LOCKED_COMPARISON = 'Comparison :material/add_circle:'
@@ -280,13 +278,8 @@ def _on_run(comparison_id, members):
     st.session_state[PENDING] = ('run', comparison_id, members, st.session_state.get(RUN_KEY))
 
 
-def _on_runs(comparison_id, members, all_runs):
-    ticked = [run for i, run in enumerate(all_runs) if st.session_state.get(f'{RUNS_KEY}_{i}')]
-    st.session_state[PENDING] = ('runs', comparison_id, members, ticked)
-
-
 def apply_pending():
-    """What was picked in Comparison | Single run, the run, or the runs compared."""
+    """What was picked in Single run | Comparison, or the run."""
     pending = st.session_state.pop(PENDING, None)
     if pending is None:
         return
@@ -300,12 +293,6 @@ def apply_pending():
         # a cleared segmented control keeps what is shown
     elif what == 'run' and value in display_name_to_id:
         st.session_state[selection_key(0)] = st.session_state[LAST_RUN] = display_name_to_id[value]
-    elif what == 'runs':
-        if len(value) < 2:
-            st.session_state[TOO_FEW] = True
-            return
-        session = QuantSession(_own_file_manager(file_manager), comparison_id)
-        session.set_hidden([r for r in session.all_runs if r not in value])
 
 
 def add_files_menu(dataset_id, runs=None):
@@ -323,8 +310,8 @@ def add_files_menu(dataset_id, runs=None):
 
 
 def experiment_bar():
-    """choose experiment; for a comparison, Comparison | Single run with its
-    run, or below, the runs compared beside Edit comparison."""
+    """choose experiment; for a comparison, Single run | Comparison with its
+    run, or Edit comparison."""
     groups = experiment_groups()
     shown = st.session_state.get(selection_key(0))
     name = experiment_of(shown, groups)
@@ -355,29 +342,11 @@ def experiment_bar():
                 help='This run is compared with no other run: process more files with its settings '
                      'to compare them.',
             )
+        if comparison and shown == opens_on:
+            quant_view.buttons(file_manager, opens_on)
         add_files_menu(shown, runs=members if shown == opens_on and comparison else None)
         if shown not in comparison_ids and downloadable:
             result_download.viewer_button(file_manager, shown if shown in downloadable else None)
-    if comparison and shown == opens_on:
-        session = QuantSession(file_manager, opens_on)
-        with st.container(horizontal=True, vertical_alignment='bottom'):
-            noun = session.sample_noun
-            design = session.design()
-            condition = dict(zip(design['sample'], design['condition']))
-            with st.popover(f'{noun.capitalize()}s compared: {len(session.runs)} of {len(session.all_runs)}',
-                            icon=':material/checklist:',
-                            help=f'Untick a {noun} to leave it out of the comparison; tick it to bring it back.'):
-                for index, run in enumerate(session.all_runs):
-                    key = f'{RUNS_KEY}_{index}'
-                    st.session_state[key] = run in session.runs
-                    st.checkbox(
-                        f'{run}  :gray[{condition.get(run) or "no condition"}]', key=key,
-                        on_change=_on_runs, args=(opens_on, members, session.all_runs),
-                    )
-            quant_view.buttons(file_manager, opens_on)
-        if st.session_state.pop(TOO_FEW, False):
-            st.warning(f'A comparison needs at least two {session.sample_noun}s. '
-                       'Pick **Single run** to look at one run.')
 
 
 # Opened with Explore results on Run analysis: show what that start made
