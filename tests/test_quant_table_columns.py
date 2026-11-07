@@ -25,6 +25,8 @@ class _Session:
     def design(self):
         return self._design
 
+    hidden = []
+    all_runs = QuantSession.all_runs
     runs = QuantSession.runs
     conditions = QuantSession.conditions
     compared = QuantSession.compared

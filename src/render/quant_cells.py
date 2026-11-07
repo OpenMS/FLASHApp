@@ -472,10 +472,15 @@ def settings_form(session, container=None):
     used = session.settings
     with container if container is not None else st.container():
         st.markdown(f'**{_sample(session)}s and conditions**')
-        st.caption(f'{_sample(session)}s with the same condition are replicates. A {_sample(session).lower()} without a condition is left out.')
+        st.caption(f'{_sample(session)}s with the same condition are replicates. Untick **Compared** to leave '
+                   f'a {_sample(session).lower()} out; a {_sample(session).lower()} without a condition is left out too.')
+        hidden = set(session.hidden)
+        table = session.design().to_pandas()
+        table.insert(0, 'compared', [s not in hidden for s in table['sample']])
         design = st.data_editor(
-            session.design().to_pandas(),
+            table,
             column_config={
+                'compared': st.column_config.CheckboxColumn('Compared', width='small'),
                 'sample': st.column_config.TextColumn(_sample(session), disabled=True),
                 'condition': st.column_config.TextColumn('Condition'),
                 'replicate': st.column_config.NumberColumn('Replicate', min_value=1, step=1),
@@ -527,11 +532,16 @@ def settings_form(session, container=None):
                                                   help='limma_like: moderated t-test (recommended).')
             chosen['postproc-fdr'] = choice('Correction', diff.FDR_METHODS, 'postproc-fdr', b)
         if st.button('Apply', type='primary', key=f'{session.dataset_id}_apply'):
-            frame = pl.from_pandas(design).with_columns(
+            compared = [str(s) for s, keep in zip(design['sample'], design['compared']) if keep]
+            if len(compared) < 2:
+                st.error(f'A comparison needs at least two {_sample(session).lower()}s.')
+                return False
+            frame = pl.from_pandas(design.drop(columns='compared')).with_columns(
                 pl.col('condition').fill_null('').cast(pl.Utf8).str.strip_chars(),
                 pl.col('replicate').fill_null(1).cast(pl.Int64),
             )
             session.save_design(frame)
-            session.save_settings({**used, **chosen, 'level': level, 'fc-cutoff': fc, 'padj-cutoff': padj})
+            session.save_settings({**used, **chosen, 'level': level, 'fc-cutoff': fc, 'padj-cutoff': padj,
+                                   'hidden': [s for s in session.all_runs if s not in compared]})
             return True
     return False
