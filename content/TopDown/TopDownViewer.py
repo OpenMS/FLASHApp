@@ -280,8 +280,9 @@ def _on_run(comparison_id, members):
     st.session_state[PENDING] = ('run', comparison_id, members, st.session_state.get(RUN_KEY))
 
 
-def _on_runs(comparison_id, members):
-    st.session_state[PENDING] = ('runs', comparison_id, members, list(st.session_state.get(RUNS_KEY) or []))
+def _on_runs(comparison_id, members, all_runs):
+    ticked = [run for i, run in enumerate(all_runs) if st.session_state.get(f'{RUNS_KEY}_{i}')]
+    st.session_state[PENDING] = ('runs', comparison_id, members, ticked)
 
 
 def apply_pending():
@@ -360,13 +361,19 @@ def experiment_bar():
     if comparison and shown == opens_on:
         session = QuantSession(file_manager, opens_on)
         with st.container(horizontal=True, vertical_alignment='bottom'):
-            st.session_state[RUNS_KEY] = session.runs
-            st.pills(
-                f'{session.sample_noun}s compared', session.all_runs, selection_mode='multi', key=RUNS_KEY,
-                on_change=_on_runs, args=(opens_on, members),
-                help=f'Click a {session.sample_noun} to leave it out of the comparison; '
-                     'click it again to bring it back.',
-            )
+            noun = session.sample_noun
+            design = session.design()
+            condition = dict(zip(design['sample'], design['condition']))
+            with st.popover(f'{noun.capitalize()}s compared: {len(session.runs)} of {len(session.all_runs)}',
+                            icon=':material/checklist:',
+                            help=f'Untick a {noun} to leave it out of the comparison; tick it to bring it back.'):
+                for index, run in enumerate(session.all_runs):
+                    key = f'{RUNS_KEY}_{index}'
+                    st.session_state[key] = run in session.runs
+                    st.checkbox(
+                        f'{run}  :gray[{condition.get(run) or "no condition"}]', key=key,
+                        on_change=_on_runs, args=(opens_on, members, session.all_runs),
+                    )
             quant_view.buttons(file_manager, opens_on)
         if st.session_state.pop(TOO_FEW, False):
             st.warning(f'A comparison needs at least two {session.sample_noun}s. '
