@@ -132,6 +132,16 @@ def identifications_over_time(file_manager, dataset_id, q_threshold=0.01, window
     return _points(rows)
 
 
+def sequence_coverage(file_manager, dataset_id, bins=20):
+    """How much of its sequence the fragments of the best hit of every
+    spectrum cover: PrSMs per 5 % of sequence coverage."""
+    proteins = insight_data.proteins(file_manager, dataset_id).filter(pl.col('is_best'))
+    if 'Coverage(%)' not in proteins.collect_schema().names():
+        return _points([])
+    coverage = proteins.select(pl.col('Coverage(%)').cast(pl.Float64)).collect().to_series()
+    return histogram({'PrSMs': coverage.to_numpy()}, bins=bins, value_range=(0, 100))
+
+
 def fragment_error_over_time(file_manager, dataset_id):
     """Median fragment mass error (ppm) of the best hit of every spectrum
     against its retention time: a trend shows calibration drift."""
