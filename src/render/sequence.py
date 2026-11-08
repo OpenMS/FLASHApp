@@ -26,7 +26,7 @@ def remove_ambigious(protein : AASequence):
 
 
 # NOTE: cannot cache this function: cannot hash "OpenMS.AASequence"
-def getFragmentMassesWithSeq(protein, res_type):
+def getFragmentMassesWithSeq(protein, res_type, average=False):
     protein_length = protein.size()
     prefix_mass_list = [.0] * protein_length
     suffix_mass_list = [.0] * protein_length
@@ -45,12 +45,14 @@ def getFragmentMassesWithSeq(protein, res_type):
 
     # process prefix
     for aa_index in range(protein_length):
-        prefix_mass = remove_ambigious(protein.getPrefix(aa_index+1)).getMonoWeight(prefix_ion_type, 0)  # + added_ptm_masses
+        prefix = remove_ambigious(protein.getPrefix(aa_index+1))
+        prefix_mass = prefix.getAverageWeight(prefix_ion_type, 0) if average else prefix.getMonoWeight(prefix_ion_type, 0)
         prefix_mass_list[aa_index] = prefix_mass
 
     # process suffix
     for aa_index in reversed(range(protein_length)):
-        suffix_mass = remove_ambigious(protein.getSuffix(aa_index+1)).getMonoWeight(suffix_ion_type, 0)  # + added_ptm_masses
+        suffix = remove_ambigious(protein.getSuffix(aa_index+1))
+        suffix_mass = suffix.getAverageWeight(suffix_ion_type, 0) if average else suffix.getMonoWeight(suffix_ion_type, 0)
         suffix_mass_list[aa_index] = suffix_mass
 
     return prefix_mass_list, suffix_mass_list
@@ -74,7 +76,10 @@ def setFixedModification(protein, fixed_mods=None):
 
 
 #@st.cache_data
-def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modifications=None, fixed_mods=None):
+def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modifications=None, fixed_mods=None,
+                           average=False):
+    """Sequence view entry of `sequence`: its theoretical mass and fragment
+    masses, monoisotopic or, with `average`, average masses."""
     protein = AASequence.fromString(sequence)
 
     # Only apply for FD
@@ -84,7 +89,8 @@ def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modificati
         fixed_mods = []
 
     # calculating proteoform mass from sequence
-    protein_mass = remove_ambigious(protein).getMonoWeight()
+    unambiguous = remove_ambigious(protein)
+    protein_mass = unambiguous.getAverageWeight() if average else unambiguous.getMonoWeight()
 
     out_object = {'sequence': list(sequence),
                   'theoretical_mass': protein_mass, 
@@ -97,7 +103,7 @@ def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modificati
     # per ion type, calculate the possible fragment masses and save them in dictionary
     for ion_type in ['ax', 'by', 'cz']:
         # calculate fragment ion masses
-        prefix_ions, suffix_ions = getFragmentMassesWithSeq(protein, ion_type)
+        prefix_ions, suffix_ions = getFragmentMassesWithSeq(protein, ion_type, average)
         prefix_ions = [[p] for p in prefix_ions]
         suffix_ions = [[s] for s in suffix_ions]
         if modifications is not None:
