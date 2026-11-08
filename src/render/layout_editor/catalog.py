@@ -18,6 +18,7 @@ DECONV_COMPONENTS = [
     {'name': 'anno_spectrum', 'label': 'Raw spectrum', 'group': 'Spectra & plots', 'requires': 'scan_table'},
     {'name': 'survey_spectrum', 'label': 'Precursor spectrum (MS1)', 'group': 'Spectra & plots', 'requires': 'scan_table'},
     {'name': '3D_SN_plot', 'label': '3D S/N plot', 'group': 'Spectra & plots', 'requires': 'mass_table'},
+    {'name': 'ms1_3d_map', 'label': '3D MS1 map (peaks by m/z, RT and intensity)', 'group': 'Heatmaps'},
     {'name': 'fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
     {'name': 'chromatogram', 'label': 'Chromatogram (TIC, base peak, deconvolved)', 'group': 'Spectra & plots'},
     {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': 'scan_table'},
