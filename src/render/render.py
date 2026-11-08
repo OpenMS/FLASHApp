@@ -26,6 +26,12 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
+try:  # the comparison plots
+    from openms_insight import PCAPlot, VolcanoPlot
+    _QUANT_ZOOMABLE = (PCAPlot, VolcanoPlot)
+except ImportError:
+    _QUANT_ZOOMABLE = ()
+
 from src.render import (
     envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
     prsm_data, prsm_overview, qc_data, validation_data,
@@ -238,6 +244,19 @@ EDIT_IDENTIFIER = 'sequence_edit'
 # with an openms-insight release without it
 FRAGMENT_MATCHES_IDENTIFIER = 'fragment_matches'
 FRAGMENT_MARKS = hasattr(DeconvolvedSpectrum, 'set_fragment_matches_identifier')
+# Plots keep their zoom in the grid's state (zoom@<component>), so a view can
+# store it with its selection; left out with a release without zoom_identifier
+ZOOMABLE = (DeconvolvedSpectrum, Heatmap, LinePlot, MirrorPlot, SeriesPlot)
+
+
+def _zoom_args(cls, name):
+    """``zoom_identifier`` for a plot that keeps its zoom, named after its
+    layout component (the cache name without its ``-<tool>`` suffix)."""
+    if not issubclass(cls, ZOOMABLE + _QUANT_ZOOMABLE):
+        return {}
+    if 'zoom_identifier' not in inspect.signature(cls.__init__).parameters:
+        return {}
+    return {'zoom_identifier': zoom_identifier(name.split('-', 1)[0])}
 
 
 def _spectrum_key(column):
@@ -356,7 +375,7 @@ _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 from src.render.layout_editor.catalog import (  # noqa: E402
     IDENTIFICATION, IDENTIFICATION_ONLY, ISOBARIC, ISOBARIC_ONLY, TOPDOWN_COMPONENTS,
 )
-from src.layout_manager import missing_note  # noqa: E402
+from src.layout_manager import missing_note, zoom_identifier  # noqa: E402
 
 _COMPONENT_LABELS = {c['name']: c['label'] for c in TOPDOWN_COMPONENTS}
 
@@ -455,8 +474,9 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
             raise MissingResult(name_tag)
     cache_path = Path(file_manager.cache_path, 'insight', dataset_id)
     cache_id = f'{name}-{_stamp(file_manager, dataset_id, sources, extra)}'
+    zoom = _zoom_args(cls, name)
     try:
-        return cls(cache_id=cache_id, cache_path=str(cache_path))
+        return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom)
     except CacheMissError:
         pass
     # Caches built from earlier results or configurations are not used again.
@@ -466,7 +486,7 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
         for old in cache_path.glob(f'{name}-*'):
             if old.name != cache_id:
                 shutil.rmtree(old, ignore_errors=True)
-    return cls(cache_id=cache_id, cache_path=str(cache_path), **build())
+    return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom, **build())
 
 
 def _heatmap(comp_name, file_manager, dataset_id):
@@ -486,7 +506,7 @@ def _heatmap(comp_name, file_manager, dataset_id):
                 insight_data.scan(file_manager, dataset_id, name) for name in levels
             ],
             x_column='rt', y_column='mass', intensity_column='intensity',
-            interactivity=interactivity, zoom_identifier=f'{comp_name}_zoom',
+            interactivity=interactivity,
             title=title, x_label='Retention Time', y_label=y_label,
             colorscale='Portland', log_scale=True,
             min_points=insight_data.HEATMAP_MIN_POINTS,
@@ -567,7 +587,6 @@ def _proteoform_heatmap(comp_name, file_manager, dataset_id):
             # A box or lasso selects the proteins of the PrSMs in it (GO terms)
             multi_select={go_terms.RUN_SET: 'accession'},
             hover_column='label',
-            zoom_identifier=f'{comp_name}_zoom',
             title=f'Proteoform Heatmap ({points.height} PrSMs)',
             x_label='Retention Time', y_label='Proteoform Mass',
             colorscale='Portland', log_scale=False, intensity_label='Score',
