@@ -12,7 +12,8 @@ selection, so a scan or proteoform stays selected when the view changes.
 **choose experiment** lists every comparison of runs and every run that
 belongs to none. For a comparison, **Single run | Comparison** picks what is
 looked at: one of its runs, with the run views, or the comparison, with its
-own views (Label-free, TMT, iTRAQ and the user's own comparison views,
+own views (Identification, Quantification, QC: label-free, QC: TMT, iTRAQ
+and the user's own comparison views,
 src/render/quant_view.py) and **Edit comparison**, whose **Compared** column
 leaves runs out (``QuantSession.hidden``). For a run of no comparison,
 Comparison is locked and offers to process more files. The view bar is below

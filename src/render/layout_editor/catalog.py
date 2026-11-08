@@ -154,6 +154,14 @@ QUANT_COMPONENTS = [
     {'name': 'quant_go', 'label': 'GO enrichment of the selected entries', 'group': 'Functional analysis',
      'requires': ('quant_table', 'quant_volcano', 'quant_heatmap'),
      'requires_label': 'the comparison table, the volcano plot or the clustered heatmap'},
+    {'name': 'quant_id_counts', 'label': 'Identifications per run', 'group': 'Identification'},
+    {'name': 'quant_id_frequency', 'label': 'Found in how many runs', 'group': 'Identification'},
+    {'name': 'quant_id_overlap', 'label': 'Shared identifications', 'group': 'Identification'},
+    {'name': 'quant_id_table', 'label': 'Identifications across runs', 'group': 'Identification'},
+    {'name': 'quant_totals', 'label': 'Total intensity per sample', 'group': 'Quality control'},
+    {'name': 'quant_correlation', 'label': 'Sample correlation', 'group': 'Quality control'},
+    {'name': 'quant_cv', 'label': 'Variation within conditions (CV)', 'group': 'Quality control'},
+    {'name': 'quant_match_quality', 'label': 'Match between runs', 'group': 'Quality control'},
     {'name': 'quant_missing_values', 'label': 'Missing values', 'group': 'Quality control'},
     {'name': 'quant_imputed_values', 'label': 'Imputed values', 'group': 'Quality control'},
     {'name': 'quant_normalization', 'label': 'Normalization', 'group': 'Quality control'},
@@ -164,16 +172,31 @@ QUANT_COMPONENTS = [
 QUANT_DIAGNOSTICS = [
     ['quant_missing_values', 'quant_imputed_values'], ['quant_normalization', 'quant_pvalues'],
 ]
-# Label-free: runs compared feature by feature, each entry followed run by run
-QUANT_DEFAULT_LAYOUT = [
-    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca'], ['quant_go'],
+# Identification: what each run identified, what the runs share, and every
+# identification with its status run by run. Needs no conditions.
+QUANT_IDENTIFICATION_LAYOUT = [
+    ['quant_id_counts', 'quant_id_frequency'], ['quant_id_overlap'], ['quant_id_table'],
 ]
-QUANT_LABEL_FREE_LAYOUT = QUANT_DEFAULT_LAYOUT
-# Isobaric labels (TMT, iTRAQ): the samples of one pooled set, so how they
-# cluster and whether their channels are balanced come before single entries
-QUANT_ISOBARIC_LAYOUT = [
-    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_pca', 'quant_heatmap'],
-    *QUANT_DIAGNOSTICS, ['quant_go'],
+# Quantification: what changed between the conditions, each entry followed
+# run by run, how the samples cluster and what the changed entries do
+QUANT_QUANTIFICATION_LAYOUT = [
+    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca'],
+    ['quant_heatmap'], ['quant_go'],
+]
+QUANT_DEFAULT_LAYOUT = QUANT_QUANTIFICATION_LAYOUT
+# Quality control of a label-free comparison: runs measured one by one, so
+# how much each run found itself and how much was matched from the others,
+# whether the runs were loaded alike, and how well replicates agree
+QUANT_LABEL_FREE_QC_LAYOUT = [
+    ['quant_id_counts', 'quant_match_quality'], ['quant_totals', 'quant_normalization'],
+    ['quant_correlation', 'quant_cv'], ['quant_missing_values', 'quant_imputed_values'], ['quant_pvalues'],
+]
+# Quality control of isobaric labels (TMT, iTRAQ): the channels of one pooled
+# set, so whether they were loaded alike, how they correlate and cluster,
+# then the steps of the comparison
+QUANT_ISOBARIC_QC_LAYOUT = [
+    ['quant_totals', 'quant_normalization'], ['quant_correlation', 'quant_pca'],
+    ['quant_cv', 'quant_missing_values'], ['quant_imputed_values', 'quant_pvalues'],
 ]
 
 MAX_EXPERIMENTS = 5

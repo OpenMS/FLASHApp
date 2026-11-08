@@ -19,8 +19,9 @@ from openms_insight import ClusteredHeatmap, PCAPlot, SeriesPlot, Table, Volcano
 
 from src.common.common import show_fig
 from src.parse import differential as diff
+from src.quant import qc
 from src.quant.session import LEVEL_NAMES, RESULTS, STATUS_LABELS
-from src.render import go_terms, insight_data
+from src.render import comparison_plots, go_terms, insight_data
 from src.render.postprocessing_plots import (
     imputed_value_preview, missingness_vs_intensity, pvalue_histogram, sample_distributions,
 )
@@ -386,6 +387,181 @@ def _frame(session, name):
     return session.result(name).collect().to_pandas()
 
 
+# -- identification ------------------------------------------------------------
+# What each run identified: these need no conditions, so they show as soon as
+# the runs are compared. They count proteoforms when the runs were identified
+# (the level shown otherwise).
+
+def _id_level(session):
+    return qc.identification_level(session.levels, session.level)
+
+
+def _id_noun(session, level):
+    if level == 'feature' and 'proteoform' not in session.levels:
+        return 'features'
+    return LEVEL_NAMES[level].lower()
+
+
+def _not_identified_note(session, level):
+    if level == 'feature' and session.manifest.get('tool') != 'flashtnt' and not session.isobaric:
+        st.caption('These runs were not identified, so the features each run detected are counted. '
+                   'Add identification to the runs to count proteoforms.')
+
+
+def build_id_counts(session, state_manager, key, height=None):
+    """Entities each run detected itself and those matched from other runs."""
+    del state_manager, height
+    level = _id_level(session)
+    counts = qc.counts_per_run(session.long(level).collect(), session.runs)
+    show_fig(comparison_plots.counts_per_run(counts, _id_noun(session, level), _sample(session)),
+             f'{key}-id-counts')
+    _not_identified_note(session, level)
+
+
+def build_id_frequency(session, state_manager, key, height=None):
+    """How many entities were found in 1, 2, ... all runs."""
+    del state_manager, height
+    level = _id_level(session)
+    table = qc.frequency(session.long(level).collect(), session.runs)
+    show_fig(comparison_plots.frequency(table, _id_noun(session, level), _sample(session)),
+             f'{key}-id-frequency')
+
+
+def build_id_overlap(session, state_manager, key, height):
+    """What every two runs share (Jaccard index of the detected entities),
+    clustered so that runs alike sit together."""
+    level = _id_level(session)
+    runs = session.runs
+    if len(runs) < 2:
+        st.info(f'Shared identifications need at least two {_sample(session).lower()}s.')
+        return
+    conditions = session.conditions()
+    _component(
+        ClusteredHeatmap, f'quant_id_overlap_{level}', session.file_manager, session.dataset_id,
+        [f'quant_{level}', 'quant_design', 'quant_settings'],
+        lambda: dict(
+            data=qc.overlap(session.long(level).collect(), runs).lazy(), id_col='Sample',
+            metadata=_metadata(conditions) if conditions else None,
+            title=f'Shared {_id_noun(session, level)} (% of those either {_sample(session).lower()} detected)',
+            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Shared (%)',
+            colorscale='Blues', reversescale=True,
+            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+        ),
+        required=[f'quant_{level}'],
+    )(key=key, state_manager=state_manager, height=height)
+
+
+def build_id_table(session, state_manager, key, height):
+    """Every entity any run found, with how each run found it."""
+    level = _id_level(session)
+    runs = session.runs
+    table = qc.identification_table(session.long(level).collect(), session.annotations(level).collect(), runs)
+    noun = _id_noun(session, level)
+    columns = [{'title': noun[:-1].capitalize() if noun.endswith('s') else noun, 'field': 'label', 'sorter': 'string'}]
+    if 'protein_label' in table.columns and level == 'proteoform':
+        columns.append({'title': 'Protein', 'field': 'protein_label', 'sorter': 'string'})
+    if 'mass' in table.columns:
+        columns.append({'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)})
+    if 'proteoforms' in table.columns:
+        columns.append({'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number'})
+    if 'PrSMs' in table.columns:
+        columns.append({'title': 'PrSMs', 'field': 'PrSMs', 'sorter': 'number',
+                        'headerTooltip': 'Spectra (PrSMs) that identify it, over all runs.'})
+    columns += [
+        {'title': 'Detected', 'field': 'Detected', 'sorter': 'number',
+         'headerTooltip': f'{_sample(session)}s that found it themselves.'},
+        {'title': 'Found', 'field': 'Found', 'sorter': 'number',
+         'headerTooltip': f'{_sample(session)}s that found it themselves or matched it from another one.'},
+    ]
+    for run in runs:
+        columns.append({'title': run, 'field': run, 'sorter': 'string',
+                        'headerTooltip': 'detected; matched, identified (match between runs, identified in the run); matched (match between runs); missing'})
+    _component(
+        Table, f'quant_id_table_{level}', session.file_manager, session.dataset_id,
+        [f'quant_{level}', f'quant_{level}_annotations', 'quant_design', 'quant_settings'],
+        lambda: dict(
+            data=table.lazy(), column_definitions=columns, index_field='RowIndex',
+            title=f'{LEVEL_NAMES[level]} across the {_sample(session).lower()}s',
+            go_to_fields=['label'], row_overview='{label}',
+        ),
+        required=[f'quant_{level}', f'quant_{level}_annotations'],
+    )(key=key, state_manager=state_manager, height=height)
+
+
+# -- quality control -------------------------------------------------------
+
+def build_totals(session, state_manager, key, height=None):
+    """Summed intensity of every run or labelled channel: unequal totals
+    mean the samples were not loaded alike (normalization corrects for it)."""
+    del state_manager, height
+    conditions = session.conditions()
+    frame = qc.totals(session.long().collect(), session.runs)
+    show_fig(comparison_plots.totals(frame, condition_colors(set(conditions.values())), conditions,
+                                     _sample(session)), f'{key}-totals')
+    unlike = qc.unlike_replicates(frame, conditions)
+    if unlike:
+        st.caption(f'Under half or over twice the total of their replicates: {", ".join(unlike)}. '
+                   'Check how they were loaded; normalization corrects for it.')
+    elif conditions:
+        st.caption('Replicates of a condition were loaded alike (within a factor of two).')
+
+
+def build_correlation(session, state_manager, key, height):
+    """Pearson correlation of the log intensities of every two samples,
+    clustered: replicates should correlate best."""
+    runs = session.runs
+    if len(runs) < 2:
+        st.info(f'A correlation needs at least two {_sample(session).lower()}s.')
+        return
+    conditions = session.conditions()
+    level = session.level
+    _component(
+        ClusteredHeatmap, f'quant_correlation_{level}', session.file_manager, session.dataset_id,
+        [f'quant_{level}', 'quant_design', 'quant_settings'],
+        lambda: dict(
+            data=qc.correlation(session.long(level).collect(), runs).lazy(), id_col='Sample',
+            metadata=_metadata(conditions) if conditions else None,
+            title=f'Correlation of the {_sample(session).lower()}s (log2 intensities of {_noun(session, True)})',
+            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Pearson r',
+            colorscale='Viridis', reversescale=False,
+            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+        ),
+        required=[f'quant_{level}'],
+    )(key=key, state_manager=state_manager, height=height)
+
+
+def build_cv(session, state_manager, key, height=None):
+    """CV of every entity within each condition, from the values measured
+    (before imputation and normalization)."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    conditions = session.conditions()
+    frame = qc.coefficients_of_variation(session.result('filtered').collect(), conditions)
+    if frame.height == 0:
+        st.info('A CV needs at least two replicates of a condition.')
+        return
+    show_fig(comparison_plots.coefficients_of_variation(frame, condition_colors(set(conditions.values()))),
+             f'{key}-cv')
+    st.caption(f'Of the {_noun(session, True)} measured in at least two replicates, before imputation and '
+               'normalization.')
+
+
+def build_match_quality(session, state_manager, key, height=None):
+    """How well the values matched between runs (match between runs) scored,
+    against the matches that were rejected."""
+    del state_manager, height
+    frame = qc.match_quality(session.long('feature').collect(), session.runs)
+    if session.isobaric or frame.height == 0:
+        st.info('No values were matched between runs: the samples were measured together '
+                '(isobaric labels) or every run found every feature itself.')
+        return
+    show_fig(comparison_plots.match_quality(frame, session.runs, _sample(session)), f'{key}-match-quality')
+    matched = frame.filter(frame['outcome'] != 'not matched').height
+    st.caption(f'{matched:,} feature values matched from other runs (match between runs, FDR 1%), '
+               f'{frame.height - matched:,} rejected.')
+
+
 # The steps of the comparison chain, each a plot of its own in the layout.
 # Saved layouts written before they were split name them together as
 # 'quant_diagnostics' (quant_view.split_diagnostics).
@@ -453,6 +629,14 @@ BUILDERS = {
     'quant_normalization': (build_normalization, None),
     'quant_pvalues': (build_pvalues, None),
     'quant_go': (build_go, None),
+    'quant_id_counts': (build_id_counts, None),
+    'quant_id_frequency': (build_id_frequency, None),
+    'quant_id_overlap': (build_id_overlap, 480),
+    'quant_id_table': (build_id_table, 376),
+    'quant_totals': (build_totals, None),
+    'quant_correlation': (build_correlation, 480),
+    'quant_cv': (build_cv, None),
+    'quant_match_quality': (build_match_quality, None),
 }
 
 
