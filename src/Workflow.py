@@ -20,6 +20,7 @@ from src.quant.run import (
     run_record,
 )
 from src import flashida
+from src import history
 from src import former_examples
 from src.workflow.WorkflowManager import WorkflowManager
 from src.workflow.StreamlitUI import editor_table
@@ -158,16 +159,37 @@ def comparison_settings(workflow):
 
 
 def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None, design=None):
-    """The label-free comparison after the per-run loop. False on failure."""
+    """The label-free comparison after the per-run loop. False on failure.
+    The runs (and the comparison) get the name given to the start."""
     if analysis.quantification(workflow.params) != analysis.LABEL_FREE:
+        workflow.name_results(dataset_ids)
         return True
     if len(dataset_ids) < 2:
         workflow.logger.log('Label-free quantification needs at least two runs: no comparison made.')
+        workflow.name_results(dataset_ids)
         return True
-    return compare_runs(
+    comparison = compare_runs(
         workflow, tool, dataset_ids, mzmls, workflow.params.get('mzML-files', []), prsm_key=prsm_key,
         design=design,
-    ) is not None
+    )
+    if comparison is None:
+        return False
+    workflow.name_results(dataset_ids, comparison)
+    return True
+
+
+def _unique_label(label, taken):
+    """`label`, or `label (n)` when another result already has it."""
+    from src.workflow.RunManager import MAX_NAME_LENGTH
+
+    label = label[:MAX_NAME_LENGTH]
+    n = 2
+    candidate = label
+    while candidate in taken:
+        suffix = f' ({n})'
+        candidate = label[:MAX_NAME_LENGTH - len(suffix)].rstrip() + suffix
+        n += 1
+    return candidate
 
 
 def empty_tsv(path, header):
@@ -255,6 +277,8 @@ class TopDownWorkflow(WorkflowManager):
     share_cache = True
     # Start analysis (settings adding files to an experiment) opens the Run page
     run_page = Path('content', 'TopDown', 'TopDownRun.py')
+    # Describe experiment names the start beside its Run button (run_name())
+    name_runs = True
 
     def __init__(self) -> None:
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
@@ -268,6 +292,41 @@ class TopDownWorkflow(WorkflowManager):
         # Your analysis, not by buttons of their own
         # (a module-level function: the workflow object is pickled for its run)
         self.ui.preset_buttons = _no_preset_buttons
+
+    def run_name_placeholder(self) -> str:
+        return 'Named after its files'
+
+    def name_results(self, dataset_ids, comparison=None) -> None:
+        """Give the runs this start processed, and its comparison, the name
+        typed beside the Run button: one run (or the comparison) takes the
+        name, the runs of a comparison or of several files `<name>: <file>`.
+        Without a name they keep their file names."""
+        name = self.run_name()
+        if not name or not dataset_ids and comparison is None:
+            return
+        taken = self._display_names()
+        labels = []
+        if comparison is not None:
+            labels.append((comparison, name))
+        for dataset_id in dataset_ids:
+            if comparison is None and len(dataset_ids) == 1:
+                labels.append((dataset_id, name))
+            else:
+                labels.append((dataset_id, f'{name}: {dataset_id.rsplit("_", 1)[0]}'))
+        for dataset_id, label in labels:
+            label = _unique_label(label, taken)
+            taken.add(label)
+            self.file_manager.rename_dataset(dataset_id, label)
+        self.logger.log(f'Named the results "{name}".')
+
+    def _display_names(self) -> set:
+        """The names the Viewer lists: every display name given so far."""
+        names = set()
+        cursor = self.file_manager.cache_cursor
+        for table in ('stored_data', 'stored_files'):
+            cursor.execute(f'SELECT id, display_name FROM {table}')
+            names.update(label or dataset_id for dataset_id, label in cursor.fetchall())
+        return names
 
     def upload(self) -> None:
         t = st.tabs(["MS data", "Database (for identification)"])
@@ -353,10 +412,17 @@ class TopDownWorkflow(WorkflowManager):
                 "mzML-files", name='MS data', multiple=True, reactive=True,
                 upload=dict(file_types=MS_DATA_TYPES, fallback=EXAMPLE_DATA, suggest_folders=True),
             )
-            self.ui.input_widget(
-                IDENTIFY_KEY, name='Identify proteoforms', widget_type='checkbox', default=True,
-                help=IDENTIFY_HELP, reactive=True,
-            )
+            kept = self.kept_deconvolution()
+            if kept:
+                # Identification added to a run: its file and deconvolution stay,
+                # so identification is on and the quantification is the run's
+                st.session_state[f'{self.parameter_manager.param_prefix}{IDENTIFY_KEY}'] = True
+                self.params[IDENTIFY_KEY] = True
+            else:
+                self.ui.input_widget(
+                    IDENTIFY_KEY, name='Identify proteoforms', widget_type='checkbox', default=True,
+                    help=IDENTIFY_HELP, reactive=True,
+                )
             identify = self.identifying()
             current_sample = self._current_sample_type()
             if identify:
@@ -368,12 +434,18 @@ class TopDownWorkflow(WorkflowManager):
             self._sample_type_choice(current_sample)
             self._recommend_sample_type(current_sample)
 
-            quant = self._choice(
-                analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
-                analysis.quantification(self.params), 'Quantification',
-                help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
-            )
-            if quant == analysis.ISOBARIC:
+            if kept:
+                quant = analysis.quantification(self.params)
+                st.caption(f'Quantification: **{analysis.QUANT_LABELS[quant]}**'
+                           + (f' ({isobaric.label(analysis.plex(self.params))})' if quant == analysis.ISOBARIC else '')
+                           + f', as {kept} was processed: its deconvolution is reused.')
+            else:
+                quant = self._choice(
+                    analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
+                    analysis.quantification(self.params), 'Quantification',
+                    help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
+                )
+            if quant == analysis.ISOBARIC and not kept:
                 self._choice(
                     analysis.PLEX_KEY, list(isobaric.PLEXES), {p: isobaric.label(p) for p in isobaric.PLEXES},
                     isobaric.DEFAULT_PLEX, 'Labels', selectbox=True,
@@ -390,6 +462,14 @@ class TopDownWorkflow(WorkflowManager):
                 len(selected), identify, current_sample, database if isinstance(database, str) else None,
                 quant, analysis.plex(params),
             ), icon='🧭')
+
+    def kept_deconvolution(self):
+        """The name of the run whose deconvolution the next start reuses
+        (identification added to it, ``missing_analysis.add_identification``), else None."""
+        info = self.ui._follow_up_info()
+        if 'FLASHDeconv' in (info.get('kept') or []) and info.get('reuses'):
+            return info.get('name') or info['reuses'][0]
+        return None
 
     def run_bar_summary(self) -> str:
         """The line beside the Run analysis button: what will run."""
@@ -474,6 +554,9 @@ class TopDownWorkflow(WorkflowManager):
                     exclude_parameters=['ion_type'],
                     display_subsections=True,
                     display_tool_name=False,
+                    # Internal fragments follow the sample type: off for a
+                    # lysate (the default), on with the Native preset
+                    custom_defaults={'algorithm:internal_ions': 'false'},
                     flag_parameters=FLASHANNOTATOR_FLAGS,
                 )
         if quant == analysis.LABEL_FREE:
@@ -518,9 +601,10 @@ class TopDownWorkflow(WorkflowManager):
             use_container_width=True,
         )
 
-    def _store_parameters(self, dataset_id, folder_path, tool, name):
+    def _store_parameters(self, dataset_id, folder_path, tool, name, settings=None):
         """Store the parameters `tool` ran with, as data and as a json file."""
-        settings = self.executor.parameter_manager.get_parameters_from_json().get(tool, {})
+        if settings is None:
+            settings = self.executor.parameter_manager.get_parameters_from_json().get(tool, {})
         self.file_manager.store_data(dataset_id, name, settings)
         json_file = Path(folder_path, f'{name}.json')
         with open(json_file, 'w') as f:
@@ -643,6 +727,30 @@ class TopDownWorkflow(WorkflowManager):
         self.file_manager.store_data(dataset_id, 'isobaric_dfs', frame)
         self.file_manager.store_data(dataset_id, 'isobaric_plex', {'plex': plex, 'channels': isobaric.channel_names(plex)})
 
+    def _reused_deconvolution(self, n_files):
+        """[dataset id or None] per input file: the run whose deconvolution a
+        start that adds identification to it reuses (``same_files``, ``keep``)."""
+        info = self.follow_up_info()
+        reuses = list(info.get('reuses') or [])
+        if 'FLASHDeconv' not in (info.get('kept') or []) or len(reuses) != n_files:
+            return [None] * n_files
+        return reuses
+
+    def _copy_deconvolution(self, source, folder_path):
+        """Put the stored FLASHDeconv output of run `source` into `folder_path`.
+        False when it is gone (the run is deconvolved again then)."""
+        keys = {name.replace('.', '_'): name for _, name in FLASHDECONV_OUTPUTS}
+        try:
+            stored = self.file_manager.get_results(source, list(keys), partial=True)
+        except Exception:
+            return False
+        if 'out_deconv_mzML' not in stored or not Path(stored['out_deconv_mzML']).exists():
+            return False
+        for key, path in stored.items():
+            if Path(path).exists():
+                copyfile(path, join(folder_path, keys[key]))
+        return True
+
     def execution(self) -> bool:
         # Get input files
         try:
@@ -669,6 +777,9 @@ class TopDownWorkflow(WorkflowManager):
             return False
 
         base_path = dirname(self.workflow_dir)
+        # Every result of this start records it (the History of a result)
+        started = time.time()
+        follows = self.follow_up_info()
         quant = analysis.quantification(self.params)
         plex = analysis.plex(self.params)
         # -quant follows label-free quantification, -iq:type the labels
@@ -684,6 +795,7 @@ class TopDownWorkflow(WorkflowManager):
         if reused:
             self.logger.log('Adding the files to the runs ' + ', '.join(d for d, _ in reused)
                             + ', which are compared with them as they are.')
+        reuse = self._reused_deconvolution(len(in_mzmls))
         samples = design_of(self.workflow_dir, self.params.get('mzML-files', []), in_mzmls)
         dataset_ids = []
         errors = []
@@ -701,14 +813,24 @@ class TopDownWorkflow(WorkflowManager):
                     makedirs(folder_path)
 
                     self.logger.log(f'Processing {current_base}:')
-                    self.logger.log("-> Running FLASHDeconv...")
-                    io = {'in': [in_mzml]}
-                    io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
-                    if not self.executor.run_topp(
-                        'FLASHDeconv', input_output=io,
-                        custom_params=deconv_params,
-                    ):
-                        raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
+                    source = reuse[index]
+                    deconv_settings = None
+                    if source is not None and self._copy_deconvolution(source, folder_path):
+                        # Identification added to a run: its deconvolution is reused
+                        self.logger.log(f"-> Reusing the deconvolution of {source}.")
+                        stored = self.file_manager.get_results(source, ['FD_parameters'], partial=True)
+                        deconv_settings = dict(stored.get('FD_parameters') or {})
+                    else:
+                        if source is not None:
+                            self.logger.log(f"The deconvolution of {source} is gone: deconvolving again.")
+                        self.logger.log("-> Running FLASHDeconv...")
+                        io = {'in': [in_mzml]}
+                        io.update({param: [join(folder_path, name)] for param, name in FLASHDECONV_OUTPUTS})
+                        if not self.executor.run_topp(
+                            'FLASHDeconv', input_output=io,
+                            custom_params=deconv_params,
+                        ):
+                            raise RuntimeError(f'FLASHDeconv failed for {current_base}.')
 
                     if identify:
                         self._identify(in_mzml, folder_path, database, current_base)
@@ -721,7 +843,8 @@ class TopDownWorkflow(WorkflowManager):
                             dataset_id, str(file).replace('.', '_'),
                             Path(folder_path, file), file_name=file
                         )
-                    self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters')
+                    self._store_parameters(dataset_id, folder_path, 'FLASHDeconv', 'FD_parameters',
+                                           settings=deconv_settings)
                     if identify:
                         self._store_parameters(dataset_id, folder_path, 'FLASHTnT', 'FTnT_parameters')
                     self._parse(dataset_id, identify)
@@ -729,6 +852,10 @@ class TopDownWorkflow(WorkflowManager):
                         self._parse_isobaric(dataset_id, plex)
                     self.file_manager.store_data(dataset_id, SETTINGS_KEY, run_record(
                         identify, quant, plex, in_mzml, samples.get(run_name(in_mzml)),
+                    ))
+                    history.record(self.file_manager, dataset_id, history.start_record(
+                        started, [in_mzml], identify, quant, plex,
+                        follows=follows, source=source if deconv_settings is not None else None,
                     ))
 
                     progress.end_step(parsing)
@@ -746,11 +873,27 @@ class TopDownWorkflow(WorkflowManager):
         compared = [d for d, _ in reused] + dataset_ids
         mzmls = [r['mzml'] for _, r in reused] + list(in_mzmls)
         design = {run_name(r['mzml']): (r.get('condition', ''), r.get('replicate', 1)) for _, r in reused}
+        earlier = set(self.file_manager.get_results_list(['quant_manifest']))
         if quant == analysis.ISOBARIC:
-            return compare_isobaric(self, tool, compared, plex) is not None
-        if identify:
-            return run_comparison(self, tool, compared, mzmls, prsm_key='prsms_tsv', design=design)
-        return run_comparison(self, tool, compared, mzmls, design=design)
+            comparison = compare_isobaric(self, tool, compared, plex)
+            ok = comparison is not None
+            if ok:
+                self.name_results(dataset_ids, comparison)
+        elif identify:
+            ok = run_comparison(self, tool, compared, mzmls, prsm_key='prsms_tsv', design=design)
+        else:
+            ok = run_comparison(self, tool, compared, mzmls, design=design)
+        # The comparison this start made records it too, and every result keeps its report
+        made = [d for d in self.file_manager.get_results_list(['quant_manifest']) if d not in earlier]
+        for comparison in made:
+            history.record(self.file_manager, comparison, history.start_record(
+                started, [], identify, quant, plex, follows=follows,
+            ))
+        try:
+            history.keep(self.workflow_dir, self.file_manager, dataset_ids + made)
+        except Exception as e:  # the results stay without a kept report
+            self.logger.log(f'The processing report could not be kept with the results: {e}', 2)
+        return ok
 
 
 # The former workflows, for queued jobs and the workspace sync of older builds

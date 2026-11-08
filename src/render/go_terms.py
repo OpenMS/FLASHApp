@@ -382,3 +382,55 @@ def term_frame(table, labels):
         'padj': table['p_adj'].astype(float).tolist(),
         'proteins': proteins,
     })
+
+
+# -- annotations of a whole run ---------------------------------------------------
+
+def term_counts(index, accessions, categories=tuple(CATEGORIES)):
+    """How many of the proteins `accessions` carry each GO term, from a term
+    index: (proteins with any GO term, category -> frame of term, count,
+    accessions (';'-joined), most frequent first). What the GO cell shows
+    while nothing is selected."""
+    wanted = sorted({clean_accession(a) for a in accessions if a})
+    terms = index.filter(pl.col('accession').is_in(wanted)).drop_nulls('term')
+    annotated = terms['accession'].n_unique() if terms.height else 0
+    tables = {}
+    for category in categories:
+        tables[category] = (
+            terms.filter(pl.col('category') == category)
+            .group_by('term')
+            .agg(
+                pl.col('accession').n_unique().alias('count'),
+                pl.col('accession').unique().sort().str.join(';').alias('accessions'),
+            )
+            .sort(['count', 'term'], descending=[True, False])
+        )
+    return annotated, tables
+
+
+def run_terms(file_manager, accessions, fetch=None, universe=None):
+    """term_counts of the proteins `accessions`, from the term index of
+    `universe` (default: the accessions). Returns (annotated, tables, error
+    message or None, accession -> label)."""
+    pool = list(universe if universe is not None else accessions)
+    index, error = term_index(file_manager, pool, fetch=fetch)
+    annotated, tables = term_counts(index, accessions)
+    labels = {clean_accession(a): protein_label(a) for a in pool if a}
+    return annotated, tables, error, labels
+
+
+def count_frame(table, labels, total):
+    """The terms of one category of term_counts for the Viewer's table."""
+    if table is None or table.height == 0:
+        return pl.DataFrame(schema={
+            'rank': pl.Int64, 'term': pl.Utf8, 'count': pl.Int64, 'share': pl.Float64, 'proteins': pl.Utf8,
+        })
+    return pl.DataFrame({
+        'rank': list(range(1, table.height + 1)),
+        'term': table['term'].to_list(),
+        'count': table['count'].to_list(),
+        'share': [100.0 * c / total if total else 0.0 for c in table['count'].to_list()],
+        'proteins': [
+            ', '.join(labels.get(a, a) for a in str(p).split(';') if a) for p in table['accessions'].to_list()
+        ],
+    })

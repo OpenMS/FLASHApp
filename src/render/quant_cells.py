@@ -15,12 +15,13 @@ plot shows it in the profile and the per-run table.
 import polars as pl
 import streamlit as st
 
-from openms_insight import ClusteredHeatmap, PCAPlot, SeriesPlot, Table, VolcanoPlot
+from openms_insight import ClusteredHeatmap, Heatmap, PCAPlot, SeriesPlot, Table, VolcanoPlot
 
 from src.common.common import show_fig
 from src.parse import differential as diff
+from src.quant import qc, sources
 from src.quant.session import LEVEL_NAMES, RESULTS, STATUS_LABELS
-from src.render import go_terms, insight_data
+from src.render import comparison_plots, go_terms, insight_data
 from src.render.postprocessing_plots import (
     imputed_value_preview, missingness_vs_intensity, pvalue_histogram, sample_distributions,
 )
@@ -382,32 +383,227 @@ def build_heatmap(session, state_manager, key, height):
     )(key=key, state_manager=state_manager, height=height)
 
 
-def build_diagnostics(session, state_manager, key, height=None):
-    """The plots behind each step of the comparison chain."""
+def _frame(session, name):
+    return session.result(name).collect().to_pandas()
+
+
+# -- identification ------------------------------------------------------------
+# What each run identified: these need no conditions, so they show as soon as
+# the runs are compared. They count proteoforms when the runs were identified
+# (the level shown otherwise).
+
+def _id_level(session):
+    return qc.identification_level(session.levels, session.level)
+
+
+def _id_noun(session, level):
+    if level == 'feature' and 'proteoform' not in session.levels:
+        return 'features'
+    return LEVEL_NAMES[level].lower()
+
+
+def _not_identified_note(session, level):
+    if level == 'feature' and session.manifest.get('tool') != 'flashtnt' and not session.isobaric:
+        st.caption('These runs were not identified, so the features each run detected are counted. '
+                   'Add identification to the runs to count proteoforms.')
+
+
+def build_id_counts(session, state_manager, key, height=None):
+    """Entities each run detected itself and those matched from other runs."""
+    del state_manager, height
+    level = _id_level(session)
+    counts = qc.counts_per_run(session.long(level).collect(), session.runs)
+    show_fig(comparison_plots.counts_per_run(counts, _id_noun(session, level), _sample(session)),
+             f'{key}-id-counts')
+    _not_identified_note(session, level)
+
+
+def build_id_frequency(session, state_manager, key, height=None):
+    """How many entities were found in 1, 2, ... all runs."""
+    del state_manager, height
+    level = _id_level(session)
+    table = qc.frequency(session.long(level).collect(), session.runs)
+    show_fig(comparison_plots.frequency(table, _id_noun(session, level), _sample(session)),
+             f'{key}-id-frequency')
+
+
+def build_id_overlap(session, state_manager, key, height):
+    """What every two runs share (Jaccard index of the detected entities),
+    clustered so that runs alike sit together."""
+    level = _id_level(session)
+    runs = session.runs
+    if len(runs) < 2:
+        st.info(f'Shared identifications need at least two {_sample(session).lower()}s.')
+        return
+    conditions = session.conditions()
+    _component(
+        ClusteredHeatmap, f'quant_id_overlap_{level}', session.file_manager, session.dataset_id,
+        [f'quant_{level}', 'quant_design', 'quant_settings'],
+        lambda: dict(
+            data=qc.overlap(session.long(level).collect(), runs).lazy(), id_col='Sample',
+            metadata=_metadata(conditions) if conditions else None,
+            title=f'Shared {_id_noun(session, level)} (% of those either {_sample(session).lower()} detected)',
+            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Shared (%)',
+            colorscale='Blues', reversescale=True,
+            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+        ),
+        required=[f'quant_{level}'],
+    )(key=key, state_manager=state_manager, height=height)
+
+
+def build_id_table(session, state_manager, key, height):
+    """Every entity any run found, with how each run found it."""
+    level = _id_level(session)
+    runs = session.runs
+    table = qc.identification_table(session.long(level).collect(), session.annotations(level).collect(), runs)
+    noun = _id_noun(session, level)
+    columns = [{'title': noun[:-1].capitalize() if noun.endswith('s') else noun, 'field': 'label', 'sorter': 'string'}]
+    if 'protein_label' in table.columns and level == 'proteoform':
+        columns.append({'title': 'Protein', 'field': 'protein_label', 'sorter': 'string'})
+    if 'mass' in table.columns:
+        columns.append({'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)})
+    if 'proteoforms' in table.columns:
+        columns.append({'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number'})
+    if 'PrSMs' in table.columns:
+        columns.append({'title': 'PrSMs', 'field': 'PrSMs', 'sorter': 'number',
+                        'headerTooltip': 'Spectra (PrSMs) that identify it, over all runs.'})
+    columns += [
+        {'title': 'Detected', 'field': 'Detected', 'sorter': 'number',
+         'headerTooltip': f'{_sample(session)}s that found it themselves.'},
+        {'title': 'Found', 'field': 'Found', 'sorter': 'number',
+         'headerTooltip': f'{_sample(session)}s that found it themselves or matched it from another one.'},
+    ]
+    for run in runs:
+        columns.append({'title': run, 'field': run, 'sorter': 'string',
+                        'headerTooltip': 'detected; matched, identified (match between runs, identified in the run); matched (match between runs); missing'})
+    _component(
+        Table, f'quant_id_table_{level}', session.file_manager, session.dataset_id,
+        [f'quant_{level}', f'quant_{level}_annotations', 'quant_design', 'quant_settings'],
+        lambda: dict(
+            data=table.lazy(), column_definitions=columns, index_field='RowIndex',
+            title=f'{LEVEL_NAMES[level]} across the {_sample(session).lower()}s',
+            go_to_fields=['label'], row_overview='{label}', interactivity={'quant_form': 'RowIndex'},
+        ),
+        required=[f'quant_{level}', f'quant_{level}_annotations'],
+    )(key=key, state_manager=state_manager, height=height)
+
+
+# -- quality control -------------------------------------------------------
+
+def build_totals(session, state_manager, key, height=None):
+    """Summed intensity of every run or labelled channel: unequal totals
+    mean the samples were not loaded alike (normalization corrects for it)."""
+    del state_manager, height
+    conditions = session.conditions()
+    frame = qc.totals(session.long().collect(), session.runs)
+    show_fig(comparison_plots.totals(frame, condition_colors(set(conditions.values())), conditions,
+                                     _sample(session)), f'{key}-totals')
+    unlike = qc.unlike_replicates(frame, conditions)
+    if unlike:
+        st.caption(f'Under half or over twice the total of their replicates: {", ".join(unlike)}. '
+                   'Check how they were loaded; normalization corrects for it.')
+    elif conditions:
+        st.caption('Replicates of a condition were loaded alike (within a factor of two).')
+
+
+def build_correlation(session, state_manager, key, height):
+    """Pearson correlation of the log intensities of every two samples,
+    clustered: replicates should correlate best."""
+    runs = session.runs
+    if len(runs) < 2:
+        st.info(f'A correlation needs at least two {_sample(session).lower()}s.')
+        return
+    conditions = session.conditions()
+    level = session.level
+    _component(
+        ClusteredHeatmap, f'quant_correlation_{level}', session.file_manager, session.dataset_id,
+        [f'quant_{level}', 'quant_design', 'quant_settings'],
+        lambda: dict(
+            data=qc.correlation(session.long(level).collect(), runs).lazy(), id_col='Sample',
+            metadata=_metadata(conditions) if conditions else None,
+            title=f'Correlation of the {_sample(session).lower()}s (log2 intensities of {_noun(session, True)})',
+            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Pearson r',
+            colorscale='Viridis', reversescale=False,
+            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+        ),
+        required=[f'quant_{level}'],
+    )(key=key, state_manager=state_manager, height=height)
+
+
+def build_cv(session, state_manager, key, height=None):
+    """CV of every entity within each condition, from the values measured
+    (before imputation and normalization)."""
     del state_manager, height
     if not _ready(session):
         return
     conditions = session.conditions()
-    runs = list(conditions)
-    filtered = session.result('filtered').collect().to_pandas()
-    imputed = session.result('imputed').collect().to_pandas()
-    normalized = session.result('normalized_wide').collect().to_pandas()
-    statistics = session.result('statistics').collect().to_pandas()
-    settings = session.settings
-    view = st.segmented_control(
-        'Step', ['Missing values', 'Imputed values', 'Normalization', 'p-values'],
-        default='Missing values', key=f'{key}_step', label_visibility='collapsed',
-    ) or 'Missing values'
-    if view == 'Missing values':
-        show_fig(missingness_vs_intensity(filtered, runs), f'{key}-missing-values')
-    elif view == 'Imputed values':
-        show_fig(imputed_value_preview(filtered, imputed, runs), f'{key}-imputed-values')
-    elif view == 'Normalization':
-        show_fig(sample_distributions(
-            imputed, normalized, runs, conditions, after_is_log=settings['postproc-transform'] != 'None',
-        ), f'{key}-run-distributions')
-    else:
-        show_fig(pvalue_histogram(statistics), f'{key}-p-values')
+    frame = qc.coefficients_of_variation(session.result('filtered').collect(), conditions)
+    if frame.height == 0:
+        st.info('A CV needs at least two replicates of a condition.')
+        return
+    show_fig(comparison_plots.coefficients_of_variation(frame, condition_colors(set(conditions.values()))),
+             f'{key}-cv')
+    st.caption(f'Of the {_noun(session, True)} measured in at least two replicates, before imputation and '
+               'normalization.')
+
+
+def build_match_quality(session, state_manager, key, height=None):
+    """How well the values matched between runs (match between runs) scored,
+    against the matches that were rejected."""
+    del state_manager, height
+    frame = qc.match_quality(session.long('feature').collect(), session.runs)
+    if session.isobaric or frame.height == 0:
+        st.info('No values were matched between runs: the samples were measured together '
+                '(isobaric labels) or every run found every feature itself.')
+        return
+    show_fig(comparison_plots.match_quality(frame, session.runs, _sample(session)), f'{key}-match-quality')
+    matched = frame.filter(frame['outcome'] != 'not matched').height
+    st.caption(f'{matched:,} feature values matched from other runs (match between runs, FDR 1%), '
+               f'{frame.height - matched:,} rejected.')
+
+
+# The steps of the comparison chain, each a plot of its own in the layout.
+# Saved layouts written before they were split name them together as
+# 'quant_diagnostics' (quant_view.split_diagnostics).
+
+def build_missing_values(session, state_manager, key, height=None):
+    """Where missing values occur: mean intensity of complete entries and of
+    entries with gaps."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    runs = list(session.conditions())
+    show_fig(missingness_vs_intensity(_frame(session, 'filtered'), runs), f'{key}-missing-values')
+
+
+def build_imputed_values(session, state_manager, key, height=None):
+    """The values imputed for the gaps against the measured ones."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    runs = list(session.conditions())
+    show_fig(imputed_value_preview(_frame(session, 'filtered'), _frame(session, 'imputed'), runs),
+             f'{key}-imputed-values')
+
+
+def build_normalization(session, state_manager, key, height=None):
+    """Intensity distribution of each sample before and after normalization."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    conditions = session.conditions()
+    show_fig(sample_distributions(
+        _frame(session, 'imputed'), _frame(session, 'normalized_wide'), list(conditions), conditions,
+        after_is_log=session.settings['postproc-transform'] != 'None',
+    ), f'{key}-run-distributions')
+
+
+def build_pvalues(session, state_manager, key, height=None):
+    """Distribution of the p-values of the group comparison."""
+    del state_manager, height
+    if not _ready(session):
+        return
+    show_fig(pvalue_histogram(_frame(session, 'statistics')), f'{key}-p-values')
 
 
 def build_go(session, state_manager, key, height=None):
@@ -420,6 +616,365 @@ def build_go(session, state_manager, key, height=None):
     go_view.render_comparison(session, state_manager, key)
 
 
+# -- from a proteoform to its PrSMs and their spectra ------------------------
+# The identification table selects an entity (`quant_form`), the PrSM table
+# lists the PrSMs of every run that identify it and selects one
+# (`quant_prsm`), and the sequence view and spectrum of that PrSM are drawn
+# from the run's own results with a state of their own.
+
+def _prsm_frame(session):
+    """The PrSMs of the comparison, with the RowIndex of the entity they
+    identify in the identification table."""
+    level = _id_level(session)
+    if level == 'feature' and 'proteoform' not in session.levels:
+        return level, None
+    table = qc.identification_table(session.long(level).collect(), session.annotations(level).collect(),
+                                    session.runs)
+    prsms = sources.comparison_prsms(session.file_manager, session.dataset_id, level)
+    frame = prsms.join(table.select(pl.col('id').alias('key'), 'RowIndex', 'label'), on='key', how='inner')
+    # Which PrSMs can be shown: their run's results are in this workspace and
+    # hold the spectrum. They come first, then the runs in their order.
+    shown = []
+    for run, run_ds in sources.run_datasets(session.file_manager, session.manifest).items():
+        try:
+            scans = insight_data.proteins(session.file_manager, run_ds).select('Scan').collect()['Scan']
+        except Exception:  # a run without identification results
+            continue
+        shown.append(pl.DataFrame({'Run': run, 'Scan': scans.drop_nulls().cast(pl.Int64).unique()}))
+    here = pl.concat(shown) if shown else pl.DataFrame(schema={'Run': pl.Utf8, 'Scan': pl.Int64})
+    order = {run: i for i, run in enumerate(session.runs)}
+    frame = (
+        frame.join(here.with_columns(pl.lit('yes').alias('Spectrum')), on=['Run', 'Scan'], how='left')
+        .with_columns(pl.col('Spectrum').fill_null('no'),
+                      pl.col('Run').replace_strict(order, default=len(order), return_dtype=pl.Int64).alias('_run'))
+        .sort(['RowIndex', 'Spectrum', '_run', 'Scan'], descending=[False, True, False, False]).drop('_run')
+    )
+    return level, frame
+
+
+def _no_prsms_note(session):
+    st.info('This comparison has no PrSMs: the runs were not identified, or were compared before the '
+            'PrSMs were kept with the comparison. Compare identified runs to follow a proteoform to its spectra.')
+
+
+def build_id_prsms(session, state_manager, key, height):
+    """Every PrSM of the proteoform picked in the identification table, run by run."""
+    level, frame = _prsm_frame(session)
+    if frame is None or frame.height == 0:
+        _no_prsms_note(session)
+        return
+    columns = [
+        {'title': _sample(session), 'field': 'Run', 'sorter': 'string'},
+        {'title': 'Scan', 'field': 'Scan', 'sorter': 'number'},
+        {'title': 'RT (min)', 'field': 'RT', 'sorter': 'number', **_fixed(2)},
+        {'title': 'Proteoform mass (Da)', 'field': 'ProteoformMass', 'sorter': 'number', **_fixed(2)},
+        {'title': 'Precursor mass (Da)', 'field': 'PrecursorMass', 'sorter': 'number', **_fixed(2)},
+        {'title': 'Error (ppm)', 'field': 'MassErrorPPM', 'sorter': 'number', **_fixed(2)},
+        {'title': 'q-value', 'field': 'qvalue', 'sorter': 'number', **_P},
+        {'title': 'Spectrum', 'field': 'Spectrum', 'sorter': 'string',
+         'headerTooltip': "yes: the run's results are in this workspace, pick the PrSM to see its spectrum."},
+        {'title': 'Proteoform', 'field': 'Proforma', 'sorter': 'string'},
+    ]
+    _component(
+        Table, f'quant_id_prsms_{level}', session.file_manager, session.dataset_id,
+        [f'quant_{level}', f'quant_{level}_annotations', 'identifications_tsv'],
+        lambda: dict(
+            data=frame.lazy(), column_definitions=columns, index_field='prsm_row',
+            title='PrSMs of the selected identification', go_to_fields=['Run', 'Scan'],
+            filters={'quant_form': 'RowIndex'}, interactivity={'quant_prsm': 'prsm_row'},
+            reclick=RECLICK, reset_sort=True,
+        ),
+        extra=sorted(sources.run_datasets(session.file_manager, session.manifest).items()),
+        required=[f'quant_{level}', 'identifications_tsv'],
+    )(key=key, state_manager=state_manager, height=height)
+
+
+def _run_state(session, run_ds, extra=''):
+    from openms_insight import StateManager
+    return StateManager(session_key=f'flash_quant_run_state_{session.dataset_id}_{run_ds}{extra}')
+
+
+def _set(state, identifier, value):
+    if state.get_selection(identifier) != value:
+        state.set_selection(identifier, value)
+
+
+def _selected_prsm(session, state_manager):
+    """(run name, dataset id, state, scan) of the PrSM picked in the PrSM
+    table, its run's state pointing at it; None (with a note) otherwise."""
+    from src.render import render
+    _, frame = _prsm_frame(session)
+    if frame is None or frame.height == 0:
+        _no_prsms_note(session)
+        return None
+    picked = state_manager.get_selection('quant_prsm')
+    row = frame.filter(pl.col('prsm_row') == picked) if picked is not None else frame.head(0)
+    form = state_manager.get_selection('quant_form')
+    if row.height == 0 or (form is not None and row['RowIndex'][0] != form):
+        st.info('Pick a PrSM in **PrSMs of the selected identification** to see its spectrum here.')
+        return None
+    prsm = row.row(0, named=True)
+    run_ds = sources.run_datasets(session.file_manager, session.manifest).get(prsm['Run'])
+    if run_ds is None:
+        st.info(f"The results of {prsm['Run']} are not in this workspace, so its spectra cannot be shown.")
+        return None
+    hit = sources.prsm_in_run(render.insight_data.proteins(session.file_manager, run_ds).collect(), prsm['Scan'])
+    if hit is None:
+        st.info(f"Scan {prsm['Scan']} of {prsm['Run']} has no PrSM in the run's own results.")
+        return None
+    state = _run_state(session, run_ds)
+    index, scan_idx = hit
+    _set(state, 'protein', index)
+    _set(state, 'scan', scan_idx)
+    _set(state, 'pscan', scan_idx)
+    st.caption(f"{prsm['label']}: scan {prsm['Scan']} of {prsm['Run']}")
+    return run_ds, state
+
+
+def _run_cell(comp_name, session, state_manager, key):
+    from src.render import render
+    picked = _selected_prsm(session, state_manager)
+    if picked is None:
+        return
+    run_ds, state = picked
+    render._render_cell(comp_name, session.file_manager, run_ds, 'topdown', state, key)
+
+
+def build_prsm_sequence(session, state_manager, key, height=None):
+    """Sequence view of the picked PrSM, from its run's results."""
+    del height
+    _run_cell('sequence_view', session, state_manager, key)
+
+
+def build_prsm_spectrum(session, state_manager, key, height=None):
+    """Annotated spectrum of the picked PrSM, from its run's results."""
+    del height
+    _run_cell('anno_spectrum', session, state_manager, key)
+
+
+# -- reporter ions (isobaric labels) ----------------------------------------
+
+def _fractions(session):
+    """Fraction (run name) -> dataset id of the labelled runs of an isobaric
+    comparison that are in this workspace; None with a note otherwise."""
+    if not session.isobaric:
+        st.info('This comparison has no reporter ions: its runs were not labelled (TMT, iTRAQ).')
+        return None
+    found = sources.run_datasets(session.file_manager, session.manifest)
+    found = {name: ds for name, ds in found.items() if session.file_manager.result_exists(ds, 'isobaric_dfs')}
+    if not found:
+        st.info('The labelled runs of this comparison are not in this workspace, so their reporter ions '
+                'cannot be shown.')
+        return None
+    return found
+
+
+def _reporter_ions(session):
+    fractions = _fractions(session)
+    if fractions is None:
+        return None
+    frames = {}
+    for name, ds in fractions.items():
+        frame = session.file_manager.get_results(ds, ['isobaric_dfs'])['isobaric_dfs']
+        frames[name] = frame if isinstance(frame, pl.DataFrame) else pl.from_pandas(frame)
+    channels = list(session.manifest.get('channels') or [])
+    return sources.reporter_ions(frames, channels, session.runs), channels
+
+
+def _plex_label(session):
+    from src.quant import isobaric
+    return isobaric.label(session.manifest.get('plex', ''))
+
+
+def build_reporter_intensities(session, state_manager, key, height=None):
+    """Intensity of every label's reporter ions, and how often each label was found."""
+    del state_manager, height
+    got = _reporter_ions(session)
+    if got is None:
+        return
+    ions, channels = got
+    conditions = session.conditions()
+    presence = sources.channel_presence(ions, channels)
+    show_fig(comparison_plots.reporter_intensities(presence, ions, condition_colors(set(conditions.values())),
+                                                   conditions), f'{key}-reporter-intensities')
+    low = [f"{r['channel']} ({r['sample']})" for r in presence.iter_rows(named=True) if r['present'] < 50]
+    if low:
+        st.caption(f'Found in under half of the labelled spectra: {", ".join(low)}. Check the labelling '
+                   'and the channel assignment.')
+    else:
+        st.caption('Every label was found in at least half of the labelled spectra.')
+
+
+def build_reporter_ratios(session, state_manager, key, height=None):
+    """Ratio of every label to the first label in the same spectrum."""
+    del state_manager, height
+    got = _reporter_ions(session)
+    if got is None:
+        return
+    ions, channels = got
+    if len(channels) < 2:
+        st.info('Ratios need at least two labels.')
+        return
+    reference = channels[0]
+    ratios = sources.reporter_ratios(ions, reference)
+    names = dict(zip(channels, session.runs))
+    show_fig(comparison_plots.reporter_ratios(ratios, f'{reference} ({names.get(reference, reference)})',
+                                              [(c, names.get(c, c)) for c in channels[1:]]),
+             f'{key}-reporter-ratios')
+    st.caption('Of the spectra with both reporter ions. Labels of the same condition as the reference '
+               'should centre on 0, the others on their expected ratio.')
+
+
+def build_reporter_labels(session, state_manager, key, height=None):
+    """How many spectra carry 0, 1, ... all reporter ions."""
+    del state_manager, height
+    got = _reporter_ions(session)
+    if got is None:
+        return
+    ions, channels = got
+    show_fig(comparison_plots.labels_found(sources.labels_found(ions, channels), _plex_label(session)),
+             f'{key}-reporter-labels')
+
+
+def _fraction_state(session, key, picker):
+    """(dataset id, state) of the labelled run shown by the reporter
+    components; the first cell asks which one when there are several."""
+    fractions = _fractions(session)
+    if fractions is None:
+        return None
+    names = list(fractions)
+    pick_key = f'quant_reporter_fraction_{session.dataset_id}'
+    if st.session_state.get(pick_key) not in names:
+        st.session_state[pick_key] = names[0]
+    if picker and len(names) > 1:
+        st.selectbox('Run', names, key=pick_key)
+    ds = fractions[st.session_state[pick_key]]
+    return ds, _run_state(session, ds, '_reporters')
+
+
+def build_reporter_spectra(session, state_manager, key, height=None):
+    """The reporter ions of every labelled spectrum of a run."""
+    del state_manager, height
+    from src.render import render
+    picked = _fraction_state(session, key, picker=True)
+    if picked is not None:
+        render._render_cell('reporter_table', session.file_manager, picked[0], 'topdown', picked[1], key)
+
+
+def build_reporter_ions(session, state_manager, key, height=None):
+    """The reporter ions of the spectrum picked in the reporter table."""
+    del state_manager, height
+    from src.render import render
+    picked = _fraction_state(session, key, picker=False)
+    if picked is not None:
+        render._render_cell('reporter_ions', session.file_manager, picked[0], 'topdown', picked[1], key)
+
+
+# -- consensus features (label-free) ----------------------------------------
+
+def _features(session):
+    if 'feature' not in session.levels:
+        raise MissingResult('consensus features')
+    long = session.long('feature').collect()
+    overview = sources.feature_overview(long, session.annotations('feature').collect(), session.runs)
+    return long, overview
+
+
+def build_feature_map(session, state_manager, key, height):
+    """Every consensus feature by retention time and mass, coloured by the
+    number of runs that detected it."""
+    long, overview = _features(session)
+    if 'rt' not in overview.columns or 'mass' not in overview.columns:
+        st.info('The features of this comparison have no mass or retention time.')
+        return
+    _component(
+        Heatmap, 'quant_feature_map', session.file_manager, session.dataset_id,
+        ['quant_feature', 'quant_feature_annotations'],
+        lambda: dict(
+            data=overview.filter(pl.col('rt').is_not_null() & pl.col('mass').is_not_null()).lazy(),
+            x_column='rt', y_column='mass', intensity_column='Detected', log_scale=False,
+            interactivity={'quant_feature': 'RowIndex'}, highlight={'quant_feature': 'RowIndex'},
+            title=f'Consensus features (colour: {_sample(session).lower()}s that detected them)',
+            x_label='Retention time (min)', y_label='Monoisotopic mass (Da)',
+            intensity_label=f'Detected in ({_sample(session).lower()}s)', colorscale='Viridis',
+        ),
+    )(key=key, state_manager=state_manager, height=height)
+    del long
+
+
+def build_feature_intensity(session, state_manager, key, height=None):
+    """Intensity of the features each run detected and of those matched into it."""
+    del state_manager, height
+    long, overview = _features(session)
+    values = sources.feature_values(long, overview, session.runs)
+    show_fig(comparison_plots.feature_intensity(values, session.runs, _sample(session)),
+             f'{key}-feature-intensity')
+    st.caption('Matched values are usually lower: match between runs fills in features close to the '
+               'detection limit of a run.')
+
+
+def build_feature_table(session, state_manager, key, height):
+    """Every consensus feature: mass, retention time, charges and how many
+    runs detected it, matched it or miss it."""
+    _, overview = _features(session)
+    columns = [
+        {'title': 'Feature', 'field': 'label', 'sorter': 'string'},
+        {'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)},
+        {'title': 'RT (min)', 'field': 'rt', 'sorter': 'number', **_fixed(2)},
+        {'title': 'Charges', 'field': 'charges', 'sorter': 'string'},
+        {'title': 'Detected', 'field': 'Detected', 'sorter': 'number',
+         'headerTooltip': f'{_sample(session)}s that detected it themselves.'},
+        {'title': 'Matched', 'field': 'Matched', 'sorter': 'number',
+         'headerTooltip': f'{_sample(session)}s it was matched into (match between runs).'},
+        {'title': 'Missing', 'field': 'Missing', 'sorter': 'number'},
+        {'title': 'Proteoform', 'field': 'proteoform', 'sorter': 'string'},
+    ]
+    frame = overview
+    if 'MinCharge' in frame.columns and 'MaxCharge' in frame.columns:
+        frame = frame.with_columns(
+            pl.when(pl.col('MinCharge') == pl.col('MaxCharge')).then(pl.col('MinCharge').cast(pl.Utf8))
+            .otherwise(pl.col('MinCharge').cast(pl.Utf8) + '–' + pl.col('MaxCharge').cast(pl.Utf8))
+            .alias('charges'),
+        )
+    else:
+        frame = frame.with_columns(pl.lit(None, pl.Utf8).alias('charges'))
+    if 'label' not in frame.columns:
+        frame = frame.with_columns(pl.col('id').alias('label'))
+    _component(
+        Table, 'quant_feature_table', session.file_manager, session.dataset_id,
+        ['quant_feature', 'quant_feature_annotations'],
+        lambda: dict(
+            data=frame.lazy(), column_definitions=columns, index_field='RowIndex',
+            title='Consensus features', go_to_fields=['label'], interactivity={'quant_feature': 'RowIndex'},
+            reclick=RECLICK, reset_sort=True,
+        ),
+    )(key=key, state_manager=state_manager, height=height)
+
+
+def build_feature_profile(session, state_manager, key, height):
+    """The picked consensus feature in every run: detected, matched or missing."""
+    long, overview = _features(session)
+    values = sources.feature_values(long, overview, session.runs).with_columns(
+        (2 ** pl.col('log2_intensity')).alias('intensity'),
+    )
+    columns = [
+        {'title': _sample(session), 'field': 'Run', 'sorter': 'string'},
+        {'title': 'Found', 'field': 'Found', 'sorter': 'string'},
+        {'title': 'Intensity', 'field': 'intensity', 'sorter': 'number', **_P},
+        {'title': 'log2 intensity', 'field': 'log2_intensity', 'sorter': 'number', **_fixed(2)},
+    ]
+    _component(
+        Table, 'quant_feature_profile', session.file_manager, session.dataset_id,
+        ['quant_feature', 'quant_feature_annotations'],
+        lambda: dict(
+            data=values.with_row_index('ValueIndex').with_columns(pl.col('ValueIndex').cast(pl.Int64)).lazy(),
+            column_definitions=columns, index_field='ValueIndex',
+            title=f'Selected feature per {_sample(session).lower()}', filters={'quant_feature': 'RowIndex'},
+            pagination=False, default_row_selects=False,
+        ),
+    )(key=key, state_manager=state_manager, height=height)
+
+
 BUILDERS = {
     'quant_summary': (build_summary, None),
     'quant_table': (build_table, 376),
@@ -428,8 +983,31 @@ BUILDERS = {
     'quant_runs': (build_runs, 300),
     'quant_pca': (build_pca, 480),
     'quant_heatmap': (build_heatmap, 600),
-    'quant_diagnostics': (build_diagnostics, None),
+    'quant_missing_values': (build_missing_values, None),
+    'quant_imputed_values': (build_imputed_values, None),
+    'quant_normalization': (build_normalization, None),
+    'quant_pvalues': (build_pvalues, None),
     'quant_go': (build_go, None),
+    'quant_id_counts': (build_id_counts, None),
+    'quant_id_frequency': (build_id_frequency, None),
+    'quant_id_overlap': (build_id_overlap, 480),
+    'quant_id_table': (build_id_table, 376),
+    'quant_totals': (build_totals, None),
+    'quant_correlation': (build_correlation, 480),
+    'quant_cv': (build_cv, None),
+    'quant_match_quality': (build_match_quality, None),
+    'quant_id_prsms': (build_id_prsms, 300),
+    'quant_prsm_sequence': (build_prsm_sequence, None),
+    'quant_prsm_spectrum': (build_prsm_spectrum, None),
+    'quant_reporter_intensities': (build_reporter_intensities, None),
+    'quant_reporter_ratios': (build_reporter_ratios, None),
+    'quant_reporter_labels': (build_reporter_labels, None),
+    'quant_reporter_spectra': (build_reporter_spectra, None),
+    'quant_reporter_ions': (build_reporter_ions, None),
+    'quant_feature_map': (build_feature_map, 480),
+    'quant_feature_intensity': (build_feature_intensity, None),
+    'quant_feature_table': (build_feature_table, 376),
+    'quant_feature_profile': (build_feature_profile, 300),
 }
 
 
@@ -449,10 +1027,15 @@ def settings_form(session, container=None):
     used = session.settings
     with container if container is not None else st.container():
         st.markdown(f'**{_sample(session)}s and conditions**')
-        st.caption(f'{_sample(session)}s with the same condition are replicates. A {_sample(session).lower()} without a condition is left out.')
+        st.caption(f'{_sample(session)}s with the same condition are replicates. Untick **Compared** to leave '
+                   f'a {_sample(session).lower()} out; a {_sample(session).lower()} without a condition is left out too.')
+        hidden = set(session.hidden)
+        table = session.design().to_pandas()
+        table.insert(0, 'compared', [s not in hidden for s in table['sample']])
         design = st.data_editor(
-            session.design().to_pandas(),
+            table,
             column_config={
+                'compared': st.column_config.CheckboxColumn('Compared', width='small'),
                 'sample': st.column_config.TextColumn(_sample(session), disabled=True),
                 'condition': st.column_config.TextColumn('Condition'),
                 'replicate': st.column_config.NumberColumn('Replicate', min_value=1, step=1),
@@ -504,11 +1087,16 @@ def settings_form(session, container=None):
                                                   help='limma_like: moderated t-test (recommended).')
             chosen['postproc-fdr'] = choice('Correction', diff.FDR_METHODS, 'postproc-fdr', b)
         if st.button('Apply', type='primary', key=f'{session.dataset_id}_apply'):
-            frame = pl.from_pandas(design).with_columns(
+            compared = [str(s) for s, keep in zip(design['sample'], design['compared']) if keep]
+            if len(compared) < 2:
+                st.error(f'A comparison needs at least two {_sample(session).lower()}s.')
+                return False
+            frame = pl.from_pandas(design.drop(columns='compared')).with_columns(
                 pl.col('condition').fill_null('').cast(pl.Utf8).str.strip_chars(),
                 pl.col('replicate').fill_null(1).cast(pl.Int64),
             )
             session.save_design(frame)
-            session.save_settings({**used, **chosen, 'level': level, 'fc-cutoff': fc, 'padj-cutoff': padj})
+            session.save_settings({**used, **chosen, 'level': level, 'fc-cutoff': fc, 'padj-cutoff': padj,
+                                   'hidden': [s for s in session.all_runs if s not in compared]})
             return True
     return False

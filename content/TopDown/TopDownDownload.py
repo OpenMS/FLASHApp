@@ -6,6 +6,7 @@ from src.common.common import page_setup, export_folder_input
 from src.common.guide import next_steps, page_intro
 from src.common import result_download as rd
 from src.workflow.FileManager import FileManager
+from src.render.history_ui import history_section
 from src import former_examples
 
 
@@ -21,7 +22,8 @@ page_intro(
      "Download the result files of your runs: one ZIP per run, or every run at once.")
     + " A run holds the deconvolved masses and spectra (TSV, mzML, msalign and feature files), "
     "with **Identify proteoforms** on also the proteins, PrSMs, tags and annotated fragments, "
-    "and the parameters it ran with. The run shown on **Explore results** can also be "
+    "and the parameters it ran with. **History** shows how a run came about, its settings and its "
+    "processing report. The run shown on **Explore results** can also be "
     f"{'exported' if local else 'downloaded'} there with its **{rd.verb()}** button."
 )
 
@@ -82,5 +84,7 @@ for i, experiment in enumerate(experiments):
                          help=f"Delete {current_name} and its results", width='stretch'):
                 file_manager.remove_results(experiment)
                 st.rerun()
+        with st.expander('History'):
+            history_section(file_manager, experiment, Path(st.session_state['workspace']), key=f'history-{i}')
         with st.expander('Files'):
             rd.file_table(files)

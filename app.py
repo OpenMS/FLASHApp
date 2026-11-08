@@ -31,6 +31,10 @@ if __name__ == '__main__':
             st.Page(Path("content", "TopDown", "TopDownViewer.py"), title="Explore results", icon="👀"),
             st.Page(Path("content", "TopDown", "TopDownDownload.py"), title=export, icon=export_icon),
         ],
+        # Tools that work without a run
+        "🧰 Other tools" : [
+            st.Page(Path("content", "Tools", "FragmentMatcher.py"), title="Match fragments", icon="🧩"),
+        ],
     }
 
     # FLASHIda: developer feature of the local app (⚙️ Settings → Developer password)

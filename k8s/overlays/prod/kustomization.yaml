@@ -6,6 +6,10 @@ resources:
 
 components:
   - ../../components/memory-tier-high
+  # Workspaces on S3 object storage (JuiceFS, k8s/storage-s3/ of the
+  # template) instead of the Manila share. The size patches below still
+  # target the Manila name; the component renames the claim after them.
+  - ../../components/storage-s3
 
 namePrefix: flashapp-
 
@@ -60,7 +64,7 @@ patches:
     patch: |
       - op: replace
         path: /spec/resources/requests/storage
-        value: 300Gi
+        value: 20T
   - target:
       kind: Deployment
       name: streamlit

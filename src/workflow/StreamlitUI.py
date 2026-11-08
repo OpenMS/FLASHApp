@@ -1135,8 +1135,10 @@ class StreamlitUI:
             name = f"**{key}**"
         if upload is not None:
             self._ensure_fallback(key, upload.get("fallback"))
-        options = self._input_file_options(key)
         widget = f"{self.parameter_manager.param_prefix}{key}"
+        if self._same_files(key, name, multiple, widget):
+            return
+        options = self._input_file_options(key)
         done = self._experiment_files(key)
         if done:
             # Settings that add files to an experiment: its processed files are
@@ -1213,6 +1215,46 @@ class StreamlitUI:
             "folders and add new ones.",
         ):
             self._browse_input_files(key, name, multiple, upload)
+
+    def _follow_up_info(self) -> dict:
+        info = self.parameter_manager.get_parameters_from_json().get(FOLLOW_UP_KEY)
+        return info if isinstance(info, dict) else {}
+
+    def _same_files(self, key: str, name: str, multiple: bool, widget: str) -> bool:
+        """While the settings add an analysis to earlier results
+        (``WorkflowManager.follow_up(..., same_files=key)``): their files, locked.
+        True when drawn in place of the file selector."""
+        info = self._follow_up_info()
+        if info.get("same_files") != key:
+            return False
+        files = [str(f) for f in info.get("files") or []]
+        st.session_state[widget] = files if multiple else (files[0] if files else None)
+        self.params[key] = st.session_state[widget]
+        names = list(dict.fromkeys(Path(f.rstrip("/\\")).name for f in files))
+        st.multiselect(
+            name,
+            names,
+            default=names,
+            disabled=True,
+            key=f"_same-files-{widget}",
+            help=f"The files of {info.get('name') or 'the earlier run'}: the analysis is added to "
+            "its results, so they stay as they are. **Start a new experiment instead** (at the top) to pick other files.",
+        )
+        return True
+
+    def _kept_tool(self, instance: str) -> bool:
+        """Draw that ``instance``'s results are reused while the settings add an
+        analysis to earlier results (``keep``); True when drawn in place of its
+        parameters."""
+        info = self._follow_up_info()
+        if instance not in (info.get("kept") or []):
+            return False
+        st.info(
+            f"**{instance}** is not run again: its results come from "
+            f"{info.get('name') or 'the earlier run'}, so its settings stay as they were there.",
+            icon=":material/lock:",
+        )
+        return True
 
     def _experiment_files(self, key: str) -> List[str]:
         """The files the experiment holds already, while the settings add files
@@ -1560,6 +1602,8 @@ class StreamlitUI:
                 like the tool's own advanced ones (e.g. output options). A name
                 ending in ":" matches a whole top-level section.
         """
+        if self._kept_tool(tool_instance_name or topp_tool_name):
+            return
         if reactive:
             self._input_TOPP_impl(
                 topp_tool_name, num_cols, exclude_parameters, include_parameters,
@@ -2845,10 +2889,21 @@ class StreamlitUI:
                      f"{'file' if len(done) == 1 else 'files'} of that run "
                      f"{'is' if len(done) == 1 else 'are'} processed already, and the results "
                      "show them together with the new ones as one experiment.")
-        text += " Check them, then start below."
+        if info.get("same_files"):
+            kept = info.get("kept") or []
+            text += (" Its files stay as they are"
+                     + (f", and the results of {', '.join(kept)} are reused" if kept else "")
+                     + ": only the settings of the steps that follow can be changed.")
+        text += " Check them, then start the run."
         with st.container(border=True, horizontal=True, vertical_alignment="center"):
             st.markdown(f":material/history: {text}", width="stretch")
-            if st.button("Dismiss", key=f"{self.workflow_dir.name}-follow-up-dismiss"):
+            if st.button(
+                "Start a new experiment instead",
+                icon=":material/restart_alt:",
+                key=f"{self.workflow_dir.name}-follow-up-dismiss",
+                help="Keep these settings, but pick any files: the run then is an experiment "
+                "of its own, not added to this run.",
+            ):
                 params = self.parameter_manager.get_parameters_from_json()
                 params.pop(FOLLOW_UP_KEY, None)
                 self.parameter_manager.write_parameters(params)
@@ -3047,7 +3102,10 @@ class StreamlitUI:
 
                 if job_status != "queued":
                     self._show_run_progress()
+                else:
+                    st.empty()  # keeps the place of the progress panel
                 with st.spinner(spinner_text):
+                    log_slot = st.empty()
                     if log_exists:
                         with open(log_path, "r", encoding="utf-8") as f:
                             lines = f.readlines()
@@ -3055,7 +3113,7 @@ class StreamlitUI:
                             display_lines = lines
                         else:
                             display_lines = lines[-st.session_state.log_lines_count:]
-                        st.code(
+                        log_slot.code(
                             "".join(display_lines),
                             language="neon",
                             line_numbers=False,
@@ -3107,12 +3165,22 @@ class StreamlitUI:
 
     def _show_run_progress(self) -> None:
         """Progress of the running workflow: per sample when the run records
-        its samples, else per file of the running tool; elapsed times."""
+        its samples, else per file of the running tool; elapsed times.
+
+        The panel is redrawn every second and the page ends each redraw with
+        st.rerun(), which never clears elements a redraw left out: the panel
+        always takes one element on the page, and inside it every part
+        (progress bar, tool progress, file list, caption) has a fixed slot,
+        filled or left empty. A part drawn only sometimes would otherwise
+        shift the parts after it and leave the last one of the previous
+        redraw on the page, a second, outdated list of samples or files.
+        """
+        panel = st.empty()
         state = read_progress(self.workflow_dir)
         if not state:
             return
         if len(state.get("samples") or []) > 1:
-            self._show_sample_progress(state)
+            self._show_sample_progress(state, panel)
             return
         if not state.get("steps"):
             return
@@ -3122,8 +3190,9 @@ class StreamlitUI:
         n = len(files)
         finished = sum(f["status"] in (DONE, FAILED) for f in files)
         active = [i for i, f in enumerate(files) if f["status"] == RUNNING]
-        with st.container(border=True):
-            st.markdown(
+        with panel.container(border=True):
+            head, bar, tool, file_list, caption = self._progress_slots()
+            head.markdown(
                 f"**Elapsed {format_duration(now - state['started'])}** · "
                 f"step {len(state['steps'])}: **{step['tool']}**"
                 + ("" if step["ended"] is None else " finished")
@@ -3148,9 +3217,9 @@ class StreamlitUI:
                     f"{threads} thread{'s' if threads > 1 else ''}"
                     + (f" × {parallel} in parallel" if parallel > 1 else "")
                 )
-                st.progress(finished / n if n else 0.0, text=text)
+                bar.progress(finished / n if n else 0.0, text=text)
                 if len(active) == 1:
-                    self._show_tool_progress()
+                    self._show_tool_progress(tool)
             if n > 1 or step["ended"] is not None:
                 lines = []
                 for f in files:
@@ -3162,26 +3231,34 @@ class StreamlitUI:
                         lines.append(f":blue[:material/progress_activity:] **{f['name']}** :gray[{format_duration(now - f['started'])}]")
                     else:
                         lines.append(f":gray[:material/radio_button_unchecked: {f['name']}]")
-                st.markdown("  \n".join(lines))
+                file_list.markdown("  \n".join(lines))
             earlier = state["steps"][:-1]
             if earlier:
-                st.caption("Done: " + " · ".join(self._step_summary(s) for s in earlier))
+                caption.caption("Done: " + " · ".join(self._step_summary(s) for s in earlier))
 
-    def _show_tool_progress(self) -> None:
-        """The running tool's own progress ("loading spectra 42 %"), if it reports any."""
+    @staticmethod
+    def _progress_slots() -> tuple:
+        """The fixed parts of the progress panel: heading, progress bar, tool
+        progress, list of samples or files, caption (see _show_run_progress)."""
+        return tuple(st.empty() for _ in range(5))
+
+    def _show_tool_progress(self, slot) -> None:
+        """The running tool's own progress ("loading spectra 42 %"), if it
+        reports any, in ``slot``."""
         found = tool_progress(Path(self.workflow_dir, "logs", "all.log"))
         if found:
             label, fraction = found
-            st.progress(fraction, text=f":gray[{label} · {fraction:.0%}]")
+            slot.progress(fraction, text=f":gray[{label} · {fraction:.0%}]")
 
-    def _show_sample_progress(self, state: dict) -> None:
+    def _show_sample_progress(self, state: dict, panel) -> None:
         """One line per sample: waiting, running (with its tool), done or failed."""
         now = time.time()
         samples = state["samples"]
         n = len(samples)
         counts = sample_counts(state)
         running = [i for i, s in enumerate(samples) if s["status"] == RUNNING]
-        with st.container(border=True):
+        with panel.container(border=True):
+            heading, bar, tool, sample_list, _caption = self._progress_slots()
             head = f"**Elapsed {format_duration(now - state['started'])}**"
             # A step outside every sample, e.g. one over all of them at the end
             shared = None
@@ -3193,11 +3270,11 @@ class StreamlitUI:
                 head += f" · sample {i + 1} of {n}: **{samples[i]['name']}**"
             elif shared is not None:
                 head += f" · **{shared['tool']}**"
-            st.markdown(head)
+            heading.markdown(head)
             text = f"{counts[DONE]} of {n} samples done"
             if counts[FAILED]:
                 text += f" · :red[{counts[FAILED]} failed]"
-            st.progress((counts[DONE] + counts[FAILED]) / n, text=text)
+            bar.progress((counts[DONE] + counts[FAILED]) / n, text=text)
             step = shared
             if running:
                 step = current_step(state, samples[running[0]]["name"])
@@ -3207,8 +3284,8 @@ class StreamlitUI:
                 and file_counts(step)[RUNNING] == 1
             )
             if one_command:
-                self._show_tool_progress()
-            st.markdown("  \n".join(self._sample_lines(state, now)))
+                self._show_tool_progress(tool)
+            sample_list.markdown("  \n".join(self._sample_lines(state, now)))
 
     @staticmethod
     def _sample_lines(state: dict, now: float) -> list:

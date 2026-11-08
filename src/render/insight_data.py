@@ -44,6 +44,31 @@ def heatmap_levels(file_manager, dataset_id, name_tag):
     return names
 
 
+# Peaks per MS1 spectrum the 3D MS1 map draws: the strongest of each
+MS1_MAP_PEAKS_PER_SPECTRUM = 40
+
+
+def ms1_peak_map(file_manager, dataset_id, per_spectrum=MS1_MAP_PEAKS_PER_SPECTRUM):
+    """The strongest `per_spectrum` peaks of every MS1 spectrum (mz, rt,
+    intensity, scan_idx), from the raw MS1 heatmap result, so a run of a few
+    hundred spectra stays a few thousand stems."""
+    return (
+        scan(file_manager, dataset_id, 'ms1_raw_heatmap')
+        .select(
+            pl.col('mass').cast(pl.Float64).alias('mz'),
+            pl.col('rt').cast(pl.Float64),
+            pl.col('intensity').cast(pl.Float64),
+            pl.col('scan_idx').cast(pl.Int64),
+        )
+        .filter(pl.col('intensity') > 0)
+        .sort(['scan_idx', 'intensity'], descending=[False, True])
+        .group_by('scan_idx', maintain_order=True)
+        .head(per_spectrum)
+        .sort(['scan_idx', 'mz'])
+        .select('mz', 'rt', 'intensity', 'scan_idx')
+    )
+
+
 def scan_table(file_manager, dataset_id):
     """One row per spectrum; `index` is the spectrum index all selections use."""
     return scan(file_manager, dataset_id, 'scan_table').with_columns(

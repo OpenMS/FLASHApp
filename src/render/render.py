@@ -26,13 +26,19 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
+try:  # the comparison plots
+    from openms_insight import PCAPlot, VolcanoPlot
+    _QUANT_ZOOMABLE = (PCAPlot, VolcanoPlot)
+except ImportError:
+    _QUANT_ZOOMABLE = ()
+
 from src.render import (
     envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
     prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
-from src.common.plot_style import spectrum_styling
+from src.common.plot_style import PEAK, PICKED, spectrum_styling
 from src.render.layout_editor.catalog import DECONV_COMPONENTS, ISOBARIC_COMPONENTS, TNT_COMPONENTS
 from src.render import proteoform_edits
 from src.render.sequence import getFragmentDataFromSeq
@@ -238,6 +244,19 @@ EDIT_IDENTIFIER = 'sequence_edit'
 # with an openms-insight release without it
 FRAGMENT_MATCHES_IDENTIFIER = 'fragment_matches'
 FRAGMENT_MARKS = hasattr(DeconvolvedSpectrum, 'set_fragment_matches_identifier')
+# Plots keep their zoom in the grid's state (zoom@<component>), so a view can
+# store it with its selection; left out with a release without zoom_identifier
+ZOOMABLE = (DeconvolvedSpectrum, Heatmap, LinePlot, MirrorPlot, SeriesPlot)
+
+
+def _zoom_args(cls, name):
+    """``zoom_identifier`` for a plot that keeps its zoom, named after its
+    layout component (the cache name without its ``-<tool>`` suffix)."""
+    if not issubclass(cls, ZOOMABLE + _QUANT_ZOOMABLE):
+        return {}
+    if 'zoom_identifier' not in inspect.signature(cls.__init__).parameters:
+        return {}
+    return {'zoom_identifier': zoom_identifier(name.split('-', 1)[0])}
 
 
 def _spectrum_key(column):
@@ -356,7 +375,7 @@ _IDENTIFICATION_ON_SELECT = {'tag': None, 'aa': None, 'mass': None}
 from src.render.layout_editor.catalog import (  # noqa: E402
     IDENTIFICATION, IDENTIFICATION_ONLY, ISOBARIC, ISOBARIC_ONLY, TOPDOWN_COMPONENTS,
 )
-from src.layout_manager import missing_note  # noqa: E402
+from src.layout_manager import missing_note, zoom_identifier  # noqa: E402
 
 _COMPONENT_LABELS = {c['name']: c['label'] for c in TOPDOWN_COMPONENTS}
 
@@ -455,8 +474,9 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
             raise MissingResult(name_tag)
     cache_path = Path(file_manager.cache_path, 'insight', dataset_id)
     cache_id = f'{name}-{_stamp(file_manager, dataset_id, sources, extra)}'
+    zoom = _zoom_args(cls, name)
     try:
-        return cls(cache_id=cache_id, cache_path=str(cache_path))
+        return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom)
     except CacheMissError:
         pass
     # Caches built from earlier results or configurations are not used again.
@@ -466,7 +486,7 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
         for old in cache_path.glob(f'{name}-*'):
             if old.name != cache_id:
                 shutil.rmtree(old, ignore_errors=True)
-    return cls(cache_id=cache_id, cache_path=str(cache_path), **build())
+    return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom, **build())
 
 
 def _heatmap(comp_name, file_manager, dataset_id):
@@ -486,7 +506,7 @@ def _heatmap(comp_name, file_manager, dataset_id):
                 insight_data.scan(file_manager, dataset_id, name) for name in levels
             ],
             x_column='rt', y_column='mass', intensity_column='intensity',
-            interactivity=interactivity, zoom_identifier=f'{comp_name}_zoom',
+            interactivity=interactivity,
             title=title, x_label='Retention Time', y_label=y_label,
             colorscale='Portland', log_scale=True,
             min_points=insight_data.HEATMAP_MIN_POINTS,
@@ -495,6 +515,52 @@ def _heatmap(comp_name, file_manager, dataset_id):
             downsample_zoomed=False,
             # FLASHViewer's export name; its wheel scrolled the page
             svg_filename='FLASHViewer-heatmap', scroll_zoom=False,
+        ),
+    )
+
+
+# Whether Plot3D draws the points of a selected value apart; left out with an
+# openms-insight release without it
+_PLOT3D_PARAMETERS = inspect.signature(Plot3D.__init__).parameters
+_PLOT3D_HIGHLIGHT = 'highlight' in _PLOT3D_PARAMETERS
+# A box wider than deep fills the full-width cell of the map (left out with an
+# openms-insight release without it)
+_MS1_MAP_SHAPE = {
+    name: value for name, value in (
+        ('aspect_ratio', {'x': 2.2, 'y': 1.2, 'z': 1.0}),
+        # The box's middle a little below the view's: the m/z axis in front
+        # stays in the cell and the tallest peaks reach its top
+        ('camera_center', {'x': 0, 'y': 0, 'z': -0.25}),
+    ) if name in _PLOT3D_PARAMETERS
+}
+
+
+def _ms1_3d_map(comp_name, file_manager, dataset_id, tool, state_manager):
+    """The MS1 peaks of the run in 3D (m/z, retention time, intensity), the
+    strongest peaks of each spectrum. The precursor spectrum of the selected
+    spectrum (an MS1 spectrum itself) is drawn in orange."""
+    if insight_data.result_path(file_manager, dataset_id, 'ms1_raw_heatmap') is None:
+        raise MissingResult('ms1_raw_heatmap')
+    if _PLOT3D_HIGHLIGHT and insight_data.result_path(file_manager, dataset_id, 'scan_table') is not None:
+        try:
+            _follow_selected_spectrum(
+                file_manager, dataset_id, state_manager, 'pscan' if tool == 'flashtnt' else 'scan',
+            )
+        except MissingResult:
+            pass
+    highlight = dict(
+        highlight={SURVEY: 'scan_idx'}, highlight_name='Precursor spectrum', highlight_color=PICKED,
+    ) if _PLOT3D_HIGHLIGHT else {}
+    return _component(
+        Plot3D, comp_name, file_manager, dataset_id, ['ms1_raw_heatmap'],
+        lambda: dict(
+            data=insight_data.ms1_peak_map(file_manager, dataset_id),
+            x_column='mz', y_column='rt', z_column='intensity', mode='stems',
+            color=PEAK, series_names={'': 'MS1 peaks'},
+            title=f'MS1 peaks (strongest {insight_data.MS1_MAP_PEAKS_PER_SPECTRUM} per spectrum)',
+            x_label='m/z', y_label='Retention Time', z_label='Intensity',
+            camera_eye={'x': 1.4, 'y': -2.0, 'z': 0.45}, svg_filename='FLASHViewer-ms1-3d-map',
+            **highlight, **_MS1_MAP_SHAPE,
         ),
     )
 
@@ -521,7 +587,6 @@ def _proteoform_heatmap(comp_name, file_manager, dataset_id):
             # A box or lasso selects the proteins of the PrSMs in it (GO terms)
             multi_select={go_terms.RUN_SET: 'accession'},
             hover_column='label',
-            zoom_identifier=f'{comp_name}_zoom',
             title=f'Proteoform Heatmap ({points.height} PrSMs)',
             x_label='Retention Time', y_label='Proteoform Mass',
             colorscale='Portland', log_scale=False, intensity_label='Score',
@@ -770,8 +835,10 @@ def _sequence_view_options(component):
     supports it: the residue menus offer the whole modification library, the
     shown proteoform can be copied as ProForma, the "Change sequence" dialog
     reads ProForma, fragment and precursor masses may be off by up to
-    ISOTOPE_ERRORS isotopes (changeable in the view), and the matched fragment
-    ions are marked on the spectra."""
+    ISOTOPE_ERRORS isotopes (changeable in the view), the matched fragment
+    ions are marked on the spectra, and proton loss/addition is offered only
+    with electron or photo fragmentation ion series (c/z or radical series),
+    where a hydrogen moves between the fragments."""
     if FRAGMENT_MARKS:
         component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     if hasattr(component, 'set_variable_modification_library'):
@@ -782,6 +849,8 @@ def _sequence_view_options(component):
         component.set_proforma_input()
     if hasattr(component, 'set_isotope_errors'):
         component.set_isotope_errors(ISOTOPE_ERRORS)
+    if hasattr(component, 'set_method_ion_options'):
+        component.set_method_ion_options()
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
@@ -1169,6 +1238,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 camera_eye={'x': 2.5, 'y': 0, 'z': 0.2}, svg_filename='FLASHViewer-3d-plot',
             ),
         ), {'height': 800}
+
+    if comp_name == 'ms1_3d_map':
+        return _ms1_3d_map(comp_name, fm, ds, tool, state_manager), {'height': 600}
 
     if comp_name == 'fragment_error_plot':
         return _fragment_error_plot(comp_name, fm, ds), {'height': 400}
