@@ -21,6 +21,7 @@ from src.quant.run import (
 )
 from src import flashida
 from src import former_examples
+from src import assistant_results
 from src.workflow.WorkflowManager import WorkflowManager
 from src.workflow.StreamlitUI import editor_table
 
@@ -255,6 +256,15 @@ class TopDownWorkflow(WorkflowManager):
     share_cache = True
     # Start analysis (settings adding files to an experiment) opens the Run page
     run_page = Path('content', 'TopDown', 'TopDownRun.py')
+    # The AI assistant: its runs are the datasets of the cache, its views
+    # those of the Viewer
+    COMPONENTS = assistant_results.COMPONENTS
+    PRESETS = assistant_results.PRESETS
+    RESULTS_LAYOUT = assistant_results.VIEWS
+
+    @staticmethod
+    def results_store(workflow_dir):
+        return assistant_results.CacheRuns(workflow_dir)
 
     def __init__(self) -> None:
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)

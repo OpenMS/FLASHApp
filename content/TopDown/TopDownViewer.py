@@ -31,7 +31,7 @@ from src import analysis, former_examples, sample_type
 from src.render.render import render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
-from src.layout_manager import request_analysis, view_bar
+from src.layout_manager import by_assistant, load_views, request_analysis, view_bar, view_runs
 from src.render import missing_analysis
 from src.render import quant_view
 from src.render.tool_results import tool_results_button, tool_results_dialog
@@ -199,7 +199,7 @@ def view_selector():
         key=VIEW_KEY, default_view=topdown_layout.default_view(identified, kind, file_manager),
         available=missing_analysis.available(file_manager, first if first in display_id_to_name else None),
         analyses=missing_analysis.ANALYSES, unavailable_options=missing_options,
-        max_experiments=MAX_EXPERIMENTS, target='the Viewer',
+        max_experiments=MAX_EXPERIMENTS, target='the Viewer', run_names=display_id_to_name,
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
             "to 3 components per row; ready-made views can be duplicated. Add experiments to compare "
@@ -355,7 +355,24 @@ if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False
     if newest is not None:
         st.session_state[selection_key(0)] = newest
 
+def apply_assistant_view():
+    """A view the AI assistant saved names the runs it compares: show them
+    (once per view, so the selectors stay the user's afterwards)."""
+    state = load_views(topdown_layout.views_path(workspace), topdown_layout.components(file_manager),
+                       topdown_layout.presets(file_manager), topdown_layout.deconvolution_default(file_manager))
+    view = next((v for v in state.get('views', []) if v.get('name') == state.get('current')), None)
+    if view is None or not by_assistant(view):
+        return
+    runs = [r for r in view_runs(view) if r in display_id_to_name]
+    stamp = (view.get('name'), view.get('created'))
+    if runs and st.session_state.get('_viewer_assistant_view') != stamp:
+        st.session_state['_viewer_assistant_view'] = stamp
+        for index, run in enumerate(runs):
+            st.session_state[selection_key(index)] = run
+
+
 apply_pending()
+apply_assistant_view()
 # Nothing (or something gone) shown: the first experiment
 if st.session_state.get(selection_key(0)) not in display_id_to_name:
     first_groups = experiment_groups()
