@@ -825,11 +825,20 @@ def _modification_picker_library():
     return [{'id': e['id'], 'mass': e['mass'], 'site': e['site']} for e in modifications.library()]
 
 
+# Isotope errors a sequence view tries by default when matching deconvolved
+# masses: FLASHDeconv can place a monoisotopic mass one isotope off
+ISOTOPE_ERRORS = 1
+
+
 def _sequence_view_options(component):
     """Options of a sequence view, each when the installed openms-insight
     supports it: the residue menus offer the whole modification library, the
     shown proteoform can be copied as ProForma, the "Change sequence" dialog
-    reads ProForma, and the matched fragment ions are marked on the spectra."""
+    reads ProForma, fragment and precursor masses may be off by up to
+    ISOTOPE_ERRORS isotopes (changeable in the view), the matched fragment
+    ions are marked on the spectra, and proton loss/addition is offered only
+    with electron or photo fragmentation ion series (c/z or radical series),
+    where a hydrogen moves between the fragments."""
     if FRAGMENT_MARKS:
         component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     if hasattr(component, 'set_variable_modification_library'):
@@ -838,6 +847,10 @@ def _sequence_view_options(component):
         component.set_proforma_copy()
     if hasattr(component, 'set_proforma_input'):
         component.set_proforma_input()
+    if hasattr(component, 'set_isotope_errors'):
+        component.set_isotope_errors(ISOTOPE_ERRORS)
+    if hasattr(component, 'set_method_ion_options'):
+        component.set_method_ion_options()
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
