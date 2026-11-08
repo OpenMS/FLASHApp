@@ -45,6 +45,11 @@ click offers ``unavailable_options`` (run the missing analysis, add files,
 bring in another run). ``render_layout``/``render_experiments`` draw a note
 with the same offer for such a component in a view of the user's own.
 
+Pass ``view_bar(states=lambda i: experiment_state(...))`` and give each
+Insight plot ``zoom_identifier=zoom_identifier(name)``: a view of the user's
+own then keeps the zoom and selection of each experiment as its defaults
+(📌 stores them, ↺ brings them back, opening the view applies them).
+
 ``layout_presets`` is the earlier, simpler selector of presets.
 
 ``layout.py`` is Streamlit-free; ``ui.py`` holds the editor and the grid.
@@ -52,21 +57,38 @@ Ported from FLASHApp's Layout Manager.
 """
 
 from src.layout_manager.layout import (
+    ANNOTATIONS_PREFIX,
+    ASSISTANT,
     MAX_COLUMNS,
     MAX_EXPERIMENTS,
+    VIEW_EXTRAS,
+    ZOOM_PREFIX,
+    annotations_identifier,
+    apply_defaults,
     apply_preset,
+    by_assistant,
+    capture_defaults,
+    clean_defaults,
+    differs_from_defaults,
+    explanation,
+    has_defaults,
     clear_layout,
     load_layout,
     load_views,
     match_preset,
     missing_analyses,
     needs,
+    normalize_zoom,
+    read_only,
     resolve_layout,
     save_layout,
     save_views,
     select_view,
+    set_view_defaults,
     validate_layout,
     validate_views,
+    view_runs,
+    zoom_identifier,
 )
 from src.layout_manager.ui import (
     experiment_state,
@@ -84,11 +106,23 @@ from src.layout_manager.ui import (
 )
 
 __all__ = [
+    "ANNOTATIONS_PREFIX",
+    "ASSISTANT",
     "MAX_COLUMNS",
     "MAX_EXPERIMENTS",
+    "VIEW_EXTRAS",
+    "ZOOM_PREFIX",
+    "annotations_identifier",
+    "apply_defaults",
     "apply_preset",
+    "by_assistant",
+    "capture_defaults",
+    "clean_defaults",
     "clear_layout",
+    "differs_from_defaults",
     "experiment_state",
+    "explanation",
+    "has_defaults",
     "layout_button",
     "layout_editor",
     "layout_presets",
@@ -99,6 +133,8 @@ __all__ = [
     "missing_analysis_dialog",
     "missing_note",
     "needs",
+    "normalize_zoom",
+    "read_only",
     "render_experiments",
     "render_layout",
     "request_analysis",
@@ -107,8 +143,11 @@ __all__ = [
     "save_views",
     "select_view",
     "selected_datasets",
+    "set_view_defaults",
     "validate_layout",
     "validate_views",
     "view_bar",
+    "view_runs",
     "views_editor",
+    "zoom_identifier",
 ]

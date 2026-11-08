@@ -904,6 +904,12 @@ def page_setup(page: str = "") -> dict[str, Any]:
         # Apply captcha by calling the captcha_control function
         captcha_control(privacy_policy_url=get_legal_links()["privacy"])
 
+    # Open what an AI assistant shows the person (src/agent_access); after
+    # the captcha, which stops a page that has not passed it.
+    if st.session_state.settings.get("agent_access", {}).get("enabled"):
+        from src.agent_access.ui import follow as follow_agent
+        follow_agent()
+
     return params
 
 
@@ -989,6 +995,11 @@ def render_sidebar(page: str = "") -> None:
             if st.session_state.settings.get("workspace_sync", {}).get("enabled"):
                 from src.common.workspace_sync import render_sync_sidebar
                 render_sync_sidebar()
+
+            # Connect an AI assistant to this workspace (src/agent_access)
+            if st.session_state.settings.get("agent_access", {}).get("enabled"):
+                from src.agent_access.ui import render_sidebar as render_agent_sidebar
+                render_agent_sidebar()
 
             # Demo workspace loader for online mode
             if st.session_state.location == "online":
