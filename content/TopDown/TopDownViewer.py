@@ -17,8 +17,9 @@ and the user's own comparison views,
 src/render/quant_view.py) and **Edit comparison**, whose **Compared** column
 leaves runs out (``QuantSession.hidden``). For a run of no comparison,
 Comparison is locked and offers to process more files. The view bar is below
-this row. **Add analysis** processes more files with the settings shown, or adds
-tool output made elsewhere.
+this row. **History** shows how the result came about, its settings and its
+processing report. **Add analysis** processes more files with the settings
+shown, or adds tool output made elsewhere.
 """
 
 
@@ -36,6 +37,7 @@ from src.layout_manager import request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
 from src.render.tool_results import tool_results_button, tool_results_dialog
+from src.render.history_ui import history_button
 from src.common import result_download
 from src.workflow.StreamlitUI import latest_results_key
 
@@ -348,6 +350,7 @@ def experiment_bar():
             )
         if comparison and shown == opens_on:
             quant_view.buttons(file_manager, opens_on)
+        history_button(file_manager, shown, workspace)
         add_files_menu(shown, runs=members if shown == opens_on and comparison else None)
         if shown not in comparison_ids and downloadable:
             result_download.viewer_button(file_manager, shown if shown in downloadable else None)
