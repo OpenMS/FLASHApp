@@ -455,21 +455,22 @@ def render_whats_new():
         st.markdown(
             """
             <div class="whats-new">
-                <h3>✨ What's new in FLASHApp 2.0 (alpha 2)</h3>
+                <h3>✨ What's new in FLASHApp 2.0 (alpha 3)</h3>
                 <div class="whats-new-columns">
                     <div>
-                        <h4>One top-down analysis</h4>
+                        <h4>Explore results your way</h4>
                         <ul>
-                            <li>Deconvolution, proteoform identification and label-free or TMT quantification in one workflow.</li>
-                            <li>Pick runs in a file selector with folders, import public PRIDE datasets, or download a UniProt proteome as the database.</li>
-                            <li>Example results for every analysis are ready in Explore results.</li>
+                            <li>Switch between ready-made views or make your own; each keeps its zoom and selection.</li>
+                            <li>Compare runs in Identification, Quantification and QC views for label-free and TMT/iTRAQ.</li>
+                            <li>New: 3D MS1 map, precursor spectrum, isotope envelope and mass shifts of identified proteoforms.</li>
                         </ul>
                     </div>
                     <div>
-                        <h4>A more flexible results page</h4>
+                        <h4>Sequences and identifications</h4>
                         <ul>
-                            <li>Arrange the results page in a layout window with a searchable component list.</li>
-                            <li>New views: chromatogram, proteoform heatmap and GO enrichment of selected proteins.</li>
+                            <li>Edit an identified proteoform, paste or copy ProForma, and pick variable modifications from a library.</li>
+                            <li>Matched fragment ions are marked on the raw and deconvolved spectra.</li>
+                            <li>Add identification to a deconvolved run without deconvolving it again, or match a mass list against a sequence.</li>
                         </ul>
                     </div>
                 </div>

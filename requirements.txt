@@ -156,11 +156,7 @@ pyyaml>=6.0
 # The viewers' components (tables, heatmaps, spectra, sequence view).
 # Its dependencies are listed in this file too; mygene and plotly are its
 # `analysis` extra (GO enrichment).
-# Development build of OpenMS-Insight main at 7380a9c (#54 to #68) with #67
-# (ticking table rows whose multi_select column is not shown, the proteoform
-# and PrSM tables), not on PyPI yet;
-# replace with the next PyPI release before an app release.
-openms-insight @ https://raw.githubusercontent.com/OpenMS/quantms-web/claude/project-thread-69v1m1/openms_insight-0.6.1.dev2026110713-py3-none-any.whl#sha256=4bc3e9c613e82b86cd1dc953a651a584367b42eff6088c440129736305a77d74
+openms-insight>=0.7.0
 scikit-learn>=1.0
 # Writes the processing report of a run as PDF (src/workflow/processing_report.py)
 reportlab>=4.0
