@@ -190,3 +190,47 @@ def test_the_viewer_finds_the_comparison_of_added_files(tmp_path, monkeypatch):
     assert quant_view.added_comparison(file_manager, workflow_dir) is None
     Path(workflow_dir, 'last-follow-up.json').write_text(json.dumps({'adds_to': ['a']}))
     assert quant_view.added_comparison(file_manager, workflow_dir) == 'comparison_2'
+
+
+def test_a_comparison_offers_identification_for_all_its_runs(tmp_path, monkeypatch):
+    from src import analysis
+
+    monkeypatch.setattr(missing_analysis, 'run_settings', lambda ws, fm, run: ({'fasta-file': 'db.fasta'}, True))
+    monkeypatch.setattr(missing_analysis, 'run_analysis', lambda fm, run: (analysis.LABEL_FREE, None))
+    monkeypatch.setattr(missing_analysis, 'input_file', lambda ws, run: f'/data/{run}.mzML')
+
+    class Names:
+        manifest = {}
+
+        def get_display_name(self, dataset_id):
+            return dataset_id
+
+        def get_results(self, dataset_id, names):
+            return {'quant_manifest': self.manifest}
+
+    options = missing_analysis.comparison_options(tmp_path, Names(), 'comparison_1', ['run1', 'run2'],
+                                                  [IDENTIFICATION])
+    assert [o['label'] for o in options] == ['Add identification to the 2 runs']
+    assert missing_analysis.comparison_options(tmp_path, Names(), 'comparison_1', ['run1'], [ISOBARIC]) == []
+
+    started = _capture_start(monkeypatch)
+    options[0]['on_click']()
+    assert started['same_files'] == 'mzML-files'
+    assert started['files'] == ['/data/run1.mzML', '/data/run2.mzML']
+    assert started['keep'] == ['FLASHDeconv'] and started['reuses'] == ['run1', 'run2']
+    assert started['changes'][analysis.IDENTIFY_KEY] is True
+    assert started['changes'][analysis.QUANT_KEY] == analysis.LABEL_FREE
+
+    # A file gone: the files still there are picked, and deconvolved again
+    monkeypatch.setattr(missing_analysis, 'input_file', lambda ws, run: None if run == 'run2' else f'/data/{run}.mzML')
+    started.clear()
+    missing_analysis.add_identification_to_runs(tmp_path, Names(), 'comparison_1', ['run1', 'run2'])
+    assert 'keep' not in started and started['params']['mzML-files'] == ['/data/run1.mzML']
+
+    # The fractions of a labelled set are quantified with their labels again
+    names = Names()
+    names.manifest = {'kind': 'isobaric', 'plex': 'tmt6plex'}
+    started.clear()
+    missing_analysis.add_identification_to_runs(tmp_path, names, 'comparison_2', ['run1'])
+    assert started['changes'][analysis.QUANT_KEY] == analysis.ISOBARIC
+    assert started['changes'][analysis.PLEX_KEY] == 'tmt6plex'
