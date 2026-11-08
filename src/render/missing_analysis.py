@@ -235,6 +235,58 @@ def add_identification(workspace, file_manager, dataset_id):
     )
 
 
+def add_identification_to_runs(workspace, file_manager, comparison_id, runs):
+    """Identify the proteoforms of the runs a comparison compares: Describe
+    experiment opens with the settings of its first run and identification on,
+    their files locked and their deconvolution (with its quantification)
+    reused, so only the database and the identification settings can be
+    changed. The new runs are compared again, next to the old comparison."""
+    from src.Workflow import TopDownWorkflow  # the page set up the workspace already
+
+    runs = list(runs)
+    params, _ = run_settings(workspace, file_manager, runs[0])
+    sources = [input_file(workspace, run) for run in runs]
+    quant, plex = run_analysis(file_manager, runs[0])
+    manifest = file_manager.get_results(comparison_id, ['quant_manifest'])['quant_manifest']
+    if manifest.get('kind') == 'isobaric':  # compared as labelled samples, so quantified as such
+        quant, plex = analysis.ISOBARIC, manifest.get('plex') or plex
+    elif quant == analysis.NO_QUANT:
+        quant = analysis.LABEL_FREE
+    changes = {analysis.IDENTIFY_KEY: True, analysis.QUANT_KEY: quant}
+    if plex:
+        changes[analysis.PLEX_KEY] = plex
+    name = file_manager.get_display_name(comparison_id)
+    note = 'with identification switched on, for the runs of this comparison'
+    if any(source is None for source in sources):
+        # A file is gone: pick the files again, and they are deconvolved again
+        params = dict(params)
+        params['mzML-files'] = [source for source in sources if source is not None]
+        TopDownWorkflow().start_from(params, changes, name=name, page=CONFIGURE_PAGE, note=note)
+        return
+    TopDownWorkflow().start_from(
+        params, changes, name=name, page=CONFIGURE_PAGE, note=note,
+        same_files='mzML-files', files=sources, keep=KEPT_FOR_IDENTIFICATION, reuses=runs,
+    )
+
+
+def comparison_options(workspace, file_manager, comparison_id, runs, missing):
+    """The dialog's choices for a comparison of ``runs`` lacking ``missing``."""
+    if IDENTIFICATION not in missing or not runs:
+        return []
+    files_kept = all(input_file(workspace, run) is not None for run in runs)
+    return [{
+        'label': f'Add identification to the {len(runs)} runs' if len(runs) > 1 else 'Add identification to its run',
+        'icon': ':material/add_circle:',
+        'help': ("Opens Describe experiment with the settings of the compared runs and identification "
+                 "switched on. Their files stay as they are and their deconvolution is reused, so only the "
+                 "protein database and the identification settings can be changed; the runs are compared "
+                 "again and the new comparison is kept next to this one."
+                 + ('' if files_kept else " Some of their input files are no longer in the workspace: "
+                    "pick them again, and they are deconvolved again.")),
+        'on_click': lambda: add_identification_to_runs(workspace, file_manager, comparison_id, runs),
+    }]
+
+
 def options(workspace, file_manager, dataset_id, missing):
     """The dialog's choices for run ``dataset_id`` lacking the analyses ``missing``."""
     name = file_manager.get_display_name(dataset_id)

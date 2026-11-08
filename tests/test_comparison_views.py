@@ -1,5 +1,6 @@
-"""The comparison views: Label-free and TMT, iTRAQ, the default by the
-kind of comparison, and the layout saved before the view bar."""
+"""The comparison views: their order, the QC of the comparison's kind only,
+Identification locked for runs that were not identified, the default, and the
+layout saved before the view bar."""
 
 import json
 
@@ -24,7 +25,7 @@ class _Results:
         return {'quant_manifest': {'kind': self.kinds.get(dataset_id, 'label-free')}}
 
 
-LABELS = ['Identification', 'Quantification', 'QC: label-free', 'QC: TMT, iTRAQ']
+LABELS = ['Quantification', 'Identification', 'QC: label-free', 'QC: TMT, iTRAQ']
 
 
 def test_presets_are_valid_views():
@@ -50,9 +51,85 @@ def test_a_picked_view_is_shown_for_every_comparison(tmp_path):
     fm = _Results(kinds={'comparison_tmt': 'isobaric'})
     path = quant_view.views_path(tmp_path)
     by_name = {p['name']: p['layout'] for p in quant_view.presets()}
+    select_view(path, quant_view.IDENTIFICATION_VIEW, QUANT_COMPONENTS, quant_view.presets(),
+                quant_view.presets()[0]['layout'])
+    assert quant_view.view_rows(fm, tmp_path, 'comparison_lfq') == by_name[quant_view.IDENTIFICATION_VIEW]
+    assert quant_view.view_rows(fm, tmp_path, 'comparison_tmt') == by_name[quant_view.IDENTIFICATION_VIEW]
+
+
+def test_each_comparison_offers_the_qc_of_its_kind(tmp_path):
+    fm = _Results(kinds={'comparison_tmt': 'isobaric'})
+    assert [p['label'] for p in quant_view.comparison_presets(fm, 'comparison_lfq')] == \
+        ['Quantification', 'Identification', 'QC: label-free']
+    assert [p['label'] for p in quant_view.comparison_presets(fm, 'comparison_tmt')] == \
+        ['Quantification', 'Identification', 'QC: TMT, iTRAQ']
+    # The QC picked for a TMT comparison is not shown for a label-free one
+    path = quant_view.views_path(tmp_path)
+    by_name = {p['name']: p['layout'] for p in quant_view.presets()}
     select_view(path, quant_view.ISOBARIC_QC_VIEW, QUANT_COMPONENTS, quant_view.presets(),
                 quant_view.presets()[0]['layout'])
-    assert quant_view.view_rows(fm, tmp_path, 'comparison_lfq') == by_name[quant_view.ISOBARIC_QC_VIEW]
+    assert quant_view.view_rows(fm, tmp_path, 'comparison_tmt') == by_name[quant_view.ISOBARIC_QC_VIEW]
+    assert quant_view.view_rows(fm, tmp_path, 'comparison_lfq') == by_name[quant_view.QUANTIFICATION_VIEW]
+
+
+def test_identification_needs_identified_runs():
+    from src.layout_manager import missing_analyses
+    from src.render.layout_editor.catalog import IDENTIFICATION, QUANT_LABEL_FREE_QC_LAYOUT
+
+    by_name = {p['name']: p['layout'] for p in quant_view.presets()}
+    assert missing_analyses(by_name[quant_view.IDENTIFICATION_VIEW], QUANT_COMPONENTS, set()) == [IDENTIFICATION]
+    assert missing_analyses(by_name[quant_view.IDENTIFICATION_VIEW], QUANT_COMPONENTS, {IDENTIFICATION}) == []
+    # The QC and the quantification views count features without identifications
+    for name in (quant_view.QUANTIFICATION_VIEW, quant_view.LABEL_FREE_QC_VIEW, quant_view.ISOBARIC_QC_VIEW):
+        assert missing_analyses(by_name[name], QUANT_COMPONENTS, set()) == [], name
+    assert QUANT_LABEL_FREE_QC_LAYOUT == by_name[quant_view.LABEL_FREE_QC_VIEW]
+
+
+class _Manifests:
+    def __init__(self, manifests):
+        self.manifests = manifests
+
+    def get_results(self, dataset_id, names):
+        return {'quant_manifest': self.manifests[dataset_id]}
+
+
+def test_a_comparison_has_identification_when_its_runs_were_identified():
+    from src.render.layout_editor.catalog import IDENTIFICATION
+
+    fm = _Manifests({'a': {'tool': 'flashtnt'}, 'b': {'tool': 'flashdeconv'}, 'c': {}})
+    assert quant_view.available(fm, 'a') == {IDENTIFICATION}
+    assert quant_view.available(fm, 'b') == set()
+    assert quant_view.available(fm, 'c') == set()
+
+
+def test_the_runs_of_an_isobaric_comparison_are_its_fractions():
+    fm = _Manifests({
+        'lfq': {'runs': ['run1', 'run2']},
+        'tmt': {'kind': 'isobaric', 'runs': ['sample1', 'sample2'], 'fractions': ['run1']},
+    })
+    assert quant_view.comparison_runs(fm, 'lfq') == ['run1', 'run2']
+    assert quant_view.comparison_runs(fm, 'tmt') == ['run1']
+
+
+def test_saved_views_get_quantification_first_once(tmp_path):
+    path = quant_view.views_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'current': 'qc-label-free', 'views': [
+        {'name': 'identification', 'in_bar': True}, {'name': 'quantification', 'in_bar': True},
+        {'name': 'custom-mine', 'label': 'Mine', 'rows': [['quant_table']], 'in_bar': True},
+        {'name': 'qc-label-free', 'in_bar': False}, {'name': 'qc-isobaric', 'in_bar': True},
+    ]}))
+    quant_view.migrate_views(path)
+    data = json.loads(path.read_text())
+    assert [v['name'] for v in data['views']] == [
+        'quantification', 'identification', 'custom-mine', 'qc-label-free', 'qc-isobaric']
+    assert data['views'][3]['in_bar'] is False
+    assert data['current'] == 'qc-label-free'
+    # Once: an order the user gives it afterwards stays
+    data['views'][0], data['views'][1] = data['views'][1], data['views'][0]
+    path.write_text(json.dumps(data))
+    quant_view.migrate_views(path)
+    assert [v['name'] for v in json.loads(path.read_text())['views']][:2] == ['identification', 'quantification']
 
 
 def test_former_ready_made_views_become_quantification(tmp_path):
@@ -134,3 +211,22 @@ def test_saved_views_with_diagnostics_show_the_four_plots(tmp_path):
 def test_former_layout_with_diagnostics_is_split(tmp_path):
     fm = _Results(layout=[['quant_table'], ['quant_diagnostics']])
     assert quant_view.layout(fm) == [['quant_table'], *quant_view.QUANT_DIAGNOSTICS]
+
+
+def test_a_qc_of_the_other_kind_comes_back_for_its_kind(tmp_path):
+    fm = _Results(kinds={'comparison_tmt': 'isobaric'})
+    path = quant_view.views_path(tmp_path)
+    by_name = {p['name']: p['layout'] for p in quant_view.presets()}
+    select_view(path, quant_view.ISOBARIC_QC_VIEW, QUANT_COMPONENTS, quant_view.presets(),
+                quant_view.presets()[0]['layout'])
+    assert quant_view.view_rows(fm, tmp_path, 'comparison_lfq') == by_name[quant_view.QUANTIFICATION_VIEW]
+    assert quant_view.view_rows(fm, tmp_path, 'comparison_tmt') == by_name[quant_view.ISOBARIC_QC_VIEW]
+    # No view of one's own was made of it
+    names = [v['name'] for v in load_views(path, QUANT_COMPONENTS, quant_view.presets(),
+                                           quant_view.presets()[0]['layout'])['views']]
+    assert not any(n.startswith('custom-') for n in names)
+    # A view picked meanwhile stays
+    quant_view.view_rows(fm, tmp_path, 'comparison_lfq')
+    select_view(path, quant_view.IDENTIFICATION_VIEW, QUANT_COMPONENTS, quant_view.presets(),
+                quant_view.presets()[0]['layout'])
+    assert quant_view.view_rows(fm, tmp_path, 'comparison_tmt') == by_name[quant_view.IDENTIFICATION_VIEW]

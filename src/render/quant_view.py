@@ -4,10 +4,12 @@ A workflow run that quantified two or more files stores a comparison
 (src/quant/session.py) next to its runs. The Viewer lists it in the experiment
 selector as "Comparison: ..."; selecting it shows a grid of comparison
 components (src/render/quant_cells.py). A view bar of its own picks the grid:
-the ready-made views **Identification**, **Quantification**, **QC: label-free**
-and **QC: TMT, iTRAQ**, and the user's own (+ and ✏️), in
-`<workspace>/layouts/comparison.json`. Until one is picked, a comparison shows
-Quantification. The layout saved with the
+the ready-made views **Quantification**, **Identification** and the QC of the
+comparison's kind (**QC: label-free** for runs compared one by one, **QC: TMT,
+iTRAQ** for labelled samples), and the user's own (+ and ✏️), in
+`<workspace>/layouts/comparison.json`. A comparison of runs that were not
+identified shows Identification locked, with + to add identification to its
+runs. Until one is picked, a comparison shows Quantification. The layout saved with the
 former Edit layout dialog becomes "My comparison layout" and the default of
 every comparison. **Edit comparison** opens a window with the conditions of
 the runs and the analysis settings.
@@ -21,7 +23,7 @@ from src.quant import isobaric
 from src.quant.session import LEVEL_NAMES, QuantSession, comparisons
 from src.render.layout_editor import get_saved_layout
 from src.render.layout_editor.catalog import (
-    QUANT_COMPONENTS, QUANT_DEFAULT_LAYOUT, QUANT_DIAGNOSTICS, QUANT_IDENTIFICATION_LAYOUT,
+    IDENTIFICATION, QUANT_COMPONENTS, QUANT_DEFAULT_LAYOUT, QUANT_DIAGNOSTICS, QUANT_IDENTIFICATION_LAYOUT,
     QUANT_ISOBARIC_QC_LAYOUT, QUANT_LABEL_FREE_QC_LAYOUT, QUANT_QUANTIFICATION_LAYOUT,
 )
 from src.render.layout_editor.dialogs import _own_file_manager
@@ -80,8 +82,11 @@ def added_comparison(file_manager, workflow_dir):
 
 
 def comparison_runs(file_manager, dataset_id):
-    """The dataset ids of the runs a comparison compares."""
+    """The dataset ids of the runs a comparison compares (the fractions of
+    an isobaric one, whose ``runs`` are its labelled samples)."""
     manifest = file_manager.get_results(dataset_id, ['quant_manifest'])['quant_manifest']
+    if manifest.get('kind') == 'isobaric':
+        return list(manifest.get('fractions') or [])
     return list(manifest.get('runs') or [])
 
 
@@ -135,6 +140,33 @@ def _rename_views(data):
     return changed
 
 
+# The order of the ready-made views before Quantification came first
+ORDER_VERSION = 2
+
+
+def _order_marker(path):
+    """Beside the views file: its ready-made views have today's order (the
+    view bar keeps no keys of its own in the file when it saves it)."""
+    return Path(path).with_name(Path(path).stem + f'.order-{ORDER_VERSION}')
+
+
+def _reorder_presets(data):
+    """Put the ready-made views of a views file saved before Quantification
+    came first in today's order, in the places they took. Returns True when
+    the file changes."""
+    if not isinstance(data.get('views'), list):
+        return False
+    order = [p['name'] for p in presets()]
+    views = data['views']
+    slots = [i for i, v in enumerate(views) if isinstance(v, dict) and v.get('name') in order]
+    ranked = sorted((views[i] for i in slots), key=lambda v: order.index(v['name']))
+    if [views[i] for i in slots] == ranked:
+        return False
+    for i, view in zip(slots, ranked):
+        views[i] = view
+    return True
+
+
 def migrate_views(path):
     """Split the former diagnostics component and rename the former
     ready-made views in the saved comparison views, once."""
@@ -146,6 +178,10 @@ def migrate_views(path):
     if not isinstance(data, dict):
         return
     changed = _rename_views(data)
+    marker = _order_marker(path)
+    if not marker.exists():
+        changed = _reorder_presets(data) | changed
+        marker.touch()
     if LEGACY_DIAGNOSTICS in json.dumps(data):
         for view in data.get('views') or []:
             if isinstance(view, dict) and isinstance(view.get('rows'), list):
@@ -177,18 +213,19 @@ def views_path(workspace):
     return Path(workspace, 'layouts', 'comparison.json')
 
 
-def presets():
-    """The ready-made comparison views: what the runs identified, what
-    changed between the conditions, and the quality control of a label-free
-    and of an isobaric (TMT, iTRAQ) comparison."""
-    return [
+def presets(isobaric_comparison=None):
+    """The ready-made comparison views, in the order of the bar: what changed
+    between the conditions, what the runs identified, and the quality control
+    of a label-free and of an isobaric (TMT, iTRAQ) comparison.
+    ``isobaric_comparison`` True or False keeps only the QC of that kind."""
+    views = [
+        {'name': QUANTIFICATION_VIEW, 'label': 'Quantification', 'layout': QUANT_QUANTIFICATION_LAYOUT,
+         'help': 'What changed between the conditions: volcano plot, comparison table, each entry run by run, '
+                 'sample similarity, the clustered heatmap and GO enrichment.'},
         {'name': IDENTIFICATION_VIEW, 'label': 'Identification', 'layout': QUANT_IDENTIFICATION_LAYOUT,
          'help': 'What each run identified and what the runs share, then every proteoform with its status run '
                  'by run; pick one to list its PrSMs in every run, and a PrSM to see its sequence view and '
                  'spectrum. Needs no conditions.'},
-        {'name': QUANTIFICATION_VIEW, 'label': 'Quantification', 'layout': QUANT_QUANTIFICATION_LAYOUT,
-         'help': 'What changed between the conditions: volcano plot, comparison table, each entry run by run, '
-                 'sample similarity, the clustered heatmap and GO enrichment.'},
         {'name': LABEL_FREE_QC_VIEW, 'label': 'QC: label-free', 'layout': QUANT_LABEL_FREE_QC_LAYOUT,
          'help': 'Quality control of runs measured one by one: the consensus features (feature map, intensity '
                  'of detected and matched values, every feature run by run), match between runs, how the runs '
@@ -198,6 +235,21 @@ def presets():
                  'per label, labels found per spectrum, every labelled spectrum and its ions), whether the '
                  'channels were loaded alike, how they correlate and cluster, missing values and p-values.'},
     ]
+    if isobaric_comparison is None:
+        return views
+    other = LABEL_FREE_QC_VIEW if isobaric_comparison else ISOBARIC_QC_VIEW
+    return [view for view in views if view['name'] != other]
+
+
+def comparison_presets(file_manager, dataset_id):
+    """The ready-made views of comparison ``dataset_id``: the QC of its kind only."""
+    return presets(is_isobaric(file_manager, dataset_id))
+
+
+def available(file_manager, dataset_id):
+    """The analyses comparison ``dataset_id`` has: identification when its
+    runs were identified (src/render/missing_analysis.py)."""
+    return {IDENTIFICATION} if comparison_tool(file_manager, dataset_id) == 'flashtnt' else set()
 
 
 def is_isobaric(file_manager, dataset_id):
@@ -232,10 +284,54 @@ def adopt_saved_layout(file_manager, workspace):
         return
     import json
     name, label = LEGACY_VIEW
+    _order_marker(path).parent.mkdir(parents=True, exist_ok=True)
+    _order_marker(path).touch()
     data = {'views': [{'name': p['name'], 'in_bar': True} for p in presets()]
             + [{'name': name, 'label': label, 'rows': legacy, 'in_bar': True}]}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1))
+
+
+def fit_current(path, shown):
+    """Keep the current view of the views file one the comparison offers.
+
+    The views file serves every comparison, but each offers only the QC of
+    its kind (``shown``, its ready-made views). A picked QC of the other kind
+    is parked and Quantification shown; it comes back for a comparison of
+    its kind, unless another view was picked meanwhile."""
+    import json
+    try:
+        data = json.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    names = [p['name'] for p in shown]
+    hidden = {p['name'] for p in presets()} - set(names)
+    parked_path = Path(path).with_name(Path(path).stem + '.parked.json')
+    try:
+        parked = json.loads(parked_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        parked = None
+    current = data.get('current')
+    changed = False
+    if isinstance(parked, dict):
+        if current != parked.get('replaced_by'):
+            parked_path.unlink(missing_ok=True)  # another view was picked meanwhile
+        elif parked.get('view') in names:
+            data['current'] = parked['view']
+            parked_path.unlink(missing_ok=True)
+            changed = True
+    if data.get('current') in hidden:
+        parked_path.write_text(json.dumps({'view': data['current'], 'replaced_by': names[0]}))
+        data['current'] = names[0]
+        changed = True
+    if changed:
+        rows = next(p['layout'] for p in presets() if p['name'] == data['current']) \
+            if data['current'] in {p['name'] for p in presets()} else None
+        if rows is not None:
+            data['layout'] = [rows]
+        Path(path).write_text(json.dumps(data, indent=1))
 
 
 def view_rows(file_manager, workspace, dataset_id):
@@ -243,20 +339,41 @@ def view_rows(file_manager, workspace, dataset_id):
     from src.layout_manager import load_layout, load_views
     path = views_path(workspace)
     migrate_views(path)
-    state = load_views(path, QUANT_COMPONENTS, presets(), QUANT_IDENTIFICATION_LAYOUT)
+    fit_current(path, comparison_presets(file_manager, dataset_id))
+    state = load_views(path, QUANT_COMPONENTS, comparison_presets(file_manager, dataset_id),
+                       QUANT_QUANTIFICATION_LAYOUT)
     name = state['current'] if load_layout(path) is not None else default_view(file_manager, dataset_id)
     view = next((v for v in state['views'] if v['name'] == name), state['views'][0])
     return [list(r) for r in view['rows']]
 
 
+VIEW_KEY = 'comparison_view'
+
+
+def _options(workspace, file_manager, dataset_id):
+    from src.render import missing_analysis
+
+    def options(missing, view):
+        del view
+        return missing_analysis.comparison_options(
+            workspace, file_manager, dataset_id, comparison_runs(file_manager, dataset_id), missing)
+    return options
+
+
 def view_selector(file_manager, workspace, dataset_id):
-    """The view bar of a comparison."""
+    """The view bar of a comparison: the views it can fill, and Identification
+    locked (+) for runs that were not identified."""
     from src.layout_manager import view_bar
+    from src.render.missing_analysis import ANALYSES
     migrate_views(views_path(workspace))
+    fit_current(views_path(workspace), comparison_presets(file_manager, dataset_id))
     view_bar(
-        views_path(workspace), QUANT_COMPONENTS, presets(), QUANT_IDENTIFICATION_LAYOUT,
-        key='comparison_view', default_view=default_view(file_manager, dataset_id),
-        target='comparisons of runs',
+        views_path(workspace), QUANT_COMPONENTS, comparison_presets(file_manager, dataset_id),
+        QUANT_QUANTIFICATION_LAYOUT,
+        key=VIEW_KEY, default_view=default_view(file_manager, dataset_id),
+        available=available(file_manager, dataset_id), analyses=ANALYSES,
+        unavailable_options=_options(workspace, file_manager, dataset_id),
+        dataset_label='comparison', target='comparisons of runs',
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. These views are used for "
             "every comparison of runs; your own take up to 3 components per row, ready-made views can "
@@ -289,7 +406,11 @@ def render(file_manager, dataset_id, rows=None):
     # openms_insight only where the comparison is drawn, so the layout helpers
     # above import without it (the unit tests do not install it)
     from openms_insight import StateManager, defer_reruns
+    from src.layout_manager import missing_analyses, missing_note, request_analysis
     from src.render import quant_cells
+    from src.render.missing_analysis import ANALYSES
+    has = available(file_manager, dataset_id)
+    labels = {c['name']: c['label'] for c in QUANT_COMPONENTS}
     tool = comparison_tool(file_manager, dataset_id)
     session = QuantSession(file_manager, dataset_id)
     level = session.level
@@ -310,6 +431,13 @@ def render(file_manager, dataset_id, rows=None):
             columns = st.columns(len(row))
             for col_index, (column, comp_name) in enumerate(zip(columns, row)):
                 with column:
+                    missing = missing_analyses([comp_name], QUANT_COMPONENTS, has)
+                    if missing:
+                        missing_note(labels.get(comp_name, comp_name), missing, ANALYSES,
+                                     lambda m, n: request_analysis(VIEW_KEY, m, component=n),
+                                     f'quant_missing_{row_index}_{col_index}', comp_name,
+                                     dataset_label='comparison')
+                        continue
                     quant_cells.render_cell(
                         comp_name, session, state_manager, f'quant_{tool}_{level}_{row_index}_{col_index}_{comp_name}',
                     )

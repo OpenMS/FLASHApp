@@ -185,6 +185,13 @@ QUANT_COMPONENTS = [
     {'name': 'quant_normalization', 'label': 'Normalization', 'group': 'Quality control'},
     {'name': 'quant_pvalues', 'label': 'p-value distribution', 'group': 'Quality control'},
 ]
+# A comparison of runs that were not identified has no proteoforms or PrSMs
+# for these (the counts of identifications count its features instead)
+QUANT_IDENTIFICATION_ONLY = {'quant_id_table', 'quant_id_prsms', 'quant_prsm_sequence', 'quant_prsm_spectrum'}
+for _component in QUANT_COMPONENTS:
+    if _component['name'] in QUANT_IDENTIFICATION_ONLY:
+        _component['needs'] = IDENTIFICATION
+del _component
 # The four plots above, which the layouts saved before they were split name
 # together (src/render/quant_view.py, split_diagnostics)
 QUANT_DIAGNOSTICS = [
