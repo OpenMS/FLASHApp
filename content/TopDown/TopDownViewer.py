@@ -220,6 +220,14 @@ PENDING = '_viewer_pending'
 LAST_RUN = '_viewer_last_run'
 SHOW_COMPARISON, SHOW_RUN = 'Comparison', 'Single run'
 LOCKED_KEY = 'viewer_show_locked'
+# Bumped when the page itself picks what is shown (the AI assistant opening a
+# view): the selectors then get new keys, so a value the browser still holds
+# for the old ones cannot pick the experiment shown before.
+SELECTORS = '_viewer_selectors'
+
+
+def _k(key):
+    return f"{key}-{st.session_state.get(SELECTORS, 0)}"
 LOCKED_COMPARISON = 'Comparison :material/add_circle:'
 LOCKED_SHOWN = '_viewer_locked_shown'  # the run the locked control was drawn for
 
@@ -257,7 +265,7 @@ def experiment_of(shown, groups):
 
 
 def _on_experiment(groups):
-    name = st.session_state.get(EXPERIMENT_KEY)
+    name = st.session_state.get(_k(EXPERIMENT_KEY))
     if name is not None:
         st.session_state[selection_key(0)] = groups[name][0]
 
@@ -265,7 +273,7 @@ def _on_experiment(groups):
 # The callbacks below only note what was picked: applied in the script run
 # (apply_pending), whose file manager is the current one.
 def _on_show(comparison_id, members):
-    st.session_state[PENDING] = ('show', comparison_id, members, st.session_state.get(SHOW_KEY))
+    st.session_state[PENDING] = ('show', comparison_id, members, st.session_state.get(_k(SHOW_KEY)))
 
 
 def _on_locked_comparison():
@@ -275,7 +283,7 @@ def _on_locked_comparison():
     comparison (the AI assistant opening a view) puts it where Single run |
     Comparison was, and the browser then reports that control's choice as its own."""
     shown_before = st.session_state.get(LOCKED_SHOWN)
-    st.session_state[LOCKED_KEY] = SHOW_RUN
+    st.session_state[_k(LOCKED_KEY)] = SHOW_RUN
     if shown_before is None or shown_before != st.session_state.get(selection_key(0)):
         return
     st.session_state[MISSING_INDEX] = 0
@@ -283,7 +291,7 @@ def _on_locked_comparison():
 
 
 def _on_run(comparison_id, members):
-    st.session_state[PENDING] = ('run', comparison_id, members, st.session_state.get(RUN_KEY))
+    st.session_state[PENDING] = ('run', comparison_id, members, st.session_state.get(_k(RUN_KEY)))
 
 
 def apply_pending():
@@ -326,28 +334,28 @@ def experiment_bar():
     if name is None:
         name = next(iter(groups))
         shown = st.session_state[selection_key(0)] = groups[name][0]
-    st.session_state[EXPERIMENT_KEY] = name
+    st.session_state[_k(EXPERIMENT_KEY)] = name
     opens_on, members = groups[name]
     comparison = opens_on in comparison_ids
     with st.container(horizontal=True, vertical_alignment='bottom'):
-        st.selectbox('choose experiment', list(groups), key=EXPERIMENT_KEY,
+        st.selectbox('choose experiment', list(groups), key=_k(EXPERIMENT_KEY),
                      on_change=_on_experiment, args=(groups,))
         st.session_state[LOCKED_SHOWN] = None if comparison else shown
         if comparison:
-            st.session_state[SHOW_KEY] = SHOW_COMPARISON if shown == opens_on else SHOW_RUN
+            st.session_state[_k(SHOW_KEY)] = SHOW_COMPARISON if shown == opens_on else SHOW_RUN
             st.segmented_control(
-                'show', [SHOW_RUN, SHOW_COMPARISON], key=SHOW_KEY, on_change=_on_show, args=(opens_on, members),
+                'show', [SHOW_RUN, SHOW_COMPARISON], key=_k(SHOW_KEY), on_change=_on_show, args=(opens_on, members),
                 help='**Single run**: the spectra, masses and proteoforms of one of its runs. '
                      '**Comparison**: the quantities of its runs side by side.',
             )
             if shown != opens_on:
                 names = [file_manager.get_display_name(r) for r in members]
-                st.session_state[RUN_KEY] = display_id_to_name.get(shown)
-                st.selectbox('run', names, key=RUN_KEY, on_change=_on_run, args=(opens_on, members))
+                st.session_state[_k(RUN_KEY)] = display_id_to_name.get(shown)
+                st.selectbox('run', names, key=_k(RUN_KEY), on_change=_on_run, args=(opens_on, members))
         else:
-            st.session_state[LOCKED_KEY] = SHOW_RUN
+            st.session_state[_k(LOCKED_KEY)] = SHOW_RUN
             st.segmented_control(
-                'show', [SHOW_RUN, LOCKED_COMPARISON], key=LOCKED_KEY, on_change=_on_locked_comparison,
+                'show', [SHOW_RUN, LOCKED_COMPARISON], key=_k(LOCKED_KEY), on_change=_on_locked_comparison,
                 help='This run is compared with no other run: process more files with its settings '
                      'to compare them.',
             )
@@ -376,6 +384,7 @@ def apply_assistant_view():
     stamp = (view.get('name'), view.get('created'))
     if runs and st.session_state.get('_viewer_assistant_view') != stamp:
         st.session_state['_viewer_assistant_view'] = stamp
+        st.session_state[SELECTORS] = st.session_state.get(SELECTORS, 0) + 1
         for index, run in enumerate(runs):
             st.session_state[selection_key(index)] = run
 
