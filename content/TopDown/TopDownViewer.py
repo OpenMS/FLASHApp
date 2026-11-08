@@ -28,7 +28,7 @@ from pathlib import Path
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src import analysis, former_examples, sample_type
-from src.render.render import render_grid
+from src.render.render import _state_manager, render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
 from src.layout_manager import request_analysis, view_bar
@@ -200,6 +200,9 @@ def view_selector():
         available=missing_analysis.available(file_manager, first if first in display_id_to_name else None),
         analyses=missing_analysis.ANALYSES, unavailable_options=missing_options,
         max_experiments=MAX_EXPERIMENTS, target='the Viewer',
+        # A view of one's own keeps each experiment's zoom and selection (📌)
+        states=lambda i: _state_manager(TOOL, selection_key(i), st.session_state.get(selection_key(i))),
+        datasets=lambda i: st.session_state.get(selection_key(i)),
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
             "to 3 components per row; ready-made views can be duplicated. Add experiments to compare "
