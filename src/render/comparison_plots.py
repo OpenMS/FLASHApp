@@ -104,3 +104,85 @@ def match_quality(frame, samples, sample_noun='Run'):
         xaxis={'categoryorder': 'array', 'categoryarray': list(samples)},
     )
     return fig
+
+
+# -- reporter ions (isobaric labels) -------------------------------------------
+
+def reporter_intensities(presence, ions, colors, conditions):
+    """Box plots: log2 intensity of every label's reporter ions over the
+    labelled spectra, coloured by condition, with the share of spectra
+    carrying the ion above each box."""
+    fig = go.Figure()
+    for row in presence.iter_rows(named=True):
+        channel, sample = row['channel'], row['sample'] or row['channel']
+        values = ions.filter(ions['channel'] == channel)['intensity'].drop_nulls()
+        condition = conditions.get(sample, 'no condition')
+        name = f'{channel}<br>{sample}'
+        fig.add_box(
+            y=values.log(2).to_list(), name=name, marker_color=colors.get(condition, '#9E9E9E'), boxpoints=False,
+            hovertemplate=f'{channel} ({sample}, {condition})<br>log2 %{{y:.2f}}<extra></extra>',
+        )
+        fig.add_annotation(x=name, y=1, yref='paper', yanchor='bottom', text=f'{row["present"]:.0f}%',
+                           showarrow=False, font={'size': 11})
+    fig.update_layout(
+        title='Reporter ion intensity per label (share of spectra with the ion on top)',
+        xaxis_title='Label (sample)', yaxis_title='log2 intensity', showlegend=False, margin={'t': 70},
+    )
+    return fig
+
+
+def reporter_ratios(ratios, reference, samples):
+    """Box plots: log2 ratio of every label to the reference label in the same
+    spectrum, with the line of equal intensity."""
+    fig = go.Figure()
+    for channel, sample in samples:
+        values = ratios.filter(ratios['channel'] == channel)['log2_ratio'].to_list()
+        if not values:
+            continue
+        fig.add_box(y=values, name=f'{channel}<br>{sample}', marker_color='#3157e9', boxpoints=False,
+                    hovertemplate=f'{channel} ({sample})<br>log2 ratio %{{y:.2f}}<extra></extra>')
+    fig.add_hline(y=0, line_dash='dot', line_color='grey')
+    fig.update_layout(
+        title=f'Ratio to label {reference} in the same spectrum', xaxis_title='Label (sample)',
+        yaxis_title=f'log2 (label / {reference})', showlegend=False,
+    )
+    return fig
+
+
+def labels_found(table, plex):
+    """Bars: spectra carrying 0, 1, ... all reporter ions."""
+    fig = go.Figure()
+    total = int(table['spectra'].sum()) or 1
+    fig.add_bar(
+        x=[str(n) for n in table['labels'].to_list()], y=table['spectra'].to_list(), marker_color='#3157e9',
+        customdata=[100.0 * s / total for s in table['spectra'].to_list()],
+        hovertemplate='%{x} labels: %{y} spectra (%{customdata:.0f}%)<extra></extra>',
+    )
+    fig.update_layout(
+        title=f'Reporter ions found per spectrum ({plex})', xaxis_title='Labels with a reporter ion',
+        yaxis_title='Spectra',
+    )
+    return fig
+
+
+# -- consensus features (label-free) -------------------------------------------
+
+FOUND_COLORS = {'detected': '#3157e9', 'matched': '#ff7501', 'missing': '#9E9E9E'}
+
+
+def feature_intensity(values, samples, sample_noun='Run'):
+    """Box plots per run: log2 intensity of the features the run detected and
+    of those matched into it from other runs."""
+    fig = go.Figure()
+    for found in ('detected', 'matched'):
+        part = values.filter((values['Found'] == found) & values['log2_intensity'].is_not_null())
+        if part.height == 0:
+            continue
+        fig.add_box(x=part['Run'].to_list(), y=part['log2_intensity'].to_list(), name=found,
+                    marker_color=FOUND_COLORS[found], boxpoints=False)
+    fig.update_layout(
+        boxmode='group', title=f'Feature intensity per {sample_noun.lower()}', xaxis_title=sample_noun,
+        yaxis_title='log2 intensity', legend_title_text='Found',
+        xaxis={'categoryorder': 'array', 'categoryarray': list(samples)},
+    )
+    return fig

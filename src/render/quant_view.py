@@ -183,19 +183,20 @@ def presets():
     and of an isobaric (TMT, iTRAQ) comparison."""
     return [
         {'name': IDENTIFICATION_VIEW, 'label': 'Identification', 'layout': QUANT_IDENTIFICATION_LAYOUT,
-         'help': 'What each run identified, how many runs found each proteoform and what the runs share, '
-                 'then every identification with its status run by run. Needs no conditions.'},
+         'help': 'Every proteoform with its status run by run; pick one to list its PrSMs in every run, and a '
+                 'PrSM to see its sequence view and spectrum. Then what each run identified and what the runs '
+                 'share. Needs no conditions.'},
         {'name': QUANTIFICATION_VIEW, 'label': 'Quantification', 'layout': QUANT_QUANTIFICATION_LAYOUT,
          'help': 'What changed between the conditions: volcano plot, comparison table, each entry run by run, '
                  'sample similarity, the clustered heatmap and GO enrichment.'},
         {'name': LABEL_FREE_QC_VIEW, 'label': 'QC: label-free', 'layout': QUANT_LABEL_FREE_QC_LAYOUT,
-         'help': 'Quality control of runs measured one by one: what each run found itself and what was '
-                 'matched from the others, how the runs were loaded, how well replicates agree, missing '
-                 'values, imputation and p-values.'},
+         'help': 'Quality control of runs measured one by one: the consensus features (feature map, intensity '
+                 'of detected and matched values, every feature run by run), match between runs, how the runs '
+                 'were loaded, how well replicates agree, missing values and p-values.'},
         {'name': ISOBARIC_QC_VIEW, 'label': 'QC: TMT, iTRAQ', 'layout': QUANT_ISOBARIC_QC_LAYOUT,
-         'help': 'Quality control of the labelled samples of one set: whether the channels were loaded '
-                 'alike, how they correlate and cluster, how well replicates agree, missing values, '
-                 'imputation and p-values.'},
+         'help': 'Quality control of the labelled samples of one set: the reporter ions (intensity and ratio '
+                 'per label, labels found per spectrum, every labelled spectrum and its ions), whether the '
+                 'channels were loaded alike, how they correlate and cluster, missing values and p-values.'},
     ]
 
 
@@ -310,5 +311,5 @@ def render(file_manager, dataset_id, rows=None):
             for col_index, (column, comp_name) in enumerate(zip(columns, row)):
                 with column:
                     quant_cells.render_cell(
-                        comp_name, session, state_manager, f'quant_{tool}_{level}_{row_index}_{col_index}',
+                        comp_name, session, state_manager, f'quant_{tool}_{level}_{row_index}_{col_index}_{comp_name}',
                     )
