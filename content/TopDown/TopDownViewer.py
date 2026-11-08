@@ -16,7 +16,7 @@ own views (Label-free, TMT, iTRAQ and the user's own comparison views,
 src/render/quant_view.py) and **Edit comparison**, whose **Compared** column
 leaves runs out (``QuantSession.hidden``). For a run of no comparison,
 Comparison is locked and offers to process more files. The view bar is below
-this row. **Add files** processes more files with the settings shown, or adds
+this row. **Add analysis** processes more files with the settings shown, or adds
 tool output made elsewhere.
 """
 
@@ -299,9 +299,9 @@ def apply_pending():
 
 
 def add_files_menu(dataset_id, runs=None):
-    """Add files: process more files with the settings shown, or add the
+    """Add analysis: process more files with the settings shown, or add the
     output of FLASHDeconv and FLASHTnT run elsewhere."""
-    with st.popover('Add files', icon=':material/library_add:', width='content'):
+    with st.popover('Add analysis', icon=':material/library_add:', width='content'):
         if dataset_id is not None and st.button(
             'Process more files', icon=':material/play_circle:', key=f'add_files_{dataset_id}', width='stretch',
             help='Process more files with these settings and compare them with this experiment',
