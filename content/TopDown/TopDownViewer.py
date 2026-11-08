@@ -221,6 +221,7 @@ LAST_RUN = '_viewer_last_run'
 SHOW_COMPARISON, SHOW_RUN = 'Comparison', 'Single run'
 LOCKED_KEY = 'viewer_show_locked'
 LOCKED_COMPARISON = 'Comparison :material/add_circle:'
+LOCKED_SHOWN = '_viewer_locked_shown'  # the run the locked control was drawn for
 
 
 def stored_runs(comparison_id):
@@ -268,8 +269,15 @@ def _on_show(comparison_id, members):
 
 
 def _on_locked_comparison():
-    """Comparison of a run compared with none: the dialog to process more files."""
+    """Comparison of a run compared with none: the dialog to process more files.
+
+    Only when this control was on the page before: a run shown in place of a
+    comparison (the AI assistant opening a view) puts it where Single run |
+    Comparison was, and the browser then reports that control's choice as its own."""
+    shown_before = st.session_state.get(LOCKED_SHOWN)
     st.session_state[LOCKED_KEY] = SHOW_RUN
+    if shown_before is None or shown_before != st.session_state.get(selection_key(0)):
+        return
     st.session_state[MISSING_INDEX] = 0
     request_analysis(VIEW_KEY, [missing_analysis.COMPARISON], component='Comparison')
 
@@ -324,6 +332,7 @@ def experiment_bar():
     with st.container(horizontal=True, vertical_alignment='bottom'):
         st.selectbox('choose experiment', list(groups), key=EXPERIMENT_KEY,
                      on_change=_on_experiment, args=(groups,))
+        st.session_state[LOCKED_SHOWN] = None if comparison else shown
         if comparison:
             st.session_state[SHOW_KEY] = SHOW_COMPARISON if shown == opens_on else SHOW_RUN
             st.segmented_control(
