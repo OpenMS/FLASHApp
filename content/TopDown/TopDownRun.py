@@ -4,6 +4,7 @@ from src import analysis
 from src.Workflow import TopDownWorkflow
 from src.common.common import page_setup, save_params
 from src.common.guide import PAGES, next_steps, page_intro
+from src.workflow.RunManager import RUN_NAME_KEY
 
 
 params = page_setup()
@@ -23,7 +24,10 @@ wf_params = wf.parameter_manager.get_parameters_from_json()
 selected = wf_params.get('mzML-files') or []
 selected = [selected] if isinstance(selected, str) else selected
 identify = bool(wf_params.get(analysis.IDENTIFY_KEY, True))
+# The name given beside Run analysis: before the start in the settings, then kept with it
+name = wf_params.get(RUN_NAME_KEY) or (wf.run_name() if wf.get_workflow_status().get('running') else '')
 st.info(
+    (f"**{name}**: " if name else '') +
     f"**{analysis.name(identify, analysis.quantification(wf_params), analysis.plex(wf_params))}** "
     f"of {len(selected)} run{'s' if len(selected) != 1 else ''}. Change it on **Describe experiment**.",
     icon='🧭',

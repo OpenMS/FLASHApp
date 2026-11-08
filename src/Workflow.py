@@ -158,16 +158,37 @@ def comparison_settings(workflow):
 
 
 def run_comparison(workflow, tool, dataset_ids, mzmls, prsm_key=None, design=None):
-    """The label-free comparison after the per-run loop. False on failure."""
+    """The label-free comparison after the per-run loop. False on failure.
+    The runs (and the comparison) get the name given to the start."""
     if analysis.quantification(workflow.params) != analysis.LABEL_FREE:
+        workflow.name_results(dataset_ids)
         return True
     if len(dataset_ids) < 2:
         workflow.logger.log('Label-free quantification needs at least two runs: no comparison made.')
+        workflow.name_results(dataset_ids)
         return True
-    return compare_runs(
+    comparison = compare_runs(
         workflow, tool, dataset_ids, mzmls, workflow.params.get('mzML-files', []), prsm_key=prsm_key,
         design=design,
-    ) is not None
+    )
+    if comparison is None:
+        return False
+    workflow.name_results(dataset_ids, comparison)
+    return True
+
+
+def _unique_label(label, taken):
+    """`label`, or `label (n)` when another result already has it."""
+    from src.workflow.RunManager import MAX_NAME_LENGTH
+
+    label = label[:MAX_NAME_LENGTH]
+    n = 2
+    candidate = label
+    while candidate in taken:
+        suffix = f' ({n})'
+        candidate = label[:MAX_NAME_LENGTH - len(suffix)].rstrip() + suffix
+        n += 1
+    return candidate
 
 
 def empty_tsv(path, header):
@@ -255,6 +276,8 @@ class TopDownWorkflow(WorkflowManager):
     share_cache = True
     # Start analysis (settings adding files to an experiment) opens the Run page
     run_page = Path('content', 'TopDown', 'TopDownRun.py')
+    # Describe experiment names the start beside its Run button (run_name())
+    name_runs = True
 
     def __init__(self) -> None:
         super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
@@ -268,6 +291,41 @@ class TopDownWorkflow(WorkflowManager):
         # Your analysis, not by buttons of their own
         # (a module-level function: the workflow object is pickled for its run)
         self.ui.preset_buttons = _no_preset_buttons
+
+    def run_name_placeholder(self) -> str:
+        return 'Named after its files'
+
+    def name_results(self, dataset_ids, comparison=None) -> None:
+        """Give the runs this start processed, and its comparison, the name
+        typed beside the Run button: one run (or the comparison) takes the
+        name, the runs of a comparison or of several files `<name>: <file>`.
+        Without a name they keep their file names."""
+        name = self.run_name()
+        if not name or not dataset_ids and comparison is None:
+            return
+        taken = self._display_names()
+        labels = []
+        if comparison is not None:
+            labels.append((comparison, name))
+        for dataset_id in dataset_ids:
+            if comparison is None and len(dataset_ids) == 1:
+                labels.append((dataset_id, name))
+            else:
+                labels.append((dataset_id, f'{name}: {dataset_id.rsplit("_", 1)[0]}'))
+        for dataset_id, label in labels:
+            label = _unique_label(label, taken)
+            taken.add(label)
+            self.file_manager.rename_dataset(dataset_id, label)
+        self.logger.log(f'Named the results "{name}".')
+
+    def _display_names(self) -> set:
+        """The names the Viewer lists: every display name given so far."""
+        names = set()
+        cursor = self.file_manager.cache_cursor
+        for table in ('stored_data', 'stored_files'):
+            cursor.execute(f'SELECT id, display_name FROM {table}')
+            names.update(label or dataset_id for dataset_id, label in cursor.fetchall())
+        return names
 
     def upload(self) -> None:
         t = st.tabs(["MS data", "Database (for identification)"])
@@ -808,7 +866,11 @@ class TopDownWorkflow(WorkflowManager):
         mzmls = [r['mzml'] for _, r in reused] + list(in_mzmls)
         design = {run_name(r['mzml']): (r.get('condition', ''), r.get('replicate', 1)) for _, r in reused}
         if quant == analysis.ISOBARIC:
-            return compare_isobaric(self, tool, compared, plex) is not None
+            comparison = compare_isobaric(self, tool, compared, plex)
+            if comparison is None:
+                return False
+            self.name_results(dataset_ids, comparison)
+            return True
         if identify:
             return run_comparison(self, tool, compared, mzmls, prsm_key='prsms_tsv', design=design)
         return run_comparison(self, tool, compared, mzmls, design=design)
