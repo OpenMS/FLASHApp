@@ -461,7 +461,7 @@ def render_whats_new():
                         <h4>Explore results your way</h4>
                         <ul>
                             <li>Switch between ready-made views or make your own; each keeps its zoom and selection.</li>
-                            <li>Compare runs in Identification, Quantification and QC views for label-free and TMT/iTRAQ.</li>
+                            <li>Compare runs in Quantification, Identification and QC views, with the QC of a label-free or TMT/iTRAQ comparison.</li>
                             <li>New: 3D MS1 map, precursor spectrum, isotope envelope and mass shifts of identified proteoforms.</li>
                         </ul>
                     </div>
