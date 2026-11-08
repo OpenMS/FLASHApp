@@ -32,7 +32,7 @@ from src.render import (
 )
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
-from src.common.plot_style import spectrum_styling
+from src.common.plot_style import PEAK, PICKED, spectrum_styling
 from src.render.layout_editor.catalog import DECONV_COMPONENTS, ISOBARIC_COMPONENTS, TNT_COMPONENTS
 from src.render import proteoform_edits
 from src.render.sequence import getFragmentDataFromSeq
@@ -495,6 +495,41 @@ def _heatmap(comp_name, file_manager, dataset_id):
             downsample_zoomed=False,
             # FLASHViewer's export name; its wheel scrolled the page
             svg_filename='FLASHViewer-heatmap', scroll_zoom=False,
+        ),
+    )
+
+
+# Whether Plot3D draws the points of a selected value apart; left out with an
+# openms-insight release without it
+_PLOT3D_HIGHLIGHT = 'highlight' in inspect.signature(Plot3D.__init__).parameters
+
+
+def _ms1_3d_map(comp_name, file_manager, dataset_id, tool, state_manager):
+    """The MS1 peaks of the run in 3D (m/z, retention time, intensity), the
+    strongest peaks of each spectrum. The precursor spectrum of the selected
+    spectrum (an MS1 spectrum itself) is drawn in orange."""
+    if insight_data.result_path(file_manager, dataset_id, 'ms1_raw_heatmap') is None:
+        raise MissingResult('ms1_raw_heatmap')
+    if _PLOT3D_HIGHLIGHT and insight_data.result_path(file_manager, dataset_id, 'scan_table') is not None:
+        try:
+            _follow_selected_spectrum(
+                file_manager, dataset_id, state_manager, 'pscan' if tool == 'flashtnt' else 'scan',
+            )
+        except MissingResult:
+            pass
+    highlight = dict(
+        highlight={SURVEY: 'scan_idx'}, highlight_name='Precursor spectrum', highlight_color=PICKED,
+    ) if _PLOT3D_HIGHLIGHT else {}
+    return _component(
+        Plot3D, comp_name, file_manager, dataset_id, ['ms1_raw_heatmap'],
+        lambda: dict(
+            data=insight_data.ms1_peak_map(file_manager, dataset_id),
+            x_column='mz', y_column='rt', z_column='intensity', mode='stems',
+            color=PEAK, series_names={'': 'MS1 peaks'},
+            title=f'MS1 peaks (strongest {insight_data.MS1_MAP_PEAKS_PER_SPECTRUM} per spectrum)',
+            x_label='m/z', y_label='Retention Time', z_label='Intensity',
+            camera_eye={'x': 1.6, 'y': -1.6, 'z': 0.8}, svg_filename='FLASHViewer-ms1-3d-map',
+            **highlight,
         ),
     )
 
@@ -1160,6 +1195,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                 camera_eye={'x': 2.5, 'y': 0, 'z': 0.2}, svg_filename='FLASHViewer-3d-plot',
             ),
         ), {'height': 800}
+
+    if comp_name == 'ms1_3d_map':
+        return _ms1_3d_map(comp_name, fm, ds, tool, state_manager), {'height': 700}
 
     if comp_name == 'fragment_error_plot':
         return _fragment_error_plot(comp_name, fm, ds), {'height': 400}

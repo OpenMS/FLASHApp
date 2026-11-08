@@ -155,3 +155,16 @@ def test_sequence_coverage_counts_every_identified_spectrum(tmp_path):
     assert points.height == 20
     assert points['x'].min() > 0 and points['x'].max() < 100
     assert points['y'].sum() == best.height
+
+
+def test_ms1_peak_map_keeps_the_strongest_peaks_of_each_spectrum(fd):
+    peaks = insight_data.ms1_peak_map(fd, FD_DATASET, per_spectrum=5).collect()
+    assert peaks.columns == ['mz', 'rt', 'intensity', 'scan_idx']
+    raw = insight_data.scan(fd, FD_DATASET, 'ms1_raw_heatmap').collect()
+    assert peaks['scan_idx'].n_unique() == raw['scan_idx'].n_unique()
+    assert peaks.group_by('scan_idx').len()['len'].max() == 5
+    # The kept peaks of a spectrum are its five strongest
+    first = int(peaks['scan_idx'][0])
+    strongest = raw.filter(pl.col('scan_idx') == first)['intensity'].sort(descending=True).head(5)
+    kept = peaks.filter(pl.col('scan_idx') == first)['intensity'].sort(descending=True)
+    assert kept.to_list() == pytest.approx(strongest.cast(pl.Float64).to_list())
