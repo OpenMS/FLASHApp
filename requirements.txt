@@ -156,7 +156,7 @@ pyyaml>=6.0
 # The viewers' components (tables, heatmaps, spectra, sequence view).
 # Its dependencies are listed in this file too; mygene and plotly are its
 # `analysis` extra (GO enrichment).
-openms-insight>=0.7.0
+openms-insight>=0.7.1
 scikit-learn>=1.0
 # Writes the processing report of a run as PDF (src/workflow/processing_report.py)
 reportlab>=4.0
