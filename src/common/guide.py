@@ -14,7 +14,7 @@ PAGES = {
         'configure': ('content/TopDown/TopDownConfigure.py', 'Describe experiment', '⚙️'),
         'run': ('content/TopDown/TopDownRun.py', 'Run analysis', '🚀'),
         'viewer': ('content/TopDown/TopDownViewer.py', 'Explore results', '👀'),
-        'matcher': ('content/TopDown/FragmentMatcher.py', 'Match fragments', '🧩'),
+        'matcher': ('content/Tools/FragmentMatcher.py', 'Match fragments', '🧩'),
         'download': ('content/TopDown/TopDownDownload.py', 'Download results', '⬇️'),
     },
 }

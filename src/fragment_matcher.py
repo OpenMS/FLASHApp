@@ -1,6 +1,6 @@
 """Fragment masses matched against a sequence without a FLASHDeconv run.
 
-The Match fragments page (content/TopDown/FragmentMatcher.py) takes a list of
+The Match fragments page (content/Tools/FragmentMatcher.py) takes a list of
 observed fragment masses, pasted or read from a file (plain text, tsv, csv or
 a TopFD/FLASHDeconv .msalign), and shows them in the sequence view against a
 sequence the user types or pastes there. Streamlit-free: this module parses
