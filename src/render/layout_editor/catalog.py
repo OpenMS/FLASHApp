@@ -154,6 +154,32 @@ QUANT_COMPONENTS = [
     {'name': 'quant_go', 'label': 'GO enrichment of the selected entries', 'group': 'Functional analysis',
      'requires': ('quant_table', 'quant_volcano', 'quant_heatmap'),
      'requires_label': 'the comparison table, the volcano plot or the clustered heatmap'},
+    {'name': 'quant_id_counts', 'label': 'Identifications per run', 'group': 'Identification'},
+    {'name': 'quant_id_frequency', 'label': 'Found in how many runs', 'group': 'Identification'},
+    {'name': 'quant_id_overlap', 'label': 'Shared identifications', 'group': 'Identification'},
+    {'name': 'quant_id_table', 'label': 'Identifications across runs', 'group': 'Identification'},
+    {'name': 'quant_id_prsms', 'label': 'PrSMs of the selected identification', 'group': 'Identification',
+     'requires': 'quant_id_table', 'requires_label': 'the identifications across runs'},
+    {'name': 'quant_prsm_sequence', 'label': 'Sequence view of the selected PrSM', 'group': 'Identification',
+     'requires': 'quant_id_prsms', 'requires_label': 'the PrSMs of the selected identification'},
+    {'name': 'quant_prsm_spectrum', 'label': 'Spectrum of the selected PrSM', 'group': 'Identification',
+     'requires': 'quant_id_prsms', 'requires_label': 'the PrSMs of the selected identification'},
+    {'name': 'quant_reporter_intensities', 'label': 'Reporter ion intensity per label', 'group': 'Reporter ions'},
+    {'name': 'quant_reporter_ratios', 'label': 'Reporter ion ratios', 'group': 'Reporter ions'},
+    {'name': 'quant_reporter_labels', 'label': 'Reporter ions found per spectrum', 'group': 'Reporter ions'},
+    {'name': 'quant_reporter_spectra', 'label': 'Reporter ions of every spectrum', 'group': 'Reporter ions'},
+    {'name': 'quant_reporter_ions', 'label': 'Reporter ions of the selected spectrum', 'group': 'Reporter ions',
+     'requires': 'quant_reporter_spectra', 'requires_label': 'the reporter ions of every spectrum'},
+    {'name': 'quant_feature_map', 'label': 'Consensus feature map', 'group': 'Consensus features'},
+    {'name': 'quant_feature_intensity', 'label': 'Feature intensity per run', 'group': 'Consensus features'},
+    {'name': 'quant_feature_table', 'label': 'Consensus features', 'group': 'Consensus features'},
+    {'name': 'quant_feature_profile', 'label': 'Selected feature per run', 'group': 'Consensus features',
+     'requires': ('quant_feature_table', 'quant_feature_map'),
+     'requires_label': 'the consensus features or the feature map'},
+    {'name': 'quant_totals', 'label': 'Total intensity per sample', 'group': 'Quality control'},
+    {'name': 'quant_correlation', 'label': 'Sample correlation', 'group': 'Quality control'},
+    {'name': 'quant_cv', 'label': 'Variation within conditions (CV)', 'group': 'Quality control'},
+    {'name': 'quant_match_quality', 'label': 'Match between runs', 'group': 'Quality control'},
     {'name': 'quant_missing_values', 'label': 'Missing values', 'group': 'Quality control'},
     {'name': 'quant_imputed_values', 'label': 'Imputed values', 'group': 'Quality control'},
     {'name': 'quant_normalization', 'label': 'Normalization', 'group': 'Quality control'},
@@ -164,16 +190,38 @@ QUANT_COMPONENTS = [
 QUANT_DIAGNOSTICS = [
     ['quant_missing_values', 'quant_imputed_values'], ['quant_normalization', 'quant_pvalues'],
 ]
-# Label-free: runs compared feature by feature, each entry followed run by run
-QUANT_DEFAULT_LAYOUT = [
-    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca'], ['quant_go'],
+# Identification: what each run identified and what the runs share, then
+# every identification with its status run by run, the PrSMs of the selected
+# one in every run and the sequence view and spectrum of the selected PrSM
+# (from its run). Needs no conditions.
+QUANT_IDENTIFICATION_LAYOUT = [
+    ['quant_id_counts', 'quant_id_frequency'], ['quant_id_overlap'],
+    ['quant_id_table'], ['quant_id_prsms'], ['quant_prsm_sequence'], ['quant_prsm_spectrum'],
 ]
-QUANT_LABEL_FREE_LAYOUT = QUANT_DEFAULT_LAYOUT
-# Isobaric labels (TMT, iTRAQ): the samples of one pooled set, so how they
-# cluster and whether their channels are balanced come before single entries
-QUANT_ISOBARIC_LAYOUT = [
-    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_pca', 'quant_heatmap'],
-    *QUANT_DIAGNOSTICS, ['quant_go'],
+# Quantification: what changed between the conditions, each entry followed
+# run by run, how the samples cluster and what the changed entries do
+QUANT_QUANTIFICATION_LAYOUT = [
+    ['quant_summary'], ['quant_volcano', 'quant_profile'], ['quant_table'], ['quant_runs', 'quant_pca'],
+    ['quant_heatmap'], ['quant_go'],
+]
+QUANT_DEFAULT_LAYOUT = QUANT_QUANTIFICATION_LAYOUT
+# Quality control of a label-free comparison: runs measured one by one, so
+# the consensus features (where they are, how each run found them, each
+# feature run by run), how much was matched between runs, whether the runs
+# were loaded alike and how well replicates agree
+QUANT_LABEL_FREE_QC_LAYOUT = [
+    ['quant_feature_map', 'quant_feature_intensity'], ['quant_feature_table', 'quant_feature_profile'],
+    ['quant_id_counts', 'quant_match_quality'], ['quant_totals', 'quant_normalization'],
+    ['quant_correlation', 'quant_cv'], ['quant_missing_values', 'quant_imputed_values'], ['quant_pvalues'],
+]
+# Quality control of isobaric labels (TMT, iTRAQ): the channels of one pooled
+# set, so the reporter ions (intensity and ratio per label, labels found per
+# spectrum, every labelled spectrum and its ions), whether the channels were
+# loaded alike, how they correlate and cluster, then the comparison steps
+QUANT_ISOBARIC_QC_LAYOUT = [
+    ['quant_reporter_intensities', 'quant_reporter_ratios'], ['quant_reporter_labels', 'quant_totals'],
+    ['quant_reporter_spectra', 'quant_reporter_ions'], ['quant_correlation', 'quant_pca'],
+    ['quant_cv', 'quant_normalization'], ['quant_missing_values', 'quant_imputed_values'], ['quant_pvalues'],
 ]
 
 MAX_EXPERIMENTS = 5

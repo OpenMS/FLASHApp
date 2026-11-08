@@ -727,7 +727,7 @@ jobs:
           kubectl kustomize k8s/overlays/prod/ | \
             yq 'select(.kind != "IngressRoute")' | \
             sed -E 's|imagePullPolicy: (IfNotPresent\|Always)|imagePullPolicy: Never|g' | \
-            sed -e 's|storageClassName: openms-manila-nfs|storageClassName: standard|g' -e 's|ReadWriteMany|ReadWriteOnce|g' > /tmp/manifests.yaml
+            sed -E -e 's#storageClassName: (openms-manila-nfs|openms-juicefs-s3)#storageClassName: standard#g' -e 's|ReadWriteMany|ReadWriteOnce|g' > /tmp/manifests.yaml
           # The shared namespace is managed by the streamlit-template's
           # deployment, not by this app's manifests, so create it here.
           kubectl create namespace openms --dry-run=client -o yaml | kubectl apply -f -
@@ -918,7 +918,7 @@ jobs:
         run: |
           kubectl kustomize k8s/overlays/prod/ | \
             sed -E 's|imagePullPolicy: (IfNotPresent\|Always)|imagePullPolicy: Never|g' | \
-            sed -e 's|storageClassName: openms-manila-nfs|storageClassName: standard|g' -e 's|ReadWriteMany|ReadWriteOnce|g' > /tmp/manifests.yaml
+            sed -E -e 's#storageClassName: (openms-manila-nfs|openms-juicefs-s3)#storageClassName: standard#g' -e 's|ReadWriteMany|ReadWriteOnce|g' > /tmp/manifests.yaml
           # The shared namespace is managed by the streamlit-template's
           # deployment, not by this app's manifests, so create it here.
           kubectl create namespace openms --dry-run=client -o yaml | kubectl apply -f -
