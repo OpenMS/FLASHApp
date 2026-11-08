@@ -501,7 +501,18 @@ def _heatmap(comp_name, file_manager, dataset_id):
 
 # Whether Plot3D draws the points of a selected value apart; left out with an
 # openms-insight release without it
-_PLOT3D_HIGHLIGHT = 'highlight' in inspect.signature(Plot3D.__init__).parameters
+_PLOT3D_PARAMETERS = inspect.signature(Plot3D.__init__).parameters
+_PLOT3D_HIGHLIGHT = 'highlight' in _PLOT3D_PARAMETERS
+# A box wider than deep fills the full-width cell of the map (left out with an
+# openms-insight release without it)
+_MS1_MAP_SHAPE = {
+    name: value for name, value in (
+        ('aspect_ratio', {'x': 2.2, 'y': 1.2, 'z': 1.0}),
+        # The box's middle a little below the view's: the m/z axis in front
+        # stays in the cell and the tallest peaks reach its top
+        ('camera_center', {'x': 0, 'y': 0, 'z': -0.25}),
+    ) if name in _PLOT3D_PARAMETERS
+}
 
 
 def _ms1_3d_map(comp_name, file_manager, dataset_id, tool, state_manager):
@@ -528,8 +539,8 @@ def _ms1_3d_map(comp_name, file_manager, dataset_id, tool, state_manager):
             color=PEAK, series_names={'': 'MS1 peaks'},
             title=f'MS1 peaks (strongest {insight_data.MS1_MAP_PEAKS_PER_SPECTRUM} per spectrum)',
             x_label='m/z', y_label='Retention Time', z_label='Intensity',
-            camera_eye={'x': 1.6, 'y': -1.6, 'z': 0.8}, svg_filename='FLASHViewer-ms1-3d-map',
-            **highlight,
+            camera_eye={'x': 1.4, 'y': -2.0, 'z': 0.45}, svg_filename='FLASHViewer-ms1-3d-map',
+            **highlight, **_MS1_MAP_SHAPE,
         ),
     )
 
@@ -1197,7 +1208,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': 800}
 
     if comp_name == 'ms1_3d_map':
-        return _ms1_3d_map(comp_name, fm, ds, tool, state_manager), {'height': 700}
+        return _ms1_3d_map(comp_name, fm, ds, tool, state_manager), {'height': 600}
 
     if comp_name == 'fragment_error_plot':
         return _fragment_error_plot(comp_name, fm, ds), {'height': 400}
