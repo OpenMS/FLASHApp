@@ -20,6 +20,7 @@ from src.quant.run import (
     run_record,
 )
 from src import flashida
+from src import history
 from src import former_examples
 from src.workflow.WorkflowManager import WorkflowManager
 from src.workflow.StreamlitUI import editor_table
@@ -776,6 +777,9 @@ class TopDownWorkflow(WorkflowManager):
             return False
 
         base_path = dirname(self.workflow_dir)
+        # Every result of this start records it (the History of a result)
+        started = time.time()
+        follows = self.follow_up_info()
         quant = analysis.quantification(self.params)
         plex = analysis.plex(self.params)
         # -quant follows label-free quantification, -iq:type the labels
@@ -849,6 +853,10 @@ class TopDownWorkflow(WorkflowManager):
                     self.file_manager.store_data(dataset_id, SETTINGS_KEY, run_record(
                         identify, quant, plex, in_mzml, samples.get(run_name(in_mzml)),
                     ))
+                    history.record(self.file_manager, dataset_id, history.start_record(
+                        started, [in_mzml], identify, quant, plex,
+                        follows=follows, source=source if deconv_settings is not None else None,
+                    ))
 
                     progress.end_step(parsing)
                     # Remove temporary folder
@@ -865,15 +873,27 @@ class TopDownWorkflow(WorkflowManager):
         compared = [d for d, _ in reused] + dataset_ids
         mzmls = [r['mzml'] for _, r in reused] + list(in_mzmls)
         design = {run_name(r['mzml']): (r.get('condition', ''), r.get('replicate', 1)) for _, r in reused}
+        earlier = set(self.file_manager.get_results_list(['quant_manifest']))
         if quant == analysis.ISOBARIC:
             comparison = compare_isobaric(self, tool, compared, plex)
-            if comparison is None:
-                return False
-            self.name_results(dataset_ids, comparison)
-            return True
-        if identify:
-            return run_comparison(self, tool, compared, mzmls, prsm_key='prsms_tsv', design=design)
-        return run_comparison(self, tool, compared, mzmls, design=design)
+            ok = comparison is not None
+            if ok:
+                self.name_results(dataset_ids, comparison)
+        elif identify:
+            ok = run_comparison(self, tool, compared, mzmls, prsm_key='prsms_tsv', design=design)
+        else:
+            ok = run_comparison(self, tool, compared, mzmls, design=design)
+        # The comparison this start made records it too, and every result keeps its report
+        made = [d for d in self.file_manager.get_results_list(['quant_manifest']) if d not in earlier]
+        for comparison in made:
+            history.record(self.file_manager, comparison, history.start_record(
+                started, [], identify, quant, plex, follows=follows,
+            ))
+        try:
+            history.keep(self.workflow_dir, self.file_manager, dataset_ids + made)
+        except Exception as e:  # the results stay without a kept report
+            self.logger.log(f'The processing report could not be kept with the results: {e}', 2)
+        return ok
 
 
 # The former workflows, for queued jobs and the workspace sync of older builds
