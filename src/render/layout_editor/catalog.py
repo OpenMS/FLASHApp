@@ -190,13 +190,13 @@ QUANT_COMPONENTS = [
 QUANT_DIAGNOSTICS = [
     ['quant_missing_values', 'quant_imputed_values'], ['quant_normalization', 'quant_pvalues'],
 ]
-# Identification: every identification with its status run by run, the PrSMs
-# of the selected one in every run, the sequence view and spectrum of the
-# selected PrSM (from its run), then what each run identified and what the
-# runs share. Needs no conditions.
+# Identification: what each run identified and what the runs share, then
+# every identification with its status run by run, the PrSMs of the selected
+# one in every run and the sequence view and spectrum of the selected PrSM
+# (from its run). Needs no conditions.
 QUANT_IDENTIFICATION_LAYOUT = [
-    ['quant_id_table'], ['quant_id_prsms'], ['quant_prsm_sequence'], ['quant_prsm_spectrum'],
     ['quant_id_counts', 'quant_id_frequency'], ['quant_id_overlap'],
+    ['quant_id_table'], ['quant_id_prsms'], ['quant_prsm_sequence'], ['quant_prsm_spectrum'],
 ]
 # Quantification: what changed between the conditions, each entry followed
 # run by run, how the samples cluster and what the changed entries do

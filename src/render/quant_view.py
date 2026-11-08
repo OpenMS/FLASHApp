@@ -183,9 +183,9 @@ def presets():
     and of an isobaric (TMT, iTRAQ) comparison."""
     return [
         {'name': IDENTIFICATION_VIEW, 'label': 'Identification', 'layout': QUANT_IDENTIFICATION_LAYOUT,
-         'help': 'Every proteoform with its status run by run; pick one to list its PrSMs in every run, and a '
-                 'PrSM to see its sequence view and spectrum. Then what each run identified and what the runs '
-                 'share. Needs no conditions.'},
+         'help': 'What each run identified and what the runs share, then every proteoform with its status run '
+                 'by run; pick one to list its PrSMs in every run, and a PrSM to see its sequence view and '
+                 'spectrum. Needs no conditions.'},
         {'name': QUANTIFICATION_VIEW, 'label': 'Quantification', 'layout': QUANT_QUANTIFICATION_LAYOUT,
          'help': 'What changed between the conditions: volcano plot, comparison table, each entry run by run, '
                  'sample similarity, the clustered heatmap and GO enrichment.'},
