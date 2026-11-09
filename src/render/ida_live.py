@@ -122,14 +122,25 @@ def _frame(df):
     return pl.from_pandas(df).lazy()
 
 
+def _count(n):
+    return f'{n:,}'
+
+
 def summary_metrics(summary, last_change):
-    cols = st.columns(6)
-    cols[0].metric('Survey scans', summary['surveys'])
-    cols[1].metric('Precursors chosen', summary['precursors'])
-    cols[2].metric('MS2 / MS3 commanded', f"{summary['ms2']} / {summary['ms3']}")
-    cols[3].metric('Waiting', summary['waiting'], help='Commanded scans not acquired yet.')
-    cols[4].metric('Identified', summary['identified'], help='Precursors with a proteoform.')
-    cols[5].metric('RT', '-' if summary['rt'] is None else f"{summary['rt']:.2f} min")
+    # One tile per count: a combined "MS2 / MS3" value no longer fit its
+    # column once both reached four digits
+    cols = st.columns(7)
+    cols[0].metric('Survey scans', _count(summary['surveys']))
+    cols[1].metric('Precursors', _count(summary['precursors']), help='Precursors FLASHIda chose.')
+    cols[2].metric('MS2 scans', _count(summary['ms2']), help='MS2 scans FLASHIda commanded.')
+    cols[3].metric('MS3 scans', _count(summary['ms3']), help='MS3 scans FLASHIda commanded.')
+    missed = summary.get('not_acquired', 0)
+    cols[4].metric(
+        'Waiting', _count(summary['waiting']),
+        help='Commanded scans the instrument has not returned yet.'
+        + (f' {missed:,} earlier commanded scans never came back.' if missed else ''))
+    cols[5].metric('Identified', _count(summary['identified']), help='Precursors with a proteoform.')
+    cols[6].metric('RT (min)', '-' if summary['rt'] is None else f"{summary['rt']:.2f}")
     if last_change is not None:
         age = time.time() - last_change
         if age < 60:
