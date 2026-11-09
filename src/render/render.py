@@ -36,6 +36,7 @@ from src.render import (
     envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
     prsm_data, prsm_overview, qc_data, validation_data,
 )
+from src.render.cache_dirs import insight_cache_dir
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
 from src.common.plot_style import PEAK, PICKED, spectrum_styling
@@ -472,7 +473,7 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
     for name_tag in sources if required is None else required:
         if insight_data.result_path(file_manager, dataset_id, name_tag) is None:
             raise MissingResult(name_tag)
-    cache_path = Path(file_manager.cache_path, 'insight', dataset_id)
+    cache_path = insight_cache_dir(file_manager.cache_path, dataset_id)
     cache_id = f'{name}-{_stamp(file_manager, dataset_id, sources, extra)}'
     zoom = _zoom_args(cls, name)
     try:
@@ -978,7 +979,7 @@ def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, en
     )
     # Earlier edits of this proteoform are not shown again
     keep = f'{name}-{_stamp(fm, ds, sources, entry)}'
-    for old in Path(fm.cache_path, 'insight', ds).glob(f'{name}-*'):
+    for old in insight_cache_dir(fm.cache_path, ds).glob(f'{name}-*'):
         if old.name != keep:
             shutil.rmtree(old, ignore_errors=True)
     if changed:

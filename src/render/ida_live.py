@@ -18,6 +18,7 @@ from openms_insight import Heatmap, StateManager, Table, defer_reruns
 from openms_insight.core.cache import CacheMissError
 
 from src.parse import ida_log
+from src.render.cache_dirs import short_name
 
 # Code of the frame builders and of this module: part of every cache id
 CODE_VERSION = hashlib.md5(
@@ -147,7 +148,9 @@ def show_run(run: Path, cache_root: Path, key: str):
         st.info('FLASHIda has not logged any scans for this run yet.')
         return
 
-    cache_path = Path(cache_root, run.name)
+    # Run names are long raw file names: a short folder keeps the cache
+    # files within Windows' path length limit
+    cache_path = Path(cache_root, short_name(run.name))
     state_manager = StateManager(session_key=f'flashida_live_state_{key}')
     run_key = f'flashida_live_run_{key}'
     if st.session_state.get(run_key) != str(run):
