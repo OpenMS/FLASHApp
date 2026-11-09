@@ -1,0 +1,102 @@
+{
+  "LC-MS real-time ID, MS2 only": {
+    "global": {
+      "method_name": "LC-MS real-time ID, MS2 only",
+      "method_description": "Top-down DDA; a species identified at the threshold is closed out",
+      "duration": 120
+    },
+    "deconvolution": {
+      "score_threshold": 0.0,
+      "tqscore_threshold": 0.1,
+      "min_charge": 1,
+      "max_charge": 50,
+      "min_mass": 600,
+      "max_mass": 50000,
+      "tol": [
+        20,
+        20,
+        20
+      ]
+    },
+    "faims": {
+      "cv_values": [],
+      "max_cv_skip": 2,
+      "cv_precursor_threshold": 20
+    },
+    "scheduling": {
+      "cycle_time": {
+        "enabled": false,
+        "value_ms": 60000
+      },
+      "scan_timeout": {
+        "enabled": false,
+        "value_ms": 30000
+      },
+      "agc_interval_seconds": 1
+    },
+    "files": {
+      "target_logs": [],
+      "inclusion_list": ""
+    },
+    "precursor_selection": {
+      "rt_window": 120,
+      "targeting": "none",
+      "consider_all_charges": true,
+      "charge_selection": "qscore",
+      "strict_inclusion": true,
+      "tie_threshold": 0.2,
+      "rank_by": "qscore",
+      "max_precursors": 1
+    },
+    "identification": {
+      "flashtnt": {
+        "min_length": 4,
+        "max_length": 10,
+        "allow_gap": false,
+        "max_aa_in_gap": 2,
+        "fixed_mod": [],
+        "max_blind_mod_count": 2,
+        "max_mod_mass": 700
+      },
+      "threshold": 500
+    },
+    "ms_settings": {
+      "ms1": {
+        "analyzer": "Orbitrap",
+        "first_mass": 400,
+        "last_mass": 2000,
+        "resolution": 240000,
+        "agc_target": 4000000,
+        "max_it": 502,
+        "microscans": 4,
+        "rf_lens": 60,
+        "source_cid": 15,
+        "source_cid_scaling": 0,
+        "data_type": "Profile"
+      },
+      "ms2": {
+        "analyzer": "Orbitrap",
+        "activation": "HCD",
+        "collision_energy": 35,
+        "resolution": 120000,
+        "agc_target": 500000,
+        "max_it": 246,
+        "first_mass": 150,
+        "last_mass": 2000,
+        "microscans": 4,
+        "data_type": "Profile",
+        "reaction_time": 0,
+        "reagent_max_it": 0,
+        "reagent_agc_target": 0
+      }
+    },
+    "quantification": {
+      "enabled": false,
+      "reporter_mz_tol": 0.003,
+      "fold_change_threshold": 2
+    },
+    "runtime": {
+      "log_dir": "logs"
+    }
+  }
+}

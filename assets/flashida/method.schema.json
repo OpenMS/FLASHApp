@@ -1,0 +1,1702 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://t0mdavid-m.github.io/FlashIDA/method.schema.json",
+  "title": "FLASHIda method.json keys",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method_name": {
+          "type": "string",
+          "description": "A name for the method. Neither the host nor the engine acts on it, and it survives in the run folder's copy of the method file.",
+          "default": ""
+        },
+        "method_description": {
+          "type": "string",
+          "description": "Free text describing the method. Neither the host nor the engine acts on it, and it survives in the run folder's copy of the method file.",
+          "default": ""
+        },
+        "duration": {
+          "type": "number",
+          "description": "How long FLASHIda drives the instrument. The clock starts when the handshake scan echoes, the first moment the instrument is under custom control, so the wait for control is not charged to the run. When it expires FLASHIda stops sending commands and cancels the instrument's queue, and the run ends earlier if the acquisition closes or the operator stops it. Read by the host alone; the engine never sees it.",
+          "default": 90,
+          "x-unit": "min",
+          "x-adr": [
+            "0043",
+            "0041"
+          ]
+        }
+      },
+      "description": "Labels for the method and the length of the run. The engine reads none of these keys, and only `duration` affects acquisition, on the instrument."
+    },
+    "deconvolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "score_threshold": {
+          "type": "number",
+          "description": "Lowest qscore a survey candidate needs to be selected, read off its anchor charge's own qscore. A candidate that matches an inclusion target is exempt. An omitted key means `-1`, not the `0` the C++ literal suggests; both admit every candidate.",
+          "default": -1
+        },
+        "tqscore_threshold": {
+          "type": "number",
+          "description": "Decides whether an acquisition bars its species. A species acquired at a qscore above it is barred by nominal mass, and by the rounded m/z of its isolation centre, for `precursor_selection.rt_window`; at or below it the species stays selectable and is re-acquired only when a later survey resolves it at a higher qscore. Under `targeting: in_depth` the first selection pass also skips a mass whose target-log score, 1 minus the product of 1 - qscore over its observations, exceeds it, and the second pass back-fills it. Inclusion rows that name charges are keyed per charge instead and never read or arm these bars.",
+          "default": 0.9
+        },
+        "min_charge": {
+          "type": "integer",
+          "description": "Lowest charge state MS1 deconvolution reports. MSn deconvolution ignores it and searches charge 1 up to the isolated precursor's charge. `precursor_selection.min_precursor_charge` is a separate floor on what selection picks.",
+          "default": 4
+        },
+        "max_charge": {
+          "type": "integer",
+          "description": "Highest charge state MS1 deconvolution considers. MSn deconvolution is capped at the isolated precursor's charge instead.",
+          "default": 50
+        },
+        "min_mass": {
+          "type": "number",
+          "description": "Lowest monoisotopic mass MS1 deconvolution reports. MSn deconvolution uses a fixed 50 Da floor instead, and `identification.characterization.min_target_mass` floors the `exhaustive` MS3 target pool.",
+          "default": 500,
+          "x-unit": "Da"
+        },
+        "max_mass": {
+          "type": "number",
+          "description": "Highest monoisotopic mass MS1 deconvolution reports. MSn deconvolution is capped at the smaller of this and the precursor mass.",
+          "default": 50000,
+          "x-unit": "Da"
+        },
+        "tol": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Mass tolerance per MS level: the first entry for MS1, the second for MS2, the third for MS3, and any further entries are ignored. Each entry sets deconvolution at its level and is the fallback for that level's exploration `tolerance_ppm`. The MS1 entry also sets the inclusion and exclusion matching window of twice the tolerance either side, and the MS2 entry sets tag matching. Author all three: an omitted key emits the two-entry `[10, 10]`, which does not load.",
+          "default": [
+            10,
+            10
+          ],
+          "minItems": 3,
+          "x-default-text": "required, three entries",
+          "x-unit": "ppm"
+        }
+      },
+      "description": "How spectra are deconvolved into masses, and the two qscore thresholds precursor selection applies to the result. The charge and mass limits act on MS1; MSn spectra take their limits from the isolated precursor."
+    },
+    "precursor_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rt_window": {
+          "type": "number",
+          "description": "Retention-time window that bounds every time-based memory of selection. An acquired mass is held back from reselection for this long. Under `in_depth` and `exclusion_masses` only target-log entries observed within this distance of the current scan count.",
+          "default": 180,
+          "x-unit": "s"
+        },
+        "targeting": {
+          "type": "string",
+          "description": "Which external mass list steers selection, and how. A candidate matches a listed mass within twice the MS1 deconvolution tolerance. `in_depth` and `exclusion_masses` read `files.target_logs`, the `ida.log` files of earlier runs.",
+          "default": "none",
+          "enum": [
+            "none",
+            "inclusion",
+            "in_depth",
+            "exclusion_masses"
+          ],
+          "enumDescriptions": [
+            "standard data-dependent selection with no target list.",
+            "masses from `files.inclusion_list`, or the acquired masses in `files.target_logs`, are selected first and are exempt from the qscore and SNR gates; a row that names charges restricts which charges are acquired, and `strict_inclusion` decides whether other masses may fill the remaining slots.",
+            "a soft reorder: a mass the target logs acquired often or well within `rt_window` is passed over in a first pass and back-filled in a second, so it changes acquisition only when `max_precursors` is contended.",
+            "a mass matching any mass the target logs deconvolved within `rt_window` of the current scan is never selected, whatever the budget."
+          ],
+          "x-adr": [
+            "0014",
+            "0028"
+          ]
+        },
+        "consider_all_charges": {
+          "type": "boolean",
+          "description": "`true`: species are ranked by their best per-charge qscore. `false`: they are ranked by their overall qscore. Applies only under `rank_by: qscore`, and orders species only: which charge a species is isolated at is `charge_selection`.",
+          "default": false,
+          "x-adr": [
+            "0059"
+          ]
+        },
+        "charge_selection": {
+          "type": "string",
+          "description": "The one ranking of a selected species' charge states. The first-ranked charge is the anchor, the window a `single` scan isolates; the first `max_charge_states` form the acquisition set of `separate` and `multiplexed`. It only orders: `snr_threshold` still decides which charges may join the set. An inclusion row that names charges narrows the candidates, and this ranking picks among them.",
+          "default": "snr",
+          "enum": [
+            "snr",
+            "qscore",
+            "intensity",
+            "purity"
+          ],
+          "enumDescriptions": [
+            "highest charge signal-to-noise; the anchor is the species' representative charge.",
+            "highest per-charge qscore.",
+            "most intense charge.",
+            "highest isolation purity: the species' own intensity at that charge over all MS1 intensity inside the window it would be isolated in. Refused under `precursor_charges: multiplexed`, whose notches share one fill."
+          ],
+          "x-adr": [
+            "0059"
+          ]
+        },
+        "strict_inclusion": {
+          "type": "boolean",
+          "description": "Read only under `targeting: inclusion`. `true`: only masses matching an active inclusion target are selected, and a survey with no active target selects nothing. `false`: targets are selected first and the remaining `max_precursors` slots go to other masses under the ordinary gates.",
+          "default": false
+        },
+        "log_target_rt_window": {
+          "type": "boolean",
+          "description": "Read only under `targeting: inclusion` with `files.target_logs` and no inclusion list. `true`: a mass a reference `ida.log` acquired is a target only within `rt_window` of a reference acquisition of it. `false`: it is a target at every retention time, as it was from 2025-07-07 to 2026-10-21; for a reference whose gradient does not match the run.",
+          "default": true
+        },
+        "log_target_charges": {
+          "type": "string",
+          "description": "Read only under `targeting: inclusion` with `files.target_logs` and no inclusion list. Which charge a reference `ida.log` target is matched at.",
+          "default": "any",
+          "enum": [
+            "any",
+            "reference"
+          ],
+          "enumDescriptions": [
+            "the target is a mass, matched at any charge.",
+            "matched only at a charge the reference acquired it at; each acquisition uses that charge up for the rest of the run, as from 2025-07-04 to 2026-10-21."
+          ]
+        },
+        "tie_threshold": {
+          "type": "number",
+          "description": "Qscore difference below which two candidates count as tied and are ordered by their inclusion row's priority, higher first. Read only under `targeting: inclusion` when an inclusion list is loaded.",
+          "default": 0.1
+        },
+        "precursor_charges": {
+          "type": "string",
+          "description": "How many charge states of a selected species are acquired, and in how many scans. `separate` and `multiplexed` acquire the same set: the anchor plus every other resolved charge whose SNR reaches `snr_threshold`, ordered by `charge_selection`, capped by `max_charge_states`. In all three modes a species costs one `max_precursors` slot.",
+          "default": "single",
+          "enum": [
+            "single",
+            "separate",
+            "multiplexed"
+          ],
+          "enumDescriptions": [
+            "one MS2 isolating the anchor charge only.",
+            "one MS2 per charge in the acquisition set, each recorded as its own precursor.",
+            "one MS2 that co-isolates the whole acquisition set as notches beside the anchor."
+          ],
+          "x-adr": [
+            "0016",
+            "0021"
+          ]
+        },
+        "snr_threshold": {
+          "type": "number",
+          "description": "Minimum signal-to-noise a charge state needs to be acquired. It gates the anchor charge and, under `separate` or `multiplexed`, every additional charge in the acquisition set. A mass matched to an inclusion target is exempt from the anchor gate but not from the additional-charge gate.",
+          "default": 1,
+          "x-adr": [
+            "0040"
+          ]
+        },
+        "max_charge_states": {
+          "type": "integer",
+          "description": "Caps the acquisition charge set of one species, anchor included, keeping the charges `charge_selection` ranks first. `0` means no cap beyond the instrument's 10 isolation windows per fragmentation stage, which bounds `separate` as well, and larger values act as 10. Inert under `precursor_charges: single`.",
+          "default": 0,
+          "x-adr": [
+            "0040"
+          ]
+        },
+        "min_charge_states": {
+          "type": "integer",
+          "description": "Smallest acquisition charge set a species must reach to be selected. A species below it is skipped and spends no `max_precursors` slot. Under `precursor_charges: single` the set is always one charge, so any value above `1` selects nothing. A later peak group that completes a split inclusion target is exempt.",
+          "default": 1,
+          "x-adr": [
+            "0040",
+            "0036"
+          ]
+        },
+        "rank_by": {
+          "type": "string",
+          "description": "How the deconvolved species of a survey are ordered before the `max_precursors` budget is spent.",
+          "default": "qscore",
+          "enum": [
+            "qscore",
+            "intensity",
+            "none"
+          ],
+          "enumDescriptions": [
+            "by deconvolution qscore, highest first; see `consider_all_charges`.",
+            "by the intensity of the species' most intense charge state, highest first.",
+            "no precursor selection: surveys trigger no MS2, and the run acquires MS1 scans only."
+          ]
+        },
+        "max_precursors": {
+          "type": "integer",
+          "description": "Number of species selected per survey. A species costs one slot however many MS2 scans it produces, so `additional_scans`, `separate` and a split inclusion target spend no extra slots.",
+          "default": 10,
+          "x-adr": [
+            "0016",
+            "0036"
+          ]
+        },
+        "min_precursor_charge": {
+          "type": "integer",
+          "description": "Lowest charge a species may be anchored on; a species whose anchor is below it is skipped. `0` means no floor. It also filters the charges an inclusion row names, but not the additional charges `separate` or `multiplexed` add to an unrestricted species.",
+          "default": 0
+        },
+        "additional_scans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of `ms_settings.additional_ms2` entries acquired for every selected precursor, after the primary MS2 and in array order. A named entry fires unconditionally. A level-2 exploration sweep varies a single scan config, so it cannot be combined with this list.",
+          "default": [],
+          "x-adr": [
+            "0014"
+          ]
+        },
+        "exploration": {
+          "$ref": "#/$defs/exploration",
+          "description": "Level-2 exploration: for each selected precursor the engine acquires MS2 pre-scans across a collision energy or reaction time range, scores them, and acquires the production MS2 at the winning setting. Absent, `ms_settings.ms2` fires once per precursor at its own settings. Its keys are documented on the exploration page.",
+          "x-default-text": "absent"
+        }
+      },
+      "description": "Decides which intact species each survey MS1 fragments: how candidates are ranked, how many are taken, which of their charge states are acquired, and which target list steers the choice. A survey's choice is a plan until its first MS2 is sent: a newer survey at the same FAIMS CV re-plans the MS2s still waiting in FLASHIda's queue, and a species counts as acquired, for `rt_window` and every bar below, only once one of its scans has been sent. The MS2 scan settings themselves live in `ms_settings`, and whether a fragment is characterized by MS3 is decided in `identification.characterization`.",
+      "x-adr": [
+        "0014",
+        "0060"
+      ]
+    },
+    "identification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fasta": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "description": "Path of a FASTA file holding the proteins every MS2 is searched against. Read as written: a relative path resolves against the working directory of the FLASHIda process, which is not necessarily the folder of the method file, so use an absolute path. Entries carrying FLASHTnT's decoy prefix (`DECOY`) are dropped at load, so a FASTA prepared for an offline search can be used unchanged. Exactly one of `fasta` and `sequence`; an empty path is refused.",
+              "x-default-text": "absent",
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "sequence": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "description": "One protein sequence, in one-letter code, that every MS2 is matched against: a reference of one entry. Exactly one of `fasta` and `sequence`; an empty sequence would match nothing, so it is refused (delete the `identification` section instead). `metric: fragment_count` needs a reference at either exploration level.",
+              "x-default-text": "absent",
+              "x-adr": [
+                "0027",
+                "0061"
+              ]
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "fasta"
+              ],
+              "properties": {
+                "fasta": {
+                  "type": "string"
+                },
+                "sequence": {
+                  "type": "null"
+                }
+              }
+            },
+            {
+              "required": [
+                "sequence"
+              ],
+              "properties": {
+                "sequence": {
+                  "type": "string"
+                },
+                "fasta": {
+                  "type": "null"
+                }
+              }
+            }
+          ],
+          "description": "The protein reference every MS2 is searched against: a FASTA file (`fasta`) or one inline sequence (`sequence`). Exactly one of the two, and not empty; a reference with both, with neither or with an empty value is refused at load. A key set to `null` counts as absent.",
+          "x-default-text": "required",
+          "x-adr": [
+            "0061"
+          ]
+        },
+        "method": {
+          "type": "string",
+          "description": "The method that annotates MS2 fragments against `reference`, feeding identification and MS3 planning. Every `characterization.mode` accepts either method except `discriminating`, which needs `refine`. Matched exactly as written.",
+          "default": "flashtnt",
+          "enum": [
+            "flashtnt",
+            "refine"
+          ],
+          "enumDescriptions": [
+            "Tag-based search with FLASHTnT.",
+            "No-search shift scan: mass-shift levels are detected against shuffled sequences at an FDR, and a dynamic program assembles the best path for each candidate total shift."
+          ],
+          "x-adr": [
+            "0049"
+          ]
+        },
+        "flashtnt": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_length": {
+              "type": "integer",
+              "description": "Shortest sequence tag the search reports, in residues, a mass gap counting as one. FLASHTnT's range is 3 to 9. Unset: FLASHTnT's default.",
+              "default": 3,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "max_length": {
+              "type": "integer",
+              "description": "Longest sequence tag the search reports, in residues, a mass gap counting as one. FLASHTnT's range is 3 to 30. Unset: FLASHTnT's default.",
+              "default": 8,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "allow_gap": {
+              "type": "boolean",
+              "description": "`true`: a tag may contain one mass gap standing for several consecutive residues. `false`: every tag position is a single residue. Unset: FLASHTnT's default.",
+              "default": false,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "max_aa_in_gap": {
+              "type": "integer",
+              "description": "Most residues one mass gap may stand for. Read only under `allow_gap: true`. FLASHTnT's range is 2 to 3. Unset: FLASHTnT's default.",
+              "default": 2,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "fixed_mod": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 0,
+              "description": "Must be empty. Fixed modifications are not supported in real time, and a non-empty list is refused at load.",
+              "default": [],
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "max_blind_mod_count": {
+              "type": "integer",
+              "description": "Most unknown modifications (mass shifts of no named modification) the search may place on one proteoform, besides the `var_mod` ones. Unset: FLASHTnT's default.",
+              "default": 1,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "max_mod_mass": {
+              "type": "number",
+              "description": "Largest absolute mass of one unknown modification. Unset: FLASHTnT's default of 500, so a protein carrying a heavier modification is only explained with this authored above that mass: a heme protein such as cytochrome c (heme +616 Da) needs at least 616.",
+              "default": 500,
+              "x-unit": "Da",
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "var_mod": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Variable modifications the search tries, each by Unimod or PSI-MOD name with its site (`Oxidation (M)`, `Acetyl (N-term)`, `Phospho (S)`) or by Unimod accession with its site (`35 (M)`). They are counted apart from the unknown modifications (`max_var_mod_count`), and both can occur on one proteoform. `[]` tries none. Unset: FLASHTnT's default, `Acetyl (Protein N-term)`: the acetylation of the protein's first residue, or of its second after the initiator Met, which is always also tried removed.",
+              "default": [
+                "Acetyl (Protein N-term)"
+              ],
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "max_var_mod_count": {
+              "type": "integer",
+              "description": "Most `var_mod` modifications on one proteoform. Unset: FLASHTnT's default.",
+              "default": 3,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "max_protein_hits": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Candidate proteins kept for one MS2 before they are extended, the best by FLASHTnT's learned candidate ranking. A reference small enough to fit keeps every proposed protein. Unset: FLASHTnT's default.",
+              "default": 50,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "gapped_tags": {
+              "type": "string",
+              "description": "Whether gapped tags (masses whose differences are sums of one or more residues) also propose candidate proteins. Where a gapped tag lands on a protein anchors the extension as a sequence tag does. FLASHTnT's other two modes, `both` and `only`, are refused. Unset: FLASHTnT's default.",
+              "default": "fallback",
+              "enum": [
+                "off",
+                "fallback"
+              ],
+              "enumDescriptions": [
+                "sequence tags alone propose candidates.",
+                "gapped tags propose candidates for an MS2 in which no sequence tag proposes a protein."
+              ],
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "terminal_ladders": {
+              "type": "boolean",
+              "description": "`true`: proteins whose intact terminus explains deconvolved masses as residue sums (the N-terminus also without the initiator Met and acetylated) are candidates too, without a sequence tag, anchored on that ladder. Unset: FLASHTnT's default.",
+              "default": true,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "precursor_ladders": {
+              "type": "boolean",
+              "description": "`true`: every stretch of a protein whose unmodified mass equals the MS2's precursor mass is scored by the fragment masses on its two sides, and the best stretches are candidates too. Unset: FLASHTnT's default.",
+              "default": true,
+              "x-adr": [
+                "0061"
+              ]
+            },
+            "skip_precursor_inference": {
+              "type": "boolean",
+              "description": "`true`: a proteoform is extended against the commanded precursor mass only. `false`: it may also be extended against a precursor mass inferred from complementary fragment pairs; when that mass differs from the commanded one, both are recorded and logged. Unset: `true`, FLASHIda's choice (FLASHTnT's own default is `false`).",
+              "default": true,
+              "x-adr": [
+                "0061"
+              ]
+            }
+          },
+          "description": "Tuning of FLASHTnT's search, which matches every MS2 against `reference`. A key left out takes FLASHTnT's own default, shown below, except `skip_precursor_inference`. Under `method: refine` the search still runs and chooses the protein, and Refine annotates it.",
+          "x-adr": [
+            "0061"
+          ]
+        },
+        "refine": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fdr": {
+              "type": "number",
+              "description": "False-discovery rate a shift level must pass. The cut is the smallest matched-ion height, at least `min_ions`, whose rate against the shuffled sequences is at or below this. Above 0 and at most 1.",
+              "default": 0.2,
+              "x-adr": [
+                "0049"
+              ]
+            },
+            "shuffles": {
+              "type": "integer",
+              "description": "Number of shuffled sequences the FDR is estimated from. The shuffle seed is fixed, so the same spectrum always gives the same cut.",
+              "default": 300,
+              "x-adr": [
+                "0049"
+              ]
+            },
+            "grid_da": {
+              "type": "number",
+              "description": "Step of the grid of trial mass shifts.",
+              "default": 0.01,
+              "x-unit": "Da",
+              "x-adr": [
+                "0049"
+              ]
+            },
+            "max_shift_da": {
+              "type": "number",
+              "description": "The trial-shift grid runs from minus this value to plus this value, so a larger shift is never detected.",
+              "default": 700,
+              "x-unit": "Da",
+              "x-adr": [
+                "0049"
+              ]
+            },
+            "min_ions": {
+              "type": "integer",
+              "description": "Smallest cut tried: a shift level needs at least this many matched ions beyond what the unshifted sequence already explains.",
+              "default": 3,
+              "x-adr": [
+                "0049"
+              ]
+            },
+            "max_levels": {
+              "type": "integer",
+              "description": "Most shift levels kept, highest signal first, after neutral losses and neutron satellites are excluded. It bounds the number of candidate totals.",
+              "default": 20,
+              "x-adr": [
+                "0049"
+              ]
+            },
+            "jump_penalty": {
+              "type": "integer",
+              "description": "Ions one jump between levels costs in a path's score: score = matched ions minus `jump_penalty` times jumps. The `discriminating` round recounts with the same penalty.",
+              "default": 2,
+              "x-adr": [
+                "0049"
+              ]
+            }
+          },
+          "description": "Settings of the Refine method, read only under `method: refine`. Refine matches at the MS2 tolerance, the second `deconvolution.tol` entry, which is not a key here.",
+          "x-default-text": "absent: Refine runs at the defaults listed below",
+          "x-adr": [
+            "0049"
+          ]
+        },
+        "search_threads": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of search workers. Each MS2 is matched on one of them, beside the thread that deconvolves and selects, so a slow match never delays the next survey. Each worker applies its own result as soon as it finishes. When more matches are waiting than four per worker, the oldest waiting one is skipped and its scan identifies nothing.",
+          "x-default-text": "absent: the number of cores minus two, at least 1",
+          "x-adr": [
+            "0062"
+          ]
+        },
+        "threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Identification score at which an identified species is closed out of acquisition: its mass and isolation m/z are barred for the retention-time window counted from the identifying MS2, and its plan units not yet sent are withdrawn at every FAIMS CV. The score is FLASHTnT's (the extension score plus 8 x the raw score) whatever the annotation method. Real time computes no FDR: read the threshold off earlier runs of comparable samples, as the score at which FLASHTnT's offline q-value reaches the level you want; it does not carry its error rate to another database size, sample type or activation. A species whose inclusion row names charges is never closed out.",
+          "x-default-text": "absent: identify and log, never close out",
+          "x-adr": [
+            "0061"
+          ]
+        },
+        "characterization": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "description": "The MS3 objective, and the choice of targets. Required: the block's presence is what turns MS3 on, so it must name an objective, and deleting the block is how MS3 is switched off. Every value plans up to `max_targets` targets. `ambiguity`, `coverage` and `fragments` rank by best-MS2 intensity and never target a full-length b or y ion. An MS3 on a c, z, a or x fragment is acquired and logged but not annotated.",
+              "enum": [
+                "ambiguity",
+                "coverage",
+                "fragments",
+                "exhaustive",
+                "discriminating"
+              ],
+              "enumDescriptions": [
+                "Targets fragments that contain an ambiguously placed modification, round-robin across modifications so each site gets its strongest container first. A precursor with nothing ambiguous gets no MS3.",
+                "Targets every observed fragment whose interior holds a backbone bond that no MS2 fragment witnessed.",
+                "Targets every mapped fragment that has a bond inside it, with no coverage test.",
+                "Targets every deconvolved mass of the winner MS2 scan, mapped or not, and also plans for a precursor whose MS2 matched nothing. `min_target_mass` sets its mass floor.",
+                "Targets the MS2 masses that the two best Refine paths explain differently, then lets the MS3 evidence decide between the paths. Needs `identification.method: refine` and no `exploration`."
+              ],
+              "x-adr": [
+                "0013",
+                "0023",
+                "0049",
+                "0052",
+                "0054",
+                "0055",
+                "0061"
+              ],
+              "x-default-text": "required"
+            },
+            "max_targets": {
+              "type": "integer",
+              "description": "The MS3 budget: fragments one planning round of a precursor may target. It counts fragments in every `fragment_charges` mode, so the extra charge states of one fragment cost no extra slot. With `exploration` set, every target becomes a whole sweep. With `per_proteoform` it also caps the distinct cleavages one proteoform gets in a run.",
+              "default": 3,
+              "x-adr": [
+                "0013",
+                "0016",
+                "0052"
+              ]
+            },
+            "min_fragment_charge": {
+              "type": "integer",
+              "description": "Fragments below this charge are not MS3 targets, in every mode. 0 means no floor. Distinct from `precursor_selection.min_precursor_charge`, which filters precursors.",
+              "default": 0
+            },
+            "min_target_mass": {
+              "type": "number",
+              "description": "Deconvolved masses below this are not MS3 targets. Read only under `mode: exhaustive`; 0 means no floor. `deconvolution.min_mass` does not reach MS2 output, so this is the only mass floor on that pool.",
+              "default": 0,
+              "x-unit": "Da",
+              "x-adr": [
+                "0023"
+              ]
+            },
+            "fragment_charges": {
+              "type": "string",
+              "description": "How many charge states of one target fragment its MS3 acquires. Extra charges must pass `precursor_selection.snr_threshold` and are ranked by intensity, up to ten in all. The budget counts fragments in all three modes.",
+              "default": "single",
+              "enum": [
+                "single",
+                "separate",
+                "multiplexed"
+              ],
+              "enumDescriptions": [
+                "One MS3 at the fragment's most intense MS2 charge.",
+                "One MS3 per charge state in the set.",
+                "One MS3 that co-isolates the whole set."
+              ],
+              "x-adr": [
+                "0016"
+              ]
+            },
+            "per_proteoform": {
+              "type": "boolean",
+              "description": "One live MS3 plan per proteoform: a newer identification of the same proteoform (protein, start and end, mass within the MS1 tolerance or 1-3 isotope steps) replaces its MS3s not yet sent, and a sent fragment is acquired again only at twice the intensity it was sent at. A proteoform gets at most `max_targets` distinct cleavages in a run, and only fragments whose isolation-window SNR exceeds 1 are targeted. Off: every identification plans its own MS3s.",
+              "default": false,
+              "x-adr": [
+                "0066"
+              ]
+            },
+            "exploration": {
+              "$ref": "#/$defs/exploration",
+              "description": "Sweeps the collision energy or reaction time of every MS3 target in place of its single MS3, scored by the chosen metric. A measuring metric or non-empty `overrides` adds a follow-up MS3 per target, so a target then costs its grid points plus one. The keys are those of the shared exploration block; see the exploration page.",
+              "x-default-text": "absent: no sweep, one MS3 per target at the energy of `ms_settings.ms3`",
+              "x-adr": [
+                "0020"
+              ]
+            }
+          },
+          "description": "Decides whether MS3 runs and which fragments of a precursor's matched MS2 it targets. The block's presence is the single MS3 switch and `mode` names the objective; the MS3 scan's instrument parameters come from `ms_settings.ms3`, and `exploration` optionally sweeps their energy per target.",
+          "x-default-text": "absent: no MS3",
+          "x-adr": [
+            "0013",
+            "0061"
+          ]
+        }
+      },
+      "description": "Real-time identification: which protein every MS2 is matched against and how, and, in `characterization`, whether and how MS3 characterizes what was matched. The section's presence is the switch: without it no MS2 is matched, `identification.tsv` gets no rows and no MS3 runs. Every MS2 except a quantification scan is matched. It acts on what `precursor_selection` chose to fragment at MS2.",
+      "x-default-text": "absent: no MS2 is matched and no MS3 runs",
+      "x-adr": [
+        "0049",
+        "0061"
+      ]
+    },
+    "quantification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "The switch. `false`: the section is inert and `ms_settings.ms2` fires once per selected precursor as in every other mode. `true`: `ms_settings.ms2_quant` fires once per selected precursor and is the only scan whose reporter ions are read, and `ms_settings.ms2` becomes the identification scan a passing verdict buys. Identification and MS3 targeting skip the quantification scan and run on the bought `ms2`.",
+          "default": false,
+          "x-adr": [
+            "0038"
+          ]
+        },
+        "scan": {
+          "type": "string",
+          "description": "Where the reporter ions are read. Read only when `enabled`. `ms3` and `both` need `identification` with `identification.threshold`, `ms_settings.ms3_quant`, `labelling: tmt6plex` and `identification.method: flashtnt`, and search every cysteine as iodoTMT-labelled (+329.2266 Da, fixed). The identification scan `ms_settings.ms2` should keep the label on its fragments: CID or ETD; an HCD identification scan releases reporters before the quantification MS3 can.",
+          "default": "ms2",
+          "enum": [
+            "ms2",
+            "ms3",
+            "both"
+          ],
+          "enumDescriptions": [
+            "The quantification scan `ms_settings.ms2_quant` screens every selected precursor, and its verdict buys the identification scan `ms_settings.ms2`.",
+            "No screen: `ms_settings.ms2` fires on every selected precursor, and an identification that reaches `identification.threshold` on a proteoform with a cysteine buys up to `ms3_targets` quantification MS3s, each on one matched fragment that contains a cysteine and whose own peaks outweigh the rest of its isolation window. Each MS3 is read for its reporter ions with its own verdict, and buys nothing. `identify` and `enriched_in` are refused.",
+            "Both: the `ms2` screen and its bought identification scan as under `ms2`, and that identification also buys the quantification MS3s as under `ms3`. `identify: none` is refused."
+          ],
+          "x-adr": [
+            "0064"
+          ]
+        },
+        "ms3_targets": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many quantification MS3s one identification buys under `scan: ms3` or `both`: the most intense eligible labelled fragments, one MS3 each, sent before any characterization MS3 of the same scan. Inert under `scan: ms2`.",
+          "default": 1,
+          "x-adr": [
+            "0064"
+          ]
+        },
+        "labelling": {
+          "type": "string",
+          "description": "The isobaric labelling scheme of the sample. It fixes the reporter channel names that `conditions` and `channel_normalization` use, and the stock isotope correction matrix.",
+          "default": "tmt6plex",
+          "enum": [
+            "itraq4plex",
+            "itraq8plex",
+            "tmt6plex",
+            "tmt10plex",
+            "tmt11plex",
+            "tmt16plex",
+            "tmt18plex"
+          ],
+          "enumDescriptions": [
+            "iTRAQ 4-plex, channels `114` to `117`.",
+            "iTRAQ 8-plex, channels `113` to `119` and `121`.",
+            "TMT 6-plex, channels `126` to `131`.",
+            "TMT 10-plex, channels `126`, `127N` to `130C`, and `131`.",
+            "TMT 11-plex, the 10-plex channels with `131` split into `131N` and `131C`.",
+            "TMT 16-plex, channels `126` to `134N`.",
+            "TMT 18-plex, channels `126` to `135N`."
+          ],
+          "x-adr": [
+            "0038"
+          ]
+        },
+        "reporter_mz_tol": {
+          "type": "number",
+          "description": "Half-width of the m/z window in which each reporter ion is looked for in the quantification scan. OpenMS accepts 0.0001 to 0.5, and at most 0.003 for `tmt10plex` and `tmt11plex`, whose neighbouring channels sit about 0.006 apart. That check runs when the first quantification scan is measured, not at load.",
+          "default": 0.002,
+          "x-unit": "Th"
+        },
+        "fold_change_threshold": {
+          "type": "number",
+          "description": "The ratio bar. A group passes when its geometric fold change, the mean over `conditions[0]` divided by the mean over `conditions[1]`, or the inverse of that ratio is strictly above it. Read by `test: fold_change` and `welch_and_fold_change`; the fold change is computed and logged under every test.",
+          "default": 1.4,
+          "x-adr": [
+            "0056"
+          ]
+        },
+        "identify": {
+          "type": "string",
+          "description": "Which group verdicts buy the identification scan `ms_settings.ms2`. The verdict is logged the same whatever this key says; the key decides only the purchase. Because identification and MS3 run on the bought scan, it also decides what gets characterized.",
+          "default": "differential",
+          "enum": [
+            "differential",
+            "quantified",
+            "all",
+            "none"
+          ],
+          "enumDescriptions": [
+            "only a `differential` group buys, further restricted by `enriched_in`.",
+            "any cleanly measured group buys, `differential` or `not_differential`.",
+            "every group whose quantification scans returned buys, including an `incomplete_channels` one.",
+            "nothing is bought; the run only quantifies."
+          ],
+          "x-adr": [
+            "0039",
+            "0056"
+          ]
+        },
+        "enriched_in": {
+          "type": "string",
+          "description": "The condition a differential group must be enriched in to buy the identification scan: one of the two `conditions[].name` values, or `either` for both directions. Enrichment is read from the condition means, so a species absent from one condition counts as enriched in the other. Read only under `identify: differential`; under any other value it is inert and the engine warns at load.",
+          "default": "either",
+          "x-adr": [
+            "0039"
+          ]
+        },
+        "test": {
+          "type": "string",
+          "description": "Which test turns the reporter channels into the differential verdict. The geometric fold change and the Welch p are both computed and logged under every test; this key decides which of them the verdict reads.",
+          "default": "fold_change",
+          "enum": [
+            "fold_change",
+            "welch",
+            "welch_and_fold_change"
+          ],
+          "enumDescriptions": [
+            "differential when the fold change or its inverse is above `fold_change_threshold`.",
+            "differential when a two-sided Welch t-test on the log2 channel intensities gives p at or below `p_value_threshold`; needs two or more channels per condition.",
+            "differential only when both bars are cleared; needs two or more channels per condition."
+          ],
+          "x-adr": [
+            "0056"
+          ]
+        },
+        "p_value_threshold": {
+          "type": "number",
+          "description": "The bar of the Welch test: a two-sided p at or below it is a hit. The p is raw, with no multiple-testing correction, because no run-wide population exists at decision time. Read by `test: welch` and `welch_and_fold_change`.",
+          "default": 0.05,
+          "x-adr": [
+            "0056"
+          ]
+        },
+        "empty_condition": {
+          "type": "string",
+          "description": "What a condition empty in every assigned channel means when the other condition is measured in every channel. It is read before any test, since no test can run on an empty side. A condition empty in only some of its channels is always `incomplete_channels`.",
+          "default": "differential",
+          "enum": [
+            "differential",
+            "incomplete"
+          ],
+          "enumDescriptions": [
+            "the species is present in one condition and absent in the other, so the verdict is `differential` and enrichment points to the measured condition.",
+            "the verdict is `incomplete_channels`, which buys an identification scan only under `identify: all`."
+          ],
+          "x-adr": [
+            "0056"
+          ]
+        },
+        "scan_normalize": {
+          "type": "boolean",
+          "description": "Scales each quantification scan of a group to its share of its own assigned reporter signal before the scans are combined, so a bright charge state does not dominate. It matters only under `precursor_charges: separate`; with one scan per group it changes neither the fold change nor the test.",
+          "default": true,
+          "x-adr": [
+            "0056"
+          ]
+        },
+        "aggregate": {
+          "type": "string",
+          "description": "How the usable quantification scans of a group are combined, channel by channel, into the one set of channels the test reads. A group holds the quantification scans of one species from one survey, one per charge state under `precursor_charges: separate`, and a scan is usable when every assigned channel was measured. With one scan per group all three values give the same result.",
+          "default": "median",
+          "enum": [
+            "median",
+            "mean",
+            "sum"
+          ],
+          "enumDescriptions": [
+            "the per-channel median; an even count takes the mean of the two middle values.",
+            "the per-channel arithmetic mean.",
+            "the per-channel sum."
+          ],
+          "x-adr": [
+            "0056"
+          ]
+        },
+        "min_usable_scans": {
+          "type": "integer",
+          "description": "How many usable quantification scans a group needs before its test decides; a scan is usable when every assigned channel was measured. When no scan is usable, the same floor applies to the scans that found one condition wholly empty. A group below the floor ends `incomplete_channels`. Values above `1` need `precursor_charges: separate`, the only mode that puts several scans in one group.",
+          "default": 1,
+          "x-adr": [
+            "0056"
+          ]
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The condition's label, which `enriched_in` uses to name a direction. `either` is reserved for `enriched_in` and cannot be a condition name.",
+                "default": "",
+                "x-adr": [
+                  "0039"
+                ]
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The reporter channels of this condition, by the channel names of `labelling`, such as `126` or `127N`. Each condition needs at least one, and two or more under the Welch tests.",
+                "default": [],
+                "x-adr": [
+                  "0038"
+                ]
+              }
+            }
+          },
+          "description": "The two experimental conditions compared, each an object with `name` and `channels`. Array order is the ratio direction: the fold change is `conditions[0]` over `conditions[1]`. A channel named in no condition is logged but not tested, so a bridge channel or a partly used kit is fine.",
+          "x-default-text": "required when quantification.enabled",
+          "x-adr": [
+            "0038"
+          ]
+        },
+        "correction_matrix": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The isotope impurity matrix of the label lot, one `/`-separated string per channel of `labelling` in channel order, as printed on the kit data sheet. Each string holds four percentages for the -2, -1, +1 and +2 Da isotopes, or eight under `tmt16plex` and `tmt18plex`, and `NA` marks no contribution. Omitted or `[]` uses the scheme's stock matrix; all zeros turns correction off.",
+          "default": [],
+          "x-default-text": "stock matrix of the scheme",
+          "x-adr": [
+            "0038"
+          ]
+        },
+        "channel_normalization": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Per-channel divisors from a previous run, keyed by channel name, applied to what the test reads. They remove sample loading and labelling differences, as the offline pipeline's channel medians do, and only their ratios matter. Once authored it must name every channel the conditions assign. Emptiness and the logged channels stay raw, while the fold change, p and condition means are corrected; absent or `{}`, every factor is 1.",
+          "x-default-text": "absent",
+          "x-adr": [
+            "0057"
+          ]
+        }
+      },
+      "description": "Isobaric reporter-ion quantification. When enabled, each selected precursor is first acquired with `ms_settings.ms2_quant`, its reporter channels are tested between two conditions, and the verdict decides whether `ms_settings.ms2` is bought to identify it. Both scans are defined in `ms_settings`; this section holds only the decision.",
+      "x-adr": [
+        "0038",
+        "0039",
+        "0056",
+        "0057"
+      ]
+    },
+    "faims": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cv_values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "An empty list turns FAIMS off and commands it off on every scan. One value holds FAIMS on at that CV for the whole run. Two or more cycle: after each survey the next CV in list order is surveyed, wrapping at the end, and each MS2 carries the CV of its survey. Author it: an omitted key means FAIMS on at a fixed `-50`, not the empty list the C++ fallback suggests.",
+          "default": [
+            -50
+          ],
+          "x-unit": "V",
+          "x-adr": [
+            "0012"
+          ]
+        },
+        "max_cv_skip": {
+          "type": "integer",
+          "description": "The most cycles in a row an unproductive CV may be passed over. A CV whose survey queues fewer MS2 commands than `cv_precursor_threshold` is passed over for one cycle, and each further poor survey doubles that, up to this cap; a productive survey resets it. `0` never skips. Read only when `cv_values` has two or more entries.",
+          "default": 0
+        },
+        "cv_precursor_threshold": {
+          "type": "integer",
+          "description": "The productivity bar for a CV while cycling: a survey that queues fewer MS2 commands than this marks its CV for skipping. It counts commands, not species, so a species acquired as several MS2 scans counts once per scan. Inert when `max_cv_skip` is `0` or `cv_values` has fewer than two entries.",
+          "default": 15
+        }
+      },
+      "description": "FAIMS compensation voltage control. `cv_values` decides whether FAIMS is off, held at one CV, or cycled; the other two keys tune how an unproductive CV is skipped while cycling. Every scan command carries an explicit FAIMS on or off.",
+      "x-adr": [
+        "0012"
+      ]
+    },
+    "ms_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ms1": {
+          "$ref": "#/$defs/scan",
+          "propertyNames": {
+            "enum": [
+              "analyzer",
+              "first_mass",
+              "last_mass",
+              "resolution",
+              "agc_target",
+              "max_it",
+              "microscans",
+              "rf_lens",
+              "source_cid",
+              "source_cid_scaling",
+              "data_type",
+              "scan_rate"
+            ]
+          },
+          "description": "The survey scan config, which also builds every monitor scan; it takes the 12 scan keys that carry no activation. The AGC prescan takes its mass range and its three source-region keys, and every MSn scan that leaves a source-region key at 0 takes this scan's value.",
+          "x-default-text": "every key 0 or empty",
+          "x-adr": [
+            "0011"
+          ]
+        },
+        "ms2": {
+          "$ref": "#/$defs/scan",
+          "description": "The MS2 scan config, fired once per selected precursor at priority 2, and the base every MS2 exploration variant is built from. With `quantification.enabled` it becomes the identification scan, bought at priority 0 when a verdict passes `quantification.identify`, while `ms2_quant` takes its place in the per-precursor dispatch.",
+          "x-default-text": "required unless precursor_selection.rank_by is none, and when quantification.enabled",
+          "x-adr": [
+            "0038"
+          ]
+        },
+        "ms2_quant": {
+          "$ref": "#/$defs/scan",
+          "description": "The quantification scan: with `quantification.enabled` it fires once per selected precursor in place of `ms2`, and it is the only scan whose reporter ions are read. Authored while quantification is off, it is inert. Its activation must release the reporter ions, which the loader does not check.",
+          "x-default-text": "absent; required when quantification.enabled",
+          "x-adr": [
+            "0038"
+          ]
+        },
+        "ms3_quant": {
+          "$ref": "#/$defs/scan",
+          "description": "Stage 1 of the quantification MS3 (`quantification.scan: ms3` or `both`): the activation that releases the reporter ions from the labelled fragment, and the scan that reads them, typically HCD over m/z 120 to 140. Stage 0 is the identification scan's own isolation and activation. Authored under `scan: ms2`, it is inert.",
+          "x-default-text": "absent; required when quantification.scan is ms3 or both",
+          "x-adr": [
+            "0064"
+          ]
+        },
+        "ms3": {
+          "$ref": "#/$defs/scan",
+          "description": "The MS3 scan config, built for every characterization target when `identification.characterization` is set, and the base every MS3 exploration variant is built from. Its activation, collision energy and reaction keys drive the fragment stage, while the first stage carries the isolation and activation of the MS2 that produced the fragment. It is inert without that block, so deleting the block switches MS3 off and nothing else needs to change.",
+          "x-default-text": "required when identification.characterization is set",
+          "x-adr": [
+            "0013",
+            "0061"
+          ]
+        },
+        "additional_ms2": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/scan"
+          },
+          "description": "Named extra MS2 scan configs, each taking the same keys as `ms2`, under snake_case names of up to 32 characters. An entry fires only where it is named: `precursor_selection.additional_scans` acquires it for every selected precursor after the first MS2, in that array's order. An entry nobody names is never acquired, and the load prints a warning for it.",
+          "x-default-text": "absent",
+          "x-adr": [
+            "0014"
+          ]
+        }
+      },
+      "description": "The scan configs: instrument parameters only, and no key here decides whether a scan is acquired. `precursor_selection`, `identification.characterization` and `quantification` decide when each config fires, and every config takes the same scan keys.",
+      "x-adr": [
+        "0009",
+        "0014"
+      ]
+    },
+    "scheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cycle_time": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "`true`: a drain that finds more than `value_ms` since the last survey MS1 queues a fresh survey at priority 0, ahead of every queued MS2 and MS3. Suppressed while an exploration sweep runs. Monitor scans and AGC prescans do not reset the clock; every other MS1 does.",
+              "default": false,
+              "x-adr": [
+                "0042"
+              ]
+            },
+            "value_ms": {
+              "type": "number",
+              "description": "Longest allowed gap between survey MS1 scans. Read only when `enabled` is `true`.",
+              "default": 60000,
+              "x-unit": "ms"
+            }
+          },
+          "description": "A ceiling on the time between survey MS1 scans. When enabled and exceeded, the next drain queues a survey ahead of pending MS2 and MS3 work."
+        },
+        "scan_timeout": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "`true`: every drain first discards queued commands that have waited longer than `value_ms`, so they are never sent. Commands already sent to the instrument are not affected. Each discard is printed as a `[TRACK-EXPIRE]` line.",
+              "default": false
+            },
+            "value_ms": {
+              "type": "number",
+              "description": "Longest a command may wait in the queue before it is discarded. Read only when `enabled` is `true`.",
+              "default": 30000,
+              "x-unit": "ms"
+            }
+          },
+          "description": "A maximum age for commands waiting in the engine's queue."
+        },
+        "agc_interval_seconds": {
+          "type": "number",
+          "description": "Interval between AGC prescans, and the only trigger that emits one. When more than this has passed since the last prescan, the next drain returns a fast ion-trap prescan ahead of every queued command, over the `ms_settings.ms1` scan range and with its source-region settings. The interval is truncated to whole milliseconds. Committed test configs set `9999999` so that no prescan fires during a test.",
+          "default": 1,
+          "x-unit": "s",
+          "x-adr": [
+            "0031"
+          ]
+        },
+        "target_depth": {
+          "type": "integer",
+          "description": "How many commands the host keeps outstanding on the instrument: one executing and the rest queued behind it. At `1` the host submits, waits for the echo and submits again, and the instrument fills every round trip with its own method's scans. Values below 1 act as 1. Read by the host alone; the engine accepts the key and ignores it.",
+          "default": 2,
+          "x-adr": [
+            "0033"
+          ]
+        }
+      },
+      "description": "How the engine paces survey scans, AGC prescans and queued commands, and how many commands the host keeps on the instrument at once. The three timers run on wall clock."
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target_logs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "`ida.log` files from earlier runs, read for their `Mass` and `AllMass` lines. Under `targeting: inclusion`, when no `inclusion_list` rows are loaded, their acquired masses are the inclusion targets: a mass is a target only within `precursor_selection.rt_window` of a reference acquisition of it (`log_target_rt_window`), and it matches at any charge (`log_target_charges`). Under `in_depth` their masses and qscores drive the soft reorder gated by `deconvolution.tqscore_threshold`, and under `exclusion_masses` every `AllMass` mass logged within `precursor_selection.rt_window` of the current survey is excluded. A `Mass` line whose command a later survey re-planned away (named on a `Superseded=` line) is not read. An unreadable file is skipped without a warning.",
+          "default": []
+        },
+        "inclusion_list": {
+          "type": "string",
+          "description": "Tab-separated inclusion list, read only under `targeting: inclusion`. Each row is mass, charge, `rt_start` and `rt_end` in minutes, and priority; a header row starting `mass` and lines starting `#` are skipped. A charge of `-1` or empty leaves the row unrestricted, and a `;`-separated list such as `10;13;16` restricts acquisition to those charges. When it loads rows they replace the `target_logs` masses as the inclusion targets, each active only inside its RT range, with priority breaking ties.",
+          "default": "",
+          "x-adr": [
+            "0028"
+          ]
+        }
+      },
+      "description": "Paths to the external inputs the engine loads once when the run starts: target logs from earlier runs and an inclusion list. An empty string or an empty array loads nothing, and a relative path resolves against the process working directory."
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "log_dir": {
+          "type": "string",
+          "description": "Base folder for run folders. Each run creates `<log_dir>/<rawname>_<timestamp>/`, or `<log_dir>/<timestamp>/` without `-r`, and writes all seven logs there: `ida.log`, `scan_commands.tsv`, `scan_results.tsv`, `identification.tsv`, `pooled_identification.tsv`, `FlashLog.log` and `IDALog.log`, plus a verbatim copy of the method file named `method.json`. Empty means the process working directory, and a relative path resolves against it. A second run in the same second gets a `_2` suffix rather than sharing a folder.",
+          "default": "",
+          "x-adr": [
+            "0015"
+          ]
+        }
+      },
+      "description": "Where the run's output goes. The host resolves it once at start, and the engine receives a finished folder path."
+    }
+  },
+  "description": "`method.json` is the one file that configures a FLASHIda run: which precursors to fragment, how to identify them in real time and whether to characterize them, and the instrument parameters of every scan. It is read twice, by the C# host and then by the C++ engine, and both loaders reject a key they do not know, so a misspelled key stops the run instead of being ignored. Every run copies the file verbatim into its run folder as `method.json`, beside the logs it produced. Each page covers one section: for every key it gives the type, the value an omitted key produces, the values and rules that apply, and the value a named committed config sets.",
+  "$defs": {
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "analyzer": {
+          "type": "string",
+          "description": "The mass analyzer that reads the scan out, a closed set checked on every scan config at load.",
+          "enum": [
+            "Orbitrap",
+            "IonTrap",
+            ""
+          ],
+          "x-default-text": "instrument method default",
+          "enumDescriptions": [
+            "Orbitrap readout.",
+            "Linear ion trap readout; an exploration pre-scan read out here is measured for its precursor share and never deconvolved or identified.",
+            "No analyzer is sent, so the instrument method's analyzer applies."
+          ],
+          "x-adr": [
+            "0045",
+            "0009"
+          ]
+        },
+        "activation": {
+          "type": "string",
+          "description": "Fragmentation of the scan's own isolation stage, passed to the instrument verbatim and case-sensitive; the code recognises `HCD`, `CID`, `ETD`, `EThcD` and `ETciD`, and an MSn scan left empty is refused when the host builds the command.",
+          "x-default-text": "required on every MSn scan",
+          "x-adr": [
+            "0010",
+            "0030"
+          ]
+        },
+        "collision_energy": {
+          "type": "integer",
+          "description": "Normalized collision energy read by `HCD`, `CID`, `EThcD` and `ETciD`, commanded on every MSn stage even at 0, which is a real setting that does not fragment rather than the instrument method default.",
+          "default": 0,
+          "x-unit": "NCE",
+          "x-adr": [
+            "0010"
+          ]
+        },
+        "resolution": {
+          "type": "integer",
+          "description": "Orbitrap resolution, sent only when above 0.",
+          "x-default-text": "instrument method default",
+          "x-adr": [
+            "0009"
+          ]
+        },
+        "agc_target": {
+          "type": "integer",
+          "description": "AGC target of the scan's injection, sent only when above 0.",
+          "x-default-text": "instrument method default",
+          "x-adr": [
+            "0009"
+          ]
+        },
+        "max_it": {
+          "type": "number",
+          "description": "Maximum injection time, sent only when above 0.",
+          "x-default-text": "instrument method default",
+          "x-unit": "ms",
+          "x-adr": [
+            "0009"
+          ]
+        },
+        "first_mass": {
+          "type": "number",
+          "description": "Lower end of the scan range, sent only when above 0; with `last_mass` also set the host commands a defined m/z range, otherwise a defined first mass.",
+          "x-default-text": "instrument method default",
+          "x-unit": "Th",
+          "x-adr": [
+            "0009"
+          ]
+        },
+        "last_mass": {
+          "type": "number",
+          "description": "Upper end of the scan range, sent only when above 0; the host commands a defined m/z range only when `first_mass` is set as well.",
+          "x-default-text": "instrument method default",
+          "x-unit": "Th",
+          "x-adr": [
+            "0009"
+          ]
+        },
+        "microscans": {
+          "type": "integer",
+          "description": "Number of microscans summed into one spectrum, sent only when above 0.",
+          "x-default-text": "instrument method default",
+          "x-adr": [
+            "0009"
+          ]
+        },
+        "data_type": {
+          "type": "string",
+          "description": "Spectrum data type passed to the instrument verbatim, `Centroid` or `Profile` in the committed configs, and sent only when not empty.",
+          "x-default-text": "instrument method default",
+          "x-adr": [
+            "0009"
+          ]
+        },
+        "scan_rate": {
+          "type": "string",
+          "description": "Ion trap scan rate passed to the instrument verbatim, such as the `Turbo` the AGC prescan uses, sent only when not empty and never inherited from `ms1`.",
+          "x-default-text": "instrument method default",
+          "x-adr": [
+            "0009",
+            "0011"
+          ]
+        },
+        "rf_lens": {
+          "type": "number",
+          "description": "RF lens of the ion source, commanded on every scan; on an MSn scan 0 takes the `ms1` value, while on `ms1` itself 0 is commanded as 0.",
+          "x-default-text": "inherits ms1's value",
+          "x-adr": [
+            "0011"
+          ]
+        },
+        "source_cid": {
+          "type": "number",
+          "description": "In-source CID energy, commanded on every scan; on an MSn scan 0 takes the `ms1` value, while on `ms1` itself 0 is commanded as 0.",
+          "x-default-text": "inherits ms1's value",
+          "x-adr": [
+            "0011"
+          ]
+        },
+        "source_cid_scaling": {
+          "type": "number",
+          "description": "Source CID scaling factor, commanded on every scan; on an MSn scan 0 takes the `ms1` value, while on `ms1` itself 0 is commanded as 0, the value the shipped method uses.",
+          "x-default-text": "inherits ms1's value",
+          "x-adr": [
+            "0011"
+          ]
+        },
+        "reaction_time": {
+          "type": "number",
+          "description": "Ion-ion reaction time, commanded even at 0 whenever a stage of the command uses `ETD`, `EThcD` or `ETciD` and omitted otherwise, so an ETD-family scan must set it above 0 because the instrument rejects 0.",
+          "default": 0,
+          "x-unit": "ms",
+          "x-adr": [
+            "0030",
+            "0010"
+          ]
+        },
+        "reagent_max_it": {
+          "type": "number",
+          "description": "Maximum injection time of the ETD reagent, sent only when a stage of the command sets it above 0.",
+          "x-default-text": "instrument method default",
+          "x-unit": "ms",
+          "x-adr": [
+            "0030",
+            "0010"
+          ]
+        },
+        "reagent_agc_target": {
+          "type": "integer",
+          "description": "AGC target of the ETD reagent, sent only when a stage of the command sets it above 0.",
+          "x-default-text": "instrument method default",
+          "x-adr": [
+            "0030",
+            "0010"
+          ]
+        }
+      }
+    },
+    "exploration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "type": "string",
+          "description": "How the level's pre-scans are scored and which energy the level then acquires at. At level 2 a sweep replaces the ordinary MS2 of every selected precursor; at level 3 every MS3 target is swept. Every pre-scan records its precursor share, the isolation window's fraction of the scan's own signal, whatever the metric.",
+          "default": "none",
+          "enum": [
+            "none",
+            "mass_count",
+            "remaining_precursor",
+            "fragment_count",
+            "kinetic_model"
+          ],
+          "enumDescriptions": [
+            "No sweep. The level fires its scan config at its authored energy, and every other key of the block except `monitor_ms1` is discarded before it reaches the engine.",
+            "Scores a pre-scan by the number of deconvolved masses and takes the highest. A measuring metric, so at level 3 a follow-up MS3 is acquired at the winning energy.",
+            "Scores a pre-scan by how close its precursor share lies to `remaining_precursor_target` and takes the closest. A measuring metric, and with `kinetic_model` the only one that can decide an ion-trap sweep.",
+            "Scores a pre-scan by the fragment ions it matches against `identification.reference`, which it therefore needs at either level. A reading metric: at level 3 the winning pre-scan is its own evidence and no follow-up is acquired unless `overrides` is set.",
+            "Fits a Gompertz curve to the precursor shares and acquires a follow-up at the modeled maximum, an integer energy between 1 and `ce_max` that need not be a grid point. Follows up at both levels, needs `kinetic_model.k2`, and sweeps exactly one activation, HCD or CID."
+          ],
+          "x-adr": [
+            "0020",
+            "0045",
+            "0047",
+            "0048"
+          ]
+        },
+        "ce_min": {
+          "type": "number",
+          "description": "Lowest collision energy of the sweep grid. Read only when a swept activation varies collision energy, which HCD, CID, EThcD and ETciD do. Under `kinetic_model` the modeled energy may lie below it.",
+          "default": 20,
+          "x-unit": "NCE"
+        },
+        "ce_max": {
+          "type": "number",
+          "description": "Highest collision energy of the sweep grid, always acquired even when `ce_step` does not divide the range. Under `kinetic_model` it is also the ceiling of the modeled energy.",
+          "default": 40,
+          "x-unit": "NCE",
+          "x-adr": [
+            "0047"
+          ]
+        },
+        "ce_step": {
+          "type": "number",
+          "description": "Spacing of the collision-energy grid, which runs from `ce_min` by this step and then adds `ce_max`. Commanded energies are integers, so a fractional grid point is truncated.",
+          "default": 5,
+          "x-unit": "NCE"
+        },
+        "overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Scan settings keys applied to every pre-scan of this level and to nothing else, each value written as a string, such as `{\"analyzer\": \"IonTrap\", \"max_it\": \"10\"}`. When the map is not empty the sweep is closed by a follow-up at the chosen energy, built from the level's own scan config without the overrides. `analyzer` takes `Orbitrap`, `IonTrap` or an empty string; an `IonTrap` pre-scan is measured and never identified, so the metric must be `remaining_precursor` or `kinetic_model`. `first_mass` and `last_mass` here set the pre-scan's readout range.",
+          "x-default-text": "absent or null",
+          "x-adr": [
+            "0020",
+            "0044",
+            "0045"
+          ]
+        },
+        "remaining_precursor_target": {
+          "type": "number",
+          "description": "The precursor share a `remaining_precursor` sweep aims for: 0.1 means one tenth of the pre-scan's signal is still inside the isolation window. A pre-scan scores one minus its distance from this value, floored at 0. Read only under `metric: remaining_precursor`.",
+          "default": 0.1,
+          "x-adr": [
+            "0048"
+          ]
+        },
+        "reaction_time_min": {
+          "type": "number",
+          "description": "Lowest ion-ion reaction time of the sweep grid. Read only when an ETD-family activation is swept, and then at least 0.03, because the instrument rejects a reaction time of 0.",
+          "default": 0,
+          "x-unit": "ms",
+          "x-adr": [
+            "0048"
+          ]
+        },
+        "reaction_time_max": {
+          "type": "number",
+          "description": "Highest reaction time of the sweep grid, always acquired. A reaction-time grid exists only when this is above `reaction_time_min`, which an ETD-family sweep requires.",
+          "default": 0,
+          "x-unit": "ms"
+        },
+        "reaction_time_step": {
+          "type": "number",
+          "description": "Spacing of the reaction-time grid, which runs from `reaction_time_min` by this step and then adds `reaction_time_max`. Must be above 0 when a reaction-time range is set.",
+          "default": 1,
+          "x-unit": "ms"
+        },
+        "activations": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Activations to sweep, each over its own grid: HCD and CID vary collision energy, ETD varies reaction time at the scan config's energy, EThcD and ETciD cross both grids. The winner is chosen across every activation of the group. Under `kinetic_model` it names exactly one activation, HCD or CID.",
+          "x-default-text": "absent or null: the activation of `ms_settings.ms2` at level 2 or `ms_settings.ms3` at level 3"
+        },
+        "tolerance_ppm": {
+          "type": "number",
+          "description": "Mass tolerance used to deconvolve this level's pre-scans and to match their fragments when scoring them. 0 uses the level's own `deconvolution.tol` entry, the second at level 2 and the third at level 3.",
+          "default": 0,
+          "x-unit": "ppm"
+        },
+        "monitor_ms1": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "The switch. Inert, with a warning at load, when the level's `metric` is `none`, because such a level never sweeps.",
+              "default": false,
+              "x-adr": [
+                "0042"
+              ]
+            },
+            "interval_ms": {
+              "type": "number",
+              "description": "Wall-clock spacing of monitor scans while the level sweeps. The first is sent as soon as a sweep starts, so even a sweep shorter than one interval gets one. Must be above 0 when `enabled`; each reading costs a full survey scan.",
+              "default": 30000,
+              "x-unit": "ms",
+              "x-adr": [
+                "0042"
+              ]
+            }
+          },
+          "description": "A periodic MS1 acquired while this level is sweeping, so the operator can watch the source. It is a copy of `ms_settings.ms1` sent ahead of the sweep, deconvolved and logged, and it selects, excludes and decides nothing. One monitor scan serves both levels when both are sweeping; level 3 is the intended place for it, because MS3 sweeps are the long ones.",
+          "x-adr": [
+            "0042"
+          ]
+        },
+        "kinetic_model": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "description": "The Kinetic Model's one authored input, read only under `metric: kinetic_model`. Under `metric: none` it is dropped before it reaches the engine.",
+          "properties": {
+            "k2": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              },
+              "description": "Overfragmentation rate per unit of collision energy, by activation name, such as `{\"HCD\": 0.0388}`. The swept activation must have an entry above 0, and it is never defaulted, because the rate differs by an order of magnitude between activations and is unmeasured at MS3 and on the ion trap. An entry for an activation the level does not sweep is inert and warned about.",
+              "x-default-text": "required, one entry for the swept activation",
+              "x-unit": "1/NCE",
+              "x-adr": [
+                "0047"
+              ]
+            }
+          },
+          "x-default-text": "required when metric is kinetic_model; otherwise absent or null",
+          "x-adr": [
+            "0047"
+          ]
+        }
+      }
+    }
+  },
+  "x-pages": [
+    {
+      "slug": "run",
+      "title": "Run",
+      "subtitle": "JSON keys of `global`, `files`, `runtime` and `scheduling`",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, `LogPathResolver.cs`, `Flash.cs`, ADR-0031, ADR-0033, ADR-0041, ADR-0043",
+      "sections": [
+        {
+          "ref": "global",
+          "exemplars": [
+            {
+              "config": "method_default.json"
+            }
+          ]
+        },
+        {
+          "ref": "files",
+          "exemplars": [
+            {
+              "config": "method_inclusion.json"
+            }
+          ]
+        },
+        {
+          "ref": "runtime",
+          "exemplars": [
+            {
+              "config": "method_default.json"
+            }
+          ]
+        },
+        {
+          "ref": "scheduling",
+          "exemplars": [
+            {
+              "config": "method_default.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "deconvolution",
+      "title": "Deconvolution",
+      "subtitle": "JSON keys of `deconvolution`",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, `Deconvolution.cpp`",
+      "sections": [
+        {
+          "ref": "deconvolution",
+          "exemplars": [
+            {
+              "config": "method_default.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "precursor-selection",
+      "title": "Precursor selection",
+      "subtitle": "JSON keys of `precursor_selection`",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, `PrecursorSelection.cpp`, ADR-0014, ADR-0016, ADR-0021, ADR-0028, ADR-0036, ADR-0040",
+      "sections": [
+        {
+          "ref": "precursor_selection",
+          "exemplars": [
+            {
+              "config": "method_cytc_separate_charges.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "exploration",
+      "title": "Exploration",
+      "subtitle": "JSON keys of `precursor_selection.exploration` and `identification.characterization.exploration`",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, `Exploration.cpp`, ADR-0020, ADR-0029, ADR-0030, ADR-0042, ADR-0044, ADR-0045, ADR-0047, ADR-0048",
+      "sections": [
+        {
+          "ref": "#/$defs/exploration",
+          "heading": "exploration",
+          "exemplars": [
+            {
+              "config": "method_exploration_ms3.json",
+              "label": "level 2",
+              "base": "precursor_selection.exploration"
+            },
+            {
+              "config": "method_exploration_ms3.json",
+              "label": "level 3",
+              "base": "identification.characterization.exploration"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "identification",
+      "title": "Identification",
+      "subtitle": "JSON keys of `identification`: the reference, the annotation method, FLASHTnT and Refine tuning, and `characterization`",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, `ProteoformTracker.cpp`, `FragmentAnalysis.cpp`, `Refine`, ADR-0013, ADR-0023, ADR-0049, ADR-0052, ADR-0054, ADR-0055, ADR-0061",
+      "sections": [
+        {
+          "ref": "identification",
+          "exclude": [
+            "flashtnt",
+            "refine",
+            "characterization"
+          ],
+          "exemplars": [
+            {
+              "config": "method_refine_cytc.json"
+            }
+          ]
+        },
+        {
+          "ref": "identification.flashtnt",
+          "exemplars": [
+            {
+              "config": "method_identify_only.json"
+            }
+          ]
+        },
+        {
+          "ref": "identification.refine",
+          "exemplars": [
+            {
+              "config": "method_refine_cytc.json"
+            }
+          ]
+        },
+        {
+          "ref": "identification.characterization",
+          "exemplars": [
+            {
+              "config": "method_ms3_cytc_exhaustive.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "scan-settings",
+      "title": "Scan settings",
+      "subtitle": "JSON keys of every scan settings object: `ms1`, `ms2`, `ms2_quant`, `ms3`, `ms3_quant`, and each `additional_ms2` entry",
+      "sources": "`MethodParameters.cs` (`MS1Parameters`, `MS2Parameters`, `MS3Parameters`, `ToJsonScanConfig`), `ScanFactory.cs`, `Config.cpp`, ADR-0009, ADR-0010, ADR-0011, ADR-0030, ADR-0045",
+      "sections": [
+        {
+          "ref": "#/$defs/scan",
+          "heading": "scan settings object",
+          "exemplars": [
+            {
+              "config": "method_dda_etd.json",
+              "label": "ms1",
+              "base": "ms_settings.ms1"
+            },
+            {
+              "config": "method_dda_etd.json",
+              "label": "ms2",
+              "base": "ms_settings.ms2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "ms-settings",
+      "title": "ms_settings",
+      "subtitle": "JSON keys of `ms_settings`: the scan roster",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, ADR-0014, ADR-0038",
+      "sections": [
+        {
+          "ref": "ms_settings",
+          "exemplars": [
+            {
+              "config": "method_default.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "quantification",
+      "title": "Quantification",
+      "subtitle": "JSON keys of `quantification`",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, `Quantification.cpp`, ADR-0038, ADR-0039, ADR-0040, ADR-0056, ADR-0057",
+      "sections": [
+        {
+          "ref": "quantification",
+          "exemplars": [
+            {
+              "config": "method_quant.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "faims",
+      "title": "FAIMS",
+      "subtitle": "JSON keys of `faims`",
+      "sources": "`MethodConfig.cs`, `MethodParameters.cs`, `Config.cpp`, `FAIMS.cpp`, ADR-0012",
+      "sections": [
+        {
+          "ref": "faims",
+          "exemplars": [
+            {
+              "config": "method_faims_3cv.json"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
