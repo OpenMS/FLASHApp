@@ -180,6 +180,14 @@ def decisions(tables: dict) -> dict:
     })
     acquired = scans['Scan'].isin(rt_of)
     scans['Acquired'] = acquired.to_numpy()
+    # The instrument acquires commanded scans in the order they were sent, so
+    # a scan sent before the last one that came back will not come back any
+    # more (dropped, or the run stopped): it is not waiting
+    sent = _col(commands, 'tracking_id')
+    came_back = np.flatnonzero(sent.isin(rt_of).to_numpy())
+    last_back = came_back[-1] if len(came_back) else -1
+    position = np.flatnonzero((_col(commands, 'scan_type') != 'survey').to_numpy())
+    scans['Waiting'] = (~acquired.to_numpy()) & (position > last_back)
     scans['RT'] = scans['Scan'].map(rt_of)
     scans['Survey RT'] = scans['Parent'].map(rt_of)
 
@@ -208,7 +216,8 @@ def decisions(tables: dict) -> dict:
     else:
         scans['Proteoform'] = ''
         scans['Score'] = np.nan
-    scans['Status'] = np.where(scans['Acquired'], 'acquired', 'waiting')
+    scans['Status'] = np.select(
+        [scans['Acquired'], scans['Waiting']], ['acquired', 'waiting'], 'not acquired')
 
     # One row per precursor
     groups = scans.groupby('precursor', sort=True)
@@ -222,7 +231,7 @@ def decisions(tables: dict) -> dict:
         'QScore': groups['QScore'].max().to_numpy(),
         'MS2': groups['MS'].apply(lambda s: int((s == 2).sum())).to_numpy(),
         'MS3': groups['MS'].apply(lambda s: int((s == 3).sum())).to_numpy(),
-        'Waiting': groups['Acquired'].apply(lambda s: int((~s).sum())).to_numpy(),
+        'Waiting': groups['Waiting'].apply(lambda s: int(s.sum())).to_numpy(),
         'Decisions': groups['Decision'].apply(lambda s: ', '.join(pd.unique(s))).to_numpy(),
         'Best energy': groups.apply(
             lambda g: g.loc[g['Winner'], 'Energy'].iloc[0] if g['Winner'].any() else np.nan,
@@ -272,7 +281,8 @@ def decisions(tables: dict) -> dict:
         'surveys_acquired': int(_col(surveys, 'tracking_id').isin(rt_of).sum()),
         'ms2': int((scans['MS'] == 2).sum()),
         'ms3': int((scans['MS'] == 3).sum()),
-        'waiting': int((~scans['Acquired']).sum()),
+        'waiting': int(scans['Waiting'].sum()),
+        'not_acquired': int((~scans['Acquired'] & ~scans['Waiting']).sum()),
         'precursors': int(len(precursors)),
         'identified': int(precursors['Identified'].sum()),
         'rt': float(np.nanmax(_num(results, 'rt'))) if len(results) and _num(results, 'rt').notna().any() else None,

@@ -162,7 +162,7 @@ def test_decisions(tmp_path):
     result = ida_log.decisions(ida_log.read_run(_run(tmp_path / "run")))
 
     assert result["summary"] == {
-        "surveys": 2, "surveys_acquired": 2, "ms2": 3, "ms3": 1, "waiting": 2,
+        "surveys": 2, "surveys_acquired": 2, "ms2": 3, "ms3": 1, "waiting": 1, "not_acquired": 1,
         "precursors": 2, "identified": 1, "rt": 0.9,
     }
 
@@ -173,13 +173,16 @@ def test_decisions(tmp_path):
     assert scans.loc["T3", "Fragment"] == "b14"
     assert scans.loc["T3", "Mass"] == pytest.approx(1498.85)
     assert scans.loc["T3", "Activation"] == "CID"
-    assert scans.loc["T3", "Status"] == "waiting"
+    # T3 was sent before T4, which came back: it will not come back any more
+    assert scans.loc["T3", "Status"] == "not acquired"
+    assert scans.loc["T5", "Status"] == "waiting"
     assert scans.loc["T2", "Proteoform"] == "PEPTIDEK"
 
     precursors = result["precursors"].set_index("precursor")
     assert precursors.loc[1, "Mass"] == pytest.approx(12351.39)
     assert precursors.loc[1, "RT"] == pytest.approx(0.5)
     assert (precursors.loc[1, "MS2"], precursors.loc[1, "MS3"]) == (2, 1)
+    assert (precursors.loc[1, "Waiting"], precursors.loc[2, "Waiting"]) == (0, 1)
     assert precursors.loc[1, "Best energy"] == 30
     assert precursors.loc[1, "Proteoform"] == "PEPTIDEK"
     assert precursors.loc[1, "Coverage"] == pytest.approx(45)
