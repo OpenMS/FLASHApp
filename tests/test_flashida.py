@@ -47,23 +47,37 @@ def test_never_online(state):
     assert not flashida.available()
 
 
-@pytest.mark.parametrize("name, expected", [
-    ("sample1_FLASHIda_TopN3.raw", "TopN3"),
-    ("sample1_FLASHIda_TopN3_2.raw", "TopN3"),
-    ("sample1_FLASHIda_TopN3.RAW", "TopN3"),
-    ("sample1.raw", None),
-    ("sample1_FLASHIda_TopN3.mzML", None),
-])
-def test_raw_file_names(name, expected):
-    assert flashida.parse_raw_name(name) == expected
+def _sld(path, names):
+    """An Xcalibur sequence as the .sld keeps it: UTF-16 text with one JSON
+    blob per row."""
+    blobs = "".join(
+        '\x00Finnigan{"ReInject":{"OriginalRawFileNameWithoutExtension":%s,'
+        '"DisplayRowNumber":%d,"DisplayLabel":0}}' % (json.dumps(n), 10 + i)
+        for i, n in enumerate(names)
+    )
+    path.write_bytes(b"\x01\x02" + blobs.encode("utf-16-le"))
+    return path
 
 
-def test_find_raws(tmp_path):
-    (tmp_path / "a_FLASHIda_M1.raw").write_text("")
-    (tmp_path / "b_FLASHIda_M2_rep.raw").write_text("")
-    (tmp_path / "other.raw").write_text("")
-    (tmp_path / "x_FLASHIda_M3.raw").mkdir()
-    assert flashida.find_raws(tmp_path) == {"a_FLASHIda_M1.raw": "M1", "b_FLASHIda_M2_rep.raw": "M2"}
+def test_sequence_rows(tmp_path):
+    sld = _sld(tmp_path / "seq.sld", ["Caco2_rep1", "Wash", 'odd "name"'])
+    assert flashida.sequence_rows(sld) == [
+        {"name": "Caco2_rep1", "row": 10}, {"name": "Wash", "row": 11}, {"name": 'odd "name"', "row": 12}]
+    assert flashida.scheduled(flashida.sequence_rows(sld), ["caco2_REP1", "Missing"]) == {"caco2_REP1": 10}
+
+
+def test_newest_sequence_and_raw_names(tmp_path):
+    assert flashida.newest_sequence(tmp_path) is None
+    old = _sld(tmp_path / "old.sld", ["a"])
+    new = _sld(tmp_path / "new.SLD", ["b"])
+    os.utime(old, (1, 1))
+    assert flashida.newest_sequence(tmp_path) == new
+    (tmp_path / "a.raw").write_text("")
+    (tmp_path / "B.RAW").write_text("")
+    (tmp_path / "c.mzML").write_text("")
+    (tmp_path / "d.raw").mkdir()
+    assert flashida.raw_names(tmp_path) == {"a", "B"}
+    assert flashida.raw_names(tmp_path / "missing") == set()
 
 
 def test_log_folder_of_a_method(tmp_path):
