@@ -24,7 +24,8 @@ from src.common.common import page_setup
 from src.common.guide import page_intro
 from src.render import insight_data, modifications
 from src.render.render import (
-    FIXED_MODS_IDENTIFIER, SEQUENCE_VIEW_OPTIONS, _modification_picker_library,
+    FIXED_MODS_IDENTIFIER, FRAGMENT_MATCHES_IDENTIFIER, SEQUENCE_VIEW_OPTIONS,
+    _modification_picker_library,
     _sequence_view_options,
 )
 from src.render.sequence import getFragmentDataFromSeq
@@ -216,4 +217,72 @@ view = ProteinSequenceView(
 if hasattr(view, 'set_modification_picker'):
     view.set_modification_picker(_modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids)
 _sequence_view_options(view)
+if hasattr(view, 'set_fragment_matches_proteoform'):
+    # The matched proteoform comes with its fragments, for the comparison below
+    view.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
+    view.set_fragment_matches_proteoform()
 view(key='fragment_matcher_view', state_manager=manager)
+
+
+# Proteoforms tried against these masses
+if hasattr(view, 'set_fragment_matches_proteoform'):
+    st.subheader('Compare proteoforms')
+    st.caption(
+        'Change the sequence, its modifications or the ion types in the view, '
+        'and add each proteoform you try: the table compares them against '
+        'these masses. ★ marks the one with the most matched fragments.'
+    )
+    current = fm_input.hypothesis(
+        manager.get_selection(FRAGMENT_MATCHES_IDENTIFIER), stored.get('precursor_mass'),
+    )
+    rows = fm_input.load_hypotheses(workspace, stored)
+    with st.container(horizontal=True, vertical_alignment='center'):
+        if st.button('Add this proteoform', icon=':material/add:', type='primary',
+                     disabled=current is None, key='matcher_add_hypothesis'):
+            rows = fm_input.add_hypothesis(workspace, stored, current)
+        if current is not None:
+            st.caption(
+                f"{current['matched_fragments']} matched fragments, "
+                f"{current['cleavages']:.0f}% of the bonds"
+            )
+    if rows:
+        best = fm_input.best_hypothesis(rows)
+        has_precursor = any(r.get('delta_da') is not None for r in rows)
+        table = pl.DataFrame([
+            {
+                'Best': '★' if i == best else '',
+                'Matched fragments': r['matched_fragments'],
+                'Cleavages (%)': r['cleavages'],
+                **({'Δ mass (Da)': r['delta_da'], 'Δ mass (ppm)': r['delta_ppm']}
+                   if has_precursor else {}),
+                'Theoretical mass': r['theoretical_mass'],
+                'N-terminal': r['n_terminal'],
+                'C-terminal': r['c_terminal'],
+                'Tolerance': r['tolerance'],
+                'Proteoform': r['proforma'],
+            }
+            for i, r in enumerate(rows)
+        ])
+        picked = st.dataframe(
+            table, hide_index=True, width='stretch', key='matcher_hypotheses',
+            on_select='rerun', selection_mode='multi-row',
+            column_config={
+                'Best': st.column_config.TextColumn('', width=30),
+                'Matched fragments': st.column_config.NumberColumn('Matched', help='Matched fragments'),
+                'Cleavages (%)': st.column_config.NumberColumn(
+                    format='%.0f', help='Bonds with a matched fragment on either side'),
+                'Theoretical mass': st.column_config.NumberColumn(format='%.2f'),
+                'Δ mass (Da)': st.column_config.NumberColumn(
+                    format='%+.2f', help='Precursor mass minus theoretical mass'),
+                'Δ mass (ppm)': st.column_config.NumberColumn(format='%+.1f'),
+                'N-terminal': st.column_config.NumberColumn('N-term.', help='N-terminal fragments'),
+                'C-terminal': st.column_config.NumberColumn('C-term.', help='C-terminal fragments'),
+                'Proteoform': st.column_config.TextColumn(width='large', help='ProForma'),
+            },
+        )
+        chosen = picked.selection.rows if picked else []
+        if st.button(f'Remove {len(chosen)} selected' if chosen else 'Remove selected',
+                     icon=':material/delete:', disabled=not chosen,
+                     key='matcher_remove_hypotheses'):
+            fm_input.remove_hypotheses(workspace, stored, chosen)
+            st.rerun()
