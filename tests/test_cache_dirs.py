@@ -33,3 +33,9 @@ def test_windows_cache_path_fits():
                   'decision_map-883152f55527-fcb39173', 'preprocessed', 'level_0_categories.parquet')
     assert len(str(folder)) < 260
     assert insight_cache_dir('cache', LONG_RUN) == Path('cache', 'insight', short_name(LONG_RUN))
+
+
+def test_one_build_lock_per_cache():
+    from src.render.cache_dirs import build_lock
+    assert build_lock('cache', 'a-1') is build_lock(Path('cache'), 'a-1')
+    assert build_lock('cache', 'a-1') is not build_lock('cache', 'a-2')

@@ -18,7 +18,7 @@ from openms_insight import Heatmap, StateManager, Table, defer_reruns
 from openms_insight.core.cache import CacheMissError
 
 from src.parse import ida_log
-from src.render.cache_dirs import short_name
+from src.render.cache_dirs import build_lock, short_name
 
 # Code of the frame builders and of this module: part of every cache id
 CODE_VERSION = hashlib.md5(
@@ -110,11 +110,17 @@ def _component(cls, name, cache_path, stamp, build, **styling):
         return cls(cache_id=cache_id, cache_path=str(cache_path), **styling)
     except CacheMissError:
         pass
-    if cache_path.exists():
-        for old in cache_path.glob(f'{name}-*'):
-            if old.name != cache_id:
-                shutil.rmtree(old, ignore_errors=True)
-    return cls(cache_id=cache_id, cache_path=str(cache_path), **build(), **styling)
+    with build_lock(cache_path, cache_id):
+        # Another tab may have built it while this one waited
+        try:
+            return cls(cache_id=cache_id, cache_path=str(cache_path), **styling)
+        except CacheMissError:
+            pass
+        if cache_path.exists():
+            for old in cache_path.glob(f'{name}-*'):
+                if old.name != cache_id:
+                    shutil.rmtree(old, ignore_errors=True)
+        return cls(cache_id=cache_id, cache_path=str(cache_path), **build(), **styling)
 
 
 def _frame(df):

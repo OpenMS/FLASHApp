@@ -9,6 +9,7 @@ Streamlit-free.
 """
 
 import hashlib
+import threading
 from pathlib import Path
 
 # Characters of the name kept before the hash
@@ -30,3 +31,21 @@ def insight_cache_dir(cache_path, dataset_id):
     """Folder of a dataset's viewer component caches below a workspace cache
     (`file_manager.cache_path`)."""
     return Path(cache_path, 'insight', short_name(dataset_id))
+
+
+_BUILD_LOCKS: dict[str, threading.Lock] = {}
+_BUILD_LOCKS_GUARD = threading.Lock()
+
+
+def build_lock(cache_dir, cache_id) -> threading.Lock:
+    """Lock held while one component cache is built.
+
+    Two browser tabs that see the same new results would otherwise build the
+    same cache at once, and on Windows one of them cannot replace a file the
+    other has open ("Could not replace cache file"). The second tab waits and
+    then loads what the first one built. One lock per cache, within this
+    server process (the desktop app runs one).
+    """
+    key = str(Path(cache_dir, cache_id))
+    with _BUILD_LOCKS_GUARD:
+        return _BUILD_LOCKS.setdefault(key, threading.Lock())

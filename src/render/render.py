@@ -36,7 +36,7 @@ from src.render import (
     envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
     prsm_data, prsm_overview, qc_data, validation_data,
 )
-from src.render.cache_dirs import insight_cache_dir
+from src.render.cache_dirs import build_lock, insight_cache_dir
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
 from src.common.plot_style import PEAK, PICKED, spectrum_styling
@@ -480,14 +480,20 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
         return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom)
     except CacheMissError:
         pass
-    # Caches built from earlier results or configurations are not used again.
-    # Not for caches that depend on the selection (`extra`, e.g. a typed
-    # sequence): two grids on a page may each need their own.
-    if extra is None and cache_path.exists():
-        for old in cache_path.glob(f'{name}-*'):
-            if old.name != cache_id:
-                shutil.rmtree(old, ignore_errors=True)
-    return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom, **build())
+    with build_lock(cache_path, cache_id):
+        # Another tab may have built it while this one waited
+        try:
+            return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom)
+        except CacheMissError:
+            pass
+        # Caches built from earlier results or configurations are not used again.
+        # Not for caches that depend on the selection (`extra`, e.g. a typed
+        # sequence): two grids on a page may each need their own.
+        if extra is None and cache_path.exists():
+            for old in cache_path.glob(f'{name}-*'):
+                if old.name != cache_id:
+                    shutil.rmtree(old, ignore_errors=True)
+        return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom, **build())
 
 
 def _heatmap(comp_name, file_manager, dataset_id):
