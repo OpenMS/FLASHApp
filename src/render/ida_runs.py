@@ -221,7 +221,8 @@ def _apply_preset(workflow_dir, presets_dir, index, select_key) -> None:
         _bump()
 
 
-@st.dialog('Method', width='large')
+# Closing it with ✕ reruns the page too, so Run analysis sees the method as it is now
+@st.dialog('Method', width='large', on_dismiss='rerun')
 def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False) -> None:
     runs = fm.load_runs(workflow_dir)
     if index >= len(runs):
@@ -421,8 +422,11 @@ _STATE = {
 }
 
 
-def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool) -> None:
-    """The runs table. While running it refreshes itself every two seconds."""
+def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=None) -> None:
+    """The runs table. While running it refreshes itself every two seconds.
+
+    ``footer`` (a function) is drawn below the table in the same fragment: the
+    Run analysis bar, whose checks must see every change made in the table."""
     if OPEN_KEY in st.session_state:
         method_dialog(workflow_dir, presets_dir, st.session_state.pop(OPEN_KEY), read_only=running)
 
@@ -533,6 +537,9 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool) -> None:
                 fm.save_runs(workflow_dir, runs)
                 _bump()
                 st.rerun(scope='fragment')
+
+        if footer is not None:
+            footer()
 
     table()
 
