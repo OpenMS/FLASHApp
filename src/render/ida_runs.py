@@ -3,7 +3,8 @@
 Each run is a raw file name and the method FLASHIda gets for it. The method
 starts from a preset (FLASHIda's defaults, the presets shipped in
 assets/flashida/presets.json, or the user's own, kept once per instrument PC)
-and is edited by section, key by key, or as JSON. While the acquisition runs,
+and is edited by section, key by key, or in a JSON tree (streamlit-extras'
+json_editor). While the acquisition runs,
 the table shows which runs the newest sequence (.sld) schedules and what
 FLASHIda is doing for each.
 """
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit_extras.json_editor import json_editor
 
 from src import flashida
 from src import flashida_method as fm
@@ -303,26 +305,24 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
             st.info('No key matches.')
 
     with tabs[-1]:
-        text_key = f'ida-json-{index}-{v}'
-        text = st.text_area('Method as JSON', value=json.dumps(method, indent=2), height=380,
-                            key=text_key, disabled=read_only,
-                            help='The file FLASHIda gets for this run. Apply checks it against '
-                                 "FLASHIda's method schema.")
-        a, b, c = st.columns([1, 1, 1.2], vertical_alignment='bottom')
-        if a.button('Apply JSON', type='primary', use_container_width=True, disabled=read_only,
-                    key=f'ida-json-apply-{index}-{v}'):
+        st.caption('The file FLASHIda gets for this run. Click a value to change it, ➕ on an '
+                   'object to add a key, 🗑 to remove one; a change is kept at once and checked '
+                   "against FLASHIda's method schema below.")
+        edited = json_editor(method, name='method', collapsed=1, editable=not read_only,
+                             display_data_types=False, sort_keys=False,
+                             key=f'ida-json-{index}-{v}')['data']
+        if not read_only:
             try:
-                parsed = json.loads(text)
+                new = edited_method(edited, method)
             except ValueError as e:
-                st.error(f'Not valid JSON: {e}')
+                st.error(str(e))
             else:
-                if not isinstance(parsed, dict):
-                    st.error('A method is a JSON object ({...}).')
-                else:
-                    run['method'] = parsed
+                if new is not None:
+                    run['method'] = new
                     _store(workflow_dir, runs)
                     _bump()
                     st.rerun(scope='fragment')
+        b, c = st.columns([1, 1.2], vertical_alignment='bottom')
         b.download_button('⬇️ Download', json.dumps(method, indent=2), use_container_width=True,
                           file_name=fm.method_file_name(run['name'] or 'method'),
                           mime='application/json', key=f'ida-json-dl-{index}-{v}')
@@ -367,6 +367,17 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
         st.toast(f'All {len(runs)} runs use this method.')
     if b.button('Done', type='primary', use_container_width=True, key=f'ida-done-{index}-{v}'):
         st.rerun()
+
+
+def edited_method(edited, method: dict):
+    """What the JSON tree of the Method dialog returned: the new method, or None
+    while it holds the method as it is. A method is a JSON object, so anything
+    else raises ValueError (the tree can turn the root into a list or a value)."""
+    if edited == method:
+        return None
+    if not isinstance(edited, dict):
+        raise ValueError('A method is a JSON object ({...}).')
+    return copy.deepcopy(edited)
 
 
 def _short(value, limit: int = 24) -> str:

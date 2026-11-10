@@ -75,8 +75,10 @@ pillow==12.3.0
     #   captcha
     #   matplotlib
     #   streamlit
-plotly==5.22.0
-    # via src (pyproject.toml)
+plotly==5.24.1
+    # via
+    #   src (pyproject.toml)
+    #   streamlit-extras (needs >=5.23)
 protobuf==6.33.5
     # via streamlit
 psutil==7.0.0
@@ -160,3 +162,5 @@ openms-insight>=0.7.3
 scikit-learn>=1.0
 # Writes the processing report of a run as PDF (src/workflow/processing_report.py)
 reportlab>=4.0
+# JSON tree editor of the FLASHIda Method dialog (src/render/ida_runs.py)
+streamlit-extras==1.6.0
