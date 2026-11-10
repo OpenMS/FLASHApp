@@ -87,6 +87,7 @@ if log.exists():
     if failed:
         reason = next((l.strip() for l in reversed(lines)
                        if l.strip() and 'Workflow execution reported failure' not in l), '')
+        reason = reason.removeprefix('ERROR:').strip()
         st.error(f'The last acquisition stopped: {reason}' if reason else
                  'The last acquisition stopped with an error, see the log.')
     with st.expander('Log', expanded=failed):
