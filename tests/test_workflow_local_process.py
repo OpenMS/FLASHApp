@@ -173,3 +173,20 @@ def test_stop_ends_the_workflow_process(tmp_path, workflow_module):
         assert "WORKFLOW CANCELLED" in log.read_text(encoding="utf-8")
     finally:
         _kill_leftovers(wf.executor.pid_dir)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="ends the process with POSIX signals")
+def test_empty_pid_dir_does_not_block_a_start(tmp_path, workflow_module):
+    """An empty pids folder (an aborted run, its files deleted by hand) is no
+    running workflow: a start used to return there without a word."""
+    wf = _make(workflow_module.SleepWorkflow, tmp_path / "sleep-workflow")
+    wf.executor.pid_dir.mkdir()
+    log = wf.workflow_dir / "logs" / "minimal.log"
+    try:
+        assert wf.get_workflow_status()["running"] is False
+        wf._start_workflow_local()
+        assert wf.get_workflow_status()["running"] is True
+        assert _wait_for(lambda: log.exists() and "sleeping" in log.read_text(encoding="utf-8"), 60), \
+            "the start did not run"
+    finally:
+        _kill_leftovers(wf.executor.pid_dir)

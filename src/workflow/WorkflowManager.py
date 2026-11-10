@@ -329,9 +329,15 @@ class WorkflowManager:
 
     def _start_workflow_local(self) -> None:
         """Start the workflow in a separate Python process (local mode)."""
-        # Catch double presses of the button while app is in frozen state
-        if self.executor.pid_dir.exists():
-            return
+        # Catch double presses of the button while app is in frozen state. An
+        # empty pids folder (left by an aborted run, or its files deleted by
+        # hand) is no running workflow: it used to make every start return here
+        # without a word.
+        pid_dir = self.executor.pid_dir
+        if pid_dir.exists():
+            if any(pid_dir.iterdir()):
+                return
+            shutil.rmtree(pid_dir, ignore_errors=True)
 
         # Delete the log file if it already exists
         shutil.rmtree(Path(self.workflow_dir, "logs"), ignore_errors=True)
