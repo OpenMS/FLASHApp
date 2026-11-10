@@ -386,14 +386,12 @@ _COPIED = '📋 Copied method'
 
 
 def _method_choices(presets: dict) -> dict:
-    """{label: (preset, method)} a dialog offers for new runs: the copied
-    method first (when there is one), then every preset."""
-    choices = {}
+    """{label: (preset, method)} a dialog offers for new runs: every preset,
+    then the copied method (when there is one)."""
+    choices = {name: (name, method) for name, method in presets.items()}
     clip = st.session_state.get(CLIPBOARD_KEY)
     if clip:
         choices[f"{_COPIED} ({clip['name'] or 'unnamed run'})"] = (clip.get('preset'), clip['method'])
-    for name, method in presets.items():
-        choices[name] = (name, method)
     return choices
 
 
@@ -525,7 +523,7 @@ def pattern_dialog(workflow_dir, presets_dir) -> None:
         st.dataframe(pd.DataFrame({
             '#': range(start + 1, start + len(names) + 1),
             'Raw file name': [n['name'] for n in names],
-            'Method': ['Wash: ' + wash_pick if n['wash'] else pick for n in names],
+            'Method': [f'{wash_pick} (wash run)' if n['wash'] else pick for n in names],
             '': ['⚠️ duplicate' if n['name'].casefold() in dup else '' for n in names],
         }), hide_index=True, use_container_width=True, height=min(36 + 35 * len(names), 300))
         _duplicates_note(duplicates)
@@ -660,7 +658,7 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
         selected = [i for i in range(len(runs)) if st.session_state.get(f'ida-sel-{i}-{_version()}')]
         if not running and runs:
             _clipboard_bar(workflow_dir, runs, selected)
-        widths = [0.35, 0.35, 4.4, 2.3, 1.7, 0.5, 1.8, 2.4, 0.5]
+        widths = [0.35, 0.35, 4.4, 2.3, 1.7, 0.6, 1.8, 2.4, 0.6]
         head = st.columns(widths, vertical_alignment='center')
         for col, title in zip(head, ['', '', 'Raw file name', 'Preset', '', '', 'In sequence',
                                      'Status' if running else '', '']):
