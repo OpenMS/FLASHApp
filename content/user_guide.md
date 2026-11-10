@@ -6,6 +6,8 @@ FLASHApp turns top-down MS data into proteoform masses, identifications and, if 
 2. **Run analysis**: press **Run analysis** at the end of *Describe experiment*; the run starts right away and you follow its progress.
 3. **Explore results**: every run, and every comparison of samples, laid out for the analysis you chose.
 
+**Export results** (**Download results** in the web app) takes the result files with you, and **Match fragments** under **Other tools** matches fragment masses against a sequence without any run.
+
 The short videos below walk through each step with example data. No knowledge of the tools behind FLASHApp is needed to follow them.
 
 @video guide-1-start.mp4 | Start an analysis: choose your runs and describe the experiment
@@ -45,7 +47,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 ## **1️⃣ Describe experiment**
 
 1. Open **Top-down analysis › Describe experiment**.
-2. In **Your analysis**, pick the **MS data**. **📂 Browse** beside it opens your files:
+2. In **Your analysis**, pick the **MS data**. **Select a folder** above it selects every run of a folder at once. **📂 Browse** beside it opens your files:
    - **Your files** lists them by folder. Tick the runs to analyse, or pick a folder to select its runs at once. Type a folder name in the *Folder* column to sort a run into it; FLASHApp suggests folders from the file names (for example `Control_R1`, `Control_R2`, `Treated_R1`), and a run's folder becomes its condition under **Samples and groups**.
    - **Data on your computer** takes new runs: drag them in or browse for them. `.mzML`, Thermo `.raw` and Bruker timsTOF `.d` are accepted; vendor files are converted for you.
    - **Cloud data** imports them from a link (an object store, OneDrive, Zenodo or Figshare).
@@ -57,6 +59,7 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
    - **Samples and groups** (with quantification only): which sample belongs to which condition (see below).
    - **Deconvolution**, and with identification **Identification** and **Fragment annotation**: the settings of each tool. The sample type already sets them; change them only if you know why. **All N parameters** beside each tool shows every setting.
    - **Linking runs** (label-free only): how runs are matched by mass and retention time.
+5. Name the start in the field beside **Run analysis** (it is named after its files when left empty). The name is what **Explore results** and **Export results** list it as.
 
 ### Samples and groups
 
@@ -75,24 +78,35 @@ Under the box, a short summary (🧭) says in plain words what the next start wi
 
 ## **3️⃣ Explore results**
 
-**Explore results** shows one run at a time (more with **Edit layout**). Pick it in **choose experiment**. Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows. **💡 Add tool results** shows the output of a FLASHDeconv or FLASHTnT run made outside FLASHApp.
+The row at the top of **Explore results** says what is shown:
 
-@video guide-2-viewer.mp4 | Explore a run and arrange your own layout
+- **choose experiment** lists every start: the runs, and a comparison as **Comparison: …**. Each example is listed under its own name.
+- **Single run | Comparison** (for a comparison only) shows one of its runs, or the comparison of all of them (see *Comparing samples* below). For a run that belongs to no comparison, **Comparison** offers to process more files to compare it with.
+- **History** shows how the result came about: its settings and its processing report.
+- **Add analysis** processes more files with the settings shown, or with **Add tool results** adds the output of a FLASHDeconv or FLASHTnT run made outside FLASHApp.
 
-Until you save your own layout, each run opens in the layout made for its analysis:
+Everything on the page is linked: select a spectrum, a protein or a proteoform in one table and every spectrum, table and plot follows.
+
+@video guide-2-viewer.mp4 | Explore a run and arrange your own view
+
+### Views
+
+The bar below this row switches between views. **Deconvolution**, **Native** and **Lysate** are ready-made; until you pick one, each run opens in the view made for its analysis:
 
 | Run | What you see first |
 |---|---|
-| Deconvolved only | The masses over retention time (heatmap), the spectra with their masses, the raw and deconvolved spectrum and a 3D signal-to-noise view. |
-| Identified, native or purified proteins | The identified proteins, the sequence with its fragments and modifications, the 3D structure, and the sequence tags behind each identification. |
-| Identified, lysate | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors, quality control of the identifications and the GO enrichment of the proteins you select. |
-| Labelled with TMT or iTRAQ | The layout of its kind as above, with the **reporter ions** of every spectrum and of the selected spectrum, right below the table that selects the spectrum. |
+| Deconvolved only (**Deconvolution**) | The masses over retention time (heatmap), the spectra with their masses, the raw and deconvolved spectrum and a 3D signal-to-noise view. |
+| Identified, native or purified proteins (**Native**) | The identified proteins, the sequence with its fragments and modifications, the 3D structure, and the sequence tags behind each identification. |
+| Identified, lysate (**Lysate**) | Proteins, their proteoforms and the spectra matching each (PrSMs) side by side, the proteoform map over retention time and mass, the sequence view, fragment errors, quality control of the identifications and the GO enrichment of the proteins you select. |
+| Labelled with TMT or iTRAQ | The view of its kind as above, with the **reporter ions** of every spectrum and of the selected spectrum, right below the table that selects the spectrum. |
 
-**Edit layout** opens the Layout Manager: drag components into the grid, choose how many runs to show at once, and **Save**. **Reset** goes back to the defaults above. A saved layout is used for every run of the workspace.
+A view that needs results a run does not have (identification, for example) is greyed out; clicking it offers to run the missing analysis. A selection stays when you switch views.
+
+**+** at the end of the bar makes a view of your own, starting as a copy of the current one: drag components into the grid, choose how many runs to show side by side, and save. **✏️** orders the views, keeps some out of the bar (they move to **More**) and edits or deletes your own. The ready-made views are never changed: editing one makes a copy.
 
 ### Components
 
-Search the list in the Layout Manager by name, or expand its groups:
+Search the list in the view editor (**+** or **✏️**) by name, or expand its groups:
 
 - **Heatmaps**: *MS1 raw heatmap* (m/z over retention time) and *MS1 deconvolved heatmap* (mass over retention time).
 - **Tables**: *Scan table* (every spectrum), *Mass table* (the masses of the selected spectrum), *Protein table* (identified proteins, with a **Characterization** badge: *Characterized* when both ends are known, every modification is placed on one residue and at least 25% of the bonds are covered by fragments; *Ambiguous* below 10%; *Partial* in between), *Proteoforms*, *PrSMs*, *Tag table*.
@@ -114,9 +128,9 @@ The **Sequence view** of a run that was not identified shows a sequence you set 
 
 ---
 
-## **5️⃣ Comparing samples**
+## **Comparing samples**
 
-With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date). Selecting it shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap, quality control and the GO enrichment of the entries you select.
+With a quantification chosen, the run ends with a comparison of the samples. It appears in **choose experiment** as **Comparison: …** (the number of runs, or the labels and samples, and the date) and opens on **Comparison**; **Single run** looks at one of its runs instead. The comparison shows a summary, the comparison table, a volcano plot, the abundance profile of the selected entry, every sample's value with its detection status, a PCA of the samples, a heatmap, quality control and the GO enrichment of the entries you select.
 
 The bar above the comparison switches between four views (and any of your own, made with **+** or ✏️):
 
@@ -127,7 +141,7 @@ The bar above the comparison switches between four views (and any of your own, m
 
 To test GO terms, select entries in the volcano plot (press **All changed**, **Higher in …** or **Lower in …**, or use box or lasso select in its mode bar), tick rows in the comparison table after turning its check boxes on, or select rows on the clustered heatmap with box or lasso select. The background is every protein of the entries tested.
 
-**Edit comparison** changes the conditions, the level compared (features, proteoforms or proteins; the latter two need identification) and the statistics (fold-change and adjusted p-value cutoffs, filtering, imputation, normalization, test). The comparison is recomputed in seconds; nothing is run again.
+**Edit comparison** changes the conditions, which runs are compared (the **Compared** column), the level compared (features, proteoforms or proteins; the latter two need identification) and the statistics (fold-change and adjusted p-value cutoffs, filtering, imputation, normalization, test). The comparison is recomputed in seconds; nothing is run again.
 
 @video guide-3-label-free.mp4 | Compare conditions without labels: one run per sample
 
@@ -140,9 +154,24 @@ To test GO terms, select entries in the volcano plot (press **All changed**, **H
 
 ---
 
-## **6️⃣ Download results**
+## **4️⃣ Export results**
 
-**Download** lists every run. **Prepare Download** packs its result files (deconvolved spectra, identifications, quantification tables); the trash icon deletes a run from the workspace.
+**Export results** lists every start. A run holds the deconvolved masses and spectra (TSV, mzML, msalign and feature files), with **Identify proteoforms** on also the proteins, PrSMs, tags and annotated fragments, and the parameters it ran with.
+
+- In the desktop app, **Export** copies a run's files to the **Export folder** (one folder per run), and **Export all N runs** copies every run.
+- In the web app, the page is called **Download results**: **Download** gives one ZIP per run, or every run at once.
+
+✏️ renames a run, **History** shows how it came about and **Files** lists its files; the trash icon deletes it from the workspace. The run shown on **Explore results** can also be exported (or downloaded) there.
+
+---
+
+## **🧩 Match fragments**
+
+**Other tools › Match fragments** matches a list of fragment masses against a sequence, without a deconvolution run:
+
+1. Under **Observed masses**, say whether the masses are monoisotopic or average and neutral (M) or protonated (MH+), then **Paste** them (mass and intensity per line), load them **From a file** (text, tsv, csv or .msalign) or take them **From a run** of the workspace. The precursor mass is optional. **Load an example** fills in a scan of the lysate example.
+2. Press **Match these masses** (**Match the masses of this file**, **Match this scan**).
+3. Set the sequence in the sequence view with **Change sequence** (plain or ProForma), and add modifications by right-clicking a residue. The matched fragments are shown on the sequence.
 
 ---
 
