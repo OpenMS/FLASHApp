@@ -30,12 +30,14 @@ from pathlib import Path
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src import analysis, former_examples, sample_type
+from openms_insight import StateManager
 from src.render.render import _state_manager, render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
 from src.layout_manager import request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
+from src.render import inspect_scan
 from src.render.tool_results import tool_results_button, tool_results_dialog
 from src.render.history_ui import history_button
 from src.common import result_download
@@ -192,6 +194,45 @@ if added and st.session_state.get('_viewer_added_comparison') != added:
     st.session_state[selection_key(0)] = added
 
 
+MATCHER_PAGE = 'content/Tools/FragmentMatcher.py'
+MATCHER_STATE = 'fragment_matcher_state'
+
+
+def inspect_picked_scan():
+    """Open the picked spectrum (of the first experiment that has one) on
+    Match fragments: its deconvolved masses, and the residues of the picked
+    proteoform when it was identified in that spectrum."""
+    for index in range(MAX_EXPERIMENTS):
+        dataset_id = st.session_state.get(selection_key(index))
+        if dataset_id not in results:
+            continue
+        state = _state_manager(TOOL, selection_key(index), dataset_id)
+        scan_idx = state.get_selection('scan')
+        if scan_idx is None:
+            continue
+        data = inspect_scan.scan_input(
+            file_manager, dataset_id, scan_idx, state.get_selection('protein'),
+            run_name=file_manager.get_display_name(dataset_id),
+        )
+        if data is None:
+            st.toast('The picked spectrum has no deconvolved masses.')
+            return
+        inspect_scan.store(workspace, data)
+        # The matcher shows this proteoform, or keeps its own sequence
+        st.session_state.pop('matcher_seen_sequence', None)
+        if data['sequence']:
+            StateManager(session_key=MATCHER_STATE).set_selection('sequence', data['sequence'])
+        st.switch_page(MATCHER_PAGE)
+    st.toast('Pick a spectrum first (a scan, mass or identification table row).')
+
+
+INSPECT_ACTION = {
+    'id': 'inspect', 'icon': '🧩', 'on_click': inspect_picked_scan,
+    'help': ('Inspect the picked spectrum in Match fragments: change the sequence, '
+             'modifications, ion types and tolerance and see the matches again'),
+}
+
+
 def view_selector():
     """The view bar: the views as many as fit, + for a view of one's own, More and ✏️."""
     first = st.session_state.get(selection_key(0))
@@ -206,6 +247,7 @@ def view_selector():
         # A view of one's own keeps each experiment's zoom and selection (📌)
         states=lambda i: _state_manager(TOOL, selection_key(i), st.session_state.get(selection_key(i))),
         datasets=lambda i: st.session_state.get(selection_key(i)),
+        actions=[INSPECT_ACTION],
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
             "to 3 components per row; ready-made views can be duplicated. Add experiments to compare "
