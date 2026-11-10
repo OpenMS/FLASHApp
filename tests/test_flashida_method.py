@@ -27,10 +27,24 @@ def test_check_finds_what_flashida_refuses():
     fm.put(method, 'precursor_selection.rank_by', 'loudest')
     fm.put(method, 'deconvolution.tol', [10, 10])
     problems = fm.check(method)
-    assert any('bogus' in p for p in problems)
+    assert not any('bogus' in p for p in problems)  # unknown, not refused
     assert any(p.startswith('precursor_selection.rank_by') for p in problems)
     assert any(p.startswith('deconvolution.tol') for p in problems)
     assert fm.check([]) != []
+
+
+def test_unknown_keys_are_kept_and_do_not_block():
+    method = fm.defaults()
+    method['bogus'] = 1
+    fm.put(method, 'deconvolution.new_key', {'a': 1})
+    fm.put(method, 'ms_settings.ms1.new_ms1_key', 3)
+    assert fm.check(method) == []
+    assert fm.unknown_keys(method) == ['bogus', 'deconvolution.new_key', 'ms_settings.ms1.new_ms1_key']
+    merged = fm.merge(fm.defaults(), method)
+    assert merged['bogus'] == 1 and fm.get(merged, 'deconvolution.new_key') == {'a': 1}
+    fm.put(method, 'precursor_selection.rank_by', 'loudest')
+    assert [p.split(':')[0] for p in fm.check(method)] == ['precursor_selection.rank_by']
+    assert fm.unknown_keys(fm.defaults()) == []
 
 
 def test_get_put_drop_and_changes():

@@ -164,22 +164,63 @@ def defaults() -> dict:
     return method
 
 
-def check(method) -> list:
-    """Problems FLASHIda would refuse the method for ([] when it loads)."""
+def _validate(method):
+    """(problems, unknown keys) of a method against the bundled schema.
+
+    A key the schema does not list is not a problem here: FLASHIda may be newer
+    than the schema this FLASHApp ships, and it checks the method itself.
+    """
     if not isinstance(method, dict):
-        return ['A method is a JSON object ({...}).']
+        return ['A method is a JSON object ({...}).'], []
     import jsonschema
 
     validator = jsonschema.Draft202012Validator(schema())
-    problems = []
+    problems, unknown = [], []
     for error in sorted(validator.iter_errors(method), key=lambda e: list(e.path)):
-        where = '.'.join(str(p) for p in error.path) or 'method'
-        problems.append(f'{where}: {error.message}')
+        parts = [str(p) for p in error.path]
+        if error.validator == 'additionalProperties' and isinstance(error.instance, dict):
+            names = _unexpected(error.message)
+            if names is not None:
+                unknown += ['.'.join(parts + [n]) for n in names]
+                continue
+        if 'propertyNames' in error.schema_path and isinstance(error.instance, str):
+            unknown.append('.'.join(parts + [error.instance]))
+            continue
+        problems.append(f"{'.'.join(parts) or 'method'}: {error.message}")
     tol = get(method, 'deconvolution.tol')
     if not isinstance(tol, list) or len(tol) < 3:
         if not any(p.startswith('deconvolution.tol') for p in problems):
             problems.append('deconvolution.tol: needs three tolerances (MS1, MS2, MS3).')
-    return problems
+    return problems, sorted(set(unknown))
+
+
+def _unexpected(message: str):
+    """The key names of jsonschema's "Additional properties ... unexpected" message."""
+    import ast
+    import re
+
+    found = re.search(r'\((.*) (?:was|were) unexpected\)\s*$', message, re.S)
+    if not found:
+        return None
+    try:
+        names = ast.literal_eval(f'({found.group(1)},)')
+    except (ValueError, SyntaxError):
+        return None
+    return [str(n) for n in names]
+
+
+def check(method) -> list:
+    """Problems FLASHIda would refuse the method for ([] when it loads).
+
+    Keys the bundled schema does not know are left out (see unknown_keys()).
+    """
+    return _validate(method)[0]
+
+
+def unknown_keys(method) -> list:
+    """Dotted paths of keys the bundled schema does not know. They are kept and
+    passed to FLASHIda as they are; a newer FLASHIda may know them."""
+    return _validate(method)[1]
 
 
 def changes(base: dict, method: dict) -> list:

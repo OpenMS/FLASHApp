@@ -348,6 +348,13 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
             st.markdown(f'⚠️ **FLASHIda would refuse this method** ({len(problems)} '
                         f'problem{"s" if len(problems) != 1 else ""}):')
             st.markdown('\n'.join(f'- `{p}`' for p in problems[:8]))
+    unknown = fm.unknown_keys(method)
+    if unknown:
+        with st.container(border=True):
+            st.markdown(f'ℹ️ **{len(unknown)} key{"s" if len(unknown) != 1 else ""} this FLASHApp does not know** '
+                        '(a newer FLASHIda may). They are kept and passed to FLASHIda as they are, which checks '
+                        'them when the run starts; edit or remove them in the JSON tab.')
+            st.markdown(', '.join(f'`{k}`' for k in unknown[:20]) + (' …' if len(unknown) > 20 else ''))
 
     st.divider()
     a, b = st.columns([1.5, 1])
@@ -468,6 +475,8 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool) -> None:
             badges = ' :orange-badge[✏️ changed]' if edited else ''
             if fm.check(run['method']):
                 badges += ' :red-badge[⚠️ refused by FLASHIda]'
+            elif fm.unknown_keys(run['method']):
+                badges += ' :blue-badge[ℹ️ new keys]'
             cols[2].markdown(text + badges)
             if cols[3].button('⚙️ Method', key=f'ida-method-{i}', use_container_width=True):
                 # Opened by the page, outside this fragment: the table refreshes
