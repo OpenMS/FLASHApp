@@ -845,7 +845,9 @@ def _sequence_view_options(component):
     ISOTOPE_ERRORS isotopes (changeable in the view), the matched fragment
     ions are marked on the spectra, and proton loss/addition is offered only
     with electron or photo fragmentation ion series (c/z or radical series),
-    where a hydrogen moves between the fragments."""
+    where a hydrogen moves between the fragments. The observed masses no
+    fragment ion explains are listed below the fragment table, each with the
+    nearest fragment ion."""
     if FRAGMENT_MARKS:
         component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     if hasattr(component, 'set_variable_modification_library'):
@@ -858,6 +860,8 @@ def _sequence_view_options(component):
         component.set_isotope_errors(ISOTOPE_ERRORS)
     if hasattr(component, 'set_method_ion_options'):
         component.set_method_ion_options()
+    if hasattr(component, 'set_unmatched_masses'):
+        component.set_unmatched_masses()
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
