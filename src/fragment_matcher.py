@@ -54,7 +54,8 @@ def parse_mass_list(text):
     Plain lists: one mass per line, optionally followed by its intensity
     (and more columns, which are ignored), separated by spaces, tabs, commas
     or semicolons; lines that are not numbers (a header, comments) are
-    skipped. An .msalign file: the peaks of its first spectrum, and its
+    skipped. Text holding a single line with semicolons is a semicolon-
+    separated list of masses instead. An .msalign file: the peaks of its first spectrum, and its
     PRECURSOR_MASS.
 
     Returns {'masses': [...], 'intensities': [...] or None,
@@ -65,6 +66,11 @@ def parse_mass_list(text):
     lines = text.splitlines()
     if any(line.strip().upper() == 'BEGIN IONS' for line in lines):
         return _parse_msalign(lines)
+    data = [line for line in lines if line.strip() and not line.lstrip().startswith('#')]
+    if len(data) == 1 and ';' in data[0]:
+        # All on one line: semicolons separate the masses (each optionally
+        # followed by its intensity), as in '1043.5; 2511.37 18000; 980.1'
+        lines = data[0].split(';')
     masses, intensities, skipped = [], [], 0
     for line in lines:
         if not line.strip() or line.lstrip().startswith('#'):
