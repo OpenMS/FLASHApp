@@ -308,20 +308,24 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
         st.caption('The file FLASHIda gets for this run. Click a value to change it, ➕ on an '
                    'object to add a key, 🗑 to remove one; a change is kept at once and checked '
                    "against FLASHIda's method schema below.")
+        tree_key = f'ida-json-{index}-{v}'
         edited = json_editor(method, name='method', collapsed=1, editable=not read_only,
-                             display_data_types=False, sort_keys=False,
-                             key=f'ida-json-{index}-{v}')['data']
-        if not read_only:
+                             display_data_types=False, sort_keys=False, key=tree_key)['data']
+        # The tree returns the method as it was when it was drawn; the other tabs
+        # may have added keys since. So a change is what differs from the tree's
+        # own previous value, and only that is applied to the method.
+        before = st.session_state.get(f'{tree_key}-before')
+        st.session_state[f'{tree_key}-before'] = copy.deepcopy(edited)
+        if not read_only and before is not None and edited != before:
             try:
-                new = edited_method(edited, method)
+                new = apply_tree_edit(method, before, edited)
             except ValueError as e:
                 st.error(str(e))
             else:
-                if new is not None:
-                    run['method'] = new
-                    _store(workflow_dir, runs)
-                    _bump()
-                    st.rerun(scope='fragment')
+                run['method'] = new
+                _store(workflow_dir, runs)
+                _bump()
+                st.rerun(scope='fragment')
         b, c = st.columns([1, 1.2], vertical_alignment='bottom')
         b.download_button('⬇️ Download', json.dumps(method, indent=2), use_container_width=True,
                           file_name=fm.method_file_name(run['name'] or 'method'),
@@ -369,15 +373,29 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
         st.rerun()
 
 
-def edited_method(edited, method: dict):
-    """What the JSON tree of the Method dialog returned: the new method, or None
-    while it holds the method as it is. A method is a JSON object, so anything
-    else raises ValueError (the tree can turn the root into a list or a value)."""
-    if edited == method:
-        return None
-    if not isinstance(edited, dict):
+def apply_tree_edit(method: dict, before, after) -> dict:
+    """The method with what changed in the JSON tree from `before` to `after`:
+    values set or added, keys removed. Keys the tree did not show (added to the
+    method after it was drawn) stay. A method is a JSON object, so a root that
+    is not one raises ValueError."""
+    if not isinstance(after, dict):
         raise ValueError('A method is a JSON object ({...}).')
-    return copy.deepcopy(edited)
+
+    def merge(target, old, new):
+        out = copy.deepcopy(target) if isinstance(target, dict) else {}
+        old = old if isinstance(old, dict) else {}
+        for key in old.keys() - new.keys():
+            out.pop(key, None)
+        for key, value in new.items():
+            if key in old and old[key] == value:
+                continue
+            if isinstance(value, dict) and isinstance(old.get(key), dict):
+                out[key] = merge(out.get(key), old[key], value)
+            else:
+                out[key] = copy.deepcopy(value)
+        return out
+
+    return merge(method, before, after)
 
 
 def _short(value, limit: int = 24) -> str:
