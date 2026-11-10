@@ -1,14 +1,14 @@
 """The runs table of the FLASHIda acquisition page and its Method dialog.
 
-Each run is a raw file name and the method FLASHIda gets for it. The method
-starts from a preset (FLASHIda's defaults, the presets shipped in
-assets/flashida/presets.json, or the user's own, kept once per instrument PC)
-and is edited by section, key by key, or as JSON. While the acquisition runs,
-the table shows which runs the newest sequence (.sld) schedules and what
-FLASHIda is doing for each.
+Each run is a raw file name and the method FLASHIda gets for it, a file in the
+method folder (src/flashida_folder.py) picked in the run's dropdown. The
+Method dialog makes a new method from any method in the folder or changes one,
+by section, key by key, or as JSON. The built-in presets (FLASHIda's defaults,
+those shipped in assets/flashida/presets.json and the user's own) are saved
+into the folder once. While the acquisition runs, the table shows which runs
+the newest sequence (.sld) schedules and what FLASHIda is doing for each.
 """
 
-import copy
 import json
 import time
 from pathlib import Path
@@ -17,6 +17,7 @@ import pandas as pd
 import streamlit as st
 
 from src import flashida
+from src import flashida_folder as ff
 from src import flashida_method as fm
 from src import flashida_sequence as fs
 
@@ -86,9 +87,9 @@ SECTIONS = {
 }
 
 _VERSION = 'ida-method-version'
-OPEN_KEY = 'ida-open-method'
-DIALOG_KEY = 'ida-open-dialog'  # 'import' or 'pattern'
-CLIPBOARD_KEY = 'ida-clipboard'  # {name, preset, method} of the copied run
+OPEN_KEY = 'ida-open-method'  # the method the Method dialog opens with
+DIALOG_KEY = 'ida-open-dialog'  # 'import', 'pattern' or 'method'
+CLIPBOARD_KEY = 'ida-clipboard'  # {name, method_file} of the copied run
 
 
 def _keys() -> dict:
@@ -208,112 +209,116 @@ def key_widget(method: dict, path: str, wkey: str, disabled: bool = False) -> bo
     return True
 
 
-# --- the dialog -------------------------------------------------------------------
+# --- method choices -----------------------------------------------------------------
 
-def _store(workflow_dir, runs) -> None:
-    fm.save_runs(workflow_dir, runs)
-
-
-def _apply_preset(workflow_dir, presets_dir, index, select_key) -> None:
-    runs = fm.load_runs(workflow_dir)
-    name = st.session_state[select_key]
-    presets = fm.all_presets(presets_dir)
-    if name in presets:
-        runs[index].update(preset=name, method=copy.deepcopy(presets[name]))
-        _store(workflow_dir, runs)
-        _bump()
+def _short(value, limit: int = 24) -> str:
+    text = json.dumps(value) if not isinstance(value, str) else (value or '""')
+    return text if len(text) <= limit else text[:limit - 1] + '…'
 
 
-# Closing it with ✕ reruns the page too, so Run analysis sees the method as it is now
+def _folder_methods(folder) -> tuple:
+    """(methods in the folder with the favorites first, favorites)."""
+    methods = ff.list_methods(folder)
+    favs = ff.favorites(folder)
+    return ff.ordered(methods, favs), favs
+
+
+def _method_label(favs, methods=None):
+    def fmt(m):
+        if m is None:
+            return 'Pick a method'
+        text = ('★ ' if m in favs else '') + m
+        return text + ' (missing)' if methods is not None and m not in methods else text
+    return fmt
+
+
+def _default_method(methods: list, favs: list, runs: list):
+    """The method a new run starts with: the last run's, else the first
+    favorite, else the first built-in preset in the folder, else the first."""
+    if runs and runs[-1].get('method_file') in methods:
+        return runs[-1]['method_file']
+    for m in list(favs) + ['LC-MS real-time ID, MS2 only', fm.DEFAULTS_PRESET]:
+        if m in methods:
+            return m
+    return methods[0] if methods else None
+
+
+# --- the method dialog -----------------------------------------------------------------
+
+EDIT_KEY = 'ida-edit'  # the method being edited: {key, method, v}
+
+
 @st.dialog('Method', width='large', on_dismiss='rerun')
-def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False) -> None:
-    runs = fm.load_runs(workflow_dir)
-    if index >= len(runs):
-        st.rerun()
-    run = runs[index]
-    method = run['method']
-    v = _version()
-    st.markdown(f"**{run['name'] or 'Unnamed run'}**")
-
-    presets = fm.all_presets(presets_dir)
-    users = fm.user_presets(presets_dir)
-    names = list(presets)
-    c1, c2, c3 = st.columns([3, 1.3, 1.3], vertical_alignment='bottom')
-    select_key = f'ida-preset-{index}-{v}'
-    current = run.get('preset') if run.get('preset') in presets else None
-    c1.selectbox(
-        'Start from preset', names, index=names.index(current) if current else None,
-        key=select_key, placeholder='Pick a preset', disabled=read_only,
-        on_change=_apply_preset, args=(workflow_dir, presets_dir, index, select_key),
-        help='Picking a preset replaces the settings below. Your own presets are '
-             'kept on this computer, for every workspace.',
-    )
-    with c2.popover('💾 Save as preset', use_container_width=True, disabled=read_only):
-        new_name = st.text_input('Preset name', value=run.get('preset') if run.get('preset') in users else '',
-                                 key=f'ida-preset-name-{index}-{v}')
-        builtin = new_name.strip() in fm.builtin_presets()
-        if builtin:
-            st.caption('Built-in presets keep their name; pick another one.')
-        if st.button('Save', type='primary', disabled=not new_name.strip() or builtin,
-                     key=f'ida-preset-save-{index}-{v}'):
-            fm.save_user_preset(presets_dir, new_name.strip(), method)
-            run['preset'] = new_name.strip()
-            _store(workflow_dir, runs)
-            _bump()
-            st.rerun(scope='fragment')
-    deletable = run.get('preset') in users and run.get('preset') not in fm.builtin_presets()
-    if c3.button('🗑️ Delete preset', use_container_width=True, disabled=read_only or not deletable,
-                 key=f'ida-preset-del-{index}-{v}',
-                 help=f"Delete your preset '{run.get('preset')}' from this computer."
-                 if deletable else 'Only your own presets can be deleted.'):
-        fm.delete_user_preset(presets_dir, run['preset'])
-        _bump()
+def method_dialog(workflow_dir, folder) -> None:
+    """New method (starting from any method in the folder) or edit one; saved
+    as a file in the method folder."""
+    methods, favs = _folder_methods(folder)
+    if not methods:
+        st.info('The method folder has no methods.')
+        return
+    mode = st.radio('Method', ['new', 'edit'], horizontal=True, key='ida-ed-mode',
+                    label_visibility='collapsed',
+                    format_func={'new': '➕ New method', 'edit': '✏️ Edit a method'}.get)
+    a, b, c = st.columns([3, 3, 0.7], vertical_alignment='bottom')
+    # Set once by the page (the picked run's method, or the one just saved)
+    start = st.session_state.pop('ida-ed-start', None)
+    if start in methods:
+        st.session_state['ida-ed-src'] = start  # opened for a picked run, or after a save
+    elif st.session_state.get('ida-ed-src') not in methods:
+        st.session_state['ida-ed-src'] = methods[0]
+    src = a.selectbox('Start from' if mode == 'new' else 'Method to edit', methods, key='ida-ed-src',
+                      format_func=_method_label(favs),
+                      help='Type to search. ★ marks favorites, listed first.')
+    work = st.session_state.get(EDIT_KEY)
+    if not work or work['key'] != (mode, src):
+        try:
+            method = ff.read(folder, src)
+        except ValueError as e:
+            st.error(str(e))
+            return
+        work = {'key': (mode, src), 'method': method, 'v': (work or {}).get('v', 0) + 1}
+        st.session_state[EDIT_KEY] = work
+    method, v = work['method'], work['v']
+    if mode == 'new':
+        new_name = b.text_input('Name of the new method', key='ida-ed-name', placeholder='Histone_MS2',
+                                help='Saved as <name>.json in the method folder.').strip()
+    else:
+        new_name = src
+        b.text_input('File', value=f'{src}.json', disabled=True, key=f'ida-ed-file-{v}')
+    if c.button('★' if src in favs else '☆', key='ida-ed-fav', use_container_width=True,
+                help=f"{'Remove' if src in favs else 'Add'} '{src}' {'from' if src in favs else 'to'} the favorites"):
+        ff.toggle_favorite(folder, src)
         st.rerun(scope='fragment')
-
-    if current:
-        diff = fm.changes(presets[current], method)
-        if diff:
-            shown = ', '.join(f'{label(p).split(" (")[0].lower()} {_short(a)} → {_short(b)}'
-                              for p, a, b in diff[:4])
-            more = f' and {len(diff) - 4} more' if len(diff) > 4 else ''
-            st.caption(f'✏️ Changed from **{current}**: {shown}{more}')
 
     keys = _keys()
     tabs = st.tabs(list(SECTIONS) + [f'All {len(keys)} keys', 'JSON'])
-    changed = False
     for tab, (section, paths) in zip(tabs, SECTIONS.items()):
         with tab:
             cols = st.columns(2)
             for n, path in enumerate(paths):
                 with cols[n % 2]:
-                    changed |= key_widget(method, path, f'ida-w-{index}-{v}-{path}', read_only)
-
+                    key_widget(method, path, f'ida-w-{v}-{path}')
     with tabs[-2]:
-        query = st.text_input('Find a key', key=f'ida-q-{index}',
+        query = st.text_input('Find a key', key='ida-q',
                               placeholder='Part of a key or its description, e.g. faims, agc, exploration')
         q = query.strip().lower()
         matching = [p for p, k in keys.items()
                     if not q or q in p.lower() or q in k.description.lower() or q in label(p).lower()]
         if matching:
-            pick = st.selectbox('Key', matching, key=f'ida-pick-{index}-{q}',
+            pick = st.selectbox('Key', matching, key=f'ida-pick-{q}',
                                 format_func=lambda p: f'{p}  ·  {label(p)}')
-            changed |= key_widget(method, pick, f'ida-w-{index}-{v}-all-{pick}', read_only)
+            key_widget(method, pick, f'ida-w-{v}-all-{pick}')
             rows = [{'Key': p, 'Value': _short(fm.get(method, p), 60) if fm.get(method, p, KeyError) is not KeyError else '',
                      'Default': _short(keys[p].default, 40) if keys[p].default is not None else keys[p].default_text,
                      'Unit': keys[p].unit} for p in matching]
             st.dataframe(pd.DataFrame(rows), hide_index=True, height=260, use_container_width=True)
         else:
             st.info('No key matches.')
-
     with tabs[-1]:
-        text_key = f'ida-json-{index}-{v}'
         text = st.text_area('Method as JSON', value=json.dumps(method, indent=2), height=380,
-                            key=text_key, disabled=read_only,
-                            help='The file FLASHIda gets for this run. Apply checks it against '
-                                 "FLASHIda's method schema.")
-        a, b, c = st.columns([1, 1, 1.2], vertical_alignment='bottom')
-        if a.button('Apply JSON', type='primary', use_container_width=True, disabled=read_only,
-                    key=f'ida-json-apply-{index}-{v}'):
+                            key=f'ida-json-{v}', help="Apply checks it against FLASHIda's method schema.")
+        j1, j2, j3 = st.columns([1, 1, 1.2], vertical_alignment='bottom')
+        if j1.button('Apply JSON', use_container_width=True, key=f'ida-json-apply-{v}'):
             try:
                 parsed = json.loads(text)
             except ValueError as e:
@@ -322,15 +327,12 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
                 if not isinstance(parsed, dict):
                     st.error('A method is a JSON object ({...}).')
                 else:
-                    run['method'] = parsed
-                    _store(workflow_dir, runs)
-                    _bump()
+                    work.update(method=parsed, v=v + 1)
                     st.rerun(scope='fragment')
-        b.download_button('⬇️ Download', json.dumps(method, indent=2), use_container_width=True,
-                          file_name=fm.method_file_name(run['name'] or 'method'),
-                          mime='application/json', key=f'ida-json-dl-{index}-{v}')
-        with c.popover('📥 Import .json file', use_container_width=True, disabled=read_only):
-            upload = st.file_uploader('Method file', type=['json'], key=f'ida-json-up-{index}-{v}')
+        j2.download_button('⬇️ Download', json.dumps(method, indent=2), use_container_width=True,
+                           file_name=f'{new_name or src}.json', mime='application/json', key=f'ida-json-dl-{v}')
+        with j3.popover('📥 Import .json file', use_container_width=True):
+            upload = st.file_uploader('Method file', type=['json'], key=f'ida-json-up-{v}')
             if upload is not None:
                 try:
                     parsed = json.loads(upload.getvalue().decode('utf-8-sig'))
@@ -338,13 +340,8 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
                 except (ValueError, AssertionError):
                     st.error('This file is not a JSON method.')
                 else:
-                    run['method'] = parsed
-                    _store(workflow_dir, runs)
-                    _bump()
+                    work.update(method=parsed, v=v + 1)
                     st.rerun(scope='fragment')
-
-    if changed:
-        _store(workflow_dir, runs)
 
     problems = fm.check(method)
     if problems:
@@ -363,36 +360,42 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
             st.markdown(', '.join(f'`{k}`' for k in unknown[:20]) + (' …' if len(unknown) > 20 else ''))
 
     st.divider()
-    a, b = st.columns([1.5, 1])
-    if a.button('Use this method for all runs', use_container_width=True, disabled=read_only,
-                key=f'ida-all-{index}-{v}'):
-        for other in runs:
-            other.update(preset=run.get('preset'), method=copy.deepcopy(method))
-        _store(workflow_dir, runs)
-        st.toast(f'All {len(runs)} runs use this method.')
-    if b.button('Done', type='primary', use_container_width=True, key=f'ida-done-{index}-{v}'):
-        st.rerun()
-
-
-def _short(value, limit: int = 24) -> str:
-    text = json.dumps(value) if not isinstance(value, str) else (value or '""')
-    return text if len(text) <= limit else text[:limit - 1] + '…'
+    if mode == 'new':
+        problem = ff.name_problem(new_name) if new_name else ''
+        if not problem and new_name and ff.stem(new_name).casefold() in {m.casefold() for m in methods}:
+            problem = f"'{ff.stem(new_name)}.json' is in the method folder already. Pick another name, or edit it."
+        if problem:
+            st.error(problem)
+        save = st.button('💾 Save to method folder', type='primary', disabled=not new_name or bool(problem),
+                         key='ida-ed-save')
+    else:
+        users = [r['name'] or f'run {i + 1}' for i, r in enumerate(fm.load_runs(workflow_dir))
+                 if r.get('method_file') == src]
+        st.caption(f"Saving overwrites `{src}.json`. "
+                   + (f"{len(users)} run{'s use' if len(users) != 1 else ' uses'} it and get"
+                      f"{'' if len(users) != 1 else 's'} the change when FLASHIda starts for "
+                      f"{'them' if len(users) != 1 else 'it'}." if users else 'No run of the table uses it.'))
+        save = st.button('💾 Save changes', type='primary', key='ida-ed-save')
+    if save:
+        name = ff.stem(new_name)
+        try:
+            ff.write(folder, name, method, overwrite=mode == 'edit')
+        except (OSError, FileExistsError) as e:
+            st.error(f'Could not save the method: {e}')
+        else:
+            # Widget values cannot be set once drawn; dropping them lets the
+            # dialog start on the saved method the next time it opens.
+            for key in (EDIT_KEY, 'ida-ed-name', 'ida-ed-src'):
+                st.session_state.pop(key, None)
+            st.session_state['ida-ed-start'] = name
+            st.session_state['ida-saved'] = name
+            _bump()
+            st.rerun()
 
 
 # --- import, export and runs by pattern ---------------------------------------------
 
 _MODES = {'append': 'Append to the table', 'replace': 'Replace the table'}
-_COPIED = '📋 Copied method'
-
-
-def _method_choices(presets: dict) -> dict:
-    """{label: (preset, method)} a dialog offers for new runs: every preset,
-    then the copied method (when there is one)."""
-    choices = {name: (name, method) for name, method in presets.items()}
-    clip = st.session_state.get(CLIPBOARD_KEY)
-    if clip:
-        choices[f"{_COPIED} ({clip['name'] or 'unnamed run'})"] = (clip.get('preset'), clip['method'])
-    return choices
 
 
 def _mode_choice(runs: list, key: str) -> str:
@@ -416,9 +419,16 @@ def _commit(workflow_dir, runs: list, added: int, duplicates: list) -> None:
     st.rerun()
 
 
+def _method_pick(label_: str, methods: list, favs: list, key: str, default=None, **kw):
+    index = methods.index(default) if default in methods else 0
+    return st.selectbox(label_, methods, index=index, key=key, format_func=_method_label(favs),
+                        help='Type to search. ★ marks favorites, listed first.', **kw)
+
+
 @st.dialog('Import runs', width='large', on_dismiss='rerun')
-def import_dialog(workflow_dir, presets_dir) -> None:
+def import_dialog(workflow_dir, folder) -> None:
     runs = fm.load_runs(workflow_dir)
+    methods, favs = _folder_methods(folder)
     source = st.radio('Source', ['json', 'sld'], horizontal=True, key='ida-imp-source',
                       format_func=lambda s: {'json': 'Sequence file (JSON)',
                                              'sld': 'Xcalibur sequence (.sld)'}[s])
@@ -427,42 +437,53 @@ def import_dialog(workflow_dir, presets_dir) -> None:
                               help='A file exported here with **Export sequence**.' if source == 'json' else
                               'Any Xcalibur sequence. Only the raw file names are taken.')
     mode = _mode_choice(runs, 'ida-imp-mode')
+    pick = _method_pick('Method for the new runs', methods, favs, 'ida-imp-method',
+                        _default_method(methods, favs, runs)) if source == 'sld' else None
 
-    new = []
-    choices = _method_choices(fm.all_presets(presets_dir))
-    pick = st.selectbox('Method for the new runs', list(choices), key='ida-imp-method') \
-        if source == 'sld' else None
+    parsed = []
     if upload is not None:
         try:
-            if source == 'json':
-                new = fs.parse_runs(upload.getvalue())
-            else:
-                preset, method = choices[pick]
-                new = fs.runs_from_names(fs.sld_names(upload.getvalue()), preset, method)
+            parsed = fs.parse_runs(upload.getvalue()) if source == 'json' else \
+                fs.runs_from_names(fs.sld_names(upload.getvalue()), pick)
         except ValueError as e:
             st.error(str(e))
-            new = []
+            parsed = []
         else:
-            if not new:
+            if not parsed:
                 st.info('The file holds no runs.')
             else:
-                st.caption(f'{len(new)} run{"s" if len(new) != 1 else ""} in the file'
-                           + (', each with its own method.' if source == 'json' else
+                def shown(r):
+                    m = r.get('method_file')
+                    if m and m in methods:
+                        return m
+                    if m:
+                        return f'{m} (saved to the method folder)' if isinstance(r.get('method'), dict) \
+                            else f'{m} (not in the method folder)'
+                    return f"{r.get('preset') or r['name']} (saved to the method folder)"
+                st.caption(f'{len(parsed)} run{"s" if len(parsed) != 1 else ""} in the file'
+                           + ('.' if source == 'json' else
                               '. Only the names are taken; every run gets the method picked above.'))
-                st.dataframe(pd.DataFrame({'Raw file name': [r['name'] for r in new],
-                                           'Preset': [r['preset'] or 'Own method' for r in new]}),
-                             hide_index=True, use_container_width=True, height=min(36 + 35 * len(new), 250))
-    combined, duplicates = fs.combine(runs, new, mode)
-    if new:
+                st.dataframe(pd.DataFrame({'Raw file name': [r['name'] for r in parsed],
+                                           'Method': [shown(r) for r in parsed]}),
+                             hide_index=True, use_container_width=True, height=min(36 + 35 * len(parsed), 250))
+    combined, duplicates = fs.combine(runs, parsed, mode)
+    if parsed:
         _duplicates_note(duplicates)
-    if st.button(f'Import {len(new)} run{"s" if len(new) != 1 else ""}' if new else 'Import',
-                 type='primary', disabled=not new, key='ida-imp-go'):
+    if st.button(f'Import {len(parsed)} run{"s" if len(parsed) != 1 else ""}' if parsed else 'Import',
+                 type='primary', disabled=not parsed, key='ida-imp-go'):
+        new, written, missing = fs.into_folder(parsed, folder) if source == 'json' else (parsed, [], [])
+        combined, duplicates = fs.combine(runs, new, mode)
+        if written:
+            st.session_state['ida-written'] = written
+        if missing:
+            st.session_state['ida-missing'] = missing
         _commit(workflow_dir, combined, len(new), duplicates)
 
 
 @st.dialog('Add runs by pattern', width='large', on_dismiss='rerun')
-def pattern_dialog(workflow_dir, presets_dir) -> None:
+def pattern_dialog(workflow_dir, folder) -> None:
     runs = fm.load_runs(workflow_dir)
+    methods, favs = _folder_methods(folder)
     st.caption('Name = prefix_date_sample_comment_replicate_suffix; empty parts are left out.')
     a, b, c = st.columns(3)
     prefix = a.text_input('Prefix', key='ida-pat-prefix')
@@ -479,9 +500,9 @@ def pattern_dialog(workflow_dir, presets_dir) -> None:
         placeholder='BSA\nEcoli; comment=top3; replicates=3\nHeLa',
         help='A line may set its own values after the name: `; comment=…` and `; replicates=…`.')
     order = right.radio('Order', list(fs.ORDERS), key='ida-pat-order', format_func=fs.ORDERS.get)
-    choices = _method_choices(fm.all_presets(presets_dir))
-    labels = list(choices)
-    pick = right.selectbox('Method for the samples', labels, key='ida-pat-method')
+    with right:
+        pick = _method_pick('Method for the samples', methods, favs, 'ida-pat-method',
+                            _default_method(methods, favs, runs))
 
     with st.container(border=True):
         w1, w2, w3, w4 = st.columns([0.9, 1, 2, 1.8], vertical_alignment='bottom')
@@ -490,8 +511,9 @@ def pattern_dialog(workflow_dir, presets_dir) -> None:
                                 key='ida-pat-every', disabled=not wash)
         wash_name = w3.text_input('Wash name', value=fs.DEFAULT_WASH_NAME, key='ida-pat-wname',
                                   disabled=not wash, help='Takes {prefix}, {date}, {suffix} and {n}, the wash number.')
-        wash_pick = w4.selectbox('Wash method', labels, disabled=not wash, key='ida-pat-wmethod',
-                                 index=labels.index(fs.WASH_PRESET) if fs.WASH_PRESET in labels else 0)
+        with w4:
+            wash_pick = _method_pick('Wash method', methods, favs, 'ida-pat-wmethod', fs.WASH_PRESET,
+                                     disabled=not wash)
 
     mode = _mode_choice(runs, 'ida-pat-mode')
 
@@ -509,10 +531,9 @@ def pattern_dialog(workflow_dir, presets_dir) -> None:
                                      int(every) if wash else 0, wash_name)
     if error:
         st.error(error)
-    new = []
-    for n in names:
-        preset, method = choices[wash_pick if n['wash'] else pick]
-        new.append({'name': n['name'], 'preset': preset, 'method': copy.deepcopy(method)})
+    if not methods:
+        st.warning('Set the method folder under Instrument PC first.')
+    new = [{'name': n['name'], 'method_file': wash_pick if n['wash'] else pick} for n in names]
     combined, duplicates = fs.combine(runs, new, mode)
     dup = {d.casefold() for d in duplicates}
     if names:
@@ -530,13 +551,8 @@ def pattern_dialog(workflow_dir, presets_dir) -> None:
     elif not error:
         st.caption('Enter at least one sample to see the runs.')
     if st.button(f'Add {len(new)} run{"s" if len(new) != 1 else ""}' if new else 'Add runs',
-                 type='primary', disabled=not new, key='ida-pat-go'):
+                 type='primary', disabled=not new or not methods, key='ida-pat-go'):
         _commit(workflow_dir, combined, len(new), duplicates)
-
-
-def _copy_method(run: dict) -> None:
-    st.session_state[CLIPBOARD_KEY] = {'name': run['name'], 'preset': run.get('preset'),
-                                       'method': copy.deepcopy(run['method'])}
 
 
 def _clipboard_bar(workflow_dir, runs: list, selected: list) -> None:
@@ -544,15 +560,15 @@ def _clipboard_bar(workflow_dir, runs: list, selected: list) -> None:
     with st.container(border=True):
         a, b = st.columns([5, 1.9], vertical_alignment='center')
         if clip:
-            a.markdown(f"📋 Copied: the method of **{clip['name'] or 'an unnamed run'}** "
-                       f"({clip.get('preset') or 'own method'}). Tick runs, then paste.")
+            a.markdown(f"📋 Copied: the method **{clip['method_file']}** of {clip['name'] or 'an unnamed run'}. "
+                       'Tick runs, then paste.')
         else:
             a.caption('📋 No method copied. Copy one with the 📋 button of a run, tick the runs that '
                       'should get it, then paste.')
         if b.button(f'Paste into selection ({len(selected)})', use_container_width=True,
                     disabled=not clip or not selected, key='ida-paste'):
             for i in selected:
-                runs[i].update(preset=clip.get('preset'), method=copy.deepcopy(clip['method']))
+                runs[i] = {'name': runs[i].get('name', ''), 'method_file': clip['method_file']}
             fm.save_runs(workflow_dir, runs)
             _bump()
             st.toast(f'Pasted the method into {len(selected)} run{"s" if len(selected) != 1 else ""}.')
@@ -561,20 +577,17 @@ def _clipboard_bar(workflow_dir, runs: list, selected: list) -> None:
 
 # --- the table --------------------------------------------------------------------
 
-def _new_run(presets_dir, runs, name='') -> dict:
-    """A new run takes the preset and method of the last run, else the first preset."""
-    if runs:
-        last = runs[-1]
-        return {'name': name, 'preset': last.get('preset'), 'method': copy.deepcopy(last['method'])}
-    presets = fm.all_presets(presets_dir)
-    first = next(iter(presets))
-    return {'name': name, 'preset': first, 'method': copy.deepcopy(presets[first])}
-
-
 def _rename(workflow_dir, index, wkey) -> None:
     runs = fm.load_runs(workflow_dir)
     if index < len(runs):
         runs[index]['name'] = st.session_state[wkey].strip()
+        fm.save_runs(workflow_dir, runs)
+
+
+def _set_method(workflow_dir, index, wkey) -> None:
+    runs = fm.load_runs(workflow_dir)
+    if index < len(runs) and st.session_state.get(wkey):
+        runs[index] = {'name': runs[index].get('name', ''), 'method_file': st.session_state[wkey]}
         fm.save_runs(workflow_dir, runs)
 
 
@@ -606,28 +619,99 @@ _STATE = {
     'failed': '❌ FLASHIda failed (see the log)',
 }
 
+# Raw file names are long: a smaller monospace font lets them fit their column.
+_NAME_CSS = ("<style>[class*='st-key-ida-name-'] input{font-size:.7rem;"
+             "font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:-.01em;"
+             "padding-left:.45rem;padding-right:.45rem}</style>")
 
-def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=None) -> None:
+
+def _prepare_folder(workflow_dir, presets_dir, folder) -> None:
+    """Once per folder and session: the presets saved into the folder, and runs
+    that still keep their method in the table moved to method files."""
+    if st.session_state.get('_ida_prepared') == folder:
+        return
+    try:
+        seeded = ff.seed_presets(folder, fm.all_presets(presets_dir))
+        runs = fm.load_runs(workflow_dir)
+        adopted, written = ff.adopt_embedded(runs, folder)
+        if adopted != runs:
+            fm.save_runs(workflow_dir, adopted)
+            _bump()
+    except OSError as e:
+        st.error(f'Could not write to the method folder: {e}')
+        return
+    st.session_state['_ida_prepared'] = folder
+    if seeded:
+        st.toast(f'Saved {len(seeded)} built-in preset{"s" if len(seeded) != 1 else ""} to the method folder: '
+                 + ', '.join(seeded))
+    if written:
+        st.toast(f'Moved the methods of the table to the method folder: {", ".join(written)}')
+
+
+def _duration_line(runs, folder, running, status) -> str:
+    if not runs:
+        return ''
+    if running and status:
+        left, unknown = 0.0, 0
+        for run in runs:
+            state = (status.get('runs') or {}).get(run['name'], {})
+            if state.get('state') in ('done', 'failed', 'skipped'):
+                continue
+            d = ff.duration(ff.run_method(run, folder))
+            if d is None:
+                unknown += 1
+                continue
+            if state.get('state') == 'running':
+                d = max(0.0, d - (time.time() - state.get('since', time.time())) / 60)
+            left += d
+        text = f'⏱️ About **{ff.format_minutes(left)}** left · ends about **{ff.format_end(left)}**'
+    else:
+        total, unknown = ff.total_minutes(runs, folder)
+        text = (f'⏱️ {len(runs)} run{"s" if len(runs) != 1 else ""} · **{ff.format_minutes(total)}** · '
+                f'ends about **{ff.format_end(total)}** if started now')
+    if unknown:
+        text += f' ({unknown} run{"s" if unknown != 1 else ""} without a duration not counted)'
+    return text
+
+
+def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=None, folder: str = '') -> None:
     """The runs table. While running it refreshes itself every two seconds.
 
     ``footer`` (a function) is drawn below the table in the same fragment: the
-    Run analysis bar, whose checks must see every change made in the table."""
-    if OPEN_KEY in st.session_state:
-        method_dialog(workflow_dir, presets_dir, st.session_state.pop(OPEN_KEY), read_only=running)
+    Run analysis bar, whose checks must see every change made in the table.
+    ``folder`` is the method folder."""
+    folder = (folder or '').strip()
+    usable = ff.usable(folder)
+    if usable and not running:
+        _prepare_folder(workflow_dir, presets_dir, folder)
     dialog = st.session_state.pop(DIALOG_KEY, None)
-    if dialog == 'import' and not running:
-        import_dialog(workflow_dir, presets_dir)
-    elif dialog == 'pattern' and not running:
-        pattern_dialog(workflow_dir, presets_dir)
+    if not running and usable:
+        if dialog == 'import':
+            import_dialog(workflow_dir, folder)
+        elif dialog == 'pattern':
+            pattern_dialog(workflow_dir, folder)
+        elif dialog == 'method':
+            if OPEN_KEY in st.session_state:
+                st.session_state['ida-ed-start'] = st.session_state.pop(OPEN_KEY)
+            method_dialog(workflow_dir, folder)
     if 'ida-added' in st.session_state:
         added, duplicates = st.session_state.pop('ida-added')
         st.toast(f'Added {added} run{"s" if added != 1 else ""}.'
                  + (f' {len(duplicates)} duplicate name{"s" if len(duplicates) != 1 else ""}, marked in the table.'
                     if duplicates else ''), icon='⚠️' if duplicates else '✅')
+    if 'ida-written' in st.session_state:
+        st.toast('Saved to the method folder: ' + ', '.join(st.session_state.pop('ida-written')))
+    if 'ida-missing' in st.session_state:
+        st.toast('Not in the method folder (pick another method for these runs): '
+                 + ', '.join(st.session_state.pop('ida-missing')), icon='⚠️')
+    if 'ida-saved' in st.session_state:
+        st.toast(f"Saved '{st.session_state.pop('ida-saved')}' to the method folder.", icon='💾')
+    st.html(_NAME_CSS)
 
     @st.fragment(run_every=2 if running else None)
     def table():
         runs = fm.load_runs(workflow_dir)
+        methods, favs = _folder_methods(folder)
         status = flashida.read_status(workflow_dir) if running else {}
         if running and status:
             sequence = status.get('sequence')
@@ -653,65 +737,86 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             (st.info if running else st.caption)(
                 f'No sequence (.sld) in the raw file folder yet. ' +
                 ('FLASHIda still starts for a run whose raw file appears.' if running else ''))
+        if not usable:
+            st.info('📁 Set the **method folder** under Instrument PC: each run picks its method from there.')
 
-        presets = fm.all_presets(presets_dir)
-        selected = [i for i in range(len(runs)) if st.session_state.get(f'ida-sel-{i}-{_version()}')]
+        v = _version()
+        selected = [i for i in range(len(runs)) if st.session_state.get(f'ida-sel-{i}-{v}')]
         if not running and runs:
             _clipboard_bar(workflow_dir, runs, selected)
-        widths = [0.35, 0.35, 4.4, 2.3, 1.7, 0.6, 1.8, 2.4, 0.6]
+        # select, #, name, method, favorite, copy, up, down, duplicate, sequence, [status], remove
+        widths = [0.3, 0.35, 3.0, 3.6, 0.5, 0.5, 0.45, 0.45, 0.5, 0.9] + ([2.4] if running else []) + [0.5]
+        titles = ['', '', 'Raw file name', 'Method', '', '', '', '', '', 'Seq.'] + (['Status'] if running else []) + ['']
         head = st.columns(widths, vertical_alignment='center')
-        for col, title in zip(head, ['', '', 'Raw file name', 'Preset', '', '', 'In sequence',
-                                     'Status' if running else '', '']):
+        for col, title in zip(head, titles):
             col.markdown(f'<span style="font-size:.8rem;opacity:.65;font-weight:600">{title}</span>',
                          unsafe_allow_html=True)
         for i, run in enumerate(runs):
-            row = st.columns(widths, vertical_alignment='center')
-            row[0].checkbox('Select', key=f'ida-sel-{i}-{_version()}', label_visibility='collapsed',
-                            disabled=running, help='Select for pasting a copied method')
-            if row[5].button('📋', key=f'ida-copy-{i}', help='Copy the method of this run'):
-                _copy_method(run)
+            c = st.columns(widths, vertical_alignment='center')
+            c[0].checkbox('Select', key=f'ida-sel-{i}-{v}', label_visibility='collapsed',
+                          disabled=running, help='Select for pasting a copied method')
+            c[1].markdown(f'**{i + 1}**')
+            wkey = f'ida-name-{i}-{v}'
+            c[2].text_input('Raw file name', value=run['name'], key=wkey, label_visibility='collapsed',
+                            disabled=running, placeholder='Raw file name, without .raw',
+                            on_change=_rename, args=(workflow_dir, i, wkey), help=run['name'] or None)
+            current = run.get('method_file')
+            options = list(methods)
+            if current and current not in options:
+                options = [current] + options
+            mkey = f'ida-m-{i}-{v}'
+            c[3].selectbox('Method', options, index=options.index(current) if current in options else None,
+                           key=mkey, label_visibility='collapsed', placeholder='Pick a method',
+                           format_func=_method_label(favs, methods), disabled=running or not methods,
+                           on_change=_set_method, args=(workflow_dir, i, mkey),
+                           help=f'{current}.json in the method folder' if current else None)
+            fav = current in favs
+            if c[4].button('★' if fav else '☆', key=f'ida-fav-{i}', disabled=not current or current not in methods,
+                           help=f"{'Remove' if fav else 'Add'} '{current}' {'from' if fav else 'to'} the "
+                                'favorites, listed first in every method choice' if current else None):
+                ff.toggle_favorite(folder, current)
                 st.rerun(scope='fragment')
-            # number, name, preset, method, in sequence, status, remove
-            cols = [row[1], row[2], row[3], row[4], row[6], row[7], row[8]]
-            cols[0].markdown(f'**{i + 1}**')
-            wkey = f'ida-name-{i}-{_version()}'
-            cols[1].text_input('Raw file name', value=run['name'], key=wkey, label_visibility='collapsed',
-                               disabled=running, placeholder='Raw file name, without .raw',
-                               on_change=_rename, args=(workflow_dir, i, wkey))
+            if c[5].button('📋', key=f'ida-copy-{i}', disabled=not current,
+                           help='Copy the method of this run'):
+                st.session_state[CLIPBOARD_KEY] = {'name': run['name'], 'method_file': current}
+                st.rerun(scope='fragment')
+            for col, step, icon in ((c[6], -1, '↑'), (c[7], 1, '↓')):
+                if col.button(icon, key=f'ida-mv{step}-{i}', disabled=running or not 0 <= i + step < len(runs),
+                              help='Move up' if step < 0 else 'Move down'):
+                    fm.save_runs(workflow_dir, ff.move(runs, i, step))
+                    _bump()
+                    st.rerun(scope='fragment')
+            if c[8].button('⧉', key=f'ida-dup-{i}', disabled=running,
+                           help='Duplicate this run below, with the next free name (R1 → R2)'):
+                fm.save_runs(workflow_dir, ff.duplicate(runs, i))
+                _bump()
+                st.rerun(scope='fragment')
+
             problem = fm.name_problem(run['name'], [r['name'] for r in runs[:i]])
-            preset = run.get('preset')
-            edited = preset in presets and fm.changes(presets[preset], run['method'])
-            text = preset if preset in presets else (f'{preset} (deleted)' if preset else 'Own method')
-            badges = ' :orange-badge[✏️ changed]' if edited else ''
-            if fm.check(run['method']):
-                badges += ' :red-badge[⚠️ fails the method check]'
-            elif fm.unknown_keys(run['method']):
-                badges += ' :blue-badge[ℹ️ new keys]'
-            cols[2].markdown(text + badges)
-            if cols[3].button('⚙️ Method', key=f'ida-method-{i}', use_container_width=True):
-                # Opened by the page, outside this fragment: the table refreshes
-                # itself while running and would close a dialog of its own.
-                st.session_state[OPEN_KEY] = i
-                st.rerun()
+            method = ff.run_method(run, folder)
             if problem and run['name']:
-                cols[4].markdown(f':red-badge[{problem}]')
+                c[9].markdown(':red-badge[⚠️]', help=problem)
+            elif current and usable and current not in methods:
+                c[9].markdown(':red-badge[⚠️]', help=f"'{current}.json' is not in the method folder.")
+            elif method is not None and fm.check(method):
+                c[9].markdown(':orange-badge[⚠️]', help="The method fails FLASHApp's check; FLASHIda may refuse it.")
             elif not sequence:
-                cols[4].markdown(':gray-badge[no sequence]')
+                c[9].markdown(':gray-badge[–]', help='No sequence in the raw file folder.')
             elif run['name'] in planned:
-                cols[4].markdown(f':green-badge[✓ row {planned[run["name"]]}]')
+                c[9].markdown(f':green-badge[✓ {planned[run["name"]]}]',
+                              help=f'Row {planned[run["name"]]} of the newest sequence.')
             else:
-                cols[4].markdown(':orange-badge[⚠️ not in sequence]',
-                                 help='Not in the newest sequence. FLASHIda still starts if this raw file appears.')
+                c[9].markdown(':orange-badge[–]',
+                              help='Not in the newest sequence. FLASHIda still starts if this raw file appears.')
             if running:
                 state = (status.get('runs') or {}).get(run['name'], {})
                 if state.get('state') == 'running':
                     minutes = int((time.time() - state.get('since', time.time())) // 60)
-                    duration = fm.get(run['method'], 'global.duration')
-                    cols[5].markdown(f'🟢 FLASHIda running · {minutes}'
-                                     + (f' of {duration:g} min' if isinstance(duration, (int, float)) else ' min'))
+                    d = ff.duration(method)
+                    c[10].markdown(f'🟢 FLASHIda running · {minutes}' + (f' of {d:g} min' if d is not None else ' min'))
                 else:
-                    cols[5].markdown(_STATE.get(state.get('state'), '⏳ Waiting for its raw file'))
-            if cols[6].button('🗑️', key=f'ida-del-{i}', disabled=running, help='Remove this run'):
+                    c[10].markdown(_STATE.get(state.get('state'), '⏳ Waiting for its raw file'))
+            if c[-1].button('🗑️', key=f'ida-del-{i}', disabled=running, help='Remove this run'):
                 del runs[i]
                 fm.save_runs(workflow_dir, runs)
                 _bump()
@@ -719,28 +824,16 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
 
         if not runs:
             st.caption('No runs yet. Add one per acquisition, named as the sequence names its raw file.')
+        else:
+            st.markdown(_duration_line(runs, folder, running, status))
         if extra:
             st.caption('Also in the sequence, not in the table (FLASHIda is not started for these): '
                        + ', '.join(f'`{e}`' for e in extra))
 
         if not running:
-            a, b, c, d, e = st.columns([1.2, 2.4, 1.9, 1.2, 1.9])
-            if c.button('🔢 Add runs by pattern', use_container_width=True,
-                        help='Names made from prefix, date, sample, comment, replicate and suffix, '
-                             'with a wash every few runs.'):
-                st.session_state[DIALOG_KEY] = 'pattern'
-                st.rerun()
-            if d.button('📥 Import', use_container_width=True,
-                        help='Runs from a sequence file exported here, or the raw file names of any '
-                             'Xcalibur sequence (.sld).'):
-                st.session_state[DIALOG_KEY] = 'import'
-                st.rerun()
-            e.download_button('⬇️ Export sequence', fs.export_runs(runs), use_container_width=True,
-                              file_name=f'flashida-runs-{fs.today()}.json', mime='application/json',
-                              disabled=not runs, key=f'ida-export-{_version()}',
-                              help='Every run with its preset and method, as JSON. Import it again here.')
+            a, b, c3, d, e, f, g = st.columns([1.1, 2.3, 1.8, 1.0, 1.25, 1.1, 1.9])
             if a.button('➕ Add run', use_container_width=True):
-                runs.append(_new_run(presets_dir, runs))
+                runs.append({'name': '', 'method_file': _default_method(methods, favs, runs)})
                 fm.save_runs(workflow_dir, runs)
                 _bump()
                 st.rerun(scope='fragment')
@@ -752,11 +845,37 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
                         help='Adds a run for each raw file the newest .sld in the raw file folder '
                              'writes that the table does not have yet.' if new else
                              'No sequence in the raw file folder, or the table has all its names.'):
-                for name in new:
-                    runs.append(_new_run(presets_dir, runs, name))
+                method_file = _default_method(methods, favs, runs)
+                runs.extend({'name': n, 'method_file': method_file} for n in new)
                 fm.save_runs(workflow_dir, runs)
                 _bump()
                 st.rerun(scope='fragment')
+            if c3.button('🔢 Add runs by pattern', use_container_width=True, disabled=not usable,
+                         help='Names made from prefix, date, sample, comment, replicate and suffix, '
+                              'with a wash every few runs.'):
+                st.session_state[DIALOG_KEY] = 'pattern'
+                st.rerun()
+            if d.button('📥 Import', use_container_width=True, disabled=not usable,
+                        help='Runs from a sequence file exported here, or the raw file names of any '
+                             'Xcalibur sequence (.sld).'):
+                st.session_state[DIALOG_KEY] = 'import'
+                st.rerun()
+            e.download_button('⬇️ Export JSON', fs.export_runs(runs, folder), use_container_width=True,
+                              file_name=f'flashida-runs-{fs.today()}.json', mime='application/json',
+                              disabled=not runs, key=f'ida-export-{v}',
+                              help='Every run with its method, as JSON. Import it again here; methods the '
+                                   'method folder lacks are saved there.')
+            f.download_button('⬇️ CSV', fs.export_csv(runs), use_container_width=True,
+                              file_name=f'flashida-runs-{fs.today()}.csv', mime='text/csv',
+                              disabled=not runs, key=f'ida-export-csv-{v}',
+                              help='Row, raw file name and method of every run, as CSV.')
+            if g.button('📝 New or edit method', use_container_width=True, disabled=not usable,
+                        help='Make a new method from any method in the folder, or change one. '
+                             'Saved as a file in the method folder.'):
+                st.session_state[DIALOG_KEY] = 'method'
+                if selected and runs[selected[0]].get('method_file'):
+                    st.session_state[OPEN_KEY] = runs[selected[0]]['method_file']
+                st.rerun()
 
         if footer is not None:
             footer()
@@ -775,6 +894,9 @@ def start_problems(workflow_dir, params: dict) -> list:
     raw = str(params.get('raw-files') or '').strip()
     if not raw or not Path(raw).is_dir():
         problems.append('Enter an existing raw file folder.')
+    folder = str(params.get('method-folder') or '').strip()
+    if not ff.usable(folder):
+        problems.append('Enter an existing method folder.')
     runs = fm.load_runs(workflow_dir)
     if not runs:
         problems.append('Add the runs to acquire.')
@@ -784,12 +906,19 @@ def start_problems(workflow_dir, params: dict) -> list:
         if problem:
             problems.append(f'Run {i + 1}: {problem}')
         names.append(run['name'])
+    if ff.usable(folder):
+        problems += [f'Run {i + 1}: {text}' for i, text in ff.method_problems(runs, folder)]
     return problems
 
 
-def method_warnings(workflow_dir) -> list:
+def method_warnings(workflow_dir, folder: str = '') -> list:
     """Runs whose method fails FLASHApp's check. They do not keep a run from
     starting: the user may override the check (Run anyway), and FLASHIda
     checks the method itself."""
-    return [f"Run {i + 1}: its method fails FLASHApp's check, FLASHIda may refuse it (open ⚙️ Method)."
-            for i, run in enumerate(fm.load_runs(workflow_dir)) if fm.check(run['method'])]
+    out = []
+    for i, run in enumerate(fm.load_runs(workflow_dir)):
+        method = ff.run_method(run, folder)
+        if method is not None and fm.check(method):
+            out.append(f"Run {i + 1}: its method fails FLASHApp's check, FLASHIda may refuse it "
+                       '(📝 New or edit method).')
+    return out

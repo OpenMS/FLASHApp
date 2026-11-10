@@ -1,19 +1,23 @@
 """Sequences of FLASHIda runs: export and import, names from an Xcalibur
 sequence, and names made from a pattern.
 
-A run is ``{name, preset, method}`` as in the runs table
-(src/flashida_method.py). Streamlit-free, so it is tested on its own.
+A run is ``{name, method_file}``: its raw file name and the name of its method
+in the method folder (src/flashida_folder.py). Tables saved before the method
+folder kept the method in the run (``{name, preset, method}``); those are read
+too. Streamlit-free, so it is tested on its own.
 """
 
-import copy
+import csv
 import datetime
+import io
 import json
 import re
 
 from src import flashida
+from src import flashida_folder as ff
 
 FORMAT = 'flashida-runs'
-VERSION = 1
+VERSION = 2
 
 # Built-in preset that the pattern dialog proposes for wash runs.
 WASH_PRESET = 'Wash'
@@ -21,15 +25,35 @@ WASH_PRESET = 'Wash'
 
 # --- export and import ------------------------------------------------------------
 
-def export_runs(runs: list) -> str:
-    """The runs table as a JSON sequence file."""
-    return json.dumps({'format': FORMAT, 'version': VERSION,
-                       'runs': [{'name': r.get('name', ''), 'preset': r.get('preset'),
-                                 'method': r.get('method', {})} for r in runs]}, indent=2)
+def export_runs(runs: list, folder=None) -> str:
+    """The runs table as a JSON sequence file. Each run names its method file
+    and carries the method too, so the file can be imported on a PC whose
+    method folder does not have it."""
+    out = []
+    for r in runs:
+        entry = {'name': r.get('name', '')}
+        if r.get('method_file'):
+            entry['method_file'] = r['method_file']
+        method = ff.run_method(r, folder)
+        if method is not None:
+            entry['method'] = method
+        out.append(entry)
+    return json.dumps({'format': FORMAT, 'version': VERSION, 'runs': out}, indent=2)
+
+
+def export_csv(runs: list) -> str:
+    """The run names (and their methods) as CSV, in table order."""
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator='\r\n')
+    w.writerow(['Row', 'Raw file name', 'Method'])
+    for i, r in enumerate(runs, 1):
+        w.writerow([i, r.get('name', ''), r.get('method_file') or r.get('preset') or ''])
+    return buf.getvalue()
 
 
 def parse_runs(text) -> list:
-    """The runs of a JSON sequence file (or a bare list of runs).
+    """The runs of a JSON sequence file (or a bare list of runs), as
+    ``{name, method_file?, method?, preset?}``.
 
     Raises ValueError with a message for the user when the file is not one."""
     if isinstance(text, bytes):
@@ -46,13 +70,48 @@ def parse_runs(text) -> list:
         raise ValueError('A sequence file holds a list of runs.')
     runs = []
     for i, r in enumerate(data, 1):
-        if not isinstance(r, dict) or not isinstance(r.get('method'), dict):
+        if not isinstance(r, dict):
+            raise ValueError(f'Run {i} is not a run.')
+        method_file = r.get('method_file')
+        method = r.get('method')
+        if not (isinstance(method_file, str) and method_file.strip()) and not isinstance(method, dict):
             raise ValueError(f'Run {i} has no method.')
-        preset = r.get('preset')
-        runs.append({'name': str(r.get('name') or '').strip(),
-                     'preset': preset if isinstance(preset, str) else None,
-                     'method': r['method']})
+        run = {'name': str(r.get('name') or '').strip()}
+        if isinstance(method_file, str) and method_file.strip():
+            run['method_file'] = ff.stem(method_file)
+        if isinstance(method, dict):
+            run['method'] = method
+        if isinstance(r.get('preset'), str):
+            run['preset'] = r['preset']
+        runs.append(run)
     return runs
+
+
+def into_folder(runs: list, folder) -> tuple:
+    """(runs, written, missing): imported runs as ``{name, method_file}``.
+    A method file the folder lacks is written from the method the file
+    carries; a run whose method is neither there nor carried is listed in
+    ``missing`` (it keeps its method file name, which the table marks)."""
+    written, missing, out, legacy = [], [], [], []
+    for r in runs:
+        name = r.get('method_file')
+        if name:
+            if not ff.exists(folder, name):
+                if isinstance(r.get('method'), dict) and ff.usable(folder):
+                    ff.write(folder, name, r['method'])
+                    written.append(name)
+                else:
+                    missing.append(name)
+            out.append({'name': r['name'], 'method_file': name})
+        else:
+            legacy.append(len(out))
+            out.append(r)
+    if legacy:
+        adopted, more = ff.adopt_embedded([out[i] for i in legacy], folder)
+        for i, run in zip(legacy, adopted):
+            out[i] = run
+        written += more
+    return out, written, sorted(set(missing), key=str.casefold)
 
 
 def sld_names(data: bytes) -> list:
@@ -60,9 +119,9 @@ def sld_names(data: bytes) -> list:
     return [r['name'] for r in flashida.sequence_rows_from_bytes(data)]
 
 
-def runs_from_names(names, preset: str | None, method: dict) -> list:
-    """One run per name, each with its own copy of the method."""
-    return [{'name': n, 'preset': preset, 'method': copy.deepcopy(method)} for n in names]
+def runs_from_names(names, method_file: str | None) -> list:
+    """One run per name, all with the same method file."""
+    return [{'name': n, 'method_file': method_file} for n in names]
 
 
 def combine(existing: list, new: list, mode: str) -> tuple:

@@ -288,13 +288,14 @@ _BAD_NAME = re.compile(r'[\\/:*?"<>|]')
 
 
 def load_runs(workflow_dir) -> list:
-    """[{name, preset, method}] of the runs table, in table order."""
+    """[{name, method_file}] of the runs table, in table order (a table saved
+    before the method folder keeps ``{name, preset, method}``)."""
     try:
         runs = json.loads(Path(workflow_dir, RUNS_FILE).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return []
-    return [r for r in runs if isinstance(r, dict) and isinstance(r.get('method'), dict)] \
-        if isinstance(runs, list) else []
+    return [r for r in runs if isinstance(r, dict) and (
+        isinstance(r.get('method'), dict) or 'method_file' in r)] if isinstance(runs, list) else []
 
 
 def save_runs(workflow_dir, runs: list) -> None:

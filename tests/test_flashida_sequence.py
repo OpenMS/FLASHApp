@@ -4,26 +4,51 @@ import json
 
 import pytest
 
+from src import flashida_folder as ff
 from src import flashida_method as fm
 from src import flashida_sequence as fs
 
 
 def _runs(*names):
-    return [{'name': n, 'preset': 'p', 'method': {'global': {'duration': i}}} for i, n in enumerate(names)]
+    return [{'name': n, 'method_file': 'M'} for n in names]
 
 
-def test_export_and_import_round_trip():
-    runs = _runs('A_R1', 'A_R2')
-    text = fs.export_runs(runs)
-    assert json.loads(text)['format'] == fs.FORMAT
-    assert fs.parse_runs(text) == runs
-    assert fs.parse_runs(text.encode('utf-8-sig')) == runs  # as uploaded, with a BOM
-    # a bare list of runs, as ida-runs.json keeps it, is read too
-    assert fs.parse_runs(json.dumps(runs)) == runs
+def test_export_and_import_round_trip(tmp_path):
+    ff.write(tmp_path, 'M1', {'global': {'duration': 60}})
+    runs = [{'name': 'A_R1', 'method_file': 'M1'}, {'name': 'A_R2', 'method_file': 'M1'}]
+    text = fs.export_runs(runs, tmp_path)
+    data = json.loads(text)
+    assert data['format'] == fs.FORMAT and data['version'] == 2
+    # the method travels with the file, for a PC whose folder lacks it
+    assert data['runs'][0]['method'] == {'global': {'duration': 60}}
+    parsed = fs.parse_runs(text.encode('utf-8-sig'))  # as uploaded, with a BOM
+    assert [r['method_file'] for r in parsed] == ['M1', 'M1']
+    # imported on another PC: the missing method file is written
+    other = tmp_path / 'other'
+    other.mkdir()
+    new, written, missing = fs.into_folder(parsed, other)
+    assert new == runs and written == ['M1'] and missing == []
+    assert ff.read(other, 'M1') == {'global': {'duration': 60}}
+    # a file without the method, naming one the folder lacks: listed as missing
+    _, _, missing = fs.into_folder([{'name': 'x', 'method_file': 'Gone'}], other)
+    assert missing == ['Gone']
+
+
+def test_import_a_file_of_the_first_version(tmp_path):
+    """Files exported before the method folder carry the method and its preset."""
+    v1 = json.dumps({'format': fs.FORMAT, 'version': 1, 'runs': [
+        {'name': 'A', 'preset': 'Wash', 'method': {'global': {'duration': 5}}}]})
+    new, written, _ = fs.into_folder(fs.parse_runs(v1), tmp_path)
+    assert new == [{'name': 'A', 'method_file': 'Wash'}] and written == ['Wash']
+
+
+def test_csv_export():
+    text = fs.export_csv([{'name': 'A_R1', 'method_file': 'M1'}, {'name': 'wash, 1', 'method_file': 'Wash'}])
+    assert text.splitlines() == ['Row,Raw file name,Method', '1,A_R1,M1', '2,"wash, 1",Wash']
 
 
 @pytest.mark.parametrize('text', ['not json', '{"format": "other", "runs": []}', '{"runs": 3}',
-                                  '[{"name": "a"}]', '[1]'])
+                                  '[{"name": "a"}]', '[1]', '[{"name": "a", "method_file": ""}]'])
 def test_import_refuses_what_is_not_a_sequence(text):
     with pytest.raises(ValueError):
         fs.parse_runs(text)
@@ -50,11 +75,8 @@ def _sld(names):
 def test_names_from_any_xcalibur_sequence():
     names = fs.sld_names(_sld(['PK_BSA_R1', 'PK_wash_1']))
     assert names == ['PK_BSA_R1', 'PK_wash_1']
-    method = {'global': {'duration': 60}}
-    runs = fs.runs_from_names(names, 'Wash', method)
-    assert [r['preset'] for r in runs] == ['Wash', 'Wash']
-    runs[0]['method']['global']['duration'] = 1  # each run gets its own copy
-    assert runs[1]['method']['global']['duration'] == 60 and method['global']['duration'] == 60
+    assert fs.runs_from_names(names, 'Wash') == [{'name': 'PK_BSA_R1', 'method_file': 'Wash'},
+                                                 {'name': 'PK_wash_1', 'method_file': 'Wash'}]
 
 
 def test_samples_with_their_own_values():
