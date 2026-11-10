@@ -920,11 +920,14 @@ class IdaWorkflow(WorkflowManager):
         self.ui.input_widget(
             key="executable", name="FLASHIda executable", default='',
             widget_type="text", help="Path to Flash.exe on the instrument PC.",
+            # The whole page reruns, so Run analysis checks the new value
+            reactive=True,
         )
         self.ui.input_widget(
             key="raw-files", name="Raw file folder", default='', widget_type="text",
             help="Folder the sequence writes its raw files to. Its newest .sld is "
                  "the sequence that is watched.",
+            reactive=True,
         )
 
     def execution(self) -> bool:
