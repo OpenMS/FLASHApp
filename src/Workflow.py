@@ -965,11 +965,12 @@ class IdaWorkflow(WorkflowManager):
             names.append(name)
             problems = flashida_method.check(run['method'])
             if problems:
-                self.logger.log(f"The method of run '{name}' does not load in FLASHIda:")
+                # Not a reason to stop: the user started despite the warning on
+                # the page (Run anyway), and FLASHIda checks the method itself.
+                self.logger.log(f"WARNING: the method of run '{name}' fails FLASHApp's check "
+                                '(started anyway; FLASHIda checks it):')
                 for line in problems:
                     self.logger.log(f'  {line}')
-                ok = False
-                continue
             unknown = flashida_method.unknown_keys(run['method'])
             if unknown:
                 self.logger.log(f"The method of run '{name}' has keys this FLASHApp does not know; "

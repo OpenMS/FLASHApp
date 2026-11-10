@@ -64,16 +64,22 @@ def start_bar() -> None:
         else:
             current = wf.parameter_manager.get_parameters_from_json()
             problems = ida_runs.start_problems(wf.workflow_dir, current)
+            # A method that fails FLASHApp's check only warns: the bundled schema
+            # may be older than the FLASHIda on this PC, so the user can override.
+            warnings = ida_runs.method_warnings(wf.workflow_dir)
             a.markdown(
-                '\n'.join(f'- {p}' for p in problems) if problems else
+                '\n'.join(f'- {p}' for p in problems + warnings) if problems or warnings else
                 f"Watches `{str(current.get('raw-files') or '').strip()}` for the newest sequence "
                 'and the raw files it writes, and starts FLASHIda for each run of the table.'
             )
-            if b.button('🚀 Run analysis', type='primary', use_container_width=True,
-                        disabled=bool(problems)):
+            override = bool(warnings) and not problems
+            if b.button('⚠️ Run anyway' if override else '🚀 Run analysis',
+                        type='secondary' if override else 'primary', use_container_width=True,
+                        disabled=bool(problems),
+                        help="Starts with the methods as they are, overriding FLASHApp's method check. "
+                             'FLASHIda checks each method itself when its run starts.' if override else None):
                 wf.start_workflow()
                 st.rerun()
-
 
 ida_runs.runs_table(wf.workflow_dir, local_workspaces_dir(st.session_state.settings), raw_dir, running,
                     footer=start_bar)
