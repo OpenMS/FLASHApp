@@ -346,9 +346,11 @@ def method_dialog(workflow_dir, presets_dir, index: int, read_only: bool = False
     problems = fm.check(method)
     if problems:
         with st.container(border=True):
-            st.markdown(f'⚠️ **FLASHIda would refuse this method** ({len(problems)} '
+            st.markdown(f'⚠️ **This FLASHApp expects FLASHIda to refuse this method** ({len(problems)} '
                         f'problem{"s" if len(problems) != 1 else ""}):')
             st.markdown('\n'.join(f'- `{p}`' for p in problems[:8]))
+            st.caption('The check uses the method schema bundled with FLASHApp, which may be older than '
+                       'your FLASHIda. **Run anyway** on the page starts the run with this method as it is.')
     unknown = fm.unknown_keys(method)
     if unknown:
         with st.container(border=True):
@@ -478,7 +480,7 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             text = preset if preset in presets else (f'{preset} (deleted)' if preset else 'Own method')
             badges = ' :orange-badge[✏️ changed]' if edited else ''
             if fm.check(run['method']):
-                badges += ' :red-badge[⚠️ refused by FLASHIda]'
+                badges += ' :red-badge[⚠️ fails the method check]'
             elif fm.unknown_keys(run['method']):
                 badges += ' :blue-badge[ℹ️ new keys]'
             cols[2].markdown(text + badges)
@@ -564,6 +566,12 @@ def start_problems(workflow_dir, params: dict) -> list:
         if problem:
             problems.append(f'Run {i + 1}: {problem}')
         names.append(run['name'])
-        if fm.check(run['method']):
-            problems.append(f"Run {i + 1}: FLASHIda would refuse its method (open ⚙️ Method).")
     return problems
+
+
+def method_warnings(workflow_dir) -> list:
+    """Runs whose method fails FLASHApp's check. They do not keep a run from
+    starting: the user may override the check (Run anyway), and FLASHIda
+    checks the method itself."""
+    return [f"Run {i + 1}: its method fails FLASHApp's check, FLASHIda may refuse it (open ⚙️ Method)."
+            for i, run in enumerate(fm.load_runs(workflow_dir)) if fm.check(run['method'])]
