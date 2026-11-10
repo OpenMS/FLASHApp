@@ -7,6 +7,7 @@ rebuilt whenever the logs grow; the selection is kept.
 """
 
 import hashlib
+import inspect
 import shutil
 import time
 from pathlib import Path
@@ -26,6 +27,16 @@ CODE_VERSION = hashlib.md5(
 ).hexdigest()[:8]
 
 COLORS = {'Deconvolved': '#9aa5b1', 'Chosen': '#f08c00', 'Identified': '#2b8a3e'}
+
+# What the map can be colored by besides the intensity (toolbar "Color"), and
+# its layers (toolbar "Layers"). Needs an openms-insight whose Heatmap takes
+# `color_columns`; an older one keeps the map colored by decision.
+COLOR_COLUMNS = {
+    'QScore': 'qscore',
+    '# deconvolved MS2 masses': 'ms2_masses',
+    '# fragment ions': 'fragment_ions',
+}
+HAS_COLOR_OPTIONS = 'color_columns' in inspect.signature(Heatmap.__init__).parameters
 
 
 def _fixed(precision=4):
@@ -175,19 +186,30 @@ def show_run(run: Path, cache_root: Path, key: str):
         st.session_state[run_key] = str(run)
 
     points = result['points']
-    heatmap = _component(
-        Heatmap, 'decision_map', cache_path, stamp, lambda: dict(
-            data=_frame(points), x_column='rt', y_column='mass', intensity_column='intensity',
-            category_column='Decision',
-            interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
-            hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
-            title='Survey masses and chosen precursors', x_label='Retention time (min)',
-            y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
-            svg_filename='FLASHIda-decisions', scroll_zoom=False,
-        ),
-        # Render-time styling, not stored with the cache
-        category_colors=COLORS,
+    common = dict(
+        x_column='rt', y_column='mass', intensity_column='intensity',
+        interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
+        hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
+        title='Survey masses and chosen precursors', x_label='Retention time (min)',
+        y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
+        svg_filename='FLASHIda-decisions', scroll_zoom=False,
     )
+    if HAS_COLOR_OPTIONS:
+        # Colored by a value, chosen in the toolbar; survey masses, chosen and
+        # identified precursors are layers to show or hide
+        heatmap = _component(
+            Heatmap, 'decision_map_values', cache_path, stamp,
+            lambda: dict(data=_frame(points), **common),
+            # Render-time options, not stored with the cache
+            color_columns=COLOR_COLUMNS, layer_column='Layer',
+        )
+    else:
+        heatmap = _component(
+            Heatmap, 'decision_map', cache_path, stamp,
+            lambda: dict(data=_frame(points), category_column='Decision', **common),
+            # Render-time styling, not stored with the cache
+            category_colors=COLORS,
+        )
     precursors = _component(
         Table, 'precursors', cache_path, stamp, lambda: dict(
             data=_frame(result['precursors']), title='Chosen precursors',
