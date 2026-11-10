@@ -967,6 +967,10 @@ class IdaWorkflow(WorkflowManager):
                     self.logger.log(f'  {line}')
                 ok = False
                 continue
+            unknown = flashida_method.unknown_keys(run['method'])
+            if unknown:
+                self.logger.log(f"The method of run '{name}' has keys this FLASHApp does not know; "
+                                f"FLASHIda checks them: {', '.join(unknown)}")
             path = Path(method_dir, flashida_method.method_file_name(name))
             path.write_text(json.dumps(run['method'], indent=2), encoding='utf-8')
             methods[name.casefold()] = (name, path)
