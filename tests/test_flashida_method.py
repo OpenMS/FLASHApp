@@ -21,6 +21,26 @@ def test_defaults_and_presets_load():
     assert fm.get(fm.defaults(), 'deconvolution.tol') == [10, 10, 10]
 
 
+def test_shipped_methods_are_files_of_a_folder(tmp_path):
+    (tmp_path / 'Native.json').write_text('{"deconvolution": {"min_charge": 5}}', encoding='utf-8')
+    (tmp_path / 'broken.json').write_text('[1, 2]', encoding='utf-8')  # not a method: left out
+    presets = fm.builtin_presets(tmp_path)
+    assert list(presets) == [fm.DEFAULTS_PRESET, 'Native']
+    assert fm.get(presets['Native'], 'deconvolution.min_charge') == 5
+    assert fm.get(presets['Native'], 'deconvolution.max_charge') == 50  # the rest are the defaults
+    # a changed file counts at once
+    (tmp_path / 'Native.json').write_text('{"deconvolution": {"min_charge": 7}}', encoding='utf-8')
+    import os
+    os.utime(tmp_path / 'Native.json', (1, 1))
+    assert fm.get(fm.builtin_presets(tmp_path)['Native'], 'deconvolution.min_charge') == 7
+
+
+def test_flashida_defaults_carry_its_scan_settings():
+    method = fm.default_method()
+    assert fm.get(method, 'ms_settings.ms1.resolution') == 240000
+    assert fm.get(method, 'ms_settings.ms2.activation') == 'HCD'
+
+
 def test_check_finds_what_flashida_refuses():
     method = fm.defaults()
     method['bogus'] = 1
@@ -66,7 +86,7 @@ def test_user_presets_are_kept_per_computer(tmp_path):
     assert list(presets)[0] == fm.DEFAULTS_PRESET and 'Histone MS3' in presets
     # a user preset never hides a built-in one
     fm.save_user_preset(tmp_path, fm.DEFAULTS_PRESET, {})
-    assert fm.all_presets(tmp_path)[fm.DEFAULTS_PRESET] == fm.defaults()
+    assert fm.all_presets(tmp_path)[fm.DEFAULTS_PRESET] == fm.default_method()
     fm.delete_user_preset(tmp_path, 'Histone MS3')
     assert 'Histone MS3' not in fm.user_presets(tmp_path)
 

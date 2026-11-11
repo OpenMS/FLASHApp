@@ -5,17 +5,22 @@ process can check a method before FLASHIda gets it.
 The keys come from FLASHIda's own JSON schema, ``assets/flashida/method.schema.json``
 (``docs/site/method.schema.json`` of FlashIDA, the file its key reference is
 generated from). Copy a newer one over it when FLASHIda gains keys.
+
+The methods FLASHApp ships are files of their own in ``assets/flashida/methods/``
+(``<name>.json``, the keys that differ from FLASHIda's defaults), so a new or
+changed one arrives with ``git pull`` and shows up the next time it is read.
 """
 
 import copy
 import json
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets' / 'flashida'
 SCHEMA_FILE = ASSETS / 'method.schema.json'
-BUILTIN_PRESETS_FILE = ASSETS / 'presets.json'
+BUILTIN_METHODS_DIR = ASSETS / 'methods'
 # Presets the user saves, kept once per computer (the instrument PC) in the
 # local workspaces folder, so every workspace offers them.
 USER_PRESETS_FILE = '.flashida-presets.json'
@@ -231,15 +236,33 @@ def changes(base: dict, method: dict) -> list:
 
 # --- presets --------------------------------------------------------------------
 
-def builtin_presets() -> dict:
+def builtin_presets(folder=BUILTIN_METHODS_DIR) -> dict:
+    """FLASHIda's defaults, then the methods FLASHApp ships (one ``.json`` file
+    each in ``folder``, merged over the defaults), by name. A file named like
+    the defaults (``FLASHIda defaults.json``) adds to them: it holds the scan
+    settings FLASHIda ships, which its schema leaves to the instrument. Read
+    again when a file changes, so an update of them counts at once; a file that
+    is not a JSON object is left out."""
     presets = {DEFAULTS_PRESET: defaults()}
-    try:
-        shipped = json.loads(BUILTIN_PRESETS_FILE.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        shipped = {}
-    for name, method in shipped.items():
-        presets[name] = merge(defaults(), method)
+    for path in sorted(Path(folder).glob('*.json'), key=lambda p: p.stem.casefold()):
+        try:
+            method = _read_method_file(str(path), path.stat().st_mtime)
+        except (OSError, ValueError):
+            continue
+        if isinstance(method, dict):
+            presets[path.stem] = merge(defaults(), method)
     return presets
+
+
+@lru_cache(maxsize=64)
+def _read_method_file(path: str, mtime: float):
+    return json.loads(Path(path).read_text(encoding='utf-8'))
+
+
+def default_method() -> dict:
+    """The method FLASHApp calls FLASHIda's defaults: the schema's defaults and
+    the scan settings of ``FLASHIda defaults.json``."""
+    return builtin_presets()[DEFAULTS_PRESET]
 
 
 def merge(base: dict, over: dict) -> dict:

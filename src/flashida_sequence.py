@@ -51,6 +51,55 @@ def export_csv(runs: list) -> str:
     return buf.getvalue()
 
 
+# Xcalibur's sequence as CSV (Sequence Setup: File > Export / Import): a first
+# line "Bracket Type=4," and then a header row and one row per sample.
+XCALIBUR_COLUMNS = ['Sample Type', 'File Name', 'Sample ID', 'Path', 'Instrument Method', 'Process Method',
+                    'Calibration File', 'Position', 'Inj Vol', 'Level', 'Sample Wt', 'Sample Vol', 'ISTD Amt',
+                    'Dil Factor', 'L1 Study', 'L2 Client', 'L3 Laboratory', 'L4 Company', 'L5 Phone',
+                    'Comment', 'Sample Name']
+
+
+def export_xcalibur_csv(runs: list, path: str = '', instrument_method: str = '') -> str:
+    """The runs as an Xcalibur sequence CSV: one Unknown sample per run, its
+    raw file name as File Name and Sample Name, writing into ``path`` with the
+    instrument method ``instrument_method`` (both may be left for Xcalibur)."""
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator='\r\n')
+    w.writerow(['Bracket Type=4', ''])
+    w.writerow(XCALIBUR_COLUMNS)
+    for r in runs:
+        row = dict.fromkeys(XCALIBUR_COLUMNS, '')
+        row.update({'Sample Type': 'Unknown', 'File Name': r.get('name', ''), 'Path': path,
+                    'Instrument Method': instrument_method, 'Sample Wt': '0', 'Sample Vol': '0',
+                    'ISTD Amt': '0', 'Dil Factor': '1', 'Sample Name': r.get('name', '')})
+        w.writerow([row[c] for c in XCALIBUR_COLUMNS])
+    return buf.getvalue()
+
+
+def csv_runs(data) -> tuple:
+    """(runs, has methods) of a CSV sequence: an Xcalibur sequence CSV (its
+    File Name column, no methods) or the table Export sequence writes (Raw file
+    name and Method). Raises ValueError for any other CSV."""
+    if isinstance(data, bytes):
+        try:
+            data = data.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            data = data.decode('cp1252')
+    rows = list(csv.reader(io.StringIO(data)))
+    for i, row in enumerate(rows):
+        cells = [c.strip() for c in row]
+        for column, method in (('File Name', None), ('Raw file name', 'Method')):
+            if column in cells:
+                at = cells.index(column)
+                m_at = cells.index(method) if method in cells else None
+                runs = [{'name': r[at].strip(),
+                         'method_file': (r[m_at].strip() or None) if m_at is not None and len(r) > m_at else None}
+                        for r in rows[i + 1:] if len(r) > at and r[at].strip()]
+                return runs, m_at is not None
+    raise ValueError('This CSV is neither an Xcalibur sequence (no "File Name" column) nor a table '
+                     'exported here (no "Raw file name" column).')
+
+
 def parse_runs(text) -> list:
     """The runs of a JSON sequence file (or a bare list of runs), as
     ``{name, method_file?, method?, preset?}``.

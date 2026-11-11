@@ -47,6 +47,24 @@ def test_csv_export():
     assert text.splitlines() == ['Row,Raw file name,Method', '1,A_R1,M1', '2,"wash, 1",Wash']
 
 
+def test_xcalibur_csv_export_and_import():
+    runs = [{'name': 'A_R1', 'method_file': 'M1'}, {'name': 'B_R1', 'method_file': 'M2'}]
+    text = fs.export_xcalibur_csv(runs, r'C:\Data', r'C:\Xcalibur\methods\TD')
+    lines = text.splitlines()
+    assert lines[0] == 'Bracket Type=4,' and lines[1].split(',') == fs.XCALIBUR_COLUMNS
+    assert lines[2].startswith(r'Unknown,A_R1,,C:\Data,C:\Xcalibur\methods\TD,')
+    # read back: the names, without methods (Xcalibur knows none of ours)
+    assert fs.csv_runs(text.encode('utf-8')) == ([{'name': 'A_R1', 'method_file': None},
+                                                  {'name': 'B_R1', 'method_file': None}], False)
+
+
+def test_the_table_csv_is_read_back_with_its_methods():
+    runs = [{'name': 'A_R1', 'method_file': 'M1'}, {'name': 'wash, 1', 'method_file': 'Wash'}]
+    assert fs.csv_runs(fs.export_csv(runs)) == (runs, True)
+    with pytest.raises(ValueError):
+        fs.csv_runs('a,b\n1,2\n')
+
+
 @pytest.mark.parametrize('text', ['not json', '{"format": "other", "runs": []}', '{"runs": 3}',
                                   '[{"name": "a"}]', '[1]', '[{"name": "a", "method_file": ""}]'])
 def test_import_refuses_what_is_not_a_sequence(text):
