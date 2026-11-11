@@ -3,18 +3,21 @@
 Each run is a raw file name and the method FLASHIda gets for it, a file in the
 method folder (src/flashida_folder.py) picked in the run's dropdown. The
 Method dialog makes a new method from any method in the folder or changes one,
-by section, key by key, or as JSON. The built-in presets (FLASHIda's defaults,
-those shipped in assets/flashida/presets.json and the user's own) are saved
-into the folder once. While the acquisition runs, the table shows which runs
-the newest sequence (.sld) schedules and what FLASHIda is doing for each.
+by section, key by key, or in a JSON tree (streamlit-extras' json_editor). The
+built-in presets (FLASHIda's defaults, those shipped in
+assets/flashida/presets.json and the user's own) are saved into the folder
+once. While the acquisition runs, the table shows which runs the newest
+sequence (.sld) schedules and what FLASHIda is doing for each.
 """
 
+import copy
 import json
 import time
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit_extras.json_editor import json_editor
 
 from src import flashida
 from src import flashida_folder as ff
@@ -315,20 +318,26 @@ def method_dialog(workflow_dir, folder) -> None:
         else:
             st.info('No key matches.')
     with tabs[-1]:
-        text = st.text_area('Method as JSON', value=json.dumps(method, indent=2), height=380,
-                            key=f'ida-json-{v}', help="Apply checks it against FLASHIda's method schema.")
-        j1, j2, j3 = st.columns([1, 1, 1.2], vertical_alignment='bottom')
-        if j1.button('Apply JSON', use_container_width=True, key=f'ida-json-apply-{v}'):
+        st.caption('The method as JSON. Click a value to change it, ➕ on an object to add a '
+                   'key, 🗑 to remove one; a change is kept at once and checked against '
+                   "FLASHIda's method schema below.")
+        tree_key = f'ida-json-{v}'
+        edited = json_editor(method, name='method', collapsed=1, editable=True,
+                             display_data_types=False, sort_keys=False, key=tree_key)['data']
+        # The tree returns the method as it was when it was drawn; the other tabs
+        # may have added keys since. So a change is what differs from the tree's
+        # own previous value, and only that is applied to the method.
+        before = st.session_state.get(f'{tree_key}-before')
+        st.session_state[f'{tree_key}-before'] = copy.deepcopy(edited)
+        if before is not None and edited != before:
             try:
-                parsed = json.loads(text)
+                new = apply_tree_edit(method, before, edited)
             except ValueError as e:
-                st.error(f'Not valid JSON: {e}')
+                st.error(str(e))
             else:
-                if not isinstance(parsed, dict):
-                    st.error('A method is a JSON object ({...}).')
-                else:
-                    work.update(method=parsed, v=v + 1)
-                    st.rerun(scope='fragment')
+                work.update(method=new, v=v + 1)
+                st.rerun(scope='fragment')
+        j2, j3 = st.columns([1, 1.2], vertical_alignment='bottom')
         j2.download_button('⬇️ Download', json.dumps(method, indent=2), use_container_width=True,
                            file_name=f'{new_name or src}.json', mime='application/json', key=f'ida-json-dl-{v}')
         with j3.popover('📥 Import .json file', use_container_width=True):
@@ -391,6 +400,31 @@ def method_dialog(workflow_dir, folder) -> None:
             st.session_state['ida-saved'] = name
             _bump()
             st.rerun()
+
+
+def apply_tree_edit(method: dict, before, after) -> dict:
+    """The method with what changed in the JSON tree from `before` to `after`:
+    values set or added, keys removed. Keys the tree did not show (added to the
+    method after it was drawn) stay. A method is a JSON object, so a root that
+    is not one raises ValueError."""
+    if not isinstance(after, dict):
+        raise ValueError('A method is a JSON object ({...}).')
+
+    def merge(target, old, new):
+        out = copy.deepcopy(target) if isinstance(target, dict) else {}
+        old = old if isinstance(old, dict) else {}
+        for key in old.keys() - new.keys():
+            out.pop(key, None)
+        for key, value in new.items():
+            if key in old and old[key] == value:
+                continue
+            if isinstance(value, dict) and isinstance(old.get(key), dict):
+                out[key] = merge(out.get(key), old[key], value)
+            else:
+                out[key] = copy.deepcopy(value)
+        return out
+
+    return merge(method, before, after)
 
 
 # --- import, export and runs by pattern ---------------------------------------------
