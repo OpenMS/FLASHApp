@@ -184,6 +184,15 @@ def load_input(workspace):
         return None
 
 
+def clear_input(workspace):
+    """Forget the stored input; True if there was one."""
+    path = input_path(workspace)
+    if not path.exists():
+        return False
+    path.unlink()
+    return True
+
+
 def spectrum_row(data):
     """The one row the sequence view matches: its masses and precursor mass."""
     return {
