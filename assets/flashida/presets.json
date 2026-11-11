@@ -98,5 +98,11 @@
     "runtime": {
       "log_dir": "logs"
     }
+  },
+  "Wash": {
+    "global": {
+      "method_name": "Wash",
+      "method_description": "Generic wash run between samples; set its values before use"
+    }
   }
 }
