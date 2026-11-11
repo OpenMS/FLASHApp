@@ -929,11 +929,19 @@ class IdaWorkflow(WorkflowManager):
                  "the sequence that is watched.",
             reactive=True,
         )
+        self.ui.input_widget(
+            key="method-folder", name="Method folder", default='', widget_type="text",
+            help="Folder of the FLASHIda methods, one .json file per method. Each run of the "
+                 "table picks one; FLASHIda gets the file as it is when its run starts. The "
+                 "built-in presets are saved there once.",
+            reactive=True,
+        )
 
     def execution(self) -> bool:
-        from src import flashida_method
+        from src import flashida_folder, flashida_method
 
         params = self.parameter_manager.get_parameters_from_json()
+        folder = str(params.get('method-folder') or '').strip()
 
         exe = Path(str(params.get('executable') or '').strip())
         if str(exe) in ('', '.'):
@@ -963,20 +971,42 @@ class IdaWorkflow(WorkflowManager):
                 ok = False
                 continue
             names.append(name)
-            problems = flashida_method.check(run['method'])
-            if problems:
-                self.logger.log(f"The method of run '{name}' does not load in FLASHIda:")
-                for line in problems:
-                    self.logger.log(f'  {line}')
+            # The method file as it is now (a table saved before the method
+            # folder keeps the method in the run)
+            if run.get('method_file'):
+                try:
+                    method = flashida_folder.read(folder, run['method_file']) \
+                        if flashida_folder.usable(folder) else None
+                except ValueError as e:
+                    self.logger.log(f"Run '{name}': {e}")
+                    ok = False
+                    continue
+                if method is None:
+                    self.logger.log(f"Run '{name}': the method folder '{folder}' is not a folder.")
+                    ok = False
+                    continue
+            else:
+                method = run.get('method')
+            if not isinstance(method, dict):
+                self.logger.log(f"Run '{name}': pick a method.")
                 ok = False
                 continue
+            run = dict(run, method=method)
+            problems = flashida_method.check(run['method'])
+            if problems:
+                # Not a reason to stop: the user started despite the warning on
+                # the page (Run anyway), and FLASHIda checks the method itself.
+                self.logger.log(f"WARNING: the method of run '{name}' fails FLASHApp's check "
+                                '(started anyway; FLASHIda checks it):')
+                for line in problems:
+                    self.logger.log(f'  {line}')
             unknown = flashida_method.unknown_keys(run['method'])
             if unknown:
                 self.logger.log(f"The method of run '{name}' has keys this FLASHApp does not know; "
                                 f"FLASHIda checks them: {', '.join(unknown)}")
             path = Path(method_dir, flashida_method.method_file_name(name))
             path.write_text(json.dumps(run['method'], indent=2), encoding='utf-8')
-            methods[name.casefold()] = (name, path)
+            methods[name.casefold()] = (name, path, run.get('method_file'))
         if not ok:
             return False
 
@@ -1026,7 +1056,14 @@ class IdaWorkflow(WorkflowManager):
                 if name.casefold() not in methods:
                     self.logger.log(f"New raw file '{name}.raw' is not in the runs table: left alone.")
                     continue
-                run_name, method_path = methods[name.casefold()]
+                run_name, method_path, method_file = methods[name.casefold()]
+                if method_file:
+                    # The method file as it is now: an edit made while waiting counts
+                    try:
+                        method_path.write_text(json.dumps(flashida_folder.read(folder, method_file), indent=2),
+                                               encoding='utf-8')
+                    except (ValueError, OSError) as e:
+                        self.logger.log(f"WARNING: {e} Run '{run_name}' gets the method as it was at the start.")
                 if run_name not in status['scheduled']:
                     self.logger.log(f"'{name}.raw' is not in the newest sequence; starting FLASHIda anyway.")
                 log_dir = flashida.method_log_dir(method_path, exe.parent)

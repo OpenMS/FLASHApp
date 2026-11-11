@@ -49,7 +49,8 @@ page_intro(
     background=(
         '**Masses.** One mass per line, optionally followed by its intensity, '
         'separated by spaces, tabs, commas or semicolons; lines that are not '
-        'numbers are skipped. An `.msalign` file gives the peaks of its first '
+        'numbers are skipped. Or all on one line, separated by semicolons '
+        '(`1043.512; 2511.374; 980.1`). An `.msalign` file gives the peaks of its first '
         'spectrum and its precursor mass.\n\n'
         '**Monoisotopic or average.** Choose what the masses are. With average '
         'masses the sequence and its fragments are computed as average masses '
@@ -111,7 +112,7 @@ with st.expander('Observed masses', expanded=stored is None):
     with paste:
         text = st.text_area(
             'Masses', height=180, key='matcher_text',
-            placeholder='e.g.\n1043.512 25000\n2511.374 18000\n...',
+            placeholder='e.g.\n1043.512 25000\n2511.374 18000\n...\nor: 1043.512; 2511.374; 980.1',
         )
         precursor = st.number_input(
             'Precursor mass (optional)', min_value=0.0, value=0.0, step=1.0, format='%.4f',
