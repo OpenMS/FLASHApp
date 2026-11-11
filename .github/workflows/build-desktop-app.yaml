@@ -42,7 +42,7 @@ env:
   APP_NAME: FLASHApp
   # Prefix of the installer names: <INSTALLER_NAME>-Setup.exe,
   # -macOS-arm64.dmg, -Linux-x86_64.AppImage (src/common/installers.py links them).
-  INSTALLER_NAME: FLASHApp-2.0.0-alpha.7
+  INSTALLER_NAME: FLASHApp-2.0.0-alpha.8
   # Define needed TOPP tools here. FileConverter converts Thermo .raw input
   # (CommandExecutor.convert_to_mzml): on Windows with
   # share/OpenMS/THIRDPARTY/ThermoRawFileParser, on macOS and Linux with OpenMS's
