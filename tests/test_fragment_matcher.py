@@ -67,6 +67,14 @@ def test_store_and_load(tmp_path):
         fm.matcher_input([1.0], mass_type='other')
 
 
+def test_clear_input(tmp_path):
+    assert fm.clear_input(tmp_path) is False
+    fm.store_input(tmp_path, [1000.0, 2000.0])
+    assert fm.load_input(tmp_path) is not None
+    assert fm.clear_input(tmp_path) is True
+    assert fm.load_input(tmp_path) is None
+
+
 def test_load_missing_or_broken(tmp_path):
     assert fm.load_input(tmp_path) is None
     fm.input_path(tmp_path).parent.mkdir(parents=True)
