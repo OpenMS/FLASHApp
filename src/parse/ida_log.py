@@ -113,24 +113,66 @@ def _last(df, column):
 
 def survey_masses(results: pd.DataFrame) -> pd.DataFrame:
     """Every mass deconvolved from a survey scan: rt (minutes), mass,
-    intensity (summed over its charges)."""
+    intensity (summed over its charges) and qscore (NaN when not logged)."""
     surveys = results[_col(results, 'ms_level') == '1']
-    rt, masses, intensities = [], [], []
-    for row_rt, row_masses, row_intensities in zip(
-        _num(surveys, 'rt'), _col(surveys, 'deconv_masses'), _col(surveys, 'deconv_intensities')
+    rt, masses, intensities, qscores = [], [], [], []
+    for row_rt, row_masses, row_intensities, row_qscores in zip(
+        _num(surveys, 'rt'), _col(surveys, 'deconv_masses'), _col(surveys, 'deconv_intensities'),
+        _col(surveys, 'deconv_qscores'),
     ):
         if not row_masses:
             continue
         groups = row_intensities.split(';') if row_intensities else []
+        scores = row_qscores.split(';') if row_qscores else []
         for i, mass in enumerate(row_masses.split(';')):
             try:
                 intensity = sum(float(v) for v in groups[i].split(',') if v) if i < len(groups) else 1.0
-                rt.append(row_rt)
-                masses.append(float(mass))
-                intensities.append(intensity)
+                mass = float(mass)
             except ValueError:
                 continue
-    return pd.DataFrame({'rt': rt, 'mass': masses, 'intensity': intensities})
+            try:
+                qscore = float(scores[i]) if i < len(scores) else np.nan
+            except ValueError:
+                qscore = np.nan
+            rt.append(row_rt)
+            masses.append(mass)
+            intensities.append(intensity)
+            qscores.append(qscore)
+    return pd.DataFrame({'rt': rt, 'mass': masses, 'intensity': intensities, 'qscore': qscores})
+
+
+def _count(values: pd.Series) -> pd.Series:
+    """Entries of a ';'-separated list per row (empty entries left out); NaN for no list."""
+    return values.map(
+        lambda v: float(sum(1 for part in v.split(';') if part.strip()))
+        if isinstance(v, str) and v.strip() else np.nan
+    )
+
+
+#: Largest mass difference (Da) between a precursor and the survey mass it was
+#: chosen from; FLASHIda may pick a neighbouring isotope (±1 Da).
+MATCH_TOLERANCE = 1.1
+
+
+def _matching_intensity(survey: pd.DataFrame, picked: pd.DataFrame) -> np.ndarray:
+    """Intensity of the survey mass each precursor was chosen from: the nearest
+    mass of the same survey scan (retention time) within MATCH_TOLERANCE; NaN
+    where there is none."""
+    if not len(survey) or not len(picked):
+        return np.full(len(picked), np.nan)
+    left = pd.DataFrame({
+        'order': np.arange(len(picked)),
+        'rt_key': np.round(picked['RT'].to_numpy(float), 6),
+        'mass': picked['Mass'].to_numpy(float),
+    }).sort_values('mass')
+    right = pd.DataFrame({
+        'rt_key': np.round(survey['rt'].to_numpy(float), 6),
+        'mass': survey['mass'].to_numpy(float),
+        'survey_intensity': survey['intensity'].to_numpy(float),
+    }).sort_values('mass')
+    matched = pd.merge_asof(left, right, on='mass', by='rt_key', direction='nearest',
+                            tolerance=MATCH_TOLERANCE)
+    return matched.sort_values('order')['survey_intensity'].to_numpy(float)
 
 
 def decisions(tables: dict) -> dict:
@@ -180,6 +222,14 @@ def decisions(tables: dict) -> dict:
     })
     acquired = scans['Scan'].isin(rt_of)
     scans['Acquired'] = acquired.to_numpy()
+    # The instrument acquires commanded scans in the order they were sent, so
+    # a scan sent before the last one that came back will not come back any
+    # more (dropped, or the run stopped): it is not waiting
+    sent = _col(commands, 'tracking_id')
+    came_back = np.flatnonzero(sent.isin(rt_of).to_numpy())
+    last_back = came_back[-1] if len(came_back) else -1
+    position = np.flatnonzero((_col(commands, 'scan_type') != 'survey').to_numpy())
+    scans['Waiting'] = (~acquired.to_numpy()) & (position > last_back)
     scans['RT'] = scans['Scan'].map(rt_of)
     scans['Survey RT'] = scans['Parent'].map(rt_of)
 
@@ -205,10 +255,14 @@ def decisions(tables: dict) -> dict:
             '_score', ascending=False).drop_duplicates('tracking_id').set_index('tracking_id')
         scans['Proteoform'] = scans['Scan'].map(best['proteoform']).fillna('')
         scans['Score'] = scans['Scan'].map(best['_score']).where(lambda s: s >= 0)
+        # Fragment ions of the identification, listed ';'-separated by FLASHIda
+        scans['Fragment ions'] = scans['Scan'].map(_count(_col(best, 'ms2_fragments')))
     else:
         scans['Proteoform'] = ''
         scans['Score'] = np.nan
-    scans['Status'] = np.where(scans['Acquired'], 'acquired', 'waiting')
+        scans['Fragment ions'] = np.nan
+    scans['Status'] = np.select(
+        [scans['Acquired'], scans['Waiting']], ['acquired', 'waiting'], 'not acquired')
 
     # One row per precursor
     groups = scans.groupby('precursor', sort=True)
@@ -222,13 +276,19 @@ def decisions(tables: dict) -> dict:
         'QScore': groups['QScore'].max().to_numpy(),
         'MS2': groups['MS'].apply(lambda s: int((s == 2).sum())).to_numpy(),
         'MS3': groups['MS'].apply(lambda s: int((s == 3).sum())).to_numpy(),
-        'Waiting': groups['Acquired'].apply(lambda s: int((~s).sum())).to_numpy(),
+        'Waiting': groups['Waiting'].apply(lambda s: int(s.sum())).to_numpy(),
         'Decisions': groups['Decision'].apply(lambda s: ', '.join(pd.unique(s))).to_numpy(),
         'Best energy': groups.apply(
             lambda g: g.loc[g['Winner'], 'Energy'].iloc[0] if g['Winner'].any() else np.nan,
             include_groups=False).to_numpy() if len(scans) else [],
         'Quant verdict': groups['Quant verdict'].apply(
             lambda s: next((v for v in s if v), '')).to_numpy(),
+        # Most masses deconvolved from one of its MS2 scans, and most fragment
+        # ions one of its identifications matched (NaN: none acquired/identified)
+        'MS2 masses': groups.apply(
+            lambda g: g.loc[g['MS'] == 2, 'Masses'].max(), include_groups=False
+        ).to_numpy() if len(scans) else [],
+        'Fragment ions': groups['Fragment ions'].max().to_numpy(),
     })
     precursors['Proteoform'] = ''
     precursors['Score'] = np.nan
@@ -250,21 +310,34 @@ def decisions(tables: dict) -> dict:
     precursors.loc[missing, 'Score'] = precursors.loc[missing, 'precursor'].map(single['Score'])
     precursors['Identified'] = precursors['Proteoform'] != ''
 
-    # Mass/RT map: survey masses, and the precursors on top
+    # Mass/RT map: survey masses, and the precursors on top. A precursor keeps
+    # the largest intensity, so downsampling never drops it; `survey_intensity`
+    # is its own (that of the survey mass it was chosen from).
     survey = survey_masses(results)
     survey['precursor'] = 0
     survey['Decision'] = 'Deconvolved'
+    survey['Layer'] = 'Survey masses'
+    survey['survey_intensity'] = survey['intensity']
+    survey['ms2_masses'] = np.nan
+    survey['fragment_ions'] = np.nan
     picked = precursors.dropna(subset=['RT', 'Mass'])
     top = pd.DataFrame({
         'rt': picked['RT'], 'mass': picked['Mass'],
         'intensity': survey['intensity'].max() if len(survey) else 1.0,
+        'qscore': picked['QScore'],
         'precursor': picked['precursor'],
         'Decision': np.where(picked['Identified'], 'Identified', 'Chosen'),
+        'Layer': np.where(picked['Identified'], 'Identified precursors', 'Chosen precursors'),
+        'survey_intensity': _matching_intensity(survey, picked),
+        'ms2_masses': picked['MS2 masses'],
+        'fragment_ions': picked['Fragment ions'],
     })
     points = pd.concat([survey, top], ignore_index=True)
+    # A precursor's own intensity goes in its label: on the map it has the largest
     points['label'] = [
-        f'Precursor {p}: {m:.2f} Da' if p else f'{m:.2f} Da'
-        for p, m in zip(points['precursor'], points['mass'])
+        f'Precursor {p}: {m:.2f} Da'
+        + (f'<br>Survey intensity: {si:.2e}' if np.isfinite(si) else '') if p else f'{m:.2f} Da'
+        for p, m, si in zip(points['precursor'], points['mass'], points['survey_intensity'])
     ]
 
     summary = {
@@ -272,7 +345,8 @@ def decisions(tables: dict) -> dict:
         'surveys_acquired': int(_col(surveys, 'tracking_id').isin(rt_of).sum()),
         'ms2': int((scans['MS'] == 2).sum()),
         'ms3': int((scans['MS'] == 3).sum()),
-        'waiting': int((~scans['Acquired']).sum()),
+        'waiting': int(scans['Waiting'].sum()),
+        'not_acquired': int((~scans['Acquired'] & ~scans['Waiting']).sum()),
         'precursors': int(len(precursors)),
         'identified': int(precursors['Identified'].sum()),
         'rt': float(np.nanmax(_num(results, 'rt'))) if len(results) and _num(results, 'rt').notna().any() else None,

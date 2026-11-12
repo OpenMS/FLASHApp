@@ -902,10 +902,12 @@ DeconvWorkflow = TopDownWorkflow
 
 
 class IdaWorkflow(WorkflowManager):
-    """FLASHIda acquisition: waits for the raw files an acquisition writes and
-    starts FLASHIda (on the instrument PC) for each, with the method named in
-    the file name (<name>FLASHIda_<method>.raw -> <method>.json from the method
-    folder). Runs until stopped. Developer feature of the local app."""
+    """FLASHIda acquisition (developer feature of the local app). The page holds
+    a table of runs, each a raw file name with its method. Running, it reads
+    the newest Xcalibur sequence (.sld) in the raw file folder, reports which
+    runs it schedules, and starts FLASHIda (on the instrument PC) with a run's
+    method as soon as that run's raw file appears. Raw files of names the table
+    does not hold are left alone. Runs until stopped."""
     share_cache = False
     # Seconds between two looks at the raw folder
     poll_interval = 1.0
@@ -918,18 +920,28 @@ class IdaWorkflow(WorkflowManager):
         self.ui.input_widget(
             key="executable", name="FLASHIda executable", default='',
             widget_type="text", help="Path to Flash.exe on the instrument PC.",
+            # The whole page reruns, so Run analysis checks the new value
+            reactive=True,
         )
         self.ui.input_widget(
             key="raw-files", name="Raw file folder", default='', widget_type="text",
-            help="Folder the acquisition writes its raw files to.",
+            help="Folder the sequence writes its raw files to. Its newest .sld is "
+                 "the sequence that is watched.",
+            reactive=True,
         )
         self.ui.input_widget(
-            key="method-files", name="Method folder", default='', widget_type="text",
-            help="Folder with the <method>.json files named in the raw file names.",
+            key="method-folder", name="Method folder", default='', widget_type="text",
+            help="Folder of the FLASHIda methods, one .json file per method. Each run of the "
+                 "table picks one; FLASHIda gets the file as it is when its run starts. The "
+                 "built-in presets are saved there once.",
+            reactive=True,
         )
 
     def execution(self) -> bool:
+        from src import flashida_folder, flashida_method
+
         params = self.parameter_manager.get_parameters_from_json()
+        folder = str(params.get('method-folder') or '').strip()
 
         exe = Path(str(params.get('executable') or '').strip())
         if str(exe) in ('', '.'):
@@ -938,41 +950,136 @@ class IdaWorkflow(WorkflowManager):
         if exe.suffix.lower() != '.exe' or not exe.is_file():
             self.logger.log(f"The FLASHIda executable '{exe}' is not an existing .exe file.")
             return False
+        raw_dir = Path(str(params.get('raw-files') or '').strip())
+        if str(raw_dir) in ('', '.') or not raw_dir.is_dir():
+            self.logger.log(f"Raw file folder '{raw_dir}' is not a folder.")
+            return False
 
-        folders = {}
-        for key, label in (('method-files', 'Method folder'), ('raw-files', 'Raw file folder')):
-            folder = Path(str(params.get(key) or '').strip())
-            if str(folder) in ('', '.') or not folder.is_dir():
-                self.logger.log(f"{label} '{folder}' is not a folder.")
-                return False
-            folders[key] = folder
-
-        seen = flashida.find_raws(folders['raw-files'])
-        if seen:
-            self.logger.log('Ignoring the FLASHIda raw files already in the folder:')
-            for name, method in sorted(seen.items()):
-                self.logger.log(f"  {name} ({method}.json)")
-
-        self.logger.log('Waiting for new raw files...')
-        while True:
-            time.sleep(self.poll_interval)
-            for name, method in sorted(flashida.find_raws(folders['raw-files']).items()):
-                if name in seen:
+        runs = flashida_method.load_runs(self.workflow_dir)
+        if not runs:
+            self.logger.log('Add the runs to acquire to the table first.')
+            return False
+        # Each run's method as FLASHIda reads it, checked before anything waits.
+        method_dir = Path(self.workflow_dir, 'methods')
+        method_dir.mkdir(exist_ok=True)
+        methods, names, ok = {}, [], True
+        for run in runs:
+            name = str(run.get('name') or '').strip()
+            problem = flashida_method.name_problem(name, names)
+            if problem:
+                self.logger.log(f"Run '{name}': {problem}")
+                ok = False
+                continue
+            names.append(name)
+            # The method file as it is now (a table saved before the method
+            # folder keeps the method in the run)
+            if run.get('method_file'):
+                try:
+                    method = flashida_folder.read(folder, run['method_file']) \
+                        if flashida_folder.usable(folder) else None
+                except ValueError as e:
+                    self.logger.log(f"Run '{name}': {e}")
+                    ok = False
                     continue
-                seen[name] = method
-                self.logger.log(f"New raw file '{name}'.")
-                method_path = Path(folders['method-files'], f'{method}.json')
-                if not method_path.is_file():
-                    self.logger.log(f"Method '{method_path}' does not exist. Skipping this file.")
-                else:
-                    log_dir = flashida.method_log_dir(method_path, exe.parent)
-                    flashida.remember_log_folder(self.workflow_dir, log_dir)
+                if method is None:
+                    self.logger.log(f"Run '{name}': the method folder '{folder}' is not a folder.")
+                    ok = False
+                    continue
+            else:
+                method = run.get('method')
+            if not isinstance(method, dict):
+                self.logger.log(f"Run '{name}': pick a method.")
+                ok = False
+                continue
+            run = dict(run, method=method)
+            problems = flashida_method.check(run['method'])
+            if problems:
+                # Not a reason to stop: the user started despite the warning on
+                # the page (Run anyway), and FLASHIda checks the method itself.
+                self.logger.log(f"WARNING: the method of run '{name}' fails FLASHApp's check "
+                                '(started anyway; FLASHIda checks it):')
+                for line in problems:
+                    self.logger.log(f'  {line}')
+            unknown = flashida_method.unknown_keys(run['method'])
+            if unknown:
+                self.logger.log(f"The method of run '{name}' has keys this FLASHApp does not know; "
+                                f"FLASHIda checks them: {', '.join(unknown)}")
+            path = Path(method_dir, flashida_method.method_file_name(name))
+            path.write_text(json.dumps(run['method'], indent=2), encoding='utf-8')
+            methods[name.casefold()] = (name, path, run.get('method_file'))
+        if not ok:
+            return False
+
+        status = {'raw_dir': str(raw_dir), 'started': time.time(), 'runs': {},
+                  'sequence': None, 'scheduled': {}, 'extra': []}
+        state = status['runs']
+        for name in names:
+            state[name] = {'state': 'waiting'}
+
+        seen = flashida.raw_names(raw_dir)
+        for name in sorted(seen):
+            if name.casefold() in methods:
+                self.logger.log(f"'{name}.raw' is already in the folder: FLASHIda is not started for it.")
+                state[methods[name.casefold()][0]] = {'state': 'skipped'}
+
+        sequence_key = None
+        self.logger.log(f"Watching '{raw_dir}' for the newest sequence and new raw files...")
+        while True:
+            sld = flashida.newest_sequence(raw_dir)
+            try:
+                key = (str(sld), sld.stat().st_mtime) if sld else None
+            except OSError:  # replaced while it was looked at
+                sld, key = None, sequence_key
+            if sld is not None and key != sequence_key:
+                sequence_key = key
+                rows = []
+                if sld is not None:
+                    try:
+                        rows = flashida.sequence_rows(sld)
+                    except OSError as e:
+                        self.logger.log(f"Could not read the sequence '{sld.name}': {e}")
+                planned = flashida.scheduled(rows, names)
+                status['sequence'] = {'name': sld.name, 'modified': key[1],
+                                      'read': time.time(), 'rows': len(rows)} if sld else None
+                status['scheduled'] = planned
+                status['extra'] = [r for r in rows if r['name'].casefold() not in methods]
+                if sld is not None:
+                    missing = [n for n in names if n not in planned]
                     self.logger.log(
-                        f"Starting FLASHIda with method '{method_path.name}' "
-                        f"(logs in '{log_dir}')..."
+                        f"Sequence '{sld.name}': {len(planned)} of {len(names)} runs scheduled"
+                        + (f", not in it: {', '.join(missing)}" if missing else '') + '.'
                     )
-                    self.executor.run_command(
-                        [exe, '-m', method_path, '-r', Path(folders['raw-files'], name)],
-                        cwd=exe.parent,
-                    )
-                self.logger.log('Waiting for new raw files...')
+            flashida.write_status(self.workflow_dir, status)
+
+            for name in sorted(flashida.raw_names(raw_dir) - seen):
+                seen.add(name)
+                if name.casefold() not in methods:
+                    self.logger.log(f"New raw file '{name}.raw' is not in the runs table: left alone.")
+                    continue
+                run_name, method_path, method_file = methods[name.casefold()]
+                if method_file:
+                    # The method file as it is now: an edit made while waiting counts
+                    try:
+                        method_path.write_text(json.dumps(flashida_folder.read(folder, method_file), indent=2),
+                                               encoding='utf-8')
+                    except (ValueError, OSError) as e:
+                        self.logger.log(f"WARNING: {e} Run '{run_name}' gets the method as it was at the start.")
+                if run_name not in status['scheduled']:
+                    self.logger.log(f"'{name}.raw' is not in the newest sequence; starting FLASHIda anyway.")
+                log_dir = flashida.method_log_dir(method_path, exe.parent)
+                flashida.remember_log_folder(self.workflow_dir, log_dir)
+                self.logger.log(
+                    f"New raw file '{name}.raw': starting FLASHIda with the method of run "
+                    f"'{run_name}' (logs in '{log_dir}')..."
+                )
+                state[run_name] = {'state': 'running', 'since': time.time()}
+                flashida.write_status(self.workflow_dir, status)
+                done = self.executor.run_command(
+                    [exe, '-m', method_path, '-r', Path(raw_dir, name + '.raw')],
+                    cwd=exe.parent,
+                )
+                state[run_name] = {'state': 'done' if done else 'failed',
+                                   'since': state[run_name]['since'], 'ended': time.time()}
+                flashida.write_status(self.workflow_dir, status)
+                self.logger.log(f"FLASHIda {'finished' if done else 'failed'} for '{name}.raw'.")
+            time.sleep(self.poll_interval)

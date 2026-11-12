@@ -7,6 +7,7 @@ rebuilt whenever the logs grow; the selection is kept.
 """
 
 import hashlib
+import inspect
 import shutil
 import time
 from pathlib import Path
@@ -18,6 +19,7 @@ from openms_insight import Heatmap, StateManager, Table, defer_reruns
 from openms_insight.core.cache import CacheMissError
 
 from src.parse import ida_log
+from src.render.cache_dirs import build_lock, short_name
 
 # Code of the frame builders and of this module: part of every cache id
 CODE_VERSION = hashlib.md5(
@@ -25,6 +27,16 @@ CODE_VERSION = hashlib.md5(
 ).hexdigest()[:8]
 
 COLORS = {'Deconvolved': '#9aa5b1', 'Chosen': '#f08c00', 'Identified': '#2b8a3e'}
+
+# What the map can be colored by besides the intensity (toolbar "Color"), and
+# its layers (toolbar "Layers"). Needs an openms-insight whose Heatmap takes
+# `color_columns`; an older one keeps the map colored by decision.
+COLOR_COLUMNS = {
+    'QScore': 'qscore',
+    '# deconvolved MS2 masses': 'ms2_masses',
+    '# fragment ions': 'fragment_ions',
+}
+HAS_COLOR_OPTIONS = 'color_columns' in inspect.signature(Heatmap.__init__).parameters
 
 
 def _fixed(precision=4):
@@ -109,11 +121,17 @@ def _component(cls, name, cache_path, stamp, build, **styling):
         return cls(cache_id=cache_id, cache_path=str(cache_path), **styling)
     except CacheMissError:
         pass
-    if cache_path.exists():
-        for old in cache_path.glob(f'{name}-*'):
-            if old.name != cache_id:
-                shutil.rmtree(old, ignore_errors=True)
-    return cls(cache_id=cache_id, cache_path=str(cache_path), **build(), **styling)
+    with build_lock(cache_path, cache_id):
+        # Another tab may have built it while this one waited
+        try:
+            return cls(cache_id=cache_id, cache_path=str(cache_path), **styling)
+        except CacheMissError:
+            pass
+        if cache_path.exists():
+            for old in cache_path.glob(f'{name}-*'):
+                if old.name != cache_id:
+                    shutil.rmtree(old, ignore_errors=True)
+        return cls(cache_id=cache_id, cache_path=str(cache_path), **build(), **styling)
 
 
 def _frame(df):
@@ -122,14 +140,25 @@ def _frame(df):
     return pl.from_pandas(df).lazy()
 
 
+def _count(n):
+    return f'{n:,}'
+
+
 def summary_metrics(summary, last_change):
-    cols = st.columns(6)
-    cols[0].metric('Survey scans', summary['surveys'])
-    cols[1].metric('Precursors chosen', summary['precursors'])
-    cols[2].metric('MS2 / MS3 commanded', f"{summary['ms2']} / {summary['ms3']}")
-    cols[3].metric('Waiting', summary['waiting'], help='Commanded scans not acquired yet.')
-    cols[4].metric('Identified', summary['identified'], help='Precursors with a proteoform.')
-    cols[5].metric('RT', '-' if summary['rt'] is None else f"{summary['rt']:.2f} min")
+    # One tile per count: a combined "MS2 / MS3" value no longer fit its
+    # column once both reached four digits
+    cols = st.columns(7)
+    cols[0].metric('Survey scans', _count(summary['surveys']))
+    cols[1].metric('Precursors', _count(summary['precursors']), help='Precursors FLASHIda chose.')
+    cols[2].metric('MS2 scans', _count(summary['ms2']), help='MS2 scans FLASHIda commanded.')
+    cols[3].metric('MS3 scans', _count(summary['ms3']), help='MS3 scans FLASHIda commanded.')
+    missed = summary.get('not_acquired', 0)
+    cols[4].metric(
+        'Waiting', _count(summary['waiting']),
+        help='Commanded scans the instrument has not returned yet.'
+        + (f' {missed:,} earlier commanded scans never came back.' if missed else ''))
+    cols[5].metric('Identified', _count(summary['identified']), help='Precursors with a proteoform.')
+    cols[6].metric('RT (min)', '-' if summary['rt'] is None else f"{summary['rt']:.2f}")
     if last_change is not None:
         age = time.time() - last_change
         if age < 60:
@@ -147,7 +176,9 @@ def show_run(run: Path, cache_root: Path, key: str):
         st.info('FLASHIda has not logged any scans for this run yet.')
         return
 
-    cache_path = Path(cache_root, run.name)
+    # Run names are long raw file names: a short folder keeps the cache
+    # files within Windows' path length limit
+    cache_path = Path(cache_root, short_name(run.name))
     state_manager = StateManager(session_key=f'flashida_live_state_{key}')
     run_key = f'flashida_live_run_{key}'
     if st.session_state.get(run_key) != str(run):
@@ -155,19 +186,30 @@ def show_run(run: Path, cache_root: Path, key: str):
         st.session_state[run_key] = str(run)
 
     points = result['points']
-    heatmap = _component(
-        Heatmap, 'decision_map', cache_path, stamp, lambda: dict(
-            data=_frame(points), x_column='rt', y_column='mass', intensity_column='intensity',
-            category_column='Decision',
-            interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
-            hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
-            title='Survey masses and chosen precursors', x_label='Retention time (min)',
-            y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
-            svg_filename='FLASHIda-decisions', scroll_zoom=False,
-        ),
-        # Render-time styling, not stored with the cache
-        category_colors=COLORS,
+    common = dict(
+        x_column='rt', y_column='mass', intensity_column='intensity',
+        interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
+        hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
+        title='Survey masses and chosen precursors', x_label='Retention time (min)',
+        y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
+        svg_filename='FLASHIda-decisions', scroll_zoom=False,
     )
+    if HAS_COLOR_OPTIONS:
+        # Colored by a value, chosen in the toolbar; survey masses, chosen and
+        # identified precursors are layers to show or hide
+        heatmap = _component(
+            Heatmap, 'decision_map_values', cache_path, stamp,
+            lambda: dict(data=_frame(points), **common),
+            # Render-time options, not stored with the cache
+            color_columns=COLOR_COLUMNS, layer_column='Layer',
+        )
+    else:
+        heatmap = _component(
+            Heatmap, 'decision_map', cache_path, stamp,
+            lambda: dict(data=_frame(points), category_column='Decision', **common),
+            # Render-time styling, not stored with the cache
+            category_colors=COLORS,
+        )
     precursors = _component(
         Table, 'precursors', cache_path, stamp, lambda: dict(
             data=_frame(result['precursors']), title='Chosen precursors',
