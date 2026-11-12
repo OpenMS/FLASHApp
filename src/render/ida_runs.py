@@ -1,16 +1,17 @@
-"""The runs table of the FLASHIda acquisition page and its Method dialog.
+"""The runs table of the FLASHIda acquisition page, and the Method editor page.
 
 Each run is a raw file name and the method FLASHIda gets for it, a file in the
 method folder (src/flashida_folder.py) picked in the run's dropdown. The
-Method dialog makes a new method from any method in the folder or changes one,
-by section, key by key, or in a JSON tree (streamlit-extras' json_editor). The
-built-in presets (FLASHIda's defaults, those shipped in
-assets/flashida/presets.json and the user's own) are saved into the folder
-once. While the acquisition runs, the table shows which runs the newest
+Method editor page makes a new method from any method in the folder or changes
+one, by step of the acquisition (the tabs and parts of src/render/ida_sections.py),
+key by key, or in a JSON tree (streamlit-extras' json_editor). The
+built-in presets (FLASHIda's defaults, the methods shipped as one file each in
+assets/flashida/methods, and the user's own) are saved into the folder once. While the acquisition runs, the table shows which runs the newest
 sequence (.sld) schedules and what FLASHIda is doing for each.
 """
 
 import copy
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -23,75 +24,10 @@ from src import flashida
 from src import flashida_folder as ff
 from src import flashida_method as fm
 from src import flashida_sequence as fs
-
-# Human names for the keys the sections show (the rest keep FLASHIda's name).
-LABELS = {
-    'global.method_name': 'Method name',
-    'global.method_description': 'Description',
-    'global.duration': 'Duration',
-    'deconvolution.tqscore_threshold': 'Qscore that closes a species',
-    'deconvolution.score_threshold': 'Lowest qscore',
-    'deconvolution.min_charge': 'Lowest charge',
-    'deconvolution.max_charge': 'Highest charge',
-    'deconvolution.min_mass': 'Lowest mass',
-    'deconvolution.max_mass': 'Highest mass',
-    'deconvolution.tol': 'Tolerance MS1, MS2, MS3',
-    'precursor_selection.max_precursors': 'Precursors per survey',
-    'precursor_selection.rank_by': 'Rank species by',
-    'precursor_selection.charge_selection': 'Isolate the charge with the best',
-    'precursor_selection.precursor_charges': 'Charge states per species',
-    'precursor_selection.consider_all_charges': 'Rank by the best charge',
-    'precursor_selection.rt_window': 'Exclusion window',
-    'precursor_selection.tie_threshold': 'Tie threshold',
-    'precursor_selection.targeting': 'Target list',
-    'precursor_selection.strict_inclusion': 'Inclusion list only',
-    'identification.reference.fasta': 'Protein database (FASTA)',
-    'identification.threshold': 'Identified at score',
-    'identification.method': 'Search',
-    'identification.flashtnt.min_length': 'Shortest tag',
-    'identification.flashtnt.max_length': 'Longest tag',
-    'identification.flashtnt.max_blind_mod_count': 'Unknown modifications',
-    'identification.flashtnt.max_mod_mass': 'Largest unknown modification',
-    'identification.flashtnt.var_mod': 'Variable modifications',
-    'quantification.enabled': 'Quantify',
-    'quantification.labelling': 'Labels',
-    'quantification.scan': 'Reporter ions from',
-    'quantification.reporter_mz_tol': 'Reporter m/z tolerance',
-    'quantification.fold_change_threshold': 'Fold change',
-    'faims.cv_values': 'FAIMS CVs',
-    'scheduling.agc_interval_seconds': 'AGC prescan every',
-    'files.inclusion_list': 'Inclusion list',
-    'files.target_logs': 'Target logs',
-    'runtime.log_dir': 'Log folder',
-}
-
-_SCAN_KEYS = ('analyzer', 'activation', 'collision_energy', 'resolution', 'agc_target',
-              'max_it', 'first_mass', 'last_mass', 'microscans', 'data_type')
-
-SECTIONS = {
-    'Run': ['global.method_name', 'global.duration', 'global.method_description',
-            'runtime.log_dir', 'files.inclusion_list', 'faims.cv_values'],
-    'Deconvolution': ['deconvolution.min_charge', 'deconvolution.max_charge',
-                      'deconvolution.min_mass', 'deconvolution.max_mass',
-                      'deconvolution.tol', 'deconvolution.tqscore_threshold'],
-    'Precursor selection': ['precursor_selection.max_precursors', 'precursor_selection.rank_by',
-                            'precursor_selection.charge_selection',
-                            'precursor_selection.precursor_charges',
-                            'precursor_selection.rt_window', 'precursor_selection.targeting'],
-    'Identification': ['identification.reference.fasta', 'identification.threshold',
-                       'identification.flashtnt.min_length', 'identification.flashtnt.max_length',
-                       'identification.flashtnt.max_blind_mod_count',
-                       'identification.flashtnt.max_mod_mass'],
-    'Quantification': ['quantification.enabled', 'quantification.labelling',
-                       'quantification.scan', 'quantification.reporter_mz_tol',
-                       'quantification.fold_change_threshold'],
-    'MS1 scan': [f'ms_settings.ms1.{k}' for k in _SCAN_KEYS if k not in ('activation', 'collision_energy')],
-    'MS2 scan': [f'ms_settings.ms2.{k}' for k in _SCAN_KEYS],
-}
+from src.render import ida_sections as sections
 
 _VERSION = 'ida-method-version'
-OPEN_KEY = 'ida-open-method'  # the method the Method dialog opens with
-DIALOG_KEY = 'ida-open-dialog'  # 'import', 'pattern' or 'method'
+DIALOG_KEY = 'ida-open-dialog'  # 'import' or 'pattern'
 CLIPBOARD_KEY = 'ida-clipboard'  # {name, method_file} of the copied run
 
 
@@ -101,28 +37,19 @@ def _keys() -> dict:
     return st.session_state['_ida_keys']
 
 
-def label(path: str) -> str:
+def label(path: str, short: bool = False) -> str:
+    """The key's name with its unit; `short` leaves out the scan or sweep level."""
     key = _keys().get(path)
-    name = LABELS.get(path)
-    if name is None:
-        name = path.split('.')[-1].replace('_', ' ')
-        name = name[:1].upper() + name[1:]
-        if path.startswith('ms_settings.'):
-            scan = path.split('.')[1].upper().replace('_QUANT', ' quant')
-            name = f'{name}'
-            if not any(path in v for v in SECTIONS.values()):
-                name = f'{scan} {name.lower()}'
+    text = sections.name(path, short)
     if key is not None and key.unit:
-        name += f' ({key.unit})'
-    return name
+        text += f' ({key.unit})'
+    return text
 
 
-def _help(key: fm.Key) -> str:
-    text = f'`{key.path}`\n\n{key.description}'
+def _help(key: fm.Key, default: str) -> str:
+    text = f'**Default:** {default}\n\n`{key.path}`\n\n{key.description}'
     if key.enum_help:
         text += '\n\n' + '\n\n'.join(f'**{v or "(none)"}**: {h}' for v, h in zip(key.enum, key.enum_help))
-    if key.default is None and key.default_text:
-        text += f'\n\nLeft empty: {key.default_text}.'
     return text
 
 
@@ -134,26 +61,70 @@ def _bump() -> None:
     st.session_state[_VERSION] = _version() + 1
 
 
-def key_widget(method: dict, path: str, wkey: str, disabled: bool = False) -> bool:
+def key_widget(method: dict, path: str, wkey: str, disabled: bool = False,
+               short: bool = False, why_not: str | None = None) -> bool:
     """One widget for one key of a method; True when it changed the method.
-    A cleared field removes the key, so FLASHIda uses its own default."""
+    A cleared field removes the key, so FLASHIda uses its own default.
+    `why_not` says why FLASHIda does not read the key now; it is then drawn
+    greyed out."""
     key = _keys().get(path)
     if key is None:
         return False
     present = fm.get(method, path, missing=KeyError) is not KeyError
     value = fm.get(method, path) if present else key.default
-    help_ = _help(key)
-    name = label(path)
+    default = sections.default_of(method, path)
+    help_ = _help(key, default)
+    if why_not:
+        help_ = f'**Not read now.** {why_not}\n\n' + help_
+        disabled = True
+    name = label(path, short)
+    choices = list(key.enum) if key.enum else sections.choices(path, method)
+    marked = sections.default_value(path)  # marked '(default)' in a list of values
 
-    if key.enum:
-        options = list(key.enum)
-        if not present and key.default is None:
+    if choices and key.type == 'array':
+        # A list of fixed values (activations to sweep, additional scans): pick any of them
+        current = [v for v in (value or [])]
+        options = list(choices) + [v for v in current if v not in choices]
+        new = st.multiselect(name, options, default=current, key=wkey, help=help_, disabled=disabled,
+                             placeholder=f'default: {default}')
+        if new == current:
+            return False
+        if not new and key.default is None:
+            new = None
+    elif choices:
+        options = list(choices)
+        if value is not None and value not in options:
+            options.append(value)
+        # A part switched on and off elsewhere (MS3) has no empty choice here
+        if None not in options and '' not in options and (key.default is None or not key.enum) \
+                and path not in sections.CLEARS:
             options = [None] + options
+        empty = f'default: {default}'
+        # Not set shows as the empty choice ('' where the schema lists one), never as a value
+        shown = '' if value is None and '' in options else value
         new = st.selectbox(
-            name, options, index=options.index(value) if value in options else 0, key=wkey,
+            name, options, index=options.index(shown) if shown in options else 0, key=wkey,
             help=help_, disabled=disabled,
-            format_func=lambda v: ('(instrument method)' if v in (None, '') else str(v)),
+            format_func=lambda v: (empty if v in (None, '') else
+                                   f'{v}  (default)' if v == marked else str(v)),
         )
+        if new == '' and not present:
+            return False
+    elif key.type == 'object' or (key.type == 'array' and key.items_type == 'object'):
+        text = json.dumps(value, indent=1) if value not in (None, {}, []) else ''
+        raw = st.text_area(name, value=text, key=wkey, disabled=disabled, height=110,
+                           help=help_ + '\n\nJSON; leave empty to remove the key.',
+                           placeholder=f'default: {default}')
+        if raw == text:
+            return False
+        if not raw.strip():
+            new = None
+        else:
+            try:
+                new = json.loads(raw)
+            except ValueError as e:
+                st.error(f'{name}: not valid JSON ({e}).')
+                return False
     elif key.type == 'boolean':
         new = st.toggle(name, value=bool(value), key=wkey, help=help_, disabled=disabled)
     elif key.type in ('integer', 'number'):
@@ -163,20 +134,15 @@ def key_widget(method: dict, path: str, wkey: str, disabled: bool = False) -> bo
             shown = int(shown) if is_int else float(shown)
         new = st.number_input(
             name, value=shown, step=1 if is_int else None, key=wkey, help=help_,
-            disabled=disabled, placeholder=key.default_text or 'FLASHIda default',
+            disabled=disabled, placeholder=f'default: {default}',
             format=None if is_int else '%g',
         )
         if new is not None and not is_int and float(new).is_integer() and isinstance(value, int):
             new = int(new)
     elif key.type == 'array':
-        if key.items_type == 'object':
-            st.text_input(name, value=json.dumps(value) if value is not None else '',
-                          key=wkey, help=help_, disabled=True)
-            st.caption('Edit this one in the JSON tab.')
-            return False
         text = ', '.join(str(v) for v in (value or []))
         raw = st.text_input(name, value=text, key=wkey, help=help_ + '\n\nComma-separated.',
-                            disabled=disabled)
+                            disabled=disabled, placeholder=f'default: {default}')
         if raw == text:
             return False
         parts = [p.strip() for p in raw.split(',') if p.strip()]
@@ -193,7 +159,7 @@ def key_widget(method: dict, path: str, wkey: str, disabled: bool = False) -> bo
     else:
         text = '' if value is None else str(value)
         new = st.text_input(name, value=text, key=wkey, help=help_, disabled=disabled,
-                            placeholder=key.default_text or '')
+                            placeholder=f'default: {default}')
         if new == text:
             return False
         if new == '' and key.default in (None, ''):
@@ -246,40 +212,143 @@ def _default_method(methods: list, favs: list, runs: list):
     return methods[0] if methods else None
 
 
-# --- the method dialog -----------------------------------------------------------------
+# --- the Method editor page --------------------------------------------------------------
 
 EDIT_KEY = 'ida-edit'  # the method being edited: {key, method, v}
+EDITOR_PAGE = 'content/FLASHIda/FLASHIdaMethodEditor.py'
 
 
-@st.dialog('Method', width='large', on_dismiss='rerun')
-def method_dialog(workflow_dir, folder) -> None:
-    """New method (starting from any method in the folder) or edit one; saved
-    as a file in the method folder."""
+def open_in_editor(method_file=None) -> None:
+    """Switch to the Method editor page, on this method of the folder."""
+    if method_file:
+        st.session_state['ida-ed-start'] = method_file
+        st.session_state['ida-ed-mode'] = 'edit'
+    st.switch_page(EDITOR_PAGE)
+
+
+def _toggle(work: dict, part: str, wkey: str) -> None:
+    sections.switch(work['method'], part, st.session_state[wkey])
+    work['v'] += 1  # fresh widgets for the part's keys
+
+
+def _part(work: dict, part: str, role: str, have: set, found: dict) -> None:
+    """One part of a tab: its name, an On switch when it is optional, what it
+    does and sums up to now, its problems, then its keys by group."""
+    method, v = work['method'], work['v']
+    title = sections.TITLES.get(part, sections.PARTS[part][0])
+    icon, what, groups, short = (sections.PARTS[part][i] for i in (1, 5, 3, 4))
+    on = part in have
+    if role == 'with' and not on:
+        return
+    with st.container(border=role != 'switch'):
+        head, right = st.columns([3, 1.4], vertical_alignment='center')
+        head.markdown(f'#### {icon} {title}' if role == 'switch' else f'**{title}**' + ('' if on else ' · off'))
+        if role in ('option', 'switch'):
+            reason = None if on else sections.why_not_add(part, have)
+            wkey = f'ida-on-{v}-{part}'
+            right.toggle('On' if role == 'option' else sections.SWITCH_TEXT[part], value=on, key=wkey,
+                         disabled=bool(reason), help=reason or what,
+                         on_change=_toggle, args=(work, part, wkey))
+        st.caption(f'{what}  \n**Now:** {sections.line(method, part)}' if on and part != 'global' else what)
+        for text in found.get(part, []):
+            st.warning(text, icon='⚠️')
+        if not on:
+            if role == 'switch':
+                st.info('Off: FLASHIda skips this step. Switch it on to set it up.', icon='⏸')
+            return
+        changed = False
+        for gtitle, paths in groups.items():
+            st.markdown(f'**{gtitle}**')
+            reasons = {sections.inactive(method, p) for p in paths}
+            if len(reasons) == 1 and None not in reasons:
+                st.caption(f'⏸ {reasons.pop()}')
+            cols = st.columns(2)
+            for n, path in enumerate(paths):
+                with cols[n % 2]:
+                    changed |= key_widget(method, path, f'ida-w-{v}-{path}', short=short,
+                                          why_not=sections.inactive(method, path))
+        if changed:
+            st.rerun()  # the summaries and the line above the tabs follow the change
+
+
+def _status(have: set, found: dict) -> str:
+    """One line above the tabs: the tabs with something to look at, and the
+    steps that are off. (In the tab names it would change them, and st.tabs
+    then starts again on its first tab.)"""
+    warn, off = [], []
+    for name, (icon, parts) in sections.TAB_PARTS.items():
+        main, role = parts[0]
+        if role == 'switch' and main not in have:
+            off.append(name)
+        n = sum(len(found.get(p, [])) for p, _ in parts if p in have)
+        if n:
+            warn.append(f'{icon} **{name}** {n}')
+    text = ('⚠️ ' + ' · '.join(warn)) if warn else '✅ Nothing FLASHIda would refuse'
+    return text + (f"  —  off: {', '.join(off)}" if off else '')
+
+
+SHIPPED = 'shipped:'  # a Start from choice that is a method FLASHApp ships, not a folder file
+EMPTY = 'empty:'  # a Start from choice: a method with no keys at all
+
+
+def _start_label(favs):
+    folder_label = _method_label(favs)
+
+    def fmt(m):
+        if m == EMPTY:
+            return '∅ Empty'
+        if isinstance(m, str) and m.startswith(SHIPPED):
+            return f'📦 {m[len(SHIPPED):]}'
+        return folder_label(m)
+    return fmt
+
+
+def method_editor(workflow_dir, folder) -> None:
+    """The Method editor page: a new method (starting from any method in the
+    folder) or a change to one, by step of the acquisition; saved as a file in
+    the method folder."""
     methods, favs = _folder_methods(folder)
     if not methods:
         st.info('The method folder has no methods.')
         return
+    if 'ida-saved' in st.session_state:
+        st.toast(f"Saved '{st.session_state.pop('ida-saved')}' to the method folder.", icon='💾')
     mode = st.radio('Method', ['new', 'edit'], horizontal=True, key='ida-ed-mode',
                     label_visibility='collapsed',
                     format_func={'new': '➕ New method', 'edit': '✏️ Edit a method'}.get)
     a, b, c = st.columns([3, 3, 0.7], vertical_alignment='bottom')
-    # Set once by the page (the picked run's method, or the one just saved)
+    # A new method starts from a favorite, a method FLASHApp ships (as it is in
+    # assets/flashida/methods, so a git pull updates it) or any method in the folder
+    shipped = fm.builtin_presets()
+    choices = methods
+    if mode == 'new':
+        choices = ([EMPTY] + [m for m in methods if m in favs] + [SHIPPED + n for n in shipped]
+                   + [m for m in methods if m not in favs])
+    # Set once: the picked run's method (from the Acquisition page), or the one just saved
     start = st.session_state.pop('ida-ed-start', None)
-    if start in methods:
-        st.session_state['ida-ed-src'] = start  # opened for a picked run, or after a save
-    elif st.session_state.get('ida-ed-src') not in methods:
-        st.session_state['ida-ed-src'] = methods[0]
-    src = a.selectbox('Start from' if mode == 'new' else 'Method to edit', methods, key='ida-ed-src',
-                      format_func=_method_label(favs),
-                      help='Type to search. ★ marks favorites, listed first.')
+    if start in choices:
+        st.session_state['ida-ed-src'] = start
+    elif st.session_state.get('ida-ed-src') not in choices:
+        st.session_state['ida-ed-src'] = next((c for c in choices if c != EMPTY), choices[0])
+    src = a.selectbox('Start from' if mode == 'new' else 'Method to edit', choices, key='ida-ed-src',
+                      format_func=_start_label(favs),
+                      help='Type to search. ∅ Empty starts with no settings at all; ★ marks favorites; '
+                           '📦 the methods FLASHApp ships (as they are in the app, also when the folder keeps '
+                           'an older copy).')
     work = st.session_state.get(EDIT_KEY)
     if not work or work['key'] != (mode, src):
         try:
-            method = ff.read(folder, src)
-        except ValueError as e:
+            if src == EMPTY:
+                method = {}
+            elif src.startswith(SHIPPED):
+                method = copy.deepcopy(shipped[src[len(SHIPPED):]])
+            else:
+                method = ff.read(folder, src)
+        except (ValueError, KeyError) as e:
             st.error(str(e))
             return
-        work = {'key': (mode, src), 'method': method, 'v': (work or {}).get('v', 0) + 1}
+        work = {'key': (mode, src), 'method': method, 'v': (work or {}).get('v', 0) + 1,
+                'saved': copy.deepcopy(method)}
         st.session_state[EDIT_KEY] = work
     method, v = work['method'], work['v']
     if mode == 'new':
@@ -288,19 +357,38 @@ def method_dialog(workflow_dir, folder) -> None:
     else:
         new_name = src
         b.text_input('File', value=f'{src}.json', disabled=True, key=f'ida-ed-file-{v}')
-    if c.button('★' if src in favs else '☆', key='ida-ed-fav', use_container_width=True,
-                help=f"{'Remove' if src in favs else 'Add'} '{src}' {'from' if src in favs else 'to'} the favorites"):
+    in_folder = src in methods
+    if c.button('★' if src in favs else '☆', key='ida-ed-fav', use_container_width=True, disabled=not in_folder,
+                help=(f"{'Remove' if src in favs else 'Add'} '{src}' {'from' if src in favs else 'to'} the favorites"
+                      if in_folder else 'Favorites are methods of the method folder.')):
         ff.toggle_favorite(folder, src)
-        st.rerun(scope='fragment')
+        st.rerun()
 
+    found = sections.hints(method)
+    have = sections.present(method) | {'global'}
     keys = _keys()
-    tabs = st.tabs(list(SECTIONS) + [f'All {len(keys)} keys', 'JSON'])
-    for tab, (section, paths) in zip(tabs, SECTIONS.items()):
+    diff = fm.changes(work['saved'], method)
+    # st.tabs starts again on its first tab when its names change, or when an
+    # element above it comes or goes: so the names are fixed, and what changes
+    # with the method sits in one container that is always there.
+    with st.container():
+        if diff:
+            shown = ', '.join(f'{label(p).split(" (")[0].lower()} {_short(x)} → {_short(y)}'
+                              for p, x, y in diff[:4])
+            more = f' and {len(diff) - 4} more' if len(diff) > 4 else ''
+            st.caption(f'✏️ Not saved yet, changed from **{_start_label(favs)(src)}**: {shown}{more}')
+        st.markdown(_status(have, found))
+    tabs = st.tabs([f'{icon} {n}' for n, (icon, _) in sections.TAB_PARTS.items()]
+                   + [f'All {len(keys)} keys', 'JSON'])
+    for tab, (name_, (icon, parts)) in zip(tabs, sections.TAB_PARTS.items()):
         with tab:
-            cols = st.columns(2)
-            for n, path in enumerate(paths):
-                with cols[n % 2]:
-                    key_widget(method, path, f'ida-w-{v}-{path}')
+            tab_on = parts[0][0] in have
+            if name_ == 'Global':
+                st.caption(f'**Now:** {sections.run_line(method)}')
+            for part, role in parts:
+                if role == 'option' and not tab_on:
+                    continue
+                _part(work, part, role, have, found)
     with tabs[-2]:
         query = st.text_input('Find a key', key='ida-q',
                               placeholder='Part of a key or its description, e.g. faims, agc, exploration')
@@ -310,18 +398,18 @@ def method_dialog(workflow_dir, folder) -> None:
         if matching:
             pick = st.selectbox('Key', matching, key=f'ida-pick-{q}',
                                 format_func=lambda p: f'{p}  ·  {label(p)}')
-            key_widget(method, pick, f'ida-w-{v}-all-{pick}')
+            if key_widget(method, pick, f'ida-w-{v}-all-{pick}', why_not=sections.inactive(method, pick)):
+                st.rerun()
             rows = [{'Key': p, 'Value': _short(fm.get(method, p), 60) if fm.get(method, p, KeyError) is not KeyError else '',
-                     'Default': _short(keys[p].default, 40) if keys[p].default is not None else keys[p].default_text,
-                     'Unit': keys[p].unit} for p in matching]
+                     'Default': sections.default_of(method, p), 'Unit': keys[p].unit} for p in matching]
             st.dataframe(pd.DataFrame(rows), hide_index=True, height=260, use_container_width=True)
         else:
             st.info('No key matches.')
     with tabs[-1]:
         st.caption('The method as JSON. Click a value to change it, ➕ on an object to add a '
                    'key, 🗑 to remove one; a change is kept at once and checked against '
-                   "FLASHIda's method schema below.")
-        tree_key = f'ida-json-{v}'
+                   "FLASHIda's method schema.")
+        tree_key = f"ida-json-{v}-{hashlib.sha1(json.dumps(method, sort_keys=True).encode()).hexdigest()[:12]}"
         edited = json_editor(method, name='method', collapsed=1, editable=True,
                              display_data_types=False, sort_keys=False, key=tree_key)['data']
         # The tree returns the method as it was when it was drawn; the other tabs
@@ -336,10 +424,10 @@ def method_dialog(workflow_dir, folder) -> None:
                 st.error(str(e))
             else:
                 work.update(method=new, v=v + 1)
-                st.rerun(scope='fragment')
+                st.rerun()
         j2, j3 = st.columns([1, 1.2], vertical_alignment='bottom')
         j2.download_button('⬇️ Download', json.dumps(method, indent=2), use_container_width=True,
-                           file_name=f'{new_name or src}.json', mime='application/json', key=f'ida-json-dl-{v}')
+                           file_name=f'{new_name or src.removeprefix(SHIPPED)}.json', mime='application/json', key=f'ida-json-dl-{v}')
         with j3.popover('📥 Import .json file', use_container_width=True):
             upload = st.file_uploader('Method file', type=['json'], key=f'ida-json-up-{v}')
             if upload is not None:
@@ -350,16 +438,12 @@ def method_dialog(workflow_dir, folder) -> None:
                     st.error('This file is not a JSON method.')
                 else:
                     work.update(method=parsed, v=v + 1)
-                    st.rerun(scope='fragment')
+                    st.rerun()
 
-    problems = fm.check(method)
-    if problems:
-        with st.container(border=True):
-            st.markdown(f'⚠️ **This FLASHApp expects FLASHIda to refuse this method** ({len(problems)} '
-                        f'problem{"s" if len(problems) != 1 else ""}):')
-            st.markdown('\n'.join(f'- `{p}`' for p in problems[:8]))
-            st.caption('The check uses the method schema bundled with FLASHApp, which may be older than '
-                       'your FLASHIda. **Run anyway** on the page starts the run with this method as it is.')
+    if fm.check(method):
+        st.caption('⚠️ in a tab: this FLASHApp expects FLASHIda to refuse the method there. The check uses the '
+                   'method schema bundled with FLASHApp, which may be older than your FLASHIda; **Run anyway** '
+                   'on the Acquisition page starts the run with the method as it is.')
     unknown = fm.unknown_keys(method)
     if unknown:
         with st.container(border=True):
@@ -368,23 +452,28 @@ def method_dialog(workflow_dir, folder) -> None:
                         'them when the run starts; edit or remove them in the JSON tab.')
             st.markdown(', '.join(f'`{k}`' for k in unknown[:20]) + (' …' if len(unknown) > 20 else ''))
 
-    st.divider()
-    if mode == 'new':
-        problem = ff.name_problem(new_name) if new_name else ''
-        if not problem and new_name and ff.stem(new_name).casefold() in {m.casefold() for m in methods}:
-            problem = f"'{ff.stem(new_name)}.json' is in the method folder already. Pick another name, or edit it."
-        if problem:
-            st.error(problem)
-        save = st.button('💾 Save to method folder', type='primary', disabled=not new_name or bool(problem),
-                         key='ida-ed-save')
-    else:
-        users = [r['name'] or f'run {i + 1}' for i, r in enumerate(fm.load_runs(workflow_dir))
-                 if r.get('method_file') == src]
-        st.caption(f"Saving overwrites `{src}.json`. "
-                   + (f"{len(users)} run{'s use' if len(users) != 1 else ' uses'} it and get"
-                      f"{'' if len(users) != 1 else 's'} the change when FLASHIda starts for "
-                      f"{'them' if len(users) != 1 else 'it'}." if users else 'No run of the table uses it.'))
-        save = st.button('💾 Save changes', type='primary', key='ida-ed-save')
+    with st.container(border=True):
+        if mode == 'new':
+            problem = ff.name_problem(new_name) if new_name else ''
+            if not problem and new_name and ff.stem(new_name).casefold() in {m.casefold() for m in methods}:
+                problem = f"'{ff.stem(new_name)}.json' is in the method folder already. Pick another name, or edit it."
+            if problem:
+                st.error(problem)
+            s1, s2 = st.columns([4, 1.6], vertical_alignment='center')
+            s1.caption('Saves the method as a new file in the method folder.' if new_name
+                       else 'Name the new method above to save it.')
+            save = s2.button('💾 Save to method folder', type='primary', disabled=not new_name or bool(problem),
+                             key='ida-ed-save', use_container_width=True)
+        else:
+            users = [r['name'] or f'run {i + 1}' for i, r in enumerate(fm.load_runs(workflow_dir))
+                     if r.get('method_file') == src]
+            s1, s2 = st.columns([4, 1.6], vertical_alignment='center')
+            s1.caption(f"Saving overwrites `{src}.json`. "
+                       + (f"{len(users)} run{'s use' if len(users) != 1 else ' uses'} it and get"
+                          f"{'' if len(users) != 1 else 's'} the change when FLASHIda starts for "
+                          f"{'them' if len(users) != 1 else 'it'}." if users else 'No run of the table uses it.'))
+            save = s2.button('💾 Save changes', type='primary', key='ida-ed-save', disabled=not diff,
+                             use_container_width=True)
     if save:
         name = ff.stem(new_name)
         try:
@@ -393,10 +482,11 @@ def method_dialog(workflow_dir, folder) -> None:
             st.error(f'Could not save the method: {e}')
         else:
             # Widget values cannot be set once drawn; dropping them lets the
-            # dialog start on the saved method the next time it opens.
-            for key in (EDIT_KEY, 'ida-ed-name', 'ida-ed-src'):
+            # page start on the saved method, to be edited further.
+            for key in (EDIT_KEY, 'ida-ed-name', 'ida-ed-src', 'ida-ed-mode'):
                 st.session_state.pop(key, None)
             st.session_state['ida-ed-start'] = name
+            st.session_state['ida-ed-mode'] = 'edit'
             st.session_state['ida-saved'] = name
             _bump()
             st.rerun()
@@ -459,26 +549,38 @@ def _method_pick(label_: str, methods: list, favs: list, key: str, default=None,
                         help='Type to search. ★ marks favorites, listed first.', **kw)
 
 
-@st.dialog('Import runs', width='large', on_dismiss='rerun')
+@st.dialog('Import sequence', width='large', on_dismiss='rerun')
 def import_dialog(workflow_dir, folder) -> None:
     runs = fm.load_runs(workflow_dir)
     methods, favs = _folder_methods(folder)
-    source = st.radio('Source', ['json', 'sld'], horizontal=True, key='ida-imp-source',
-                      format_func=lambda s: {'json': 'Sequence file (JSON)',
-                                             'sld': 'Xcalibur sequence (.sld)'}[s])
-    upload = st.file_uploader('File', type=['json'] if source == 'json' else ['sld'],
-                              key=f'ida-imp-file-{source}',
-                              help='A file exported here with **Export sequence**.' if source == 'json' else
-                              'Any Xcalibur sequence. Only the raw file names are taken.')
+    upload = st.file_uploader('Sequence', type=['json', 'sld', 'csv'], key='ida-imp-file',
+                              help='A sequence exported here with **Export sequence** (.json: names and '
+                                   'methods; .csv: the table), or an Xcalibur sequence (.sld, or .csv exported '
+                                   'from Xcalibur): only the raw file names are taken from those.')
+    # The file says what it is: FLASHApp's sequence (.json), Xcalibur's (.sld), or a CSV of either
+    suffix = Path(upload.name).suffix.lower() if upload is not None else '.json'
+    source = {'.sld': 'sld', '.csv': 'csv'}.get(suffix, 'json')
+    csv_parsed, csv_methods = [], False
+    if source == 'csv':
+        try:
+            csv_parsed, csv_methods = fs.csv_runs(upload.getvalue())
+        except ValueError as e:
+            st.error(str(e))
+    names_only = source == 'sld' or (source == 'csv' and not csv_methods)
     mode = _mode_choice(runs, 'ida-imp-mode')
     pick = _method_pick('Method for the new runs', methods, favs, 'ida-imp-method',
-                        _default_method(methods, favs, runs)) if source == 'sld' else None
+                        _default_method(methods, favs, runs)) if names_only else None
 
     parsed = []
     if upload is not None:
         try:
-            parsed = fs.parse_runs(upload.getvalue()) if source == 'json' else \
-                fs.runs_from_names(fs.sld_names(upload.getvalue()), pick)
+            if source == 'json':
+                parsed = fs.parse_runs(upload.getvalue())
+            elif source == 'sld':
+                parsed = fs.runs_from_names(fs.sld_names(upload.getvalue()), pick)
+            else:
+                parsed = (csv_parsed if csv_methods
+                          else fs.runs_from_names([r['name'] for r in csv_parsed], pick))
         except ValueError as e:
             st.error(str(e))
             parsed = []
@@ -495,8 +597,8 @@ def import_dialog(workflow_dir, folder) -> None:
                             else f'{m} (not in the method folder)'
                     return f"{r.get('preset') or r['name']} (saved to the method folder)"
                 st.caption(f'{len(parsed)} run{"s" if len(parsed) != 1 else ""} in the file'
-                           + ('.' if source == 'json' else
-                              '. Only the names are taken; every run gets the method picked above.'))
+                           + ('. Only the names are taken; every run gets the method picked above.'
+                              if names_only else '.'))
                 st.dataframe(pd.DataFrame({'Raw file name': [r['name'] for r in parsed],
                                            'Method': [shown(r) for r in parsed]}),
                              hide_index=True, use_container_width=True, height=min(36 + 35 * len(parsed), 250))
@@ -505,7 +607,11 @@ def import_dialog(workflow_dir, folder) -> None:
         _duplicates_note(duplicates)
     if st.button(f'Import {len(parsed)} run{"s" if len(parsed) != 1 else ""}' if parsed else 'Import',
                  type='primary', disabled=not parsed, key='ida-imp-go'):
-        new, written, missing = fs.into_folder(parsed, folder) if source == 'json' else (parsed, [], [])
+        if source == 'json':
+            new, written, missing = fs.into_folder(parsed, folder)
+        else:  # a table exported here names its methods; those the folder lacks are reported
+            new, written = parsed, []
+            missing = sorted({r['method_file'] for r in parsed if r.get('method_file') not in methods} - {None})
         combined, duplicates = fs.combine(runs, new, mode)
         if written:
             st.session_state['ida-written'] = written
@@ -724,10 +830,6 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             import_dialog(workflow_dir, folder)
         elif dialog == 'pattern':
             pattern_dialog(workflow_dir, folder)
-        elif dialog == 'method':
-            if OPEN_KEY in st.session_state:
-                st.session_state['ida-ed-start'] = st.session_state.pop(OPEN_KEY)
-            method_dialog(workflow_dir, folder)
     if 'ida-added' in st.session_state:
         added, duplicates = st.session_state.pop('ida-added')
         st.toast(f'Added {added} run{"s" if added != 1 else ""}.'
@@ -738,8 +840,6 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
     if 'ida-missing' in st.session_state:
         st.toast('Not in the method folder (pick another method for these runs): '
                  + ', '.join(st.session_state.pop('ida-missing')), icon='⚠️')
-    if 'ida-saved' in st.session_state:
-        st.toast(f"Saved '{st.session_state.pop('ida-saved')}' to the method folder.", icon='💾')
     st.html(_NAME_CSS)
 
     @st.fragment(run_every=2 if running else None)
@@ -778,9 +878,9 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
         selected = [i for i in range(len(runs)) if st.session_state.get(f'ida-sel-{i}-{v}')]
         if not running and runs:
             _clipboard_bar(workflow_dir, runs, selected)
-        # select, #, name, method, favorite, copy, up, down, duplicate, sequence, [status], remove
-        widths = [0.3, 0.35, 3.0, 3.6, 0.5, 0.5, 0.45, 0.45, 0.5, 0.9] + ([2.4] if running else []) + [0.5]
-        titles = ['', '', 'Raw file name', 'Method', '', '', '', '', '', 'Seq.'] + (['Status'] if running else []) + ['']
+        # select, #, name, method, favorite, copy, duplicate, sequence, [status], remove
+        widths = [0.3, 0.35, 3.3, 3.9, 0.5, 0.5, 0.5, 0.9] + ([2.4] if running else []) + [0.5]
+        titles = ['', '', 'Raw file name', 'Method', '', '', '', 'Seq.'] + (['Status'] if running else []) + ['']
         head = st.columns(widths, vertical_alignment='center')
         for col, title in zip(head, titles):
             col.markdown(f'<span style="font-size:.8rem;opacity:.65;font-weight:600">{title}</span>',
@@ -814,13 +914,7 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
                            help='Copy the method of this run'):
                 st.session_state[CLIPBOARD_KEY] = {'name': run['name'], 'method_file': current}
                 st.rerun(scope='fragment')
-            for col, step, icon in ((c[6], -1, '↑'), (c[7], 1, '↓')):
-                if col.button(icon, key=f'ida-mv{step}-{i}', disabled=running or not 0 <= i + step < len(runs),
-                              help='Move up' if step < 0 else 'Move down'):
-                    fm.save_runs(workflow_dir, ff.move(runs, i, step))
-                    _bump()
-                    st.rerun(scope='fragment')
-            if c[8].button('⧉', key=f'ida-dup-{i}', disabled=running,
+            if c[6].button('⧉', key=f'ida-dup-{i}', disabled=running,
                            help='Duplicate this run below, with the next free name (R1 → R2)'):
                 fm.save_runs(workflow_dir, ff.duplicate(runs, i))
                 _bump()
@@ -829,27 +923,27 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             problem = fm.name_problem(run['name'], [r['name'] for r in runs[:i]])
             method = ff.run_method(run, folder)
             if problem and run['name']:
-                c[9].markdown(':red-badge[⚠️]', help=problem)
+                c[7].markdown(':red-badge[⚠️]', help=problem)
             elif current and usable and current not in methods:
-                c[9].markdown(':red-badge[⚠️]', help=f"'{current}.json' is not in the method folder.")
+                c[7].markdown(':red-badge[⚠️]', help=f"'{current}.json' is not in the method folder.")
             elif method is not None and fm.check(method):
-                c[9].markdown(':orange-badge[⚠️]', help="The method fails FLASHApp's check; FLASHIda may refuse it.")
+                c[7].markdown(':orange-badge[⚠️]', help="The method fails FLASHApp's check; FLASHIda may refuse it.")
             elif not sequence:
-                c[9].markdown(':gray-badge[–]', help='No sequence in the raw file folder.')
+                c[7].markdown(':gray-badge[–]', help='No sequence in the raw file folder.')
             elif run['name'] in planned:
-                c[9].markdown(f':green-badge[✓ {planned[run["name"]]}]',
+                c[7].markdown(f':green-badge[✓ {planned[run["name"]]}]',
                               help=f'Row {planned[run["name"]]} of the newest sequence.')
             else:
-                c[9].markdown(':orange-badge[–]',
+                c[7].markdown(':orange-badge[–]',
                               help='Not in the newest sequence. FLASHIda still starts if this raw file appears.')
             if running:
                 state = (status.get('runs') or {}).get(run['name'], {})
                 if state.get('state') == 'running':
                     minutes = int((time.time() - state.get('since', time.time())) // 60)
                     d = ff.duration(method)
-                    c[10].markdown(f'🟢 FLASHIda running · {minutes}' + (f' of {d:g} min' if d is not None else ' min'))
+                    c[8].markdown(f'🟢 FLASHIda running · {minutes}' + (f' of {d:g} min' if d is not None else ' min'))
                 else:
-                    c[10].markdown(_STATE.get(state.get('state'), '⏳ Waiting for its raw file'))
+                    c[8].markdown(_STATE.get(state.get('state'), '⏳ Waiting for its raw file'))
             if c[-1].button('🗑️', key=f'ida-del-{i}', disabled=running, help='Remove this run'):
                 del runs[i]
                 fm.save_runs(workflow_dir, runs)
@@ -865,7 +959,7 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
                        + ', '.join(f'`{e}`' for e in extra))
 
         if not running:
-            a, b, c3, d, e, f, g = st.columns([1.1, 2.3, 1.8, 1.0, 1.25, 1.1, 1.9])
+            a, b, c3, d, e, g = st.columns([1.1, 2.3, 1.8, 1.4, 1.4, 1.9])
             if a.button('➕ Add run', use_container_width=True):
                 runs.append({'name': '', 'method_file': _default_method(methods, favs, runs)})
                 fm.save_runs(workflow_dir, runs)
@@ -889,27 +983,40 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
                               'with a wash every few runs.'):
                 st.session_state[DIALOG_KEY] = 'pattern'
                 st.rerun()
-            if d.button('📥 Import', use_container_width=True, disabled=not usable,
-                        help='Runs from a sequence file exported here, or the raw file names of any '
-                             'Xcalibur sequence (.sld).'):
+            if d.button('📥 Import sequence', use_container_width=True, disabled=not usable,
+                        help='Runs from a sequence exported here (.json or the .csv table), or the raw '
+                             'file names of an Xcalibur sequence (.sld, or .csv exported from Xcalibur).'):
                 st.session_state[DIALOG_KEY] = 'import'
                 st.rerun()
-            e.download_button('⬇️ Export JSON', fs.export_runs(runs, folder), use_container_width=True,
-                              file_name=f'flashida-runs-{fs.today()}.json', mime='application/json',
-                              disabled=not runs, key=f'ida-export-{v}',
-                              help='Every run with its method, as JSON. Import it again here; methods the '
-                                   'method folder lacks are saved there.')
-            f.download_button('⬇️ CSV', fs.export_csv(runs), use_container_width=True,
-                              file_name=f'flashida-runs-{fs.today()}.csv', mime='text/csv',
-                              disabled=not runs, key=f'ida-export-csv-{v}',
-                              help='Row, raw file name and method of every run, as CSV.')
+            with e.popover('⬇️ Export sequence', use_container_width=True, disabled=not runs):
+                st.download_button('FLASHApp sequence (.json)', fs.export_runs(runs, folder),
+                                   use_container_width=True, file_name=f'flashida-runs-{fs.today()}.json',
+                                   mime='application/json', key=f'ida-export-{v}',
+                                   help='Every run with its method. Import it again here with **Import '
+                                        'sequence**; methods the method folder lacks are saved there.')
+                st.markdown('**For Xcalibur**')
+                inst = st.text_input('Instrument method', key='ida-xcal-meth',
+                                     placeholder=r'C:\Xcalibur\methods\TopDown',
+                                     help='The Xcalibur instrument method every sample runs with, as Xcalibur '
+                                          'writes it. Left empty, pick it in Xcalibur after the import.')
+                st.download_button('Xcalibur sequence (.csv)',
+                                   fs.export_xcalibur_csv(runs, raw_dir or '', inst.strip()),
+                                   use_container_width=True, file_name=f'flashida-sequence-{fs.today()}.csv',
+                                   mime='text/csv', key=f'ida-export-xcal-{v}',
+                                   help='One sample per run, its raw file name as File Name, the raw file '
+                                        'folder as Path. Import it in Xcalibur (Sequence Setup: File > Import); '
+                                        'Import sequence here reads it too.')
+                st.divider()
+                st.download_button('Table (.csv)', fs.export_csv(runs), use_container_width=True,
+                                   file_name=f'flashida-runs-{fs.today()}.csv', mime='text/csv',
+                                   key=f'ida-export-csv-{v}',
+                                   help='Row, raw file name and method of every run, e.g. for Excel. '
+                                        'Import sequence reads it back with the methods.')
             if g.button('📝 New or edit method', use_container_width=True, disabled=not usable,
-                        help='Make a new method from any method in the folder, or change one. '
-                             'Saved as a file in the method folder.'):
-                st.session_state[DIALOG_KEY] = 'method'
-                if selected and runs[selected[0]].get('method_file'):
-                    st.session_state[OPEN_KEY] = runs[selected[0]]['method_file']
-                st.rerun()
+                        help='Opens the Method editor: make a new method from any method in the folder, '
+                             'or change one (the ticked run\'s, if one is ticked). Saved as a file in the '
+                             'method folder.'):
+                open_in_editor(runs[selected[0]].get('method_file') if selected else None)
 
         if footer is not None:
             footer()

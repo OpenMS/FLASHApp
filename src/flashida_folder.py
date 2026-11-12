@@ -235,15 +235,6 @@ def duplicate(runs: list, index: int) -> list:
     return out
 
 
-def move(runs: list, index: int, step: int) -> list:
-    """The runs with run ``index`` moved ``step`` places (-1 up, +1 down)."""
-    out = list(runs)
-    j = index + step
-    if 0 <= index < len(out) and 0 <= j < len(out):
-        out[index], out[j] = out[j], out[index]
-    return out
-
-
 # --- duration ---------------------------------------------------------------------
 
 def duration(method: dict | None):

@@ -83,13 +83,6 @@ def test_duplicate_counts_the_replicate_up():
     assert runs[0]['name'] == 'A_R1' and len(runs) == 2  # the table given is left as it was
 
 
-def test_move():
-    runs = ['a', 'b', 'c']
-    assert ff.move(runs, 0, 1) == ['b', 'a', 'c']
-    assert ff.move(runs, 2, -1) == ['a', 'c', 'b']
-    assert ff.move(runs, 0, -1) == runs and ff.move(runs, 2, 1) == runs
-
-
 def test_total_duration_and_end(tmp_path):
     ff.write(tmp_path, 'Long', {'global': {'duration': 120}})
     ff.write(tmp_path, 'Wash', {'global': {}})
