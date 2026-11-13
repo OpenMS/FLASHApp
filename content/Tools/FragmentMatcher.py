@@ -19,14 +19,15 @@ from pathlib import Path
 
 import polars as pl
 import streamlit as st
-from openms_insight import ProteinSequenceView, StateManager
+from openms_insight import ProteinSequenceView, StateManager, Table
 
 from src import fragment_matcher as fm_input
 from src.common.common import page_setup
 from src.common.guide import page_intro
 from src.render import insight_data, modifications
 from src.render.render import (
-    FIXED_MODS_IDENTIFIER, SEQUENCE_VIEW_OPTIONS, _modification_picker_library,
+    FIXED_MODS_IDENTIFIER, FRAGMENT_MATCHES_IDENTIFIER, SEQUENCE_VIEW_OPTIONS,
+    _modification_picker_library,
     _sequence_view_options,
 )
 from src.render.sequence import getFragmentDataFromSeq
@@ -312,6 +313,10 @@ view = ProteinSequenceView(
 if hasattr(view, 'set_modification_picker'):
     view.set_modification_picker(_modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids)
 _sequence_view_options(view)
+if hasattr(view, 'set_fragment_matches_proteoform'):
+    # The matched proteoform comes with its fragments, for the comparison below
+    view.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
+    view.set_fragment_matches_proteoform()
 # The Change sequence dialog can fetch a sequence from UniProt
 if hasattr(view, 'set_uniprot_lookup'):
     view.set_uniprot_lookup()
@@ -319,3 +324,124 @@ if hasattr(view, 'set_uniprot_lookup'):
 if hasattr(view, 'set_proforma_identifier'):
     view.set_proforma_identifier(PROFORMA_IDENTIFIER)
 view(key='fragment_matcher_view', state_manager=manager)
+
+
+HYPOTHESIS_IDENTIFIER = 'hypothesis'
+
+
+def _fixed(precision):
+    return {'formatter': 'fixed',
+            'formatterParams': {'precision': precision, 'placeholders': {'NaN': ''}}}
+
+
+HYPOTHESIS_COLUMNS = [
+    {'field': 'best', 'title': '', 'width': 40, 'hozAlign': 'center', 'headerSort': False,
+     'headerTooltip': 'The proteoform with the most matched fragments'},
+    {'field': 'proforma', 'title': 'Proteoform', 'hozAlign': 'left', 'width': 260,
+     'tooltip': True, 'headerTooltip': 'ProForma'},
+    {'field': 'matched', 'title': 'Matched', 'sorter': 'number',
+     'headerTooltip': 'Matched fragments, counted as the fragment table above counts them'},
+    {'field': 'cleavages', 'title': 'Cleav. %', 'sorter': 'number', **_fixed(0),
+     'headerTooltip': 'Bonds with a matched fragment on either side'},
+    {'field': 'delta_da', 'title': 'Δ Da', 'sorter': 'number', **_fixed(2),
+     'headerTooltip': 'Precursor mass minus theoretical mass, in Da'},
+    {'field': 'delta_ppm', 'title': 'Δ ppm', 'sorter': 'number', **_fixed(1),
+     'headerTooltip': 'Precursor mass minus theoretical mass, in ppm'},
+    {'field': 'theoretical_mass', 'title': 'Mass', 'headerTooltip': 'Theoretical mass of the proteoform', 'sorter': 'number', **_fixed(2)},
+    {'field': 'n_terminal', 'title': 'N', 'sorter': 'number', 'headerTooltip': 'N-terminal fragments'},
+    {'field': 'c_terminal', 'title': 'C', 'sorter': 'number', 'headerTooltip': 'C-terminal fragments'},
+    {'field': 'tolerance', 'title': 'Tol.', 'hozAlign': 'left',
+     'headerTooltip': 'Fragment mass tolerance the proteoform was matched with'},
+]
+
+
+def _hypotheses_table(workspace, stored, rows, manager):
+    """The proteoforms tried, as an Insight table; a picked row can be shown
+    in the view again or removed."""
+    best = fm_input.best_hypothesis(rows)
+    has_precursor = any(r.get('delta_da') is not None for r in rows)
+    frame = pl.DataFrame([
+        {
+            'id': i,
+            'best': '★' if i == best else '',
+            'matched': r['matched_fragments'],
+            'cleavages': r['cleavages'],
+            'delta_da': r['delta_da'],
+            'delta_ppm': r['delta_ppm'],
+            'theoretical_mass': r['theoretical_mass'],
+            'n_terminal': r['n_terminal'],
+            'c_terminal': r['c_terminal'],
+            'tolerance': r['tolerance'],
+            'proforma': r['proforma'],
+        }
+        for i, r in enumerate(rows)
+    ], schema_overrides={'delta_da': pl.Float64, 'delta_ppm': pl.Float64})
+    columns = [c for c in HYPOTHESIS_COLUMNS
+               if has_precursor or c['field'] not in ('delta_da', 'delta_ppm')]
+    digest = hashlib.sha1(
+        json.dumps(rows, sort_keys=True, default=str).encode()).hexdigest()[:12]
+    cache_path = Path(workspace, 'fragment-matcher', 'insight')
+    cache_id = f'hypotheses-{digest}'
+    # Tables of earlier lists are not shown again
+    if cache_path.exists():
+        for old in cache_path.glob('hypotheses-*'):
+            if old.name != cache_id:
+                shutil.rmtree(old, ignore_errors=True)
+    table = Table(
+        cache_id=cache_id, cache_path=str(cache_path), data=frame.lazy(),
+        column_definitions=columns, index_field='id', title=f'Proteoforms tried ({len(rows)})',
+        interactivity={HYPOTHESIS_IDENTIFIER: 'id'}, layout='fitDataFill',
+        initial_sort=[{'column': 'matched', 'dir': 'desc'}], pagination=False,
+        default_row=-1, default_row_selects=False, float_precision='float64',
+    )
+    table(key=f'matcher_hypotheses_{digest}', state_manager=manager, height=min(80 + 40 * len(rows), 360))
+    picked = manager.get_selection(HYPOTHESIS_IDENTIFIER)
+    picked = picked if isinstance(picked, int) and 0 <= picked < len(rows) else None
+    with st.container(horizontal=True):
+        st.button('Show in the view', icon=':material/visibility:', disabled=picked is None,
+                  key='matcher_show_hypothesis', on_click=_show_hypothesis,
+                  args=(rows[picked]['proforma'] if picked is not None else '',),
+                  help='Show the picked proteoform in the sequence view and the sequence box')
+        st.button('Remove', icon=':material/delete:', disabled=picked is None,
+                  key='matcher_remove_hypotheses', on_click=_remove_hypothesis,
+                  args=(stored, picked), help='Remove the picked proteoform from the table')
+
+
+def _show_hypothesis(proforma):
+    """Show a proteoform of the table in the view (as the sequence box does)."""
+    st.session_state['matcher_sequence'] = proforma
+    st.session_state['matcher_sequence_seen'] = proforma
+    manager = state()
+    manager.set_selection(PROFORMA_IDENTIFIER, proforma)
+    manager.set_selection(HYPOTHESIS_IDENTIFIER, None)
+
+
+def _remove_hypothesis(stored, index):
+    fm_input.remove_hypotheses(workspace, stored, [index])
+    state().set_selection(HYPOTHESIS_IDENTIFIER, None)
+
+
+# Proteoforms tried against these masses
+if hasattr(view, 'set_fragment_matches_proteoform'):
+    st.subheader('Compare proteoforms')
+    st.caption(
+        'Change the sequence, its modifications or the ion types in the view, '
+        'and add each proteoform you try: the table compares them against '
+        'these masses. ★ marks the one with the most matched fragments; pick a '
+        'row to show it in the view again or to remove it.'
+    )
+    current = fm_input.hypothesis(
+        manager.get_selection(FRAGMENT_MATCHES_IDENTIFIER), stored.get('precursor_mass'),
+    )
+    rows = fm_input.load_hypotheses(workspace, stored)
+    with st.container(horizontal=True, vertical_alignment='center'):
+        if st.button('Add this proteoform', icon=':material/add:', type='primary',
+                     disabled=current is None, key='matcher_add_hypothesis'):
+            rows = fm_input.add_hypothesis(workspace, stored, current)
+        if current is not None:
+            st.caption(
+                f"{current['matched_fragments']} matched fragments, "
+                f"{current['cleavages']:.0f}% of the bonds"
+            )
+    if rows:
+        _hypotheses_table(workspace, stored, rows, manager)

@@ -207,3 +207,102 @@ def input_stamp(data):
     import hashlib
     payload = json.dumps({k: data.get(k) for k in ('masses', 'precursor_mass', 'mass_type')})
     return hashlib.sha1(payload.encode()).hexdigest()[:12]
+
+
+# Proteoforms tried against one mass list ------------------------------------
+#
+# The sequence view writes the fragments it matched, with the proteoform it
+# matched them against, to the fragment_matches selection. The page keeps the
+# proteoforms the user adds as hypotheses, one row each, for the mass list
+# they were tried on (a new list starts an empty table).
+
+def hypotheses_path(workspace):
+    return Path(workspace, 'fragment-matcher', 'hypotheses.json')
+
+
+def hypothesis(matches, precursor_mass=None):
+    """One row for the proteoform of a fragment_matches selection, or None.
+
+    ``matches`` is what the sequence view wrote (``proteoform`` and
+    ``fragments``, see openms-insight's ``fragment_matches_proteoform``).
+    """
+    if not isinstance(matches, dict) or not isinstance(matches.get('proteoform'), dict):
+        return None
+    proteoform = matches['proteoform']
+    if not proteoform.get('sequence'):
+        return None
+    fragments = [f for f in matches.get('fragments') or [] if f.get('kind') in ('N', 'C')]
+    theoretical = float(proteoform.get('theoreticalMass') or 0)
+    tolerance = matches.get('tolerance') or {}
+    row = {
+        'proforma': proteoform.get('proforma') or proteoform['sequence'],
+        'length': int(proteoform.get('length') or len(proteoform['sequence'])),
+        'theoretical_mass': theoretical,
+        # Counted as the view's fragment table does (an ion matched on two
+        # masses, e.g. one isotope off, is two rows there)
+        'matched_fragments': len(fragments),
+        'n_terminal': sum(f.get('kind') == 'N' for f in fragments),
+        'c_terminal': sum(f.get('kind') == 'C' for f in fragments),
+        'cleavages': float(proteoform.get('cleavagePercentage') or 0),
+        'tolerance': f"{tolerance.get('value')} {tolerance.get('unit')}" if tolerance else '',
+        'delta_da': None,
+        'delta_ppm': None,
+    }
+    if precursor_mass and theoretical:
+        delta = float(precursor_mass) - theoretical
+        row['delta_da'] = delta
+        row['delta_ppm'] = delta / theoretical * 1e6
+    return row
+
+
+def load_hypotheses(workspace, data):
+    """The hypotheses kept for this input (``load_input``), oldest first."""
+    path = hypotheses_path(workspace)
+    if data is None or not path.exists():
+        return []
+    try:
+        stored = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return []
+    if stored.get('input') != input_stamp(data):
+        return []
+    return list(stored.get('rows') or [])
+
+
+def _store_hypotheses(workspace, data, rows):
+    path = hypotheses_path(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({'input': input_stamp(data), 'rows': rows}))
+    return rows
+
+
+def add_hypothesis(workspace, data, row):
+    """Keep ``row``; one tried again (same ProForma and tolerance) replaces
+    its earlier result in place."""
+    rows = load_hypotheses(workspace, data)
+    key = (row['proforma'], row.get('tolerance'))
+    for i, kept in enumerate(rows):
+        if (kept.get('proforma'), kept.get('tolerance')) == key:
+            rows[i] = row
+            break
+    else:
+        rows.append(row)
+    return _store_hypotheses(workspace, data, rows)
+
+
+def remove_hypotheses(workspace, data, indices):
+    rows = [r for i, r in enumerate(load_hypotheses(workspace, data)) if i not in set(indices)]
+    return _store_hypotheses(workspace, data, rows)
+
+
+def best_hypothesis(rows):
+    """Index of the row with the most matched fragments (ties: more
+    cleavages, then the smaller |Δ mass|), or None."""
+    if not rows:
+        return None
+    def rank(item):
+        _, row = item
+        delta = row.get('delta_da')
+        return (row['matched_fragments'], row['cleavages'],
+                -abs(delta) if delta is not None else 0)
+    return max(enumerate(rows), key=rank)[0]
