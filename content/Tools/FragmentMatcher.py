@@ -21,22 +21,35 @@ import polars as pl
 import streamlit as st
 from openms_insight import ProteinSequenceView, StateManager
 
+try:
+    from openms_insight.components.protein_sequence_view import FRAGMENTATION_METHODS
+except ImportError:
+    FRAGMENTATION_METHODS = {'CID/HCD': (), 'ETD/ECD': (), 'EThcD': (), 'UVPD': ()}
+# ProForma 2.0 read by pyOpenMS (openms-insight with core.proforma)
+try:
+    from openms_insight.core import proforma as proforma_reader
+    if not proforma_reader.available():
+        proforma_reader = None
+except ImportError:
+    proforma_reader = None
+
 from src import fragment_matcher as fm_input
 from src.common.common import page_setup
 from src.common.guide import page_intro
 from src.render import insight_data, modifications
 from src.render.render import (
     FIXED_MODS_IDENTIFIER, SEQUENCE_VIEW_OPTIONS, _modification_picker_library,
-    _sequence_view_options,
+    _scan_methods, _sequence_view_options,
 )
 from src.render.sequence import getFragmentDataFromSeq
 from src.workflow.FileManager import FileManager
 
 STATE_KEY = 'fragment_matcher_state'
+# What the masses box holds
+DECONVOLVED = 'Deconvolved masses'
+MZ_VALUES = 'm/z values'
 # The shown proteoform as ProForma, shared by the sequence box and the view
 PROFORMA_IDENTIFIER = 'proforma'
-EXAMPLE_RUN = 'example_lysate_identified'
-EXAMPLE_SCAN = 4268
 # DNA-binding protein HU-alpha (E. coli), identified in that scan
 EXAMPLE_SEQUENCE = 'MNKTQLIDVIAEKAELSKTQAKAALESTLAAITESLKEGDAVQLVGFGTFKVNHRAERTGRNPQTGKEIKIAAANVPAFVSGKALKDAVK'
 
@@ -46,11 +59,13 @@ file_manager = FileManager(workspace, Path(workspace, 'cache'))
 
 st.title('🧩 Match fragments')
 page_intro(
-    'Match a list of fragment masses against a sequence, without running a '
-    'deconvolution. Type or paste the masses and the sequence (plain or '
-    'ProForma) in the two boxes below; the sequence view follows them, and a '
-    'change in the view (**Change sequence** with UniProt, a residue\'s menu) '
-    'shows in the sequence box. Files and scans of a run: **More ways to give masses**.',
+    'Match fragment masses against a sequence. Give the sequence (plain or '
+    'ProForma, or fetched by UniProt accession) and the fragment masses, or the '
+    'm/z peaks of a fragment spectrum, which FLASHDeconv deconvolves, in the two '
+    'boxes below. The sequence view follows them, and a change in the view '
+    '(**Change sequence**, a residue\'s menu) shows in the sequence box. '
+    '**Example** fills in a scan of the lysate example; files and scans of a run: '
+    '**More ways to give masses**.',
     background=(
         '**Masses.** One mass per line, optionally followed by its intensity, '
         'separated by spaces, tabs, commas or semicolons; lines that are not '
@@ -63,11 +78,18 @@ page_intro(
         'added in the view shift them by their monoisotopic mass.\n\n'
         '**M or MH+.** Masses given as MH+ (singly protonated) are made '
         'neutral by subtracting one proton.\n\n'
-        '**Sequence.** In **Change sequence**, a UniProt accession (e.g. '
-        '`P0ACF0`, an isoform such as `P0ACF0-2`, or `sp|P0ACF0|DBHA_ECOLI`) '
-        'fills in the sequence of that entry. Edit it there, or write '
-        'modifications in ProForma: `K[Acetyl]`, `S[+79.9663]`, an N-terminal '
-        '`[Acetyl]-` or a fixed `<[Carbamidomethyl]@C>` in front.'
+        '**m/z values.** With **m/z values** chosen above the box, give the '
+        'peaks of a fragment spectrum, m/z and intensity per line; FLASHDeconv '
+        '(as in OpenMS) turns them into neutral monoisotopic masses. Without '
+        'intensities it finds no isotope patterns.\n\n'
+        '**Sequence.** A UniProt accession (e.g. `P0ACF0`, an isoform such as '
+        '`P0ACF0-2`, or `sp|P0ACF0|DBHA_ECOLI`) above the sequence box fills in '
+        'the sequence of that entry. Write modifications in ProForma 2.0, read '
+        'by OpenMS: `K[Acetyl]`, `S[+79.9663]`, `[UNIMOD:21]`, an N-terminal '
+        '`[Acetyl]-`, a fixed `<[Carbamidomethyl]@C>` in front, a range '
+        '`(EVTS)[+79.97]` or anywhere in the sequence `[+42.0106]?SEQ`.\n\n'
+        '**Fragmentation.** The method the fragments were made with picks the '
+        'ion series the view matches.'
     ),
 )
 
@@ -86,8 +108,24 @@ def save(masses, intensities, precursor, mass_type, given_as, sequence=None, nam
     if data.get('sequence'):
         manager = state()
         manager.set_selection('sequence', data['sequence'])
-        manager.set_selection(PROFORMA_IDENTIFIER, data['sequence'])
+        request_proforma(data['sequence'])
     return data
+
+
+def link_text(value):
+    """The ProForma in the link: a string, or {'text', 'by', 'n'}."""
+    if isinstance(value, dict):
+        value = value.get('text')
+    return value if isinstance(value, str) else ''
+
+
+def request_proforma(text):
+    """Ask the view for this proteoform: a numbered request, so an answer of
+    the view to an earlier one never overwrites the sequence box."""
+    n = st.session_state.get('matcher_proforma_n', 0) + 1
+    st.session_state['matcher_proforma_n'] = n
+    st.session_state['matcher_sequence_seen'] = text
+    state().set_selection(PROFORMA_IDENTIFIER, {'text': text, 'by': 'app', 'n': n})
 
 
 def mass_lines(data):
@@ -114,28 +152,86 @@ def masses_changed():
     except fm_input.MassListError as error:
         st.session_state['matcher_mass_error'] = str(error)
         return
+    name = 'Masses'
+    given_as = st.session_state.get('matcher_given_as', fm_input.NEUTRAL)
+    mass_type = st.session_state.get('matcher_mass_type', fm_input.MONOISOTOPIC)
+    if st.session_state.get('matcher_values') == MZ_VALUES:
+        # FLASHDeconv gives neutral monoisotopic masses
+        intensities = parsed['intensities']
+        if intensities and any(i is None for i in intensities):
+            intensities = None
+        deconvolved = fm_input.deconvolve_mz(parsed['masses'], intensities)
+        if not deconvolved['masses']:
+            st.session_state['matcher_mass_error'] = (
+                f"FLASHDeconv found no isotope pattern in the {len(parsed['masses'])} m/z values. "
+                'Give each peak with its intensity, and enough peaks per pattern.')
+            return
+        name = f"Deconvolved from {len(parsed['masses'])} m/z values"
+        parsed = {**parsed, **deconvolved}
+        given_as, mass_type = fm_input.NEUTRAL, fm_input.MONOISOTOPIC
     data = save(parsed['masses'], parsed['intensities'],
                 st.session_state.get('matcher_precursor') or parsed['precursor_mass'],
-                st.session_state.get('matcher_mass_type', fm_input.MONOISOTOPIC),
-                st.session_state.get('matcher_given_as', fm_input.NEUTRAL), name='Masses')
+                mass_type, given_as, name=name)
     # The box keeps what was typed
     st.session_state['matcher_text_stamp'] = fm_input.input_stamp(data)
 
 
 def sequence_changed():
     """The sequence box changed: the view takes it (plain or ProForma)."""
-    text = st.session_state.get('matcher_sequence', '').strip()
-    st.session_state['matcher_sequence_seen'] = text
-    state().set_selection(PROFORMA_IDENTIFIER, text)
+    request_proforma(st.session_state.get('matcher_sequence', '').strip())
+
+
+EXAMPLE_FILES = {
+    DECONVOLVED: Path('example-data', 'fragment-matcher', 'scan4268_masses.tsv'),
+    MZ_VALUES: Path('example-data', 'fragment-matcher', 'scan4268_mz.tsv'),
+}
+EXAMPLE_PRECURSOR = 9529.1849
+
+
+def values_switched():
+    """Masses and m/z values do not mix: switching empties the masses box."""
+    fm_input.clear_input(workspace)
+    st.session_state['matcher_text'] = ''
+    st.session_state['matcher_text_stamp'] = ''
+    st.session_state['matcher_mass_error'] = ''
+
+
+def fetch_uniprot():
+    """The sequence of the UniProt accession goes into the sequence box."""
+    st.session_state['matcher_uniprot'] = None
+    st.session_state['matcher_uniprot_error'] = ''
+    text = (st.session_state.get('matcher_accession') or '').strip()
+    if not text:
+        return
+    try:
+        entry = fm_input.uniprot_entry(text)
+    except fm_input.UniProtLookupError as error:
+        st.session_state['matcher_uniprot_error'] = str(error)
+        return
+    st.session_state['matcher_uniprot'] = entry
+    st.session_state['matcher_sequence'] = entry['sequence']
+    sequence_changed()
+
+
+def load_example():
+    """Scan 4268 of the lysate example (HU-alpha) in the boxes: its deconvolved
+    masses or its m/z peaks, as the masses box is set, with precursor and sequence."""
+    values = st.session_state.get('matcher_values') or DECONVOLVED
+    st.session_state['matcher_text'] = EXAMPLE_FILES[values].read_text(encoding='utf-8')
+    st.session_state['matcher_precursor'] = EXAMPLE_PRECURSOR
+    st.session_state['matcher_given_as'] = fm_input.NEUTRAL
+    st.session_state['matcher_mass_type'] = fm_input.MONOISOTOPIC
+    masses_changed()
+    st.session_state['matcher_sequence'] = EXAMPLE_SEQUENCE
+    sequence_changed()
 
 
 def delete_all():
     """Empty both boxes and the precursor: no masses, no sequence, no modifications."""
     clear_masses()
     st.session_state['matcher_sequence'] = ''
-    st.session_state['matcher_sequence_seen'] = ''
+    request_proforma('')
     manager = state()
-    manager.set_selection(PROFORMA_IDENTIFIER, '')
     manager.set_selection('sequence', '')
     manager.set_selection(FIXED_MODS_IDENTIFIER, [])
 
@@ -148,7 +244,8 @@ def clear_masses():
 
 
 def run_masses(dataset_id, scan_number):
-    """Deconvolved masses and precursor mass of a scan of a run, or None."""
+    """Deconvolved masses, precursor mass and fragmentation method (None when
+    the run does not say) of a scan of a run, or None."""
     spectra = insight_data.sequence_view_spectra(file_manager, dataset_id)
     scans = insight_data.scan(file_manager, dataset_id, 'scan_table').select('index', 'Scan')
     rows = (
@@ -158,9 +255,21 @@ def run_masses(dataset_id, scan_number):
     )
     if rows.height == 0:
         return None
-    return list(rows['MonoMass'][0]), rows['PrecursorMass'][0]
+    index = int(rows['index'][0])
+    methods = _scan_methods(file_manager, dataset_id)
+    method = methods[index] if index < len(methods) else None
+    if method not in FRAGMENTATION_METHODS:
+        method = None
+    return list(rows['MonoMass'][0]), rows['PrecursorMass'][0], method
 
 
+# Each visit starts empty: masses and sequence of an earlier session are dropped
+if not st.session_state.get('matcher_started'):
+    fm_input.clear_input(workspace)
+    st.session_state['matcher_started'] = True
+# A scan of a run brings its fragmentation method (set before the widget is drawn)
+if st.session_state.get('matcher_fragmentation_next'):
+    st.session_state['matcher_fragmentation'] = st.session_state.pop('matcher_fragmentation_next')
 stored = fm_input.load_input(workspace)
 manager = state()
 
@@ -174,29 +283,73 @@ if st.session_state.get('matcher_text_stamp') != stamp:
     if stored:
         st.session_state['matcher_given_as'] = fm_input.NEUTRAL
 # The sequence box follows the view (its dialog, residue menus)
-from_view = manager.get_selection(PROFORMA_IDENTIFIER)
-if from_view is not None and from_view != st.session_state.get('matcher_sequence_seen'):
-    st.session_state['matcher_sequence'] = from_view
-    st.session_state['matcher_sequence_seen'] = from_view
+# (only its answer to the latest request, or a request of its dialog)
+link = manager.get_selection(PROFORMA_IDENTIFIER)
+if isinstance(link, dict):
+    n = link.get('n') or 0
+    latest = st.session_state.get('matcher_proforma_n', 0)
+    if link.get('by') == 'dialog' and n > latest:
+        st.session_state['matcher_proforma_n'] = n
+        latest = n
+    from_view = link_text(link)
+    if (link.get('by') in ('view', 'dialog') and n >= latest
+            and from_view != st.session_state.get('matcher_sequence_seen')):
+        st.session_state['matcher_sequence'] = from_view
+        st.session_state['matcher_sequence_seen'] = from_view
 
-masses_box, sequence_box = st.columns(2)
+# Headings first, then what fills each box, then the boxes
+sequence_heading, masses_heading = st.columns(2)
+sequence_heading.markdown(
+    '**Sequence** (plain or ProForma)',
+    help='Type, paste or fetch it by UniProt accession (the field below). Applied '
+             'when you leave the box or press Ctrl+Enter, and kept in step with the '
+             'sequence view: a change there (Change sequence, the residue menus) '
+             'shows here. Empty the box to clear the sequence.\n\n'
+             'ProForma 2.0 (read by OpenMS): `K[Acetyl]`, `S[+79.9663]`, `[UNIMOD:21]`, '
+             'terminal `[Acetyl]-SEQ`, fixed `<[Carbamidomethyl]@C>SEQ`, a range '
+             '`(EVTS)[+79.97]` or anywhere in the sequence `[+42.0106]?SEQ`; the '
+             'matched fragments narrow a range down. Position groups (`#g1`), labile '
+             'modifications and mass gaps are not supported yet.',
+)
+masses_heading.markdown(
+    '**Fragment m/z values**' if st.session_state.get('matcher_values') == MZ_VALUES
+    else '**Fragment masses**',
+    help='Deconvolved masses or the m/z peaks of a fragment spectrum, as chosen '
+         'in the field below; one per line, optionally with its intensity. Applied '
+         'when you leave the box or press Ctrl+Enter. Switching between the two '
+         'empties the box. Mass type, a file or a scan of a run: under More ways '
+         'to give masses.',
+)
+# Above the boxes, in a row of their own, so both boxes start level
+accession_choice, values_choice = st.columns(2)
+with accession_choice:
+    with st.container(horizontal=True, vertical_alignment='bottom'):
+        st.text_input(
+            'UniProt accession', key='matcher_accession', on_change=fetch_uniprot,
+            placeholder='UniProt accession, e.g. P0ACF0', label_visibility='collapsed',
+            help='The sequence of a UniProt entry goes into the sequence box: an '
+                 'accession, an isoform (P0ACF0-2) or a FASTA identifier '
+                 '(sp|P0ACF0|DBHA_ECOLI). Enter or Get sequence fetches it.',
+        )
+        st.button('Get sequence', on_click=fetch_uniprot,
+                  disabled=not (st.session_state.get('matcher_accession') or '').strip())
+with values_choice:
+    st.segmented_control(
+        'Values are', [DECONVOLVED, MZ_VALUES], key='matcher_values', default=DECONVOLVED,
+        on_change=values_switched, label_visibility='collapsed',
+        help='Deconvolved masses: neutral fragment masses as FLASHDeconv or another '
+             'deconvolution gives them. m/z values: the peaks of a fragment spectrum '
+             '(m/z and intensity per line); FLASHDeconv turns them into masses.',
+    )
+sequence_box, masses_box = st.columns(2)
 with masses_box:
     st.text_area(
-        'Fragment masses', height=160, key='matcher_text', on_change=masses_changed,
+        'Fragment m/z values' if st.session_state.get('matcher_values') == MZ_VALUES
+        else 'Fragment masses',
+        height=160, key='matcher_text', on_change=masses_changed,
         placeholder='One per line, optionally with its intensity, e.g.\n1043.512 25000\n2511.374 18000\nor: 1043.512; 2511.374; 980.1',
-        help='Applied when you leave the field or press Ctrl+Enter. Mass type, '
-             'a file or a scan of a run: below, under More ways to give masses.',
+        label_visibility='collapsed',
     )
-    with st.container(horizontal=True, vertical_alignment='bottom'):
-        st.number_input(
-            'Precursor mass (optional)', min_value=0.0, step=1.0, format='%.4f',
-            key='matcher_precursor', on_change=masses_changed,
-            help='Neutral or MH+ as the masses (Given as, below). A precursor in an '
-                 '.msalign file or the scan of a run fills it in.',
-        )
-        st.button('Delete all', icon=':material/delete_sweep:', on_click=delete_all,
-                  help='Empty the masses, the precursor and the sequence with its '
-                       'modifications.')
     if st.session_state.get('matcher_mass_error'):
         st.error(st.session_state['matcher_mass_error'])
 with sequence_box:
@@ -204,10 +357,41 @@ with sequence_box:
         'Sequence (plain or ProForma)', height=160, key='matcher_sequence',
         on_change=sequence_changed,
         placeholder='e.g. MNKTQLIDVIAEK...\nor ProForma: [Acetyl]-MNK[Trimethyl]TQLIDVIAEK...\nor <[Carbamidomethyl]@C>PEPTCIDE',
-        help='Applied when you leave the field or press Ctrl+Enter, and kept in step '
-             'with the sequence view: a change there (Change sequence, UniProt, the '
-             'residue menus) shows here. Empty it to clear the sequence.',
+        label_visibility='collapsed',
     )
+    # The UniProt entry the sequence came from
+    if st.session_state.get('matcher_uniprot_error'):
+        st.error(st.session_state['matcher_uniprot_error'])
+    elif entry_info := st.session_state.get('matcher_uniprot'):
+        st.caption(
+            f"[{entry_info['accession']}](https://www.uniprot.org/uniprotkb/{entry_info['accession']}/entry)"
+            f" · {entry_info['entry']} · {entry_info['name']}"
+            + (f" · *{entry_info['organism']}*" if entry_info['organism'] else '')
+            + f" · {len(entry_info['sequence'])} residues"
+        )
+
+with st.container(horizontal=True, horizontal_alignment='distribute', vertical_alignment='bottom'):
+    st.number_input(
+        'Precursor mass (optional)', min_value=0.0, step=1.0, format='%.4f',
+        key='matcher_precursor', on_change=masses_changed,
+        help='The precursor mass, neutral or MH+ as the masses are given (under '
+             'More ways to give masses); with m/z values always the neutral mass. '
+             'An .msalign file, a scan of a run or Example fills it in.',
+    )
+    st.selectbox(
+        'Fragmentation', list(FRAGMENTATION_METHODS), key='matcher_fragmentation',
+        help='How the fragments were made: the sequence view matches its ion '
+             'series (CID/HCD: b, y; ETD/ECD: c, z•; EThcD: b, c, y, z•; UVPD: '
+             'a, b, c, x, y, z and their variants). The series can still be '
+             'changed in the view\'s settings.',
+    )
+    st.button('Example', icon=':material/science:', on_click=load_example,
+              help='Scan 4268 of the lysate example: its deconvolved masses or its '
+                   'm/z peaks (as chosen above the masses), its precursor mass and '
+                   'its protein, HU-alpha.')
+    st.button('Delete all', icon=':material/delete_sweep:', on_click=delete_all,
+              help='Empty the masses, the precursor and the sequence with its '
+                   'modifications.')
 
 with st.expander('More ways to give masses'):
     with st.container(horizontal=True):
@@ -253,14 +437,10 @@ with st.expander('More ways to give masses'):
                 else:
                     save(found[0], None, found[1], fm_input.MONOISOTOPIC, fm_input.NEUTRAL,
                          name=f'{names[run]}, scan {scan_number}')
+                    # The scan's own fragmentation method, set before the next run draws it
+                    if found[2]:
+                        st.session_state['matcher_fragmentation_next'] = found[2]
                     st.rerun()
-    if EXAMPLE_RUN in file_manager.get_results_list(['sequence_view']):
-        if st.button(f'Load an example (scan {EXAMPLE_SCAN} of the lysate example, with HU-alpha)'):
-            found = run_masses(EXAMPLE_RUN, EXAMPLE_SCAN)
-            if found is not None:
-                save(found[0], None, found[1], fm_input.MONOISOTOPIC, fm_input.NEUTRAL,
-                     sequence=EXAMPLE_SEQUENCE, name=f'Lysate example, scan {EXAMPLE_SCAN}')
-                st.rerun()
 
 # The view is shown without masses too, so the sequence can be set first
 shown = stored if stored is not None else fm_input.matcher_input([], mass_type=mass_type)
@@ -277,23 +457,61 @@ sequence = manager.get_selection('sequence') or ''
 mod_ids = modifications.fixed_ids({'fixed_modifications': []}, manager.get_selection(FIXED_MODS_IDENTIFIER))
 
 
+def proforma_spans(sequence):
+    """Modifications of the sequence box over several residues (a range,
+    `(EVTS)[+79.97]`, or anywhere, `[+42.01]?SEQ`), as (start, end, mass,
+    label), 0-based. One-residue modifications are the view's own."""
+    text = link_text(manager.get_selection(PROFORMA_IDENTIFIER))
+    if not text or not sequence or proforma_reader is None:
+        return ()
+    try:
+        read = proforma_reader.read_proforma(text)
+    except proforma_reader.ProFormaReadError:
+        return ()
+    if read['sequence'] != sequence:
+        return ()
+    return tuple((m['start'], m['end'], m['mass'], m['label'])
+                 for m in read['modifications'] if m['start'] != m['end'])
+
+
 @st.cache_data(max_entries=8, show_spinner=False)
-def entry_for(sequence, mod_ids, average):
-    data = getFragmentDataFromSeq(sequence, fixed_mods={'fixed_modifications': list(mod_ids)},
-                                  average=average)
+def entry_for(sequence, mod_ids, average, spans=()):
+    data = getFragmentDataFromSeq(
+        sequence, fixed_mods={'fixed_modifications': list(mod_ids)}, average=average,
+        # 1-based, as getFragmentDataFromSeq takes them
+        modifications=[(s + 1, e + 1, m) for s, e, m, _ in spans] if spans else None,
+    )
+    if spans:
+        data['theoretical_mass'] += sum(m for _, _, m, _ in spans)
+        data['modifications'] = [
+            {'start': s, 'end': e, 'mass_diff': m, 'labels': label} for s, e, m, label in spans
+        ]
     return json.loads(json.dumps(data, default=float))
 
 
-try:
-    entry = entry_for(sequence, tuple(mod_ids), average)
-except Exception as error:  # pyOpenMS refuses the residues
-    st.error(f'The sequence could not be used: {error}')
-    entry = entry_for('', (), average)
+# No sequence: an empty entry, built here. pyOpenMS on an empty sequence
+# warns and has crashed the server (access violation) now and then
+EMPTY_ENTRY = {
+    'sequence': [], 'theoretical_mass': 0.0, 'fixed_modifications': [],
+    **{f'fragment_masses_{ion}': [] for ion in 'abcxyz'},
+}
+
+spans = proforma_spans(sequence)
+if not sequence:
+    entry = EMPTY_ENTRY
+else:
+    try:
+        entry = entry_for(sequence, tuple(mod_ids), average, spans)
+    except Exception as error:  # pyOpenMS refuses the residues
+        st.error(f'The sequence could not be used: {error}')
+        entry = EMPTY_ENTRY
 
 # One cache per mass list and sequence; the earlier ones are not shown again
 cache_path = Path(workspace, 'cache', 'insight', 'fragment-matcher')
-sequence_stamp = hashlib.sha1(json.dumps([sequence, mod_ids]).encode()).hexdigest()[:10]
-cache_id = f'matcher-{fm_input.input_stamp(shown)}-{sequence_stamp}'
+sequence_stamp = hashlib.sha1(json.dumps([sequence, mod_ids, spans]).encode()).hexdigest()[:10]
+fragmentation = st.session_state.get('matcher_fragmentation') or next(iter(FRAGMENTATION_METHODS))
+method_stamp = hashlib.sha1(fragmentation.encode()).hexdigest()[:4]
+cache_id = f'matcher-{fm_input.input_stamp(shown)}-{sequence_stamp}-{method_stamp}'
 if cache_path.exists():
     for old in cache_path.glob('matcher-*'):
         if old.name != cache_id:
@@ -301,8 +519,10 @@ if cache_path.exists():
 view = ProteinSequenceView(
     cache_id=cache_id,
     cache_path=str(cache_path),
-    data=pl.LazyFrame([fm_input.spectrum_row(shown)], schema={
-        'index': pl.Int64, 'MonoMass': pl.List(pl.Float64), 'PrecursorMass': pl.Float64}),
+    data=pl.LazyFrame([{**fm_input.spectrum_row(shown), 'Fragmentation': fragmentation}], schema={
+        'index': pl.Int64, 'MonoMass': pl.List(pl.Float64), 'PrecursorMass': pl.Float64,
+        'Fragmentation': pl.Utf8}),
+    fragmentation_column='Fragmentation',
     filters={'matcher_spectrum': 'index'}, filter_defaults={'matcher_spectrum': 0},
     sequence=entry, sequence_identifier='sequence',
     settings=fm_input.DEFAULT_SETTINGS[shown.get('mass_type', fm_input.MONOISOTOPIC)],

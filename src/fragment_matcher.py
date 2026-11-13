@@ -9,6 +9,9 @@ and stores the input; the page draws it.
 Other pages open the matcher with a mass list of their own through
 ``store_input`` (and then switch to the page), e.g. the masses of a selected
 spectrum and the sequence of an identification.
+
+A list of m/z values (a fragment spectrum's peaks) is turned into masses by
+``deconvolve_mz``, FLASHDeconv's own spectral deconvolution in pyOpenMS.
 """
 
 from __future__ import annotations
@@ -191,6 +194,97 @@ def clear_input(workspace):
         return False
     path.unlink()
     return True
+
+
+def deconvolve_mz(mz, intensities=None, min_charge=1, max_charge=None):
+    """Neutral monoisotopic masses of a fragment spectrum given as m/z peaks,
+    by FLASHDeconv (pyOpenMS ``FLASHDeconvAlgorithm``, its default settings).
+
+    ``intensities`` default to 1 per peak (FLASHDeconv scores isotope
+    patterns by intensity, so real intensities give better masses).
+    ``max_charge`` None keeps FLASHDeconv's default.
+
+    Returns {'masses': [...], 'intensities': [...]} ordered by mass; empty
+    lists when no isotope pattern is found.
+    """
+    import pyopenms as oms
+
+    peaks = sorted(zip(mz, intensities or [1.0] * len(mz)))
+    if not peaks:
+        return {'masses': [], 'intensities': []}
+    spectrum = oms.MSSpectrum()
+    spectrum.setMSLevel(2)
+    spectrum.setRT(1.0)
+    spectrum.setNativeID('scan=2')
+    spectrum.set_peaks(([p[0] for p in peaks], [float(p[1] or 1.0) for p in peaks]))
+    precursor = oms.Precursor()
+    precursor.setMZ(peaks[-1][0])
+    spectrum.setPrecursors([precursor])
+    # FLASHDeconv reads a run: one MS1 scan before the fragment spectrum
+    survey = oms.MSSpectrum()
+    survey.setMSLevel(1)
+    survey.setRT(0.9)
+    survey.setNativeID('scan=1')
+    survey.set_peaks(([peaks[-1][0]], [1.0]))
+    run = oms.MSExperiment()
+    run.addSpectrum(survey)
+    run.addSpectrum(spectrum)
+
+    algorithm = oms.FLASHDeconvAlgorithm()
+    params = algorithm.getParameters()
+    params.setValue('SD:min_charge', int(min_charge))
+    if max_charge is not None:
+        params.setValue('SD:max_charge', int(max_charge))
+    algorithm.setParameters(params)
+    deconvolved, _ = algorithm.run(run)
+    found = []
+    for spec in deconvolved:
+        if spec.getOriginalSpectrum().getMSLevel() != 2:
+            continue
+        found.extend((pg.getMonoMass(), pg.getIntensity()) for pg in spec)
+    found.sort()
+    return {'masses': [m for m, _ in found], 'intensities': [i for _, i in found]}
+
+
+class UniProtLookupError(ValueError):
+    """An accession that is not one, or a UniProt entry that cannot be had."""
+
+
+def uniprot_entry(text):
+    """The UniProt entry of an accession (``P0ACF0``, an isoform ``P0ACF0-2`` or a
+    FASTA identifier ``sp|P0ACF0|DBHA_ECOLI``): {'accession', 'entry', 'name',
+    'organism', 'sequence'}, fetched with the app's UniProt client."""
+    from src.render.structure import uniprot_accession
+    from src.workflow import uniprot
+
+    text = (text or '').strip()
+    # Accessions are upper case; a typed p0acf0 means P0ACF0
+    if '|' not in text:
+        text = text.upper()
+    accession = uniprot_accession(text)
+    if accession is None:
+        raise UniProtLookupError(f"'{text}' is not a UniProt accession (e.g. P0ACF0 or P0ACF0-2)")
+    isoform = re.search(rf'{accession}(-\d+)', text.upper())
+    accession += isoform.group(1) if isoform else ''
+    try:
+        fasta = uniprot._get(f'/uniprotkb/{accession}.fasta', {}).text
+    except uniprot.UniProtError as e:
+        message = str(e)
+        if '400' in message or '404' in message:
+            message = f'UniProt has no entry {accession}'
+        raise UniProtLookupError(message) from e
+    lines = fasta.strip().splitlines()
+    if not lines or not lines[0].startswith('>') or len(lines) < 2:
+        raise UniProtLookupError(f'UniProt has no entry {accession}')
+    header = lines[0]
+    found = re.match(r'>\w+\|[^|]+\|(\S+)\s+(.*?)(?:\s+OS=(.*?))?(?:\s+OX=.*)?$', header)
+    return {
+        'accession': accession,
+        'entry': found.group(1) if found else accession,
+        'name': found.group(2) if found else header[1:],
+        'organism': (found.group(3) or '') if found else '',
+        'sequence': ''.join(lines[1:]).replace(' ', ''),
+    }
 
 
 def spectrum_row(data):

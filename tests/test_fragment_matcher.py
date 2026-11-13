@@ -89,3 +89,65 @@ def test_average_fragment_masses():
     assert mono['theoretical_mass'] == pytest.approx(799.36, abs=0.01)
     assert avg['theoretical_mass'] == pytest.approx(799.82, abs=0.01)
     assert avg['fragment_masses_b'][1][0] > mono['fragment_masses_b'][1][0]
+
+
+def _isotope_peaks(sequence, charges=(3, 4, 5)):
+    """m/z and intensity of a peptide's isotope pattern at several charges."""
+    import pyopenms as oms
+    peptide = oms.AASequence.fromString(sequence)
+    mono = peptide.getMonoWeight()
+    pattern = peptide.getFormula().getIsotopeDistribution(oms.CoarseIsotopePatternGenerator(8))
+    mz, intensities = [], []
+    for z in charges:
+        for k, peak in enumerate(pattern.getContainer()):
+            mz.append((mono + k * 1.00235 + z * fm.PROTON) / z)
+            intensities.append(peak.getIntensity() * 1e6)
+    return mono, mz, intensities
+
+
+def test_deconvolve_mz_finds_the_monoisotopic_mass():
+    mono, mz, intensities = _isotope_peaks('MNKTQLIDVIAEKAELSKTQAKAAL')
+    found = fm.deconvolve_mz(mz, intensities)
+    assert len(found['masses']) == 1
+    assert found['masses'][0] == pytest.approx(mono, abs=0.01)
+    assert found['intensities'][0] > 0
+
+
+def test_deconvolve_mz_without_peaks():
+    assert fm.deconvolve_mz([]) == {'masses': [], 'intensities': []}
+
+
+class _Response:
+    def __init__(self, text):
+        self.text = text
+
+
+def test_uniprot_entry(monkeypatch):
+    from src.workflow import uniprot
+    asked = []
+
+    def get(path, params):
+        asked.append(path)
+        return _Response('>sp|P0ACF0|DBHA_ECOLI DNA-binding protein HU-alpha '
+                         'OS=Escherichia coli (strain K12) OX=83333 GN=hupA PE=1 SV=2\nMNKT\nQLID\n')
+
+    monkeypatch.setattr(uniprot, '_get', get)
+    entry = fm.uniprot_entry('sp|P0ACF0|DBHA_ECOLI')
+    assert entry == {'accession': 'P0ACF0', 'entry': 'DBHA_ECOLI',
+                     'name': 'DNA-binding protein HU-alpha',
+                     'organism': 'Escherichia coli (strain K12)', 'sequence': 'MNKTQLID'}
+    fm.uniprot_entry('p0acf0-2')
+    assert asked == ['/uniprotkb/P0ACF0.fasta', '/uniprotkb/P0ACF0-2.fasta']
+
+
+def test_uniprot_entry_errors(monkeypatch):
+    from src.workflow import uniprot
+
+    def missing(path, params):
+        raise uniprot.UniProtError('UniProt answered 404')
+
+    monkeypatch.setattr(uniprot, '_get', missing)
+    with pytest.raises(fm.UniProtLookupError, match='not a UniProt accession'):
+        fm.uniprot_entry('hello')
+    with pytest.raises(fm.UniProtLookupError, match='has no entry Q9ZZZ9'):
+        fm.uniprot_entry('Q9ZZZ9')

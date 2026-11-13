@@ -82,8 +82,9 @@ def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modificati
     masses, monoisotopic or, with `average`, average masses."""
     protein = AASequence.fromString(sequence)
 
-    # Only apply for FD
-    if modifications is None:
+    # Fixed modifications: for a sequence given by the user (FD), or with
+    # `modifications` when they are passed explicitly (Match fragments)
+    if modifications is None or fixed_mods is not None:
         protein, fixed_mods = setFixedModification(protein, fixed_mods)  # handling fixed modifications
     else:
         fixed_mods = []
