@@ -245,6 +245,32 @@ EDIT_IDENTIFIER = 'sequence_edit'
 # with an openms-insight release without it
 FRAGMENT_MATCHES_IDENTIFIER = 'fragment_matches'
 FRAGMENT_MARKS = hasattr(DeconvolvedSpectrum, 'set_fragment_matches_identifier')
+# openms-insight releases whose LinePlot marks labelled x positions (x_markers)
+X_MARKERS = 'x_markers' in inspect.signature(LinePlot.__init__).parameters
+# Reporter ions of neighbouring TMT channels are 0.0063 m/z apart
+REPORTER_TOLERANCE = 0.003
+
+
+def reporter_plot_args(channels, mzs, markers=X_MARKERS):
+    """How the reporter ion plot shows its channels: a function giving the
+    cached arguments from the reporter frame, and the render-time arguments.
+
+    With an openms-insight that has ``x_markers``, each channel is an x
+    marker: a guide with its name, and a dot on its reporter ion. A channel
+    without signal keeps its guide and name instead of a stick of height
+    zero. Older releases label the sticks (``annotation_column``).
+    """
+    if not markers:
+        return (lambda data: dict(data=data, annotation_column='label')), {}
+
+    def data_args(data):
+        # The unlabelled points at the edges stay: they keep the range
+        return dict(data=data.filter((pl.col('intensity') > 0) | (pl.col('label') == '')))
+
+    marked = {c: mz for c, mz in zip(channels, mzs) if mz}
+    return data_args, {'x_markers': marked, 'x_marker_tolerance': REPORTER_TOLERANCE}
+
+
 # Plots keep their zoom in the grid's state (zoom@<component>), so a view can
 # store it with its selection; left out with a release without zoom_identifier
 ZOOMABLE = (DeconvolvedSpectrum, Heatmap, LinePlot, MirrorPlot, SeriesPlot)
@@ -463,19 +489,21 @@ def _scan_methods(file_manager, dataset_id):
     return () if path is None else mzml_scan_methods(path)
 
 
-def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, required=None):
+def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, required=None,
+               render=None):
     """The Insight component `name` of a dataset: loaded from its cache, or
     built with the keyword arguments `build()` returns.
 
     `sources` are the results the cache is built from; `required` (default:
-    all of them) must exist.
+    all of them) must exist. `render` are render-time arguments, not part of
+    the cache, passed whether the cache is loaded or built.
     """
     for name_tag in sources if required is None else required:
         if insight_data.result_path(file_manager, dataset_id, name_tag) is None:
             raise MissingResult(name_tag)
     cache_path = insight_cache_dir(file_manager.cache_path, dataset_id)
     cache_id = f'{name}-{_stamp(file_manager, dataset_id, sources, extra)}'
-    zoom = _zoom_args(cls, name)
+    zoom = {**_zoom_args(cls, name), **(render or {})}
     try:
         return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom)
     except CacheMissError:
@@ -1132,14 +1160,17 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name == 'reporter_ions':
         plex, channels = _plex(fm, ds)
         mzs = dict(isobaric.PLEXES.get(plex, ('', []))[1])
+        channel_mzs = [mzs.get(c, 0.0) for c in channels]
+        data_args, markers = reporter_plot_args(channels, channel_mzs, X_MARKERS)
         return _component(
             LinePlot, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
             lambda: dict(
-                data=insight_data.reporter_ions(fm, ds, channels, [mzs.get(c, 0.0) for c in channels]),
+                **data_args(insight_data.reporter_ions(fm, ds, channels, channel_mzs)),
                 filters={'scan': 'scan_idx'}, x_column='mz', y_column='intensity',
-                annotation_column='label', title='Reporter ions of the selected spectrum',
+                title='Reporter ions of the selected spectrum',
                 x_label='m/z', y_label='Intensity',
             ),
+            render=markers,
         ), {}
 
     if comp_name == 'mass_table':
