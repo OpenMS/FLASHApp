@@ -21,22 +21,43 @@ def test_fingerprint_changes_with_data_and_settings():
     assert _fingerprint(frame, {}) != _fingerprint(frame.with_columns(y=pl.lit(5)), {})
 
 
-def test_go_bar_chart_puts_the_most_significant_term_first():
-    table = pd.DataFrame({
-        'GO_Term': ['late', 'early'], 'p_adj': [0.04, 1e-5], 'Count': [2, 5],
-        'GeneRatio': ['2/10', '5/10'], 'FoldEnrichment': [1.5, 3.0],
-    })
-    spec = go_view._bar_chart(table, 'BP', 10)
-    assert spec['data']['term'].to_list() == ['early', 'late']
-    assert spec['data']['score'][0] == 5.0
+def test_go_bar_chart_puts_the_most_significant_term_first_per_category():
+    tables = {
+        'BP': pd.DataFrame({
+            'GO_Term': ['late', 'early'], 'p_adj': [0.04, 1e-5], 'Count': [2, 5],
+            'GeneRatio': ['2/10', '5/10'], 'FoldEnrichment': [1.5, 3.0],
+        }),
+        'MF': pd.DataFrame({
+            'GO_Term': ['binding'], 'p_adj': [0.01], 'Count': [3],
+            'GeneRatio': ['3/10'], 'FoldEnrichment': [2.0],
+        }),
+        'CC': None,
+    }
+    spec = go_view._bar_chart(tables)
+    data = spec['data']
+    assert data.filter(pl.col('category') == 'BP')['term'].to_list() == ['early', 'late']
+    assert data.filter(pl.col('category') == 'MF')['term'].to_list() == ['binding']
+    assert data['score'][0] == 5.0
     assert spec['mode'] == 'bars' and spec['orientation'] == 'h'
+    # The chart picks the category and the number of terms itself
+    assert spec['view_column'] == 'category' and spec['view_identifier'] == go_view.CATEGORY_IDENTIFIER
+    assert spec['top_choices'] == go_view.TERM_COUNTS and spec['top_default'] == go_view.TOP_TERMS
+    assert (spec['x_column'], spec['y_column']) == ('term', 'score')
 
 
 def test_go_count_chart_reports_the_share_of_annotated_proteins():
-    table = pl.DataFrame({'term': ['a', 'b'], 'count': [4, 1]})
-    spec = go_view._count_chart(table, 'CC', 1, 8)
-    assert spec['data']['proteins'].to_list() == [4]
+    tables = {'CC': pl.DataFrame({'term': ['a', 'b'], 'count': [4, 1]}), 'BP': None}
+    spec = go_view._count_chart(tables, 8)
+    assert spec['data']['proteins'].to_list() == [4, 1]
+    assert spec['data']['category'].to_list() == ['CC', 'CC']
     assert '50.0% of annotated' in spec['data']['hover'][0]
+
+
+def test_go_term_table_holds_every_category():
+    frames = {'BP': pl.DataFrame({'term': ['a']}), 'CC': pl.DataFrame({'term': ['b', 'c']})}
+    table = go_view._all_categories(frames)
+    assert table['category'].to_list() == ['BP', 'CC', 'CC']
+    assert table['id'].to_list() == [0, 1, 2]
 
 
 def test_row_height_lines_up_the_views_of_a_row():

@@ -26,6 +26,9 @@ from src.render.series import show_series
 # Terms the bar chart can show
 TERM_COUNTS = [10, 15, 20, 30, 50]
 TOP_TERMS = 15
+# The state identifier the chart writes its GO category to; the table follows it
+CATEGORY_IDENTIFIER = 'go_category'
+DEFAULT_CATEGORY = 'BP'
 # Results kept per session (one per selection)
 _RESULTS_KEPT = 8
 
@@ -103,29 +106,53 @@ def _result(file_manager, selected, background, universe=None):
     return digest, store[digest]
 
 
-def _bar_chart(table, category, count):
-    """The `count` most significant terms, as the arguments of a horizontal bar chart."""
-    top = table.sort_values('p_adj').head(count)
-    padj = top['p_adj'].astype(float).clip(lower=1e-300)
-    data = pl.DataFrame({
-        'term': top['GO_Term'].astype(str).tolist(),
-        'score': (-np.log10(padj)).round(3).tolist(),
-        'hover': [
-            f'{t}: {c} selected ({r}), adj. p {p:.2e}, fold {f:.2f}'
-            for t, c, r, p, f in zip(top['GO_Term'], top['Count'], top['GeneRatio'], padj, top['FoldEnrichment'])
-        ],
-    })
+def _views():
+    """The arguments of a chart whose GO category is picked in the chart itself."""
     return dict(
-        data=data, x_column='term', y_column='score', mode='bars', orientation='h', show_legend=False,
-        hover_column='hover', title=f'{go_terms.CATEGORIES[category]}: the most significant terms',
-        x_label='GO term', y_label='-log10(adjusted p-value)',
+        view_column='category', view_names=dict(go_terms.CATEGORIES), view_identifier=CATEGORY_IDENTIFIER,
+        view_default=DEFAULT_CATEGORY, top_choices=TERM_COUNTS, top_default=TOP_TERMS, bar_height=26,
+        mode='bars', orientation='h', show_legend=False, hover_column='hover', x_label='GO term',
     )
 
 
-def _term_table(file_manager, scope, digest, category, frame, columns=TERM_COLUMNS,
+def _bar_chart(tables):
+    """The most significant terms of every category, as the arguments of a
+    horizontal bar chart showing one category at a time."""
+    parts = []
+    for category in go_terms.CATEGORIES:
+        table = tables.get(category)
+        if table is None or not len(table):
+            continue
+        top = table.sort_values('p_adj').head(max(TERM_COUNTS))
+        padj = top['p_adj'].astype(float).clip(lower=1e-300)
+        parts.append(pl.DataFrame({
+            'term': top['GO_Term'].astype(str).tolist(),
+            'score': (-np.log10(padj)).round(3).tolist(),
+            'hover': [
+                f'{t}: {c} selected ({r}), adj. p {p:.2e}, fold {f:.2f}'
+                for t, c, r, p, f in zip(top['GO_Term'], top['Count'], top['GeneRatio'], padj, top['FoldEnrichment'])
+            ],
+            'category': [category] * len(top),
+        }))
+    return dict(
+        data=pl.concat(parts), x_column='term', y_column='score', title='{view}: the most significant terms',
+        y_label='-log10(adjusted p-value)', **_views(),
+    )
+
+
+def _all_categories(frames):
+    """One table of the terms of every category, `category` naming each
+    row's, `id` a row number across them."""
+    parts = [frame.with_columns(pl.lit(category).alias('category')) for category, frame in frames.items()]
+    table = pl.concat(parts, how='vertical_relaxed')
+    return table.with_row_index('id')
+
+
+def _term_table(file_manager, scope, digest, frame, columns=TERM_COLUMNS,
                 sort=({'column': 'padj', 'dir': 'asc'},)):
+    """The terms of the GO category picked in the chart above."""
     cache_path = Path(file_manager.cache_path, 'insight', 'go')
-    cache_id = f'go-{scope}-{digest}-{category}'
+    cache_id = f'go-{scope}-{digest}'
     try:
         return Table(cache_id=cache_id, cache_path=str(cache_path))
     except CacheMissError:
@@ -133,11 +160,12 @@ def _term_table(file_manager, scope, digest, category, frame, columns=TERM_COLUM
     # Tables of earlier selections of this view are not shown again
     if cache_path.exists():
         for old in cache_path.glob(f'go-{scope}-*'):
-            if not old.name.startswith(f'go-{scope}-{digest}-'):
+            if old.name != cache_id:
                 shutil.rmtree(old, ignore_errors=True)
     return Table(
         cache_id=cache_id, cache_path=str(cache_path), data=frame.lazy(),
-        column_definitions=list(columns), index_field='rank', title=f'GO terms ({len(frame)})',
+        column_definitions=list(columns), index_field='id', title='GO terms',
+        filters={CATEGORY_IDENTIFIER: 'category'}, filter_defaults={CATEGORY_IDENTIFIER: DEFAULT_CATEGORY},
         initial_sort=list(sort), layout='fitColumns',
         pagination=False, go_to_fields=['term'], float_precision='float64',
     )
@@ -149,43 +177,34 @@ def _clear(state_manager, identifier):
     state_manager.set_selection(identifier, None)
 
 
-def _pick_terms(key):
-    pick, size = st.columns([4, 1], vertical_alignment='bottom')
-    with pick:
-        category = st.segmented_control(
-            'GO category', list(go_terms.CATEGORIES), default='BP', key=f'{key}_category',
-            format_func=go_terms.CATEGORIES.get, label_visibility='collapsed',
-        ) or 'BP'
-    with size:
-        count = st.selectbox(
-            'Terms in the chart', TERM_COUNTS, index=TERM_COUNTS.index(TOP_TERMS), key=f'{key}_count',
-            help='How many terms the bar chart shows. The table lists all of them.',
-        )
-    return category, count
-
-
-def _count_chart(table, category, count, total):
-    """The `count` most frequent terms, as the arguments of a horizontal bar chart."""
-    top = table.head(count)
-    counts = top['count'].to_list()
-    data = pl.DataFrame({
-        'term': top['term'].to_list(),
-        'proteins': counts,
-        'hover': [
-            f'{t}: {c} proteins ({100.0 * c / total if total else 0.0:.1f}% of annotated)'
-            for t, c in zip(top['term'].to_list(), counts)
-        ],
-    })
+def _count_chart(tables, total):
+    """The most frequent terms of every category, as the arguments of a
+    horizontal bar chart showing one category at a time."""
+    parts = []
+    for category in go_terms.CATEGORIES:
+        table = tables.get(category)
+        if table is None or not table.height:
+            continue
+        top = table.head(max(TERM_COUNTS))
+        counts = top['count'].to_list()
+        parts.append(pl.DataFrame({
+            'term': top['term'].to_list(),
+            'proteins': counts,
+            'hover': [
+                f'{t}: {c} proteins ({100.0 * c / total if total else 0.0:.1f}% of annotated)'
+                for t, c in zip(top['term'].to_list(), counts)
+            ],
+            'category': [category] * len(counts),
+        }))
     return dict(
-        data=data, x_column='term', y_column='proteins', mode='bars', orientation='h', show_legend=False,
-        hover_column='hover', title=f'{go_terms.CATEGORIES[category]}: the most frequent terms',
-        x_label='GO term', y_label='Proteins',
+        data=pl.concat(parts), x_column='term', y_column='proteins', title='{view}: the most frequent terms',
+        y_label='Proteins', **_views(),
     )
 
 
-def _chart(file_manager, spec, name, key):
+def _chart(file_manager, spec, name, key, state_manager):
     data = spec.pop('data')
-    show_series(data, name, file_manager.cache_path, key, height=max(320, 100 + 30 * data.height), **spec)
+    show_series(data, name, file_manager.cache_path, key, height=320, state_manager=state_manager, **spec)
 
 
 def _render_all(file_manager, scope, state_manager, background, key, what, universe=None):
@@ -209,20 +228,19 @@ def _render_all(file_manager, scope, state_manager, background, key, what, unive
     if not annotated:
         st.info(f'No protein among {what} has a GO annotation at MyGene.info.')
         return
-    category, count = _pick_terms(key)
-    table = tables[category]
     st.caption(
         f'GO annotations of {what}: {annotated} of {len(set(background))} proteins have GO terms '
         '(MyGene.info, by UniProt accession).'
     )
-    if table is None or not table.height:
-        st.info(f'No protein has {go_terms.CATEGORIES[category].lower()} terms.')
+    if not any(t is not None and t.height for t in tables.values()):
+        st.info('No protein has GO terms.')
         return
-    _chart(file_manager, _count_chart(table, category, count, annotated), f'go-{scope}-all-{category}', f'{key}_all_chart')
+    _chart(file_manager, _count_chart(tables, annotated), f'go-{scope}-all', f'{key}_all_chart', state_manager)
+    frames = {c: go_terms.count_frame(tables.get(c), labels, annotated) for c in go_terms.CATEGORIES}
     _term_table(
-        file_manager, scope, f'all{digest}', category, go_terms.count_frame(table, labels, annotated),
+        file_manager, scope, f'all{digest}', _all_categories(frames),
         columns=COUNT_COLUMNS, sort=({'column': 'count', 'dir': 'desc'},),
-    )(key=f'{key}_all_{category}', state_manager=state_manager, height=360)
+    )(key=f'{key}_all_terms', state_manager=state_manager, height=360)
 
 
 def _render(file_manager, scope, state_manager, identifier, selected, background, key, picked_line,
@@ -246,19 +264,19 @@ def _render(file_manager, scope, state_manager, identifier, selected, background
     if not result['fg_count']:
         st.info('None of the selected proteins has a GO annotation at MyGene.info.')
         return
-    category, count = _pick_terms(key)
-    table = result['categories'][category]
+    tables = result['categories']
     st.caption(
         f"{result['fg_count']} of {result['fg_total']} selected and {result['bg_count']} of "
         f"{result['bg_total']} background proteins have GO terms (MyGene.info, by UniProt accession). "
         "One-sided Fisher's exact test, Benjamini-Hochberg adjusted per category."
     )
-    if table is None or not len(table):
-        st.info(f'The selected proteins have no {go_terms.CATEGORIES[category].lower()} terms.')
+    if not any(t is not None and len(t) for t in tables.values()):
+        st.info('The selected proteins have no GO terms.')
         return
-    _chart(file_manager, _bar_chart(table, category, count), f'go-{scope}-{category}', f'{key}_chart')
-    _term_table(file_manager, scope, digest, category, go_terms.term_frame(table, labels))(
-        key=f'{key}_terms_{category}', state_manager=state_manager, height=360,
+    _chart(file_manager, _bar_chart(tables), f'go-{scope}', f'{key}_chart', state_manager)
+    frames = {c: go_terms.term_frame(tables.get(c), labels) for c in go_terms.CATEGORIES}
+    _term_table(file_manager, scope, digest, _all_categories(frames))(
+        key=f'{key}_terms', state_manager=state_manager, height=360,
     )
 
 
