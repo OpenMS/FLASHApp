@@ -583,6 +583,11 @@ def build_imputed_values(session, state_manager, key, height=None):
     )
 
 
+def _normalization_height(samples):
+    """A box per sample, laid out horizontally."""
+    return 44 * samples + 140
+
+
 def build_normalization(session, state_manager, key, height=None):
     """Intensity distribution of each sample before and after normalization."""
     if not _ready(session):
@@ -594,7 +599,7 @@ def build_normalization(session, state_manager, key, height=None):
     )
     show_series(
         data, 'quant-run-distributions', session.file_manager.cache_path, key,
-        height=max(height or 0, 44 * len(samples) + 140), state_manager=state_manager,
+        height=max(height or 0, _normalization_height(len(samples))), state_manager=state_manager,
         x_column='Sample', y_column='Intensity', series_column='Stage', series_names=STAGE_SERIES,
         series_colors=STAGE_COLORS, mode='box', orientation='h',
         title='Intensity distributions before and after normalization', x_label=_sample(session),
@@ -1010,8 +1015,26 @@ BUILDERS = {
 }
 
 
-def render_cell(comp_name, session, state_manager, key):
-    builder, height = BUILDERS[comp_name]
+# Views that size themselves (metrics, GO, a run's own sequence and spectra)
+FREE_HEIGHT = {'quant_summary', 'quant_go', 'quant_prsm_sequence', 'quant_prsm_spectrum',
+               'quant_reporter_spectra', 'quant_reporter_ions'}
+DEFAULT_HEIGHT = 400
+
+
+def row_height(row, samples=0):
+    """One height for the views of a grid row, so their panels line up: the
+    tallest view of the row sets it. ``samples``: how many samples the
+    comparison has (the normalization view grows with them)."""
+    heights = [BUILDERS[name][1] or DEFAULT_HEIGHT for name in row
+               if name in BUILDERS and name not in FREE_HEIGHT]
+    if 'quant_normalization' in row:
+        heights.append(_normalization_height(samples))
+    return max(heights) if len(row) > 1 and heights else None
+
+
+def render_cell(comp_name, session, state_manager, key, height=None):
+    builder, default = BUILDERS[comp_name]
+    height = height or default
     try:
         builder(session, state_manager, key, height)
     except MissingResult as e:

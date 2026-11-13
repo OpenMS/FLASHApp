@@ -37,3 +37,16 @@ def test_go_count_chart_reports_the_share_of_annotated_proteins():
     spec = go_view._count_chart(table, 'CC', 1, 8)
     assert spec['data']['proteins'].to_list() == [4]
     assert '50.0% of annotated' in spec['data']['hover'][0]
+
+
+def test_row_height_lines_up_the_views_of_a_row():
+    from src.render import quant_cells
+
+    # The tallest view of the row sets it; views that size themselves do not count
+    assert quant_cells.row_height(['quant_feature_map', 'quant_feature_intensity']) == 480
+    assert quant_cells.row_height(['quant_correlation', 'quant_cv']) == 480
+    assert quant_cells.row_height(['quant_totals', 'quant_go']) == quant_cells.DEFAULT_HEIGHT
+    # A view alone in its row keeps its own height
+    assert quant_cells.row_height(['quant_pvalues']) is None
+    # The normalization view grows with the samples, and its partner with it
+    assert quant_cells.row_height(['quant_totals', 'quant_normalization'], samples=20) == 44 * 20 + 140
