@@ -21,6 +21,7 @@ import streamlit as st
 from streamlit_extras.json_editor import json_editor
 
 from src import flashida
+from src import flashida_compare as fc
 from src import flashida_folder as ff
 from src import flashida_method as fm
 from src import flashida_sequence as fs
@@ -303,6 +304,175 @@ def _start_label(favs):
     return fmt
 
 
+# --- the Compare mode of the Method editor -------------------------------------------------
+
+def open_compare(method_a: str, method_b: str) -> None:
+    """Switch to the Method editor comparing two methods of the folder."""
+    st.session_state.update({'ida-ed-mode': 'compare', 'ida-cmp-a-start': method_a,
+                             'ida-cmp-b-start': method_b})
+    st.switch_page(EDITOR_PAGE)
+
+
+def _to_compare(src: str) -> None:
+    """From Edit: compare the working copy (B) with the saved file (A)."""
+    work = st.session_state.get(EDIT_KEY)
+    if work:
+        work['key'] = ('compare', src)
+    st.session_state.update({'ida-ed-mode': 'compare', 'ida-cmp-a-start': src, 'ida-cmp-b-start': src})
+
+
+def _to_edit(src: str) -> None:
+    """From Compare: edit B further, the changes taken over kept."""
+    work = st.session_state.get(EDIT_KEY)
+    if work:
+        work['key'] = ('edit', src)
+    st.session_state.update({'ida-ed-mode': 'edit', 'ida-ed-start': src})
+
+
+def _shown(value) -> str:
+    return '–' if value is None else _short(value, 40)
+
+
+def _compare(workflow_dir, folder, methods: list, favs: list) -> None:
+    """A (any method) next to B (a method of the folder): the settings in which
+    B acquires differently, taken over from A one by one, by step or all at
+    once, into B's working copy, which is then saved like an edited method."""
+    shipped = fm.builtin_presets()
+    a_choices = ([m for m in methods if m in favs] + [SHIPPED + n for n in shipped]
+                 + [m for m in methods if m not in favs])
+    for key, choices, first in (('ida-cmp-a', a_choices, 0), ('ida-cmp-b', methods, 1)):
+        start = st.session_state.pop(f'{key}-start', None)
+        if start in choices:
+            st.session_state[key] = start
+        elif st.session_state.get(key) not in choices:
+            st.session_state[key] = choices[min(first, len(choices) - 1)]
+    c1, c2 = st.columns(2)
+    a_src = c1.selectbox('A: take settings from', a_choices, key='ida-cmp-a', format_func=_start_label(favs),
+                         help='Any method of the folder, or one FLASHApp ships (📦). It is only read.')
+    b_src = c2.selectbox('B: method to change', methods, key='ida-cmp-b', format_func=_method_label(favs),
+                         help='A method of the folder. Settings taken over from A change its working copy; '
+                              'nothing is written before you save.')
+    try:
+        a = copy.deepcopy(shipped[a_src[len(SHIPPED):]]) if a_src.startswith(SHIPPED) else ff.read(folder, a_src)
+    except (ValueError, KeyError) as e:
+        st.error(str(e))
+        return
+    a, notes = fc.migrate(a)
+    work = st.session_state.get(EDIT_KEY)
+    if not work or work['key'] != ('compare', b_src):
+        try:
+            b = ff.read(folder, b_src)
+        except ValueError as e:
+            st.error(str(e))
+            return
+        work = {'key': ('compare', b_src), 'method': b, 'v': (work or {}).get('v', 0) + 1,
+                'saved': copy.deepcopy(b)}
+        st.session_state[EDIT_KEY] = work
+    b, v = work['method'], work['v']
+    for note in notes:
+        st.info(note, icon='🔁')
+
+    def take(new: dict) -> None:
+        work.update(method=new, v=v + 1)
+        st.rerun()
+
+    diff = fm.changes(work['saved'], b)
+    rows = fc.compare(a, b)
+    with st.container():  # always there, so what follows keeps its place
+        if diff:
+            d1, d2 = st.columns([5, 1.2], vertical_alignment='center')
+            d1.caption(f'✏️ B not saved yet: {len(diff)} key{"s" if len(diff) != 1 else ""} taken over or changed.')
+            if d2.button('↺ Reset B', use_container_width=True, key=f'ida-cmp-reset-{v}',
+                         help=f'Back to {b_src}.json as it is saved'):
+                take(copy.deepcopy(work['saved']))
+        if not rows:
+            st.success('B acquires exactly as A.' if a_src != b_src or diff else
+                       'Pick two methods; B acquires exactly as A.', icon='✅')
+
+    if rows:
+        st.markdown('**Settings that differ**')
+        table = pd.DataFrame({
+            'A → B': [False] * len(rows),
+            'Step': [r.tab for r in rows],
+            'Setting': [fc.switch_label(r.path) or (r.path if r.tab == fc.UNKNOWN else label(r.path))
+                        for r in rows],
+            'A': [_shown(r.a) for r in rows],
+            'B': [_shown(r.b) for r in rows],
+        })
+        picked = st.data_editor(table, hide_index=True, use_container_width=True, key=f'ida-cmp-table-{v}',
+                                disabled=['Step', 'Setting', 'A', 'B'],
+                                height=min(38 + 35 * len(rows), 460),
+                                column_config={'A → B': st.column_config.CheckboxColumn(width='small')})
+        chosen = [rows[i].path for i, on in enumerate(picked['A → B']) if on]
+        t1, t2, _ = st.columns([1.6, 1.6, 3])
+        if t1.button(f'Ticked A → B ({len(chosen)})', type='primary', disabled=not chosen,
+                     use_container_width=True, key=f'ida-cmp-take-{v}'):
+            take(fc.adopt(b, a, chosen))
+        if t2.button(f'All A → B ({len(rows)})', use_container_width=True, key=f'ida-cmp-all-{v}',
+                     help='B then acquires exactly as A'):
+            take(fc.adopt(b, a, [r.path for r in rows]))
+
+    with st.expander('All settings'):
+        every = fc.all_settings(a, b)
+        st.dataframe(pd.DataFrame({
+            '': ['≠' if d else '' for *_, d in every],
+            'Step': [tab for tab, *_ in every],
+            'Setting': [label(p) for _, p, *_ in every],
+            'A': [_shown(x) for _, _, x, _, _ in every],
+            'B': [_shown(y) for _, _, _, y, _ in every],
+        }), hide_index=True, use_container_width=True, height=420,
+            column_config={'': st.column_config.TextColumn(width='small')})
+        st.caption('The values FLASHIda works with: a setting left out shows its default. '
+                   '≠ marks the settings that differ above.')
+
+    found = sections.hints(b)
+    if found:
+        st.caption('⚠️ B: ' + ' · '.join(f'{sections.PARTS[p][0] if p in sections.PARTS else p}: {t}'
+                                          for p, ts in found.items() for t in ts[:1]))
+
+    with st.container(border=True):
+        users = [r['name'] or f'run {i + 1}' for i, r in enumerate(fm.load_runs(workflow_dir))
+                 if r.get('method_file') == b_src]
+        s1, s2, s3 = st.columns([3.4, 1.5, 1.5], vertical_alignment='center')
+        s1.caption(f"**Save changes** overwrites `{b_src}.json`; "
+                   + (f"{len(users)} run{'s use' if len(users) != 1 else ' uses'} it. "
+                      if users else 'no run of the table uses it. ')
+                   + '**Save as new method** leaves it as it is.')
+        s2.button('✏️ Edit B', use_container_width=True, key=f'ida-cmp-edit-{v}', on_click=_to_edit,
+                  args=(b_src,), help='Edit B further in the tabs; what was taken over stays')
+        if s3.button('💾 Save changes', type='primary', use_container_width=True, disabled=not diff,
+                     key=f'ida-cmp-save-{v}'):
+            try:
+                ff.write(folder, ff.stem(b_src), b, overwrite=True)
+            except OSError as e:
+                st.error(f'Could not save the method: {e}')
+            else:
+                st.session_state.pop(EDIT_KEY, None)
+                st.session_state['ida-saved'] = b_src
+                st.rerun()
+        n1, n2 = st.columns([3.4, 3.0], vertical_alignment='bottom')
+        new_name = n1.text_input('Name of the new method', key=f'ida-cmp-new-{v}', placeholder=f'{b_src}_2',
+                                 help='Saved as <name>.json in the method folder; B stays as it is.').strip()
+        problem = ff.name_problem(new_name) if new_name else ''
+        if not problem and new_name and ff.stem(new_name).casefold() in {m.casefold() for m in methods}:
+            problem = f"'{ff.stem(new_name)}.json' is in the method folder already. Pick another name."
+        if problem:
+            st.error(problem)
+        if n2.button('💾 Save as new method', use_container_width=True, disabled=not new_name or bool(problem),
+                     key=f'ida-cmp-save-new-{v}'):
+            name = ff.stem(new_name)
+            try:
+                ff.write(folder, name, b, overwrite=False)
+            except (OSError, FileExistsError) as e:
+                st.error(f'Could not save the method: {e}')
+            else:
+                # The new method is B from now on; the old B stays as it was saved
+                st.session_state.pop(EDIT_KEY, None)
+                st.session_state['ida-cmp-b-start'] = name
+                st.session_state['ida-saved'] = name
+                st.rerun()
+
+
 def method_editor(workflow_dir, folder) -> None:
     """The Method editor page: a new method (starting from any method in the
     folder) or a change to one, by step of the acquisition; saved as a file in
@@ -313,9 +483,13 @@ def method_editor(workflow_dir, folder) -> None:
         return
     if 'ida-saved' in st.session_state:
         st.toast(f"Saved '{st.session_state.pop('ida-saved')}' to the method folder.", icon='💾')
-    mode = st.radio('Method', ['new', 'edit'], horizontal=True, key='ida-ed-mode',
+    mode = st.radio('Method', ['new', 'edit', 'compare'], horizontal=True, key='ida-ed-mode',
                     label_visibility='collapsed',
-                    format_func={'new': '➕ New method', 'edit': '✏️ Edit a method'}.get)
+                    format_func={'new': '➕ New method', 'edit': '✏️ Edit a method',
+                                 'compare': '⇄ Compare'}.get)
+    if mode == 'compare':
+        _compare(workflow_dir, folder, methods, favs)
+        return
     a, b, c = st.columns([3, 3, 0.7], vertical_alignment='bottom')
     # A new method starts from a favorite, a method FLASHApp ships (as it is in
     # assets/flashida/methods, so a git pull updates it) or any method in the folder
@@ -376,7 +550,12 @@ def method_editor(workflow_dir, folder) -> None:
             shown = ', '.join(f'{label(p).split(" (")[0].lower()} {_short(x)} → {_short(y)}'
                               for p, x, y in diff[:4])
             more = f' and {len(diff) - 4} more' if len(diff) > 4 else ''
-            st.caption(f'✏️ Not saved yet, changed from **{_start_label(favs)(src)}**: {shown}{more}')
+            n1, n2 = st.columns([5, 1.6], vertical_alignment='center')
+            n1.caption(f'✏️ Not saved yet, changed from **{_start_label(favs)(src)}**: {shown}{more}')
+            if mode == 'edit':
+                n2.button('⇄ Compare with saved', use_container_width=True, key=f'ida-ed-cmp-{v}',
+                          on_click=_to_compare, args=(src,),
+                          help='Every setting that now acquires differently from the saved file')
         st.markdown(_status(have, found))
     tabs = st.tabs([f'{icon} {n}' for n, (icon, _) in sections.TAB_PARTS.items()]
                    + [f'All {len(keys)} keys', 'JSON'])
@@ -705,6 +884,12 @@ def _clipboard_bar(workflow_dir, runs: list, selected: list) -> None:
         else:
             a.caption('📋 No method copied. Copy one with the 📋 button of a run, tick the runs that '
                       'should get it, then paste.')
+        if len(selected) == 2 and all(runs[i].get('method_file') for i in selected):
+            ma, mb = (runs[i]['method_file'] for i in selected)
+            if b.button('⇄ Compare their methods', use_container_width=True, key='ida-compare-runs',
+                        disabled=ma == mb, help=f'{ma} (A) next to {mb} (B) in the Method editor'
+                        if ma != mb else 'Both runs use the same method.'):
+                open_compare(ma, mb)
         if b.button(f'Paste into selection ({len(selected)})', use_container_width=True,
                     disabled=not clip or not selected, key='ida-paste'):
             for i in selected:
