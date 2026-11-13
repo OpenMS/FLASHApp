@@ -28,9 +28,17 @@
     },
     {
       "title": "Interactive visualizations (OpenMS-Insight)",
+      "github": "t0mdavid-m/OpenMS-Insight",
+      "exclude": [
+        "claude"
+      ],
+      "extra": [
+        "JKVISION1101"
+      ],
       "people": [
         "t0mdavid-m",
         "hjn0415a",
+        "PhilippKaulich",
         "JKVISION1101"
       ]
     }
