@@ -286,6 +286,17 @@ def _zoom_args(cls, name):
     return {'zoom_identifier': zoom_identifier(name.split('-', 1)[0])}
 
 
+def _identification_settings(file_manager, dataset_id):
+    """Fragment settings of the identification sequence views: the run's
+    stored settings, and the residues a proteoform's truncated termini leave
+    out marked by a break line per terminus, labelled with their positions
+    (count and residues on hover), which keeps a short proteoform of a long protein on a few rows.
+    An openms-insight release without the option ignores it."""
+    settings = dict(file_manager.get_results(dataset_id, ['settings'])['settings'] or {})
+    settings['show_truncations'] = False
+    return settings
+
+
 def _spectrum_key(column):
     """Keyword arguments naming the column of a sequence view's data that holds
     the scan index of its spectrum, so the spectra mark its fragment ions only
@@ -1009,7 +1020,7 @@ def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, en
             filters={'protein': 'proteoform_index'}, sequence=entry,
             mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
             fragmentation_column='fragmentation',
-            settings=fm.get_results(ds, ['settings'])['settings'],
+            settings=_identification_settings(fm, ds),
             entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
             **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
         ),
@@ -1388,7 +1399,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     filters={'protein': 'proteoform_index'},
                     mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
                     fragmentation_column='fragmentation',
-                    settings=fm.get_results(ds, ['settings'])['settings'],
+                    settings=_identification_settings(fm, ds),
                     entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
                     **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
                 ),
