@@ -10,19 +10,18 @@ comparison): how many proteins carry each term.
 
 import hashlib
 import json
-import math
 import shutil
 from pathlib import Path
 
 import numpy as np
-import plotly.graph_objects as go
+import polars as pl
 import streamlit as st
 
 from openms_insight import Table
 from openms_insight.core.cache import CacheMissError
 
-from src.common.common import show_fig
 from src.render import go_terms
+from src.render.series import show_series
 
 # Terms the bar chart can show
 TERM_COUNTS = [10, 15, 20, 30, 50]
@@ -105,24 +104,22 @@ def _result(file_manager, selected, background, universe=None):
 
 
 def _bar_chart(table, category, count):
-    top = table.sort_values('p_adj').head(count).iloc[::-1]
-    score = -np.log10(top['p_adj'].clip(lower=1e-300))
-    fig = go.Figure(go.Bar(
-        x=score, y=top['GO_Term'], orientation='h',
-        marker=dict(color=top['FoldEnrichment'], colorscale='Viridis', showscale=True,
-                    colorbar=dict(title='Fold')),
-        customdata=np.stack([top['GeneRatio'], top['p_adj']], axis=-1),
-        hovertemplate='%{y}<br>Selected: %{customdata[0]}<br>adj. p: %{customdata[1]:.2e}<extra></extra>',
-    ))
-    fig.add_vline(x=-np.log10(0.05), line_dash='dash', line_color='#E74C3C',
-                  annotation_text='adj. p = 0.05', annotation_position='top')
-    fig.update_layout(
-        title=f'{go_terms.CATEGORIES[category]}: top {len(top)} terms',
-        xaxis_title='-log10(adjusted p-value)', yaxis_title=None,
-        height=max(280, 60 + 24 * len(top)), margin=dict(l=10, r=10, t=50, b=40),
+    """The `count` most significant terms, as the arguments of a horizontal bar chart."""
+    top = table.sort_values('p_adj').head(count)
+    padj = top['p_adj'].astype(float).clip(lower=1e-300)
+    data = pl.DataFrame({
+        'term': top['GO_Term'].astype(str).tolist(),
+        'score': (-np.log10(padj)).round(3).tolist(),
+        'hover': [
+            f'{t}: {c} selected ({r}), adj. p {p:.2e}, fold {f:.2f}'
+            for t, c, r, p, f in zip(top['GO_Term'], top['Count'], top['GeneRatio'], padj, top['FoldEnrichment'])
+        ],
+    })
+    return dict(
+        data=data, x_column='term', y_column='score', mode='bars', orientation='h', show_legend=False,
+        hover_column='hover', title=f'{go_terms.CATEGORIES[category]}: the most significant terms',
+        x_label='GO term', y_label='-log10(adjusted p-value)',
     )
-    fig.update_yaxes(automargin=True)
-    return fig
 
 
 def _term_table(file_manager, scope, digest, category, frame, columns=TERM_COLUMNS,
@@ -168,21 +165,27 @@ def _pick_terms(key):
 
 
 def _count_chart(table, category, count, total):
-    top = table.head(count).reverse()
-    share = [100.0 * c / total if total else 0.0 for c in top['count'].to_list()]
-    fig = go.Figure(go.Bar(
-        x=top['count'].to_list(), y=top['term'].to_list(), orientation='h',
-        marker=dict(color='#3157e9'), customdata=share,
-        hovertemplate='%{y}<br>%{x} proteins (%{customdata:.1f}% of annotated)<extra></extra>',
-    ))
-    fig.update_layout(
-        title=f'{go_terms.CATEGORIES[category]}: the {top.height} most frequent terms',
-        xaxis=dict(title='Proteins', tick0=0, dtick=max(1, math.ceil(max(top['count'].to_list()) / 8))),
-        yaxis_title=None,
-        height=max(280, 60 + 24 * top.height), margin=dict(l=10, r=10, t=50, b=40),
+    """The `count` most frequent terms, as the arguments of a horizontal bar chart."""
+    top = table.head(count)
+    counts = top['count'].to_list()
+    data = pl.DataFrame({
+        'term': top['term'].to_list(),
+        'proteins': counts,
+        'hover': [
+            f'{t}: {c} proteins ({100.0 * c / total if total else 0.0:.1f}% of annotated)'
+            for t, c in zip(top['term'].to_list(), counts)
+        ],
+    })
+    return dict(
+        data=data, x_column='term', y_column='proteins', mode='bars', orientation='h', show_legend=False,
+        hover_column='hover', title=f'{go_terms.CATEGORIES[category]}: the most frequent terms',
+        x_label='GO term', y_label='Proteins',
     )
-    fig.update_yaxes(automargin=True)
-    return fig
+
+
+def _chart(file_manager, spec, name, key):
+    data = spec.pop('data')
+    show_series(data, name, file_manager.cache_path, key, height=max(320, 100 + 30 * data.height), **spec)
 
 
 def _render_all(file_manager, scope, state_manager, background, key, what, universe=None):
@@ -215,7 +218,7 @@ def _render_all(file_manager, scope, state_manager, background, key, what, unive
     if table is None or not table.height:
         st.info(f'No protein has {go_terms.CATEGORIES[category].lower()} terms.')
         return
-    show_fig(_count_chart(table, category, count, annotated), f'GO-{category}-{scope}-all')
+    _chart(file_manager, _count_chart(table, category, count, annotated), f'go-{scope}-all-{category}', f'{key}_all_chart')
     _term_table(
         file_manager, scope, f'all{digest}', category, go_terms.count_frame(table, labels, annotated),
         columns=COUNT_COLUMNS, sort=({'column': 'count', 'dir': 'desc'},),
@@ -253,7 +256,7 @@ def _render(file_manager, scope, state_manager, identifier, selected, background
     if table is None or not len(table):
         st.info(f'The selected proteins have no {go_terms.CATEGORIES[category].lower()} terms.')
         return
-    show_fig(_bar_chart(table, category, count), f'GO-{category}-{scope}')
+    _chart(file_manager, _bar_chart(table, category, count), f'go-{scope}-{category}', f'{key}_chart')
     _term_table(file_manager, scope, digest, category, go_terms.term_frame(table, labels))(
         key=f'{key}_terms_{category}', state_manager=state_manager, height=360,
     )
