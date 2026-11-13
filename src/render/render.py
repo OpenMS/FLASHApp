@@ -262,10 +262,9 @@ def _zoom_args(cls, name):
 def _identification_settings(file_manager, dataset_id):
     """Fragment settings of the identification sequence views: the run's
     stored settings, and the residues a proteoform's truncated termini leave
-    out shown as one line per terminus ("… n residues truncated", the
-    residues on hover), which keeps a short proteoform of a long protein on
-    a few rows. An openms-insight
-    release without the option ignores it."""
+    out marked by a "⋯" per terminus (count, positions and residues on
+    hover), which keeps a short proteoform of a long protein on a few rows.
+    An openms-insight release without the option ignores it."""
     settings = dict(file_manager.get_results(dataset_id, ['settings'])['settings'] or {})
     settings['show_truncations'] = False
     return settings
