@@ -232,3 +232,51 @@ def test_an_empty_run(tmp_path):
     result = ida_log.decisions(ida_log.read_run(run))
     assert result["summary"]["precursors"] == 0
     assert result["points"].empty
+
+
+def test_write_status_retries_a_refused_replace(tmp_path, monkeypatch):
+    """Windows refuses to replace a file another process has open
+    (PermissionError): the status is written once that is over."""
+    real_replace = flashida.Path.replace
+    refusals = iter([True, True, False])
+
+    def replace(self, target):
+        if next(refusals):
+            raise PermissionError(5, 'Access is denied')
+        return real_replace(self, target)
+
+    monkeypatch.setattr(flashida.Path, 'replace', replace)
+    monkeypatch.setattr(flashida.time, 'sleep', lambda seconds: None)
+    assert flashida.write_status(tmp_path, {'state': 'running'}) is True
+    assert flashida.read_status(tmp_path)['state'] == 'running'
+
+
+def test_write_status_gives_up_without_stopping(tmp_path, monkeypatch):
+    """Still refused after the retries: False, the old status stays, no
+    leftover temporary file, and no exception for the acquisition."""
+    flashida.write_status(tmp_path, {'state': 'old'})
+
+    def refuse(self, target):
+        raise PermissionError(5, 'Access is denied')
+
+    monkeypatch.setattr(flashida.Path, 'replace', refuse)
+    monkeypatch.setattr(flashida.time, 'sleep', lambda seconds: None)
+    assert flashida.write_status(tmp_path, {'state': 'new'}, attempts=3) is False
+    assert flashida.read_status(tmp_path)['state'] == 'old'
+    assert not list(tmp_path.glob('*.tmp'))
+
+
+def test_newest_sequence_skips_a_file_it_cannot_read(tmp_path, monkeypatch):
+    """A sequence removed or locked while the folder is looked at counts as
+    the oldest, instead of raising."""
+    (tmp_path / 'a.sld').write_text('a')
+    (tmp_path / 'b.sld').write_text('b')
+    real_stat = flashida.Path.stat
+
+    def stat(self, *args, **kwargs):
+        if self.name == 'b.sld':
+            raise PermissionError(5, 'Access is denied')
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(flashida.Path, 'stat', stat)
+    assert flashida.newest_sequence(tmp_path).name == 'a.sld'
