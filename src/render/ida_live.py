@@ -213,6 +213,7 @@ def show_run(run: Path, cache_root: Path, key: str):
     precursors = _component(
         Table, 'precursors', cache_path, stamp, lambda: dict(
             data=_frame(result['precursors']), title='Chosen precursors',
+            pagination_identifier=f'flashida_live_precursors_page_{key}',
             index_field='precursor', go_to_fields=['precursor', 'Mass'],
             interactivity={'precursor': 'precursor'}, column_definitions=_no_collapse(PRECURSOR_COLUMNS),
             initial_sort=[{'column': 'precursor', 'dir': 'desc'}],
@@ -224,6 +225,7 @@ def show_run(run: Path, cache_root: Path, key: str):
     scans = _component(
         Table, 'scans', cache_path, stamp, lambda: dict(
             data=_frame(result['scans']), title='Scans commanded for the precursor',
+            pagination_identifier=f'flashida_live_scans_page_{key}',
             index_field='scan', filters={'precursor': 'precursor'},
             column_definitions=_no_collapse(SCAN_COLUMNS), reclick='keep', scroll_position='top',
             default_row_selects=False,

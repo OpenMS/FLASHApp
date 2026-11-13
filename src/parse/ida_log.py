@@ -264,30 +264,41 @@ def decisions(tables: dict) -> dict:
     scans['Status'] = np.select(
         [scans['Acquired'], scans['Waiting']], ['acquired', 'waiting'], 'not acquired')
 
-    # One row per precursor
+    # One row per precursor. Vectorised: per-group Python callbacks took
+    # seconds once a run had thousands of precursors, longer than the live
+    # viewer's refresh interval.
     groups = scans.groupby('precursor', sort=True)
+    ids = pd.Index(list(groups.groups), name='precursor')
+
+    def first_where(mask, column, fill=None):
+        """`column` of the first scan of each precursor where `mask` holds."""
+        rows = scans.loc[mask].drop_duplicates('precursor').set_index('precursor')[column]
+        rows = rows.reindex(ids)
+        return rows if fill is None else rows.fillna(fill)
+
+    # The scan at the lowest MS level comes first (stable, so ties keep
+    # FLASHIda's order)
+    lowest = scans.sort_values(['precursor', 'MS'], kind='stable').drop_duplicates(
+        'precursor').set_index('precursor')
+    ms = scans['MS']
     precursors = pd.DataFrame({
-        'precursor': list(groups.groups),
+        'precursor': ids.to_numpy(),
         'RT': groups['Survey RT'].min().to_numpy(),
-        'Mass': groups.apply(lambda g: g.loc[g['MS'] == g['MS'].min(), 'Mass'].iloc[0],
-                             include_groups=False).to_numpy() if len(scans) else [],
-        'z': groups.apply(lambda g: g.loc[g['MS'] == g['MS'].min(), 'z'].iloc[0],
-                          include_groups=False).to_numpy() if len(scans) else [],
+        'Mass': lowest['Mass'].reindex(ids).to_numpy(),
+        'z': lowest['z'].reindex(ids).to_numpy(),
         'QScore': groups['QScore'].max().to_numpy(),
-        'MS2': groups['MS'].apply(lambda s: int((s == 2).sum())).to_numpy(),
-        'MS3': groups['MS'].apply(lambda s: int((s == 3).sum())).to_numpy(),
-        'Waiting': groups['Waiting'].apply(lambda s: int(s.sum())).to_numpy(),
-        'Decisions': groups['Decision'].apply(lambda s: ', '.join(pd.unique(s))).to_numpy(),
-        'Best energy': groups.apply(
-            lambda g: g.loc[g['Winner'], 'Energy'].iloc[0] if g['Winner'].any() else np.nan,
-            include_groups=False).to_numpy() if len(scans) else [],
-        'Quant verdict': groups['Quant verdict'].apply(
-            lambda s: next((v for v in s if v), '')).to_numpy(),
+        'MS2': (ms == 2).groupby(scans['precursor']).sum().reindex(ids).astype('int64').to_numpy(),
+        'MS3': (ms == 3).groupby(scans['precursor']).sum().reindex(ids).astype('int64').to_numpy(),
+        'Waiting': scans['Waiting'].groupby(scans['precursor']).sum().reindex(ids).astype(
+            'int64').to_numpy(),
+        'Decisions': scans.drop_duplicates(['precursor', 'Decision']).groupby('precursor')[
+            'Decision'].agg(', '.join).reindex(ids).to_numpy(),
+        'Best energy': first_where(scans['Winner'], 'Energy').to_numpy(),
+        'Quant verdict': first_where(scans['Quant verdict'] != '', 'Quant verdict', '').to_numpy(),
         # Most masses deconvolved from one of its MS2 scans, and most fragment
         # ions one of its identifications matched (NaN: none acquired/identified)
-        'MS2 masses': groups.apply(
-            lambda g: g.loc[g['MS'] == 2, 'Masses'].max(), include_groups=False
-        ).to_numpy() if len(scans) else [],
+        'MS2 masses': scans.loc[ms == 2].groupby('precursor')['Masses'].max().reindex(
+            ids).to_numpy(),
         'Fragment ions': groups['Fragment ions'].max().to_numpy(),
     })
     precursors['Proteoform'] = ''
