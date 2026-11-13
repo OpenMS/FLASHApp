@@ -11,6 +11,7 @@ import csv
 import datetime
 import io
 import json
+import random
 import re
 
 from src import flashida
@@ -202,7 +203,8 @@ def duplicate_names(runs: list) -> list:
 
 REPLICATE_FORMATS = {'R{n}': 'R1', 'R{nn}': 'R01', 'rep{n}': 'rep1', 'rep{nn}': 'rep01'}
 ORDERS = {'sample': 'All replicates of a sample, then the next',
-          'replicate': 'Alternate: replicate 1 of every sample, then 2, …'}
+          'replicate': 'Alternate: replicate 1 of every sample, then 2, …',
+          'random': 'Random: every run in a random place'}
 DEFAULT_WASH_NAME = '{prefix}_{date}_wash_{n}'
 SEPARATOR = '_'
 
@@ -254,31 +256,68 @@ def parse_samples(text: str, comment: str = '', replicates: int = 1) -> list:
     return samples
 
 
+# Runs put between the sample runs, every few runs: (label, default name)
+INSERT_KINDS = {
+    'wash': ('Wash', DEFAULT_WASH_NAME),
+    'qc': ('QC standard', '{prefix}_{date}_QC_{n}'),
+    'blank': ('Blank', '{prefix}_{date}_blank_{n}'),
+}
+
+
 def pattern_names(samples: list, prefix: str = '', date: str = '', suffix: str = '',
                   replicate_format: str = 'R{n}', order: str = 'sample',
-                  wash_every: int = 0, wash_name: str = DEFAULT_WASH_NAME) -> list:
-    """[{name, wash}] of the runs a pattern makes:
-    ``prefix_date_sample_comment_replicate_suffix``, empty parts left out.
+                  wash_every: int = 0, wash_name: str = DEFAULT_WASH_NAME, inserts=None,
+                  taken=(), seed=None) -> list:
+    """[{name, kind, wash}] of the runs a pattern makes:
+    ``prefix_date_sample_comment_replicate_suffix``, empty parts left out;
+    ``kind`` is 'sample' or a key of INSERT_KINDS, ``wash`` is kind == 'wash'.
 
-    With ``wash_every`` > 0 a wash run follows every that many sample runs
-    (none after the last); ``wash_name`` takes {prefix}, {date}, {suffix} and
-    {n}, the wash number."""
+    ``inserts`` (``[{kind, every, name}]``) put a run of that kind after every
+    ``every`` sample runs (none after the last), in the order given when two
+    fall on the same place; ``name`` takes {prefix}, {date}, {suffix} and {n},
+    the number of that kind, counted on past names in ``taken`` (the runs
+    already in the table). ``wash_every`` and ``wash_name`` are the same for
+    washes alone. Order 'random' shuffles the sample runs with ``seed`` (the
+    same seed, the same order); the inserted runs keep their places."""
     if order not in ORDERS:
         raise ValueError(f'Unknown order {order!r}')
-    if order == 'sample':
+    if order in ('sample', 'random'):
         runs = [(s, k) for s in samples for k in range(1, s['replicates'] + 1)]
+        if order == 'random':
+            random.Random(seed).shuffle(runs)
     else:
         most = max((s['replicates'] for s in samples), default=0)
         runs = [(s, k) for k in range(1, most + 1) for s in samples if k <= s['replicates']]
+    if inserts is None:
+        inserts = [{'kind': 'wash', 'every': wash_every, 'name': wash_name}] if wash_every else []
+    names = [join([prefix, date, s['sample'], s['comment'], replicate_label(k, replicate_format), suffix])
+             for s, k in runs]
+    return with_inserts(names, inserts, prefix, date, suffix, taken)
 
-    out, washes = [], 0
-    for i, (s, k) in enumerate(runs, 1):
-        out.append({'name': join([prefix, date, s['sample'], s['comment'],
-                                  replicate_label(k, replicate_format), suffix]),
-                    'wash': False})
-        if wash_every and wash_every > 0 and i % wash_every == 0 and i < len(runs):
-            washes += 1
-            out.append({'name': wash_run_name(wash_name, prefix, date, suffix, washes), 'wash': True})
+
+def with_inserts(names: list, inserts: list, prefix: str = '', date: str = '', suffix: str = '',
+                 taken=()) -> list:
+    """[{name, kind, wash}]: the sample runs ``names`` with the runs of
+    ``inserts`` (see ``pattern_names``) between them. An inserted run takes
+    the first number whose name is not in ``taken`` (ignoring case) and not
+    yet given here, so a second batch of washes goes on from the first."""
+    used = {str(t).casefold() for t in taken} | {n.casefold() for n in names}
+    out, counts = [], {}
+    for i, name in enumerate(names, 1):
+        out.append({'name': name, 'kind': 'sample', 'wash': False})
+        for ins in inserts:
+            every = int(ins.get('every') or 0)
+            if every > 0 and i % every == 0 and i < len(names):
+                kind = ins['kind']
+                pattern = ins.get('name') or INSERT_KINDS[kind][1]
+                while True:
+                    counts[kind] = counts.get(kind, 0) + 1
+                    new = wash_run_name(pattern, prefix, date, suffix, counts[kind])
+                    # a name without {n} cannot get a free number: keep it, the table marks it
+                    if new.casefold() not in used or '{n}' not in pattern:
+                        break
+                used.add(new.casefold())
+                out.append({'name': new, 'kind': kind, 'wash': kind == 'wash'})
     return out
 
 
