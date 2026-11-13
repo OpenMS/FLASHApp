@@ -6,6 +6,8 @@ from .ParameterManager import InvalidParameterFileError, ParameterManager
 from .CommandExecutor import CommandExecutor
 from .StreamlitUI import StreamlitUI
 from .FileManager import FileManager
+from .pid_files import reap
+from ._log_status import classify_log_outcome
 from .RunManager import RunManager, FINISHED, FAILED, CANCELLED, RUNNING, FOLLOW_UP_KEY, FOLLOW_UP_FILE, RUN_NAME_KEY, RUN_NAME_FILE, MAX_NAME_LENGTH, apply_settings, same_files_info
 import multiprocessing
 import shutil
@@ -329,9 +331,15 @@ class WorkflowManager:
 
     def _start_workflow_local(self) -> None:
         """Start the workflow in a separate Python process (local mode)."""
-        # Catch double presses of the button while app is in frozen state
-        if self.executor.pid_dir.exists():
-            return
+        # Catch double presses of the button while app is in frozen state. Pid
+        # files of processes that are gone (a killed run) and an empty pids
+        # folder (an aborted run, or its files deleted by hand) are no running
+        # workflow: they used to make every start return here without a word.
+        pid_dir = self.executor.pid_dir
+        if pid_dir.exists():
+            if reap(pid_dir)[0]:
+                return
+            shutil.rmtree(pid_dir, ignore_errors=True)
 
         # Delete the log file if it already exists
         shutil.rmtree(Path(self.workflow_dir, "logs"), ignore_errors=True)
@@ -440,6 +448,12 @@ class WorkflowManager:
 
         # Fallback: check PID files (local mode)
         pid_dir = self.executor.pid_dir
+        if not self._is_online_mode() and pid_dir.exists():
+            # A run whose process was killed (the app force-closed) left its
+            # pid files behind and showed as running forever.
+            running, removed = reap(pid_dir)
+            if removed and not running:
+                self._record_interrupted_run()
         if pid_dir.exists() and list(pid_dir.iterdir()):
             return {
                 "running": True,
@@ -460,6 +474,19 @@ class WorkflowManager:
             "queue_position": None,
             "queue_length": None,
         }
+
+    def _record_interrupted_run(self) -> None:
+        """Say in the log why a run whose processes are gone ended."""
+        log = Path(self.workflow_dir, "logs", "minimal.log")
+        try:
+            content = log.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            content = ""
+        if classify_log_outcome(content) == "error":
+            self.logger.log(
+                "ERROR: The workflow was interrupted: its process ended without "
+                "finishing (the app was closed or the process was killed)."
+            )
 
     def stop_workflow(self) -> bool:
         """

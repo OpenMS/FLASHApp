@@ -15,6 +15,15 @@ def test_plain_list_with_header_and_intensities():
     assert parsed['precursor_mass'] is None
 
 
+def test_semicolon_separated_on_one_line():
+    parsed = fm.parse_mass_list('1043.5; 2511.37;980.1;\n')
+    assert parsed['masses'] == [1043.5, 2511.37, 980.1]
+    assert parsed['intensities'] is None
+    parsed = fm.parse_mass_list('1043.5 25000; 2511.37 18000')
+    assert parsed['masses'] == [1043.5, 2511.37]
+    assert parsed['intensities'] == [25000.0, 18000.0]
+
+
 def test_masses_only_and_mixed_columns():
     parsed = fm.parse_mass_list('100.5\n200.25 7\n')
     assert parsed['masses'] == [100.5, 200.25]
@@ -56,6 +65,14 @@ def test_store_and_load(tmp_path):
     assert fm.input_stamp(data) != fm.input_stamp({**data, 'mass_type': fm.MONOISOTOPIC})
     with pytest.raises(ValueError):
         fm.matcher_input([1.0], mass_type='other')
+
+
+def test_clear_input(tmp_path):
+    assert fm.clear_input(tmp_path) is False
+    fm.store_input(tmp_path, [1000.0, 2000.0])
+    assert fm.load_input(tmp_path) is not None
+    assert fm.clear_input(tmp_path) is True
+    assert fm.load_input(tmp_path) is None
 
 
 def test_load_missing_or_broken(tmp_path):

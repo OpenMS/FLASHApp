@@ -45,7 +45,11 @@ _SLD_ROW = re.compile(
 
 def sequence_rows(path) -> list:
     """[{name, row}] of the raw files an Xcalibur sequence (.sld) writes, in order."""
-    data = Path(path).read_bytes()
+    return sequence_rows_from_bytes(Path(path).read_bytes())
+
+
+def sequence_rows_from_bytes(data: bytes) -> list:
+    """``sequence_rows`` of an .sld already read, e.g. one the user uploaded."""
     text = data.decode('utf-16-le', errors='ignore')
     rows = []
     for m in _SLD_ROW.finditer(text):

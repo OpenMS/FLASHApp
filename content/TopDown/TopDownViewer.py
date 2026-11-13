@@ -38,6 +38,7 @@ from src.layout_manager import request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
 from src.render import inspect_scan
+from src.render.widget_state import follow
 from src.render.tool_results import tool_results_button, tool_results_dialog
 from src.render.history_ui import history_button
 from src.common import result_download
@@ -317,7 +318,10 @@ def _on_show(comparison_id, members):
 
 def _on_locked_comparison():
     """Comparison of a run compared with none: the dialog to process more files."""
+    picked = st.session_state.get(LOCKED_KEY)
     st.session_state[LOCKED_KEY] = SHOW_RUN
+    if picked != LOCKED_COMPARISON:
+        return  # sent again by the browser after a switch, not a click on Comparison
     st.session_state[MISSING_INDEX] = 0
     request_analysis(VIEW_KEY, [missing_analysis.COMPARISON], component='Comparison')
 
@@ -332,6 +336,12 @@ def apply_pending():
     if pending is None:
         return
     what, comparison_id, members, value = pending
+    shown = st.session_state.get(selection_key(0))
+    if shown != comparison_id and shown not in members:
+        # Picked on a comparison that is no longer shown: the browser can still
+        # send the control of the experiment shown before a switch, and it
+        # would take the page back there.
+        return
     if what == 'show':
         if value == SHOW_RUN and members:
             last = st.session_state.get(LAST_RUN)
@@ -366,14 +376,14 @@ def experiment_bar():
     if name is None:
         name = next(iter(groups))
         shown = st.session_state[selection_key(0)] = groups[name][0]
-    st.session_state[EXPERIMENT_KEY] = name
+    follow(EXPERIMENT_KEY, name)
     opens_on, members = groups[name]
     comparison = opens_on in comparison_ids
     with st.container(horizontal=True, vertical_alignment='bottom'):
         st.selectbox('choose experiment', list(groups), key=EXPERIMENT_KEY,
                      on_change=_on_experiment, args=(groups,))
         if comparison:
-            st.session_state[SHOW_KEY] = SHOW_COMPARISON if shown == opens_on else SHOW_RUN
+            follow(SHOW_KEY, SHOW_COMPARISON if shown == opens_on else SHOW_RUN)
             st.segmented_control(
                 'show', [SHOW_RUN, SHOW_COMPARISON], key=SHOW_KEY, on_change=_on_show, args=(opens_on, members),
                 help='**Single run**: the spectra, masses and proteoforms of one of its runs. '
@@ -381,10 +391,10 @@ def experiment_bar():
             )
             if shown != opens_on:
                 names = [file_manager.get_display_name(r) for r in members]
-                st.session_state[RUN_KEY] = display_id_to_name.get(shown)
+                follow(RUN_KEY, display_id_to_name.get(shown))
                 st.selectbox('run', names, key=RUN_KEY, on_change=_on_run, args=(opens_on, members))
         else:
-            st.session_state[LOCKED_KEY] = SHOW_RUN
+            follow(LOCKED_KEY, SHOW_RUN)
             st.segmented_control(
                 'show', [SHOW_RUN, LOCKED_COMPARISON], key=LOCKED_KEY, on_change=_on_locked_comparison,
                 help='This run is compared with no other run: process more files with its settings '

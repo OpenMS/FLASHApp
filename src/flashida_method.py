@@ -5,17 +5,22 @@ process can check a method before FLASHIda gets it.
 The keys come from FLASHIda's own JSON schema, ``assets/flashida/method.schema.json``
 (``docs/site/method.schema.json`` of FlashIDA, the file its key reference is
 generated from). Copy a newer one over it when FLASHIda gains keys.
+
+The methods FLASHApp ships are files of their own in ``assets/flashida/methods/``
+(``<name>.json``, the keys that differ from FLASHIda's defaults), so a new or
+changed one arrives with ``git pull`` and shows up the next time it is read.
 """
 
 import copy
 import json
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets' / 'flashida'
 SCHEMA_FILE = ASSETS / 'method.schema.json'
-BUILTIN_PRESETS_FILE = ASSETS / 'presets.json'
+BUILTIN_METHODS_DIR = ASSETS / 'methods'
 # Presets the user saves, kept once per computer (the instrument PC) in the
 # local workspaces folder, so every workspace offers them.
 USER_PRESETS_FILE = '.flashida-presets.json'
@@ -164,22 +169,63 @@ def defaults() -> dict:
     return method
 
 
-def check(method) -> list:
-    """Problems FLASHIda would refuse the method for ([] when it loads)."""
+def _validate(method):
+    """(problems, unknown keys) of a method against the bundled schema.
+
+    A key the schema does not list is not a problem here: FLASHIda may be newer
+    than the schema this FLASHApp ships, and it checks the method itself.
+    """
     if not isinstance(method, dict):
-        return ['A method is a JSON object ({...}).']
+        return ['A method is a JSON object ({...}).'], []
     import jsonschema
 
     validator = jsonschema.Draft202012Validator(schema())
-    problems = []
+    problems, unknown = [], []
     for error in sorted(validator.iter_errors(method), key=lambda e: list(e.path)):
-        where = '.'.join(str(p) for p in error.path) or 'method'
-        problems.append(f'{where}: {error.message}')
+        parts = [str(p) for p in error.path]
+        if error.validator == 'additionalProperties' and isinstance(error.instance, dict):
+            names = _unexpected(error.message)
+            if names is not None:
+                unknown += ['.'.join(parts + [n]) for n in names]
+                continue
+        if 'propertyNames' in error.schema_path and isinstance(error.instance, str):
+            unknown.append('.'.join(parts + [error.instance]))
+            continue
+        problems.append(f"{'.'.join(parts) or 'method'}: {error.message}")
     tol = get(method, 'deconvolution.tol')
     if not isinstance(tol, list) or len(tol) < 3:
         if not any(p.startswith('deconvolution.tol') for p in problems):
             problems.append('deconvolution.tol: needs three tolerances (MS1, MS2, MS3).')
-    return problems
+    return problems, sorted(set(unknown))
+
+
+def _unexpected(message: str):
+    """The key names of jsonschema's "Additional properties ... unexpected" message."""
+    import ast
+    import re
+
+    found = re.search(r'\((.*) (?:was|were) unexpected\)\s*$', message, re.S)
+    if not found:
+        return None
+    try:
+        names = ast.literal_eval(f'({found.group(1)},)')
+    except (ValueError, SyntaxError):
+        return None
+    return [str(n) for n in names]
+
+
+def check(method) -> list:
+    """Problems FLASHIda would refuse the method for ([] when it loads).
+
+    Keys the bundled schema does not know are left out (see unknown_keys()).
+    """
+    return _validate(method)[0]
+
+
+def unknown_keys(method) -> list:
+    """Dotted paths of keys the bundled schema does not know. They are kept and
+    passed to FLASHIda as they are; a newer FLASHIda may know them."""
+    return _validate(method)[1]
 
 
 def changes(base: dict, method: dict) -> list:
@@ -190,15 +236,33 @@ def changes(base: dict, method: dict) -> list:
 
 # --- presets --------------------------------------------------------------------
 
-def builtin_presets() -> dict:
+def builtin_presets(folder=BUILTIN_METHODS_DIR) -> dict:
+    """FLASHIda's defaults, then the methods FLASHApp ships (one ``.json`` file
+    each in ``folder``, merged over the defaults), by name. A file named like
+    the defaults (``FLASHIda defaults.json``) adds to them: it holds the scan
+    settings FLASHIda ships, which its schema leaves to the instrument. Read
+    again when a file changes, so an update of them counts at once; a file that
+    is not a JSON object is left out."""
     presets = {DEFAULTS_PRESET: defaults()}
-    try:
-        shipped = json.loads(BUILTIN_PRESETS_FILE.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        shipped = {}
-    for name, method in shipped.items():
-        presets[name] = merge(defaults(), method)
+    for path in sorted(Path(folder).glob('*.json'), key=lambda p: p.stem.casefold()):
+        try:
+            method = _read_method_file(str(path), path.stat().st_mtime)
+        except (OSError, ValueError):
+            continue
+        if isinstance(method, dict):
+            presets[path.stem] = merge(defaults(), method)
     return presets
+
+
+@lru_cache(maxsize=64)
+def _read_method_file(path: str, mtime: float):
+    return json.loads(Path(path).read_text(encoding='utf-8'))
+
+
+def default_method() -> dict:
+    """The method FLASHApp calls FLASHIda's defaults: the schema's defaults and
+    the scan settings of ``FLASHIda defaults.json``."""
+    return builtin_presets()[DEFAULTS_PRESET]
 
 
 def merge(base: dict, over: dict) -> dict:
@@ -247,13 +311,14 @@ _BAD_NAME = re.compile(r'[\\/:*?"<>|]')
 
 
 def load_runs(workflow_dir) -> list:
-    """[{name, preset, method}] of the runs table, in table order."""
+    """[{name, method_file}] of the runs table, in table order (a table saved
+    before the method folder keeps ``{name, preset, method}``)."""
     try:
         runs = json.loads(Path(workflow_dir, RUNS_FILE).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return []
-    return [r for r in runs if isinstance(r, dict) and isinstance(r.get('method'), dict)] \
-        if isinstance(runs, list) else []
+    return [r for r in runs if isinstance(r, dict) and (
+        isinstance(r.get('method'), dict) or 'method_file' in r)] if isinstance(runs, list) else []
 
 
 def save_runs(workflow_dir, runs: list) -> None:
