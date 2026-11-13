@@ -30,12 +30,14 @@ from pathlib import Path
 from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src import analysis, former_examples, sample_type
+from openms_insight import StateManager
 from src.render.render import _state_manager, render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
 from src.layout_manager import request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
+from src.render import inspect_scan
 from src.render.widget_state import follow
 from src.render.tool_results import tool_results_button, tool_results_dialog
 from src.render.history_ui import history_button
@@ -149,6 +151,7 @@ def experiment(index):
     render_grid(
         dataset_id, experiment_layout(index, dataset_id), file_manager, TOOL,
         selection_key(index), f'flash_viewer_grid_{index}', on_missing=add_missing(index),
+        on_inspect=request_inspect,
     )
 
 
@@ -191,6 +194,47 @@ added = quant_view.added_comparison(file_manager, Path(workspace, missing_analys
 if added and st.session_state.get('_viewer_added_comparison') != added:
     st.session_state['_viewer_added_comparison'] = added
     st.session_state[selection_key(0)] = added
+
+
+MATCHER_PAGE = 'content/Tools/FragmentMatcher.py'
+MATCHER_STATE = 'fragment_matcher_state'
+
+
+INSPECT_REQUEST = '_viewer_inspect'
+
+
+def request_inspect(dataset_id, scan_idx, proteoform_index):
+    """The inspect button of a table row: open its spectrum on the next run
+    (a page cannot be switched while a component is drawn)."""
+    if scan_idx is None:
+        return False
+    st.session_state[INSPECT_REQUEST] = (dataset_id, scan_idx, proteoform_index)
+    return True
+
+
+def inspect_requested():
+    """Open the spectrum of the row whose inspect button was clicked on Match
+    fragments: its deconvolved masses, and the residues of the row's
+    proteoform when it was identified in that spectrum."""
+    request = st.session_state.pop(INSPECT_REQUEST, None)
+    if request is None:
+        return
+    dataset_id, scan_idx, proteoform_index = request
+    if dataset_id not in results:
+        return
+    data = inspect_scan.scan_input(
+        file_manager, dataset_id, scan_idx, proteoform_index,
+        run_name=file_manager.get_display_name(dataset_id),
+    )
+    if data is None:
+        st.toast('This spectrum has no deconvolved masses.')
+        return
+    inspect_scan.store(workspace, data)
+    # The matcher shows this proteoform, or keeps its own sequence
+    st.session_state.pop('matcher_seen_sequence', None)
+    if data['sequence']:
+        StateManager(session_key=MATCHER_STATE).set_selection('sequence', data['sequence'])
+    st.switch_page(MATCHER_PAGE)
 
 
 def view_selector():
@@ -373,6 +417,7 @@ if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False
         st.session_state[selection_key(0)] = newest
 
 apply_pending()
+inspect_requested()
 # Nothing (or something gone) shown: the first experiment
 if st.session_state.get(selection_key(0)) not in display_id_to_name:
     first_groups = experiment_groups()
