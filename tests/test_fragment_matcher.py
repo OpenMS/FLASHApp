@@ -151,3 +151,26 @@ def test_uniprot_entry_errors(monkeypatch):
         fm.uniprot_entry('hello')
     with pytest.raises(fm.UniProtLookupError, match='has no entry Q9ZZZ9'):
         fm.uniprot_entry('Q9ZZZ9')
+
+
+def test_range_fragments_with_and_without_the_shift():
+    """A range of residues 3-5 (1-based): an ion holding part of it gets both
+    masses (ambiguous), one holding all of it only the shifted mass."""
+    from src.render.sequence import getFragmentDataFromSeq
+    plain = getFragmentDataFromSeq('PEPTIDEK', fixed_mods={'fixed_modifications': []})
+    ranged = getFragmentDataFromSeq('PEPTIDEK', fixed_mods={'fixed_modifications': []},
+                                    modifications=[(3, 5, 16.0)])
+
+    def kinds(ion):
+        out = []
+        for base, masses in zip(plain[f'fragment_masses_{ion}'], ranged[f'fragment_masses_{ion}']):
+            if len(masses) == 2:
+                out.append('both')
+            else:
+                out.append('shifted' if masses[0] == pytest.approx(base[0] + 16.0) else 'plain')
+        return out
+
+    # b1..b8: b1, b2 before the range; b3, b4 cut inside it; b5.. hold all of it
+    assert kinds('b') == ['plain', 'plain', 'both', 'both', 'shifted', 'shifted', 'shifted', 'shifted']
+    # y1..y8: y1-y3 after the range; y4, y5 cut inside it; y6.. hold all of it
+    assert kinds('y') == ['plain', 'plain', 'plain', 'both', 'both', 'shifted', 'shifted', 'shifted']

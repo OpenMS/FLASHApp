@@ -112,11 +112,12 @@ def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modificati
                 unmodified_mass = pr[0]
                 modified_mass = unmodified_mass
                 for s, e, m in modifications:
-                    # Area of ambiguous modifications
-                    if (s <= i+1) and (e >= i+1):
+                    # The ion (residues 1..i+1) holds part of the range: the
+                    # shift may or may not be in it
+                    if s <= i+1 < e:
                         modified_mass += m
-                    # Mass shift prior to this ion
-                    elif (s <= i+1):
+                    # The whole range is in the ion: so is its shift
+                    elif e <= i+1:
                         unmodified_mass += m
                         modified_mass += m
                 # Consider mass shift before ion
@@ -129,9 +130,11 @@ def getFragmentDataFromSeq(sequence, coverage=None, maxCoverage=None, modificati
                 unmodified_mass = su[0]
                 modified_mass = unmodified_mass
                 for s, e, m in modifications:
-                    if (s <= i+1) and (e >= i+1):
+                    # The ion (residues i+1..n) holds part of the range
+                    if s < i+1 <= e:
                         modified_mass += m
-                    elif (e >= i+1):
+                    # The whole range is in the ion
+                    elif s >= i+1:
                         unmodified_mass += m
                         modified_mass += m
                 su[0] = unmodified_mass
