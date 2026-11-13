@@ -19,6 +19,7 @@ env:
 
 jobs:
   compare:
+    if: false
     name: In-process (.NET 8) vs mono reader, Linux desktop
     runs-on: ubuntu-24.04
     steps:
@@ -145,7 +146,6 @@ jobs:
           { echo "| Platform | Case | Exit | mzML |"; echo "|---|---|---|---|"; printf '%s\n' "${summary[@]}"; } | tee -a "$GITHUB_STEP_SUMMARY"
 
   docker:
-    if: false
     name: Docker image
     runs-on: ubuntu-24.04
     steps:
@@ -163,6 +163,8 @@ jobs:
           img=ghcr.io/openms/flashapp:latest
           docker pull -q "$img"
           docker image inspect "$img" --format '{{.Created}} {{index .Config.Labels "org.opencontainers.image.revision"}}'
+          docker run --rm --entrypoint /bin/bash "$img" -c 'FileConverter --version; FLASHDeconv --version; FLASHTnT --version 2>&1 | head -3; which FLASHAnnotator FLASHQuantConsensus'
+          echo "FDmerge HEAD: $(git ls-remote https://github.com/t0mdavid-m/OpenMS refs/heads/FDmerge)"
           cat > data/run.sh <<'SH'
           set -u
           cd /data
