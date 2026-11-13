@@ -366,10 +366,6 @@ def build_pca(session, state_manager, key, height):
         st.info(f'PCA could not be computed: {e}')
         return
     pca(key=key, state_manager=state_manager, height=height, pc_x=1, pc_y=2)
-    ratios = pca.get_variance_ratio()
-    st.caption('Explained variance: ' + ', '.join(
-        f'PC{i + 1} {r * 100:.1f}%' for i, r in enumerate(ratios[:3])
-    ) + f'. The 500 most variable {_noun(session, True)}.')
 
 
 def build_heatmap(session, state_manager, key, height):
@@ -409,11 +405,6 @@ def _id_noun(session, level):
     return LEVEL_NAMES[level].lower()
 
 
-def _not_identified_note(session, level):
-    if level == 'feature' and session.manifest.get('tool') != 'flashtnt' and not session.isobaric:
-        st.caption('These runs were not identified, so the features each run detected are counted. '
-                   'Add identification to the runs to count proteoforms.')
-
 
 def build_id_counts(session, state_manager, key, height=None):
     """Entities each run detected itself and those matched from other runs."""
@@ -422,7 +413,6 @@ def build_id_counts(session, state_manager, key, height=None):
     _plot(session, f'quant-id-counts-{level}',
           comparison_plots.counts_per_run(counts, _id_noun(session, level), _sample(session)),
           key, state_manager, height)
-    _not_identified_note(session, level)
 
 
 def build_id_frequency(session, state_manager, key, height=None):
@@ -505,10 +495,8 @@ def build_totals(session, state_manager, key, height=None):
         frame, condition_colors(set(conditions.values())), conditions, _sample(session)), key, state_manager, height)
     unlike = qc.unlike_replicates(frame, conditions)
     if unlike:
-        st.caption(f'Under half or over twice the total of their replicates: {", ".join(unlike)}. '
+        st.warning(f'Under half or over twice the total of their replicates: {", ".join(unlike)}. '
                    'Check how they were loaded; normalization corrects for it.')
-    elif conditions:
-        st.caption('Replicates of a condition were loaded alike (within a factor of two).')
 
 
 def build_correlation(session, state_manager, key, height):
@@ -547,8 +535,6 @@ def build_cv(session, state_manager, key, height=None):
         return
     _plot(session, 'quant-cv', comparison_plots.coefficients_of_variation(
         frame, condition_colors(set(conditions.values()))), key, state_manager, height)
-    st.caption(f'Of the {_noun(session, True)} measured in at least two replicates, before imputation and '
-               'normalization.')
 
 
 def build_match_quality(session, state_manager, key, height=None):
@@ -561,9 +547,6 @@ def build_match_quality(session, state_manager, key, height=None):
         return
     _plot(session, 'quant-match-quality', comparison_plots.match_quality(frame, session.runs, _sample(session)),
           key, state_manager, height)
-    matched = frame.filter(frame['outcome'] != 'not matched').height
-    st.caption(f'{matched:,} feature values matched from other runs (match between runs, FDR 1%), '
-               f'{frame.height - matched:,} rejected.')
 
 
 # The steps of the comparison chain, each a plot of its own in the layout.
@@ -824,10 +807,8 @@ def build_reporter_intensities(session, state_manager, key, height=None):
         presence, ions, condition_colors(set(conditions.values())), conditions), key, state_manager, height)
     low = [f"{r['channel']} ({r['sample']})" for r in presence.iter_rows(named=True) if r['present'] < 50]
     if low:
-        st.caption(f'Found in under half of the labelled spectra: {", ".join(low)}. Check the labelling '
+        st.warning(f'Found in under half of the labelled spectra: {", ".join(low)}. Check the labelling '
                    'and the channel assignment.')
-    else:
-        st.caption('Every label was found in at least half of the labelled spectra.')
 
 
 def build_reporter_ratios(session, state_manager, key, height=None):
@@ -845,8 +826,6 @@ def build_reporter_ratios(session, state_manager, key, height=None):
     _plot(session, 'quant-reporter-ratios', comparison_plots.reporter_ratios(
         ratios, f'{reference} ({names.get(reference, reference)})', [(c, names.get(c, c)) for c in channels[1:]]),
         key, state_manager, height)
-    st.caption('Of the spectra with both reporter ions. Labels of the same condition as the reference '
-               'should centre on 0, the others on their expected ratio.')
 
 
 def build_reporter_labels(session, state_manager, key, height=None):
@@ -931,8 +910,6 @@ def build_feature_intensity(session, state_manager, key, height=None):
     values = sources.feature_values(long, overview, session.runs)
     _plot(session, 'quant-feature-intensity', comparison_plots.feature_intensity(
         values, session.runs, _sample(session)), key, state_manager, height)
-    st.caption('Matched values are usually lower: match between runs fills in features close to the '
-               'detection limit of a run.')
 
 
 def build_feature_table(session, state_manager, key, height):
