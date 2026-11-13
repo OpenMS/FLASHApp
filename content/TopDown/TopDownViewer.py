@@ -151,6 +151,7 @@ def experiment(index):
     render_grid(
         dataset_id, experiment_layout(index, dataset_id), file_manager, TOOL,
         selection_key(index), f'flash_viewer_grid_{index}', on_missing=add_missing(index),
+        on_inspect=request_inspect,
     )
 
 
@@ -199,39 +200,41 @@ MATCHER_PAGE = 'content/Tools/FragmentMatcher.py'
 MATCHER_STATE = 'fragment_matcher_state'
 
 
-def inspect_picked_scan():
-    """Open the picked spectrum (of the first experiment that has one) on
-    Match fragments: its deconvolved masses, and the residues of the picked
+INSPECT_REQUEST = '_viewer_inspect'
+
+
+def request_inspect(dataset_id, scan_idx, proteoform_index):
+    """The inspect button of a table row: open its spectrum on the next run
+    (a page cannot be switched while a component is drawn)."""
+    if scan_idx is None:
+        return False
+    st.session_state[INSPECT_REQUEST] = (dataset_id, scan_idx, proteoform_index)
+    return True
+
+
+def inspect_requested():
+    """Open the spectrum of the row whose inspect button was clicked on Match
+    fragments: its deconvolved masses, and the residues of the row's
     proteoform when it was identified in that spectrum."""
-    for index in range(MAX_EXPERIMENTS):
-        dataset_id = st.session_state.get(selection_key(index))
-        if dataset_id not in results:
-            continue
-        state = _state_manager(TOOL, selection_key(index), dataset_id)
-        scan_idx = state.get_selection('scan')
-        if scan_idx is None:
-            continue
-        data = inspect_scan.scan_input(
-            file_manager, dataset_id, scan_idx, state.get_selection('protein'),
-            run_name=file_manager.get_display_name(dataset_id),
-        )
-        if data is None:
-            st.toast('The picked spectrum has no deconvolved masses.')
-            return
-        inspect_scan.store(workspace, data)
-        # The matcher shows this proteoform, or keeps its own sequence
-        st.session_state.pop('matcher_seen_sequence', None)
-        if data['sequence']:
-            StateManager(session_key=MATCHER_STATE).set_selection('sequence', data['sequence'])
-        st.switch_page(MATCHER_PAGE)
-    st.toast('Pick a spectrum first (a scan, mass or identification table row).')
-
-
-INSPECT_ACTION = {
-    'id': 'inspect', 'icon': '🧩', 'on_click': inspect_picked_scan,
-    'help': ('Inspect the picked spectrum in Match fragments: change the sequence, '
-             'modifications, ion types and tolerance and see the matches again'),
-}
+    request = st.session_state.pop(INSPECT_REQUEST, None)
+    if request is None:
+        return
+    dataset_id, scan_idx, proteoform_index = request
+    if dataset_id not in results:
+        return
+    data = inspect_scan.scan_input(
+        file_manager, dataset_id, scan_idx, proteoform_index,
+        run_name=file_manager.get_display_name(dataset_id),
+    )
+    if data is None:
+        st.toast('This spectrum has no deconvolved masses.')
+        return
+    inspect_scan.store(workspace, data)
+    # The matcher shows this proteoform, or keeps its own sequence
+    st.session_state.pop('matcher_seen_sequence', None)
+    if data['sequence']:
+        StateManager(session_key=MATCHER_STATE).set_selection('sequence', data['sequence'])
+    st.switch_page(MATCHER_PAGE)
 
 
 def view_selector():
@@ -248,7 +251,6 @@ def view_selector():
         # A view of one's own keeps each experiment's zoom and selection (📌)
         states=lambda i: _state_manager(TOOL, selection_key(i), st.session_state.get(selection_key(i))),
         datasets=lambda i: st.session_state.get(selection_key(i)),
-        actions=[INSPECT_ACTION],
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
             "to 3 components per row; ready-made views can be duplicated. Add experiments to compare "
@@ -415,6 +417,7 @@ if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False
         st.session_state[selection_key(0)] = newest
 
 apply_pending()
+inspect_requested()
 # Nothing (or something gone) shown: the first experiment
 if st.session_state.get(selection_key(0)) not in display_id_to_name:
     first_groups = experiment_groups()

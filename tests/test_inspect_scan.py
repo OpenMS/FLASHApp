@@ -105,3 +105,37 @@ def test_the_viewer_opens_the_matcher_page_with_its_state():
     assert "STATE_KEY = 'fragment_matcher_state'" in matcher
     assert (root / 'content' / 'Tools' / 'FragmentMatcher.py').exists()
     assert "MATCHER_PAGE = 'content/Tools/FragmentMatcher.py'" in viewer
+
+
+def _table_rows(fm, table):
+    """The data each spectrum table is drawn from, as render.py builds it."""
+    from src.render import hierarchy_data
+    if table == 'scan_table':
+        return insight_data.scan_table(fm, DECONVOLVED).collect()
+    if table == 'protein_table':
+        return insight_data.proteins(fm, IDENTIFIED).collect()
+    hits = hierarchy_data.prsms(fm, IDENTIFIED)
+    if table == 'proteoform_table':
+        return hierarchy_data.proteoforms_from(hits)
+    return hierarchy_data.prsm_rows_from(hits)
+
+
+@pytest.mark.parametrize('table', sorted(inspect_scan.TABLES))
+def test_a_table_row_names_a_spectrum_that_can_be_inspected(fm, table):
+    rows = _table_rows(fm, table)
+    row = rows.row(0, named=True)
+    scan_idx, proteoform = inspect_scan.from_row(table, row)
+    assert scan_idx is not None
+    dataset = DECONVOLVED if table == 'scan_table' else IDENTIFIED
+    data = inspect_scan.scan_input(fm, dataset, scan_idx, proteoform)
+    assert data is not None and data['masses']
+    if table == 'scan_table':
+        assert proteoform is None
+    else:
+        # An identification row brings its proteoform along
+        assert data['sequence']
+
+
+def test_a_row_without_its_spectrum_gives_none():
+    assert inspect_scan.from_row('scan_table', {}) == (None, None)
+    assert inspect_scan.from_row('protein_table', {'index': 3}) == (None, 3)

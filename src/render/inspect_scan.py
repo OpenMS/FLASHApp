@@ -1,6 +1,7 @@
 """Inspect a spectrum of a run on the Match fragments page.
 
-The Viewer's Inspect action takes the scan picked in an experiment: its
+The inspect button of a row of the Viewer's spectrum tables (``TABLES``)
+takes that row's spectrum: its
 deconvolved masses and precursor mass, and, when the scan's proteoform is
 the one picked, the proteoform's residues, and hands them to the matcher
 (``fragment_matcher.store_input``), where masses, sequence, modifications
@@ -13,6 +14,21 @@ import polars as pl
 
 from src import fragment_matcher
 from src.render import insight_data
+
+
+# The tables whose rows are a spectrum, and how to read a row: (the
+# spectrum's index, the proteoform of the row or None)
+TABLES = {
+    'scan_table': lambda row: (row.get('index'), None),
+    'protein_table': lambda row: (row.get('scan_idx'), row.get('index')),
+    'proteoform_table': lambda row: (row.get('scan_idx'), row.get('best_index')),
+    'proteoform_prsm_table': lambda row: (row.get('scan_idx'), row.get('index')),
+}
+
+
+def from_row(table, row):
+    """(scan_idx, proteoform_index) of a row of one of ``TABLES``."""
+    return TABLES[table](row)
 
 
 def proteoform_residues(file_manager, dataset_id, proteoform_index, scan_idx=None):

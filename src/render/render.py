@@ -1574,8 +1574,24 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
                 height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
 
 
+INSPECT_LABEL = 'Inspect this spectrum in Match fragments'
+
+
+def _inspect_button(component, comp_name, dataset_id, on_inspect):
+    """A button per row of a spectrum table that hands the row's spectrum
+    (and proteoform) to ``on_inspect(dataset_id, scan_idx, proteoform_index)``.
+    An openms-insight release without row actions shows no button."""
+    from src.render import inspect_scan
+    if on_inspect is None or comp_name not in inspect_scan.TABLES or not hasattr(component, 'on_row_action'):
+        return
+    component.on_row_action(
+        'inspect', lambda row: on_inspect(dataset_id, *inspect_scan.from_row(comp_name, row)),
+        icon='mdi-puzzle-outline', label=INSPECT_LABEL,
+    )
+
+
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None,
-                 row=None):
+                 row=None, on_inspect=None):
     row = row or [comp_name]
     per_row = 2 if len(row) == 1 else 1
     missing = []
@@ -1628,6 +1644,7 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, 
         else:
             st.info(f'This dataset has no data for this view ({e}).')
         return
+    _inspect_button(component, comp_name, dataset_id, on_inspect)
     component(key=key, state_manager=state_manager, **render_args)
 
 
@@ -1662,10 +1679,13 @@ def _grid_lock() -> threading.Lock:
 
 def render_grid(
     selected_data, layout_info_per_exp, file_manager, tool, identifier,
-    grid_key='flash_viewer_grid', on_missing=None,
+    grid_key='flash_viewer_grid', on_missing=None, on_inspect=None,
 ):
     """Draw one experiment. ``on_missing(missing, component)``: the button of the
-    note a component draws when the run lacks the analysis it needs."""
+    note a component draws when the run lacks the analysis it needs.
+    ``on_inspect(dataset_id, scan_idx, proteoform_index)``: the inspect button
+    of each row of the spectrum tables (``inspect_scan.TABLES``); returns True to
+    rerun."""
     with _grid_lock():
         state_manager = _state_manager(tool, identifier, selected_data)
         # A click updates every view of the grid in one rerun, not one per view
@@ -1677,5 +1697,5 @@ def render_grid(
                         _render_cell(
                             comp_name, file_manager, selected_data, tool, state_manager,
                             f'{grid_key}_{row_index}_{col_index}', on_missing,
-                            row=row,
+                            row=row, on_inspect=on_inspect,
                         )
