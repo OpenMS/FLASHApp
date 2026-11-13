@@ -204,6 +204,8 @@ RUN pip install /pyopenms-wheel/*.whl && rm -rf /pyopenms-wheel
 # Install other dependencies (excluding pyopenms)
 COPY requirements.txt ./requirements.txt
 RUN grep -Ev '^pyopenms([=<>!~].*)?$' requirements.txt > requirements_cleaned.txt && mv requirements_cleaned.txt requirements.txt
+# TEMPORARY: the openms-insight development build requirements.txt names; remove before release.
+COPY dev-wheels/ ./dev-wheels/
 RUN pip install -r requirements.txt
 
 WORKDIR /
