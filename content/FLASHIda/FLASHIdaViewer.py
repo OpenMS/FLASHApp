@@ -12,7 +12,7 @@ if not flashida.available():
     st.stop()
 
 from src.Workflow import IdaWorkflow  # noqa: E402
-from src.render.ida_live import show_run  # noqa: E402
+from src.render.ida_live import live_container, show_run  # noqa: E402
 
 wf = IdaWorkflow()
 
@@ -64,6 +64,11 @@ cache_root = Path(wf.workflow_dir, 'cache', 'insight-live')
 
 @st.fragment(run_every=interval if live else None)
 def runs_view():
+    with live_container('flashida-viewer-live-view'):
+        _runs_view()
+
+
+def _runs_view():
     runs = ida_log.find_runs(folder)
     if not runs:
         st.info('No FLASHIda runs in this folder yet. A run appears as soon as FLASHIda starts.')
