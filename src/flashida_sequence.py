@@ -264,6 +264,27 @@ INSERT_KINDS = {
 }
 
 
+# How the default names of inserted runs end: <..._>wash_3, QC_1, blank_2
+_INSERT_NAME = {kind: re.compile(rf'(^|_){word}_\d+$', re.IGNORECASE)
+                for kind, word in (('wash', 'wash'), ('qc', 'QC'), ('blank', 'blank'))}
+
+
+def insert_kind(run: dict, methods: dict):
+    """The kind of inserted run (a key of INSERT_KINDS) ``run`` is, else None.
+
+    ``methods`` maps the kinds in use to their method. A run inserted by
+    FLASHApp keeps its ``kind``; a run from before that field counts only when
+    it has the kind's method and a name like ``…_wash_3``, so a sample run
+    that happens to use the wash method stays a sample run."""
+    kind = run.get('kind')
+    if kind in INSERT_KINDS:
+        return kind if kind in methods else None
+    for kind, method in methods.items():
+        if run.get('method_file') == method and _INSERT_NAME[kind].search(run.get('name') or ''):
+            return kind
+    return None
+
+
 def pattern_names(samples: list, prefix: str = '', date: str = '', suffix: str = '',
                   replicate_format: str = 'R{n}', order: str = 'sample',
                   wash_every: int = 0, wash_name: str = DEFAULT_WASH_NAME, inserts=None,

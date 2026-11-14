@@ -838,17 +838,22 @@ def order_dialog(workflow_dir, folder) -> None:
     if len(set(used)) != len(used):
         st.error('Two kinds have the same method: give each its own, or leave one out (—).')
         return
-    kind_of = {i['method']: i['kind'] for i in inserts}
-    order = run_order([{'name': r.get('name'), 'method': r.get('method_file') or 'no method',
-                        'kind': kind_of.get(r.get('method_file'))} for r in runs],
+    # By the kind a run was inserted as, not by its method alone: a sample run
+    # that uses the wash method is still a sample run
+    in_use = {i['kind']: i['method'] for i in inserts}
+    kinds = [fs.insert_kind(r, in_use) for r in runs]
+    order = run_order([{'name': r.get('name'), 'method': r.get('method_file') or 'no method', 'kind': k}
+                       for r, k in zip(runs, kinds)],
                       key='ida-run-order', inserts=inserts)
     if order is not None:
-        new = [runs[e] if isinstance(e, int) else {'name': e['name'], 'method_file': e['method']}
-               for e in order]
+        # Every inserted run keeps its kind from now on, also one found by its name
+        new = [dict(runs[e], **({'kind': kinds[e]} if kinds[e] else {})) if isinstance(e, int)
+               else {'name': e['name'], 'method_file': e['method'], 'kind': e['kind']} for e in order]
         fm.save_runs(workflow_dir, new)
         _bump()
         added = sum(not isinstance(e, int) for e in order)
-        removed = len(runs) - (len(order) - added)
+        kept = {e for e in order if isinstance(e, int)}
+        removed = sum(i not in kept for i in range(len(runs)))
         st.toast('Saved the new order of the runs'
                  + (f', {added} run{"s" if added != 1 else ""} added' if added else '')
                  + (f', {removed} run{"s" if removed != 1 else ""} removed' if removed else '') + '.',
@@ -930,8 +935,8 @@ def pattern_dialog(workflow_dir, folder) -> None:
         st.error(error)
     if not methods:
         st.warning('Set the method folder under Instrument PC first.')
-    new = [{'name': n['name'], 'method_file': pick if n['kind'] == 'sample' else picks[n['kind']]}
-           for n in names]
+    new = [{'name': n['name'], 'method_file': pick} if n['kind'] == 'sample'
+           else {'name': n['name'], 'method_file': picks[n['kind']], 'kind': n['kind']} for n in names]
     combined, duplicates = fs.combine(runs, new, mode)
     dup = {d.casefold() for d in duplicates}
     if names:

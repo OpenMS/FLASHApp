@@ -171,3 +171,17 @@ def test_random_order_shuffles_only_the_samples():
         # the washes keep their places, the same sample runs are all there
         assert [i for i, n in enumerate(runs) if n['wash']] == [3, 7, 11]
         assert sorted(n['name'] for n in runs) == sorted(n['name'] for n in in_order)
+
+
+def test_insert_kind_is_the_stored_kind_not_the_method():
+    methods = {'wash': 'Wash', 'qc': 'QC'}
+    # a run FLASHApp inserted keeps its kind, whatever its name
+    assert fs.insert_kind({'name': 'rinse', 'method_file': 'Wash', 'kind': 'wash'}, methods) == 'wash'
+    # ... unless that kind is not in use
+    assert fs.insert_kind({'name': 'x_wash_1', 'method_file': 'Wash', 'kind': 'blank'}, methods) is None
+    # a run from before the field: the kind's method and its name
+    assert fs.insert_kind({'name': '20261113_wash_1', 'method_file': 'Wash'}, methods) == 'wash'
+    assert fs.insert_kind({'name': 'QC_2', 'method_file': 'QC'}, methods) == 'qc'
+    # a sample run with the wash method stays a sample run
+    assert fs.insert_kind({'name': '20261113_Ecoli_R3', 'method_file': 'Wash'}, methods) is None
+    assert fs.insert_kind({'name': '20261113_wash_1', 'method_file': 'Other'}, methods) is None

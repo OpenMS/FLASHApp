@@ -26,7 +26,7 @@ def run_order(items: list, key: str, inserts: list = ()):
     free number, and get its method. ``every`` is the default spacing.
 
     The result has, per position, the index of a run of ``items`` or a new
-    run ``{'name', 'method'}``. Runs may only be dropped when they are inserted
+    run ``{'name', 'method', 'kind'}``. Runs may only be dropped when they are inserted
     runs; anything else (a list from before the table changed) gives None.
     """
     handled_key = f'{key}_handled'
@@ -41,10 +41,11 @@ def run_order(items: list, key: str, inserts: list = ()):
         return None
     kept = [e for e in order if isinstance(e, int)]
     new = [e for e in order if not isinstance(e, int)]
-    methods = {i['method'] for i in inserts}
+    method_of = {i['kind']: i['method'] for i in inserts}
     if (len(set(kept)) != len(kept) or any(not 0 <= i < len(items) for i in kept)
             or any(not items[i].get('kind') for i in set(range(len(items))) - set(kept))
-            or any(not isinstance(e, dict) or not e.get('name') or e.get('method') not in methods
-                   for e in new)):
+            or any(not isinstance(e, dict) or not e.get('name') or e.get('kind') not in method_of
+                   or e.get('method') != method_of[e['kind']] for e in new)):
         return None
-    return [e if isinstance(e, int) else {'name': str(e['name']), 'method': e['method']} for e in order]
+    return [e if isinstance(e, int) else {'name': str(e['name']), 'method': e['method'], 'kind': e['kind']}
+            for e in order]

@@ -213,7 +213,7 @@
     }
     document.getElementById('save').onclick = function () {
       setValue({ action: 'save', nonce: Date.now() + Math.random(),
-                 order: draft.map(function (e) { return e.i !== null ? e.i : { name: e.name, method: e.method }; }) });
+                 order: draft.map(function (e) { return e.i !== null ? e.i : { name: e.name, method: e.method, kind: e.kind }; }) });
     };
     document.getElementById('reset').onclick = function () { draft = fresh(); selected = null; render(); };
     syncHeight();
