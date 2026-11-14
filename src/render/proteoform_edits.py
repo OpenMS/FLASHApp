@@ -8,7 +8,8 @@ Every edit arrives as a dict with an ``action`` and a fresh ``nonce``:
   one residue (the first of its range; the view then marks where the
   fragments allow it);
 - ``'update'``: the edited ``sequence``, ``start_position``, ``end_position``
-  and ``modifications``;
+  and ``modifications`` (the view moves the start and end from a residue's
+  menu; the fragment masses are those of the residues in that range);
 - ``'reset'``: back to the search result.
 
 The edits of a dataset are kept per proteoform in the workspace cache (under
@@ -106,11 +107,19 @@ def apply(edits, edit, proteoform, entry):
             return None
         start = _position(edit.get('start_position'), 0)
         end = _position(edit.get('end_position'), len(sequence) - 1)
-        if start >= len(sequence) or end >= len(sequence):
+        if start >= len(sequence) or end >= len(sequence) or (0 <= end < start):
             start, end = 0, len(sequence) - 1
+        # Residues outside the proteoform (truncated in the view) carry no
+        # modification; a terminal one (-1, the length) stays on its terminus
+        first = max(start, 0)
+        last = len(sequence) - 1 if end < 0 else end
+        modifications = [
+            m for m in _clean_modifications(edit.get('modifications'), len(sequence))
+            if m['start'] in (-1, len(sequence)) or first <= m['start'] <= last
+        ]
         new[key] = {
             'sequence': sequence, 'start_position': start, 'end_position': end,
-            'modifications': _clean_modifications(edit.get('modifications'), len(sequence)),
+            'modifications': modifications,
         }
     else:
         return None

@@ -62,6 +62,33 @@ def test_update_and_reset():
     assert 7 not in reset and reset[pe.NONCE] == 5
 
 
+def test_update_moves_the_termini():
+    edits = pe.apply({}, {'action': 'edit', 'nonce': 1}, 7, SEARCH)
+    update = {
+        'action': 'update', 'nonce': 2, 'sequence': 'MKSTAK',
+        'start_position': 2, 'end_position': 4,
+        'modifications': [
+            {'start': -1, 'end': -1, 'mass_diff': 42.0106, 'labels': 'Acetyl'},
+            {'start': 1, 'end': 1, 'mass_diff': 14.0157, 'labels': 'Methyl'},
+            {'start': 3, 'end': 3, 'mass_diff': 79.9663, 'labels': 'Phospho'},
+            {'start': 5, 'end': 5, 'mass_diff': 0.9840, 'labels': 'Deamidated'},
+            {'start': 6, 'end': 6, 'mass_diff': -0.9840, 'labels': 'Amidated'},
+        ],
+    }
+    edits = pe.apply(edits, update, 7, SEARCH)
+    assert (edits[7]['start_position'], edits[7]['end_position']) == (2, 4)
+    # Residues truncated by the new termini lose their modifications
+    assert [m['start'] for m in edits[7]['modifications']] == [-1, 3, 6]
+    # The fragment masses are those of the residues in the range
+    seen = []
+    entry = pe.entry(edits[7], SEARCH, lambda seq: seen.append(seq) or {})
+    assert seen == ['STA']
+    assert (entry['start_position'], entry['end_position']) == (2, 4)
+    # A start after the end falls back to the whole sequence
+    bad = pe.apply(edits, {**update, 'nonce': 3, 'start_position': 4, 'end_position': 2}, 7, SEARCH)
+    assert (bad[7]['start_position'], bad[7]['end_position']) == (0, 5)
+
+
 def test_entry_of_an_edited_proteoform():
     edits = pe.apply({}, {'action': 'edit', 'nonce': 1}, 7, SEARCH)
     seen = []
