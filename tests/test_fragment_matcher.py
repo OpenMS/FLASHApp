@@ -174,3 +174,57 @@ def test_range_fragments_with_and_without_the_shift():
     assert kinds('b') == ['plain', 'plain', 'both', 'both', 'shifted', 'shifted', 'shifted', 'shifted']
     # y1..y8: y1-y3 after the range; y4, y5 cut inside it; y6.. hold all of it
     assert kinds('y') == ['plain', 'plain', 'plain', 'both', 'both', 'shifted', 'shifted', 'shifted']
+
+
+def _matches(proforma, mass, names, cleavages=50.0, tolerance=10):
+    return {
+        'spectrum': 0,
+        'tolerance': {'value': tolerance, 'unit': 'ppm'},
+        'fragments': [
+            {'name': n, 'ion': n[0], 'kind': 'N' if n[0] in 'abc' else 'C',
+             'mass': 100.0 + i, 'massIndex': i}
+            for i, n in enumerate(names)
+        ] + [{'name': 'b2-y3', 'ion': 'by', 'kind': 'I', 'mass': 5.0, 'massIndex': None}],
+        'proteoform': {'proforma': proforma, 'sequence': 'PEPTIDE', 'length': 7,
+                       'theoreticalMass': mass, 'cleavagePercentage': cleavages},
+    }
+
+
+def test_hypothesis_row_from_the_view_matches():
+    row = fm.hypothesis(_matches('PEPT[+79.97]IDE', 1000.0, ['b2', 'b3', 'y2', 'b3']), 1000.01)
+    # Internal fragments are not counted; an ion matched on two masses is
+    # two rows, as in the view's table
+    assert row['matched_fragments'] == 4
+    assert (row['n_terminal'], row['c_terminal']) == (3, 1)
+    assert row['proforma'] == 'PEPT[+79.97]IDE'
+    assert row['delta_da'] == pytest.approx(0.01)
+    assert row['delta_ppm'] == pytest.approx(10.0)
+    assert row['tolerance'] == '10 ppm'
+    # No precursor, no Δ; nothing matched yet or an older view, no row
+    assert fm.hypothesis(_matches('PEPTIDE', 1000.0, ['b2']))['delta_da'] is None
+    assert fm.hypothesis(None) is None
+    assert fm.hypothesis({'fragments': []}) is None
+
+
+def test_hypotheses_kept_per_mass_list(tmp_path):
+    data = fm.store_input(tmp_path, [100.0, 200.0], precursor_mass=1000.0)
+    first = fm.hypothesis(_matches('PEPTIDE', 1000.5, ['b2']), 1000.0)
+    second = fm.hypothesis(_matches('PEPT[+79.97]IDE', 1000.0, ['b2', 'y3', 'y4'], 70), 1000.0)
+    fm.add_hypothesis(tmp_path, data, first)
+    fm.add_hypothesis(tmp_path, data, second)
+    rows = fm.load_hypotheses(tmp_path, data)
+    assert [r['proforma'] for r in rows] == ['PEPTIDE', 'PEPT[+79.97]IDE']
+    assert fm.best_hypothesis(rows) == 1
+
+    # The same proteoform tried again replaces its row in place
+    again = fm.hypothesis(_matches('PEPTIDE', 1000.5, ['b2', 'b3', 'b4', 'y5'], 80), 1000.0)
+    rows = fm.add_hypothesis(tmp_path, data, again)
+    assert [r['matched_fragments'] for r in rows] == [4, 3]
+    assert fm.best_hypothesis(rows) == 0
+
+    assert [r['proforma'] for r in fm.remove_hypotheses(tmp_path, data, [0])] == ['PEPT[+79.97]IDE']
+
+    # Another mass list starts an empty table
+    other = fm.store_input(tmp_path, [300.0])
+    assert fm.load_hypotheses(tmp_path, other) == []
+    assert fm.best_hypothesis([]) is None

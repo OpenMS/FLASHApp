@@ -245,6 +245,32 @@ EDIT_IDENTIFIER = 'sequence_edit'
 # with an openms-insight release without it
 FRAGMENT_MATCHES_IDENTIFIER = 'fragment_matches'
 FRAGMENT_MARKS = hasattr(DeconvolvedSpectrum, 'set_fragment_matches_identifier')
+# openms-insight releases whose LinePlot marks labelled x positions (x_markers)
+X_MARKERS = 'x_markers' in inspect.signature(LinePlot.__init__).parameters
+# Reporter ions of neighbouring TMT channels are 0.0063 m/z apart
+REPORTER_TOLERANCE = 0.003
+
+
+def reporter_plot_args(channels, mzs, markers=X_MARKERS):
+    """How the reporter ion plot shows its channels: a function giving the
+    cached arguments from the reporter frame, and the render-time arguments.
+
+    With an openms-insight that has ``x_markers``, each channel is an x
+    marker: a guide with its name, and a dot on its reporter ion. A channel
+    without signal keeps its guide and name instead of a stick of height
+    zero. Older releases label the sticks (``annotation_column``).
+    """
+    if not markers:
+        return (lambda data: dict(data=data, annotation_column='label')), {}
+
+    def data_args(data):
+        # The unlabelled points at the edges stay: they keep the range
+        return dict(data=data.filter((pl.col('intensity') > 0) | (pl.col('label') == '')))
+
+    marked = {c: mz for c, mz in zip(channels, mzs) if mz}
+    return data_args, {'x_markers': marked, 'x_marker_tolerance': REPORTER_TOLERANCE}
+
+
 # Plots keep their zoom in the grid's state (zoom@<component>), so a view can
 # store it with its selection; left out with a release without zoom_identifier
 ZOOMABLE = (DeconvolvedSpectrum, Heatmap, LinePlot, MirrorPlot, SeriesPlot)
@@ -258,6 +284,17 @@ def _zoom_args(cls, name):
     if 'zoom_identifier' not in inspect.signature(cls.__init__).parameters:
         return {}
     return {'zoom_identifier': zoom_identifier(name.split('-', 1)[0])}
+
+
+def _identification_settings(file_manager, dataset_id):
+    """Fragment settings of the identification sequence views: the run's
+    stored settings, and the residues a proteoform's truncated termini leave
+    out marked by a break line per terminus, labelled with their positions
+    (count and residues on hover), which keeps a short proteoform of a long protein on a few rows.
+    An openms-insight release without the option ignores it."""
+    settings = dict(file_manager.get_results(dataset_id, ['settings'])['settings'] or {})
+    settings['show_truncations'] = False
+    return settings
 
 
 def _spectrum_key(column):
@@ -463,19 +500,21 @@ def _scan_methods(file_manager, dataset_id):
     return () if path is None else mzml_scan_methods(path)
 
 
-def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, required=None):
+def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, required=None,
+               render=None):
     """The Insight component `name` of a dataset: loaded from its cache, or
     built with the keyword arguments `build()` returns.
 
     `sources` are the results the cache is built from; `required` (default:
-    all of them) must exist.
+    all of them) must exist. `render` are render-time arguments, not part of
+    the cache, passed whether the cache is loaded or built.
     """
     for name_tag in sources if required is None else required:
         if insight_data.result_path(file_manager, dataset_id, name_tag) is None:
             raise MissingResult(name_tag)
     cache_path = insight_cache_dir(file_manager.cache_path, dataset_id)
     cache_id = f'{name}-{_stamp(file_manager, dataset_id, sources, extra)}'
-    zoom = _zoom_args(cls, name)
+    zoom = {**_zoom_args(cls, name), **(render or {})}
     try:
         return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom)
     except CacheMissError:
@@ -845,7 +884,9 @@ def _sequence_view_options(component):
     ISOTOPE_ERRORS isotopes (changeable in the view), the matched fragment
     ions are marked on the spectra, and proton loss/addition is offered only
     with electron or photo fragmentation ion series (c/z or radical series),
-    where a hydrogen moves between the fragments."""
+    where a hydrogen moves between the fragments. The observed masses no
+    fragment ion explains are listed below the fragment table, each with the
+    nearest fragment ion."""
     if FRAGMENT_MARKS:
         component.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     if hasattr(component, 'set_variable_modification_library'):
@@ -858,6 +899,8 @@ def _sequence_view_options(component):
         component.set_isotope_errors(ISOTOPE_ERRORS)
     if hasattr(component, 'set_method_ion_options'):
         component.set_method_ion_options()
+    if hasattr(component, 'set_unmatched_masses'):
+        component.set_unmatched_masses()
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
@@ -977,7 +1020,7 @@ def _edited_sequence_view(comp_name, tool, fm, ds, state_manager, proteoform, en
             filters={'protein': 'proteoform_index'}, sequence=entry,
             mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
             fragmentation_column='fragmentation',
-            settings=fm.get_results(ds, ['settings'])['settings'],
+            settings=_identification_settings(fm, ds),
             entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
             **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
         ),
@@ -1128,14 +1171,17 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name == 'reporter_ions':
         plex, channels = _plex(fm, ds)
         mzs = dict(isobaric.PLEXES.get(plex, ('', []))[1])
+        channel_mzs = [mzs.get(c, 0.0) for c in channels]
+        data_args, markers = reporter_plot_args(channels, channel_mzs, X_MARKERS)
         return _component(
             LinePlot, comp_name, fm, ds, ['isobaric_dfs', 'scan_table'],
             lambda: dict(
-                data=insight_data.reporter_ions(fm, ds, channels, [mzs.get(c, 0.0) for c in channels]),
+                **data_args(insight_data.reporter_ions(fm, ds, channels, channel_mzs)),
                 filters={'scan': 'scan_idx'}, x_column='mz', y_column='intensity',
-                annotation_column='label', title='Reporter ions of the selected spectrum',
+                title='Reporter ions of the selected spectrum',
                 x_label='m/z', y_label='Intensity',
             ),
+            render=markers,
         ), {}
 
     if comp_name == 'mass_table':
@@ -1353,7 +1399,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
                     filters={'protein': 'proteoform_index'},
                     mass_identifier='mass', aa_identifier='aa', fragment_identifier='fragment',
                     fragmentation_column='fragmentation',
-                    settings=fm.get_results(ds, ['settings'])['settings'],
+                    settings=_identification_settings(fm, ds),
                     entry_title='Proteoform', observed_mass_label='Observed proteoform mass',
                     **SEQUENCE_VIEW_OPTIONS, **_spectrum_key('scan_idx'),
                 ),
@@ -1574,8 +1620,24 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
                 height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
 
 
+INSPECT_LABEL = 'Inspect this spectrum in Match fragments'
+
+
+def _inspect_button(component, comp_name, dataset_id, on_inspect):
+    """A button per row of a spectrum table that hands the row's spectrum
+    (and proteoform) to ``on_inspect(dataset_id, scan_idx, proteoform_index)``.
+    An openms-insight release without row actions shows no button."""
+    from src.render import inspect_scan
+    if on_inspect is None or comp_name not in inspect_scan.TABLES or not hasattr(component, 'on_row_action'):
+        return
+    component.on_row_action(
+        'inspect', lambda row: on_inspect(dataset_id, *inspect_scan.from_row(comp_name, row)),
+        icon='mdi-puzzle-outline', label=INSPECT_LABEL,
+    )
+
+
 def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on_missing=None,
-                 row=None):
+                 row=None, on_inspect=None):
     row = row or [comp_name]
     per_row = 2 if len(row) == 1 else 1
     missing = []
@@ -1628,6 +1690,7 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, 
         else:
             st.info(f'This dataset has no data for this view ({e}).')
         return
+    _inspect_button(component, comp_name, dataset_id, on_inspect)
     component(key=key, state_manager=state_manager, **render_args)
 
 
@@ -1662,10 +1725,13 @@ def _grid_lock() -> threading.Lock:
 
 def render_grid(
     selected_data, layout_info_per_exp, file_manager, tool, identifier,
-    grid_key='flash_viewer_grid', on_missing=None,
+    grid_key='flash_viewer_grid', on_missing=None, on_inspect=None,
 ):
     """Draw one experiment. ``on_missing(missing, component)``: the button of the
-    note a component draws when the run lacks the analysis it needs."""
+    note a component draws when the run lacks the analysis it needs.
+    ``on_inspect(dataset_id, scan_idx, proteoform_index)``: the inspect button
+    of each row of the spectrum tables (``inspect_scan.TABLES``); returns True to
+    rerun."""
     with _grid_lock():
         state_manager = _state_manager(tool, identifier, selected_data)
         # A click updates every view of the grid in one rerun, not one per view
@@ -1677,5 +1743,5 @@ def render_grid(
                         _render_cell(
                             comp_name, file_manager, selected_data, tool, state_manager,
                             f'{grid_key}_{row_index}_{col_index}', on_missing,
-                            row=row,
+                            row=row, on_inspect=on_inspect,
                         )
