@@ -132,3 +132,56 @@ def test_wash_preset_is_built_in():
     presets = fm.builtin_presets()
     assert fs.WASH_PRESET in presets
     assert fm.get(presets[fs.WASH_PRESET], 'global.method_name') == 'Wash'
+
+
+def test_runs_of_several_kinds_between_the_samples():
+    samples = fs.parse_samples('A\nB\nC', '', 2)
+    inserts = [{'kind': 'wash', 'every': 2, 'name': fs.DEFAULT_WASH_NAME},
+               {'kind': 'qc', 'every': 3, 'name': fs.INSERT_KINDS['qc'][1]}]
+    runs = fs.pattern_names(samples, 'PK', '20261113', inserts=inserts)
+    assert [(n['name'], n['kind']) for n in runs] == [
+        ('PK_20261113_A_R1', 'sample'), ('PK_20261113_A_R2', 'sample'), ('PK_20261113_wash_1', 'wash'),
+        ('PK_20261113_B_R1', 'sample'), ('PK_20261113_QC_1', 'qc'), ('PK_20261113_B_R2', 'sample'),
+        ('PK_20261113_wash_2', 'wash'), ('PK_20261113_C_R1', 'sample'), ('PK_20261113_C_R2', 'sample')]
+    # two kinds on the same place come in the order given
+    both = fs.with_inserts(['a', 'b', 'c'], [{'kind': 'qc', 'every': 2}, {'kind': 'wash', 'every': 2}])
+    assert [n['kind'] for n in both] == ['sample', 'sample', 'qc', 'wash', 'sample']
+
+
+def test_inserted_runs_take_the_first_free_number():
+    samples = fs.parse_samples('A\nB\nC', '', 1)
+    inserts = [{'kind': 'wash', 'every': 1, 'name': fs.DEFAULT_WASH_NAME}]
+    runs = fs.pattern_names(samples, '', '20261113', inserts=inserts,
+                            taken=['20261113_wash_1', '20261113_WASH_2'])
+    assert [n['name'] for n in runs if n['wash']] == ['20261113_wash_3', '20261113_wash_4']
+    # a name without {n} cannot be numbered: it stays, and the table marks the duplicate
+    fixed = fs.with_inserts(['a', 'b', 'c'], [{'kind': 'blank', 'every': 1, 'name': 'blank'}])
+    assert [n['name'] for n in fixed if n['kind'] == 'blank'] == ['blank', 'blank']
+
+
+def test_random_order_shuffles_only_the_samples():
+    samples = fs.parse_samples('A\nB\nC\nD', '', 3)
+    inserts = [{'kind': 'wash', 'every': 3, 'name': '{date}_wash_{n}'}]
+    one = fs.pattern_names(samples, '', 'd', order='random', seed=1, inserts=inserts)
+    again = fs.pattern_names(samples, '', 'd', order='random', seed=1, inserts=inserts)
+    other = fs.pattern_names(samples, '', 'd', order='random', seed=2, inserts=inserts)
+    in_order = fs.pattern_names(samples, '', 'd', inserts=inserts)
+    assert one == again and one != other
+    for runs in (one, other):
+        # the washes keep their places, the same sample runs are all there
+        assert [i for i, n in enumerate(runs) if n['wash']] == [3, 7, 11]
+        assert sorted(n['name'] for n in runs) == sorted(n['name'] for n in in_order)
+
+
+def test_insert_kind_is_the_stored_kind_not_the_method():
+    methods = {'wash': 'Wash', 'qc': 'QC'}
+    # a run FLASHApp inserted keeps its kind, whatever its name
+    assert fs.insert_kind({'name': 'rinse', 'method_file': 'Wash', 'kind': 'wash'}, methods) == 'wash'
+    # ... unless that kind is not in use
+    assert fs.insert_kind({'name': 'x_wash_1', 'method_file': 'Wash', 'kind': 'blank'}, methods) is None
+    # a run from before the field: the kind's method and its name
+    assert fs.insert_kind({'name': '20261113_wash_1', 'method_file': 'Wash'}, methods) == 'wash'
+    assert fs.insert_kind({'name': 'QC_2', 'method_file': 'QC'}, methods) == 'qc'
+    # a sample run with the wash method stays a sample run
+    assert fs.insert_kind({'name': '20261113_Ecoli_R3', 'method_file': 'Wash'}, methods) is None
+    assert fs.insert_kind({'name': '20261113_wash_1', 'method_file': 'Other'}, methods) is None

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run order</title>
+<style>
+  :root {
+    --primary: #ff4b4b;
+    --bg: #ffffff;
+    --bg2: #f0f2f6;
+    --text: #31333f;
+    --border: rgba(49, 51, 63, 0.2);
+    --muted: rgba(49, 51, 63, 0.6);
+    --font: "Source Sans Pro", "Source Sans 3", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: transparent; color: var(--text); font-family: var(--font); font-size: 15px; }
+  body { padding: 2px 2px 8px; user-select: none; -webkit-user-select: none; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .toolbar .spacer { flex: 1 1 auto; }
+  .btn { border: 1px solid var(--border); background: var(--bg); border-radius: 8px; padding: 5px 12px; line-height: 1.4; }
+  .btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.primary:hover:not(:disabled) { color: #fff; filter: brightness(1.08); }
+  .wash { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 2px 4px 2px 10px; background: var(--bg); }
+  .wash input { width: 3.6em; border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; background: var(--bg); text-align: right; user-select: text; }
+  .wash .btn { padding: 3px 10px; }
+  .wash .sep { color: var(--muted); }
+  .status { font-size: 13px; color: var(--muted); min-height: 18px; margin-bottom: 4px; }
+  .status.dirty { color: #b7791f; }
+  .hint { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+
+  .list { display: grid; gap: 0; }
+  .item { display: grid; grid-template-columns: 22px 2.4em minmax(0, 1.4fr) minmax(0, 1fr) 4.5em; gap: 8px; align-items: center;
+          border: 1px solid var(--border); background: var(--bg2); border-radius: 8px; padding: 6px 8px; cursor: grab; touch-action: none; }
+  .item:hover { border-color: var(--primary); }
+  .item.sel { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+  .item.source { opacity: .35; }
+  .item.iswash { background: color-mix(in srgb, var(--bg2) 55%, rgba(80, 140, 255, .18)); }
+  .item.moved .num { color: #b7791f; }
+  .grip { color: var(--muted); font-size: 13px; letter-spacing: -2px; text-align: center; }
+  .num { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  .name { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .method { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .was { font-size: 11px; color: var(--muted); white-space: nowrap; text-align: right; }
+  .was.new { color: #2b7de9; font-weight: 600; }
+  .gap { height: 4px; border-radius: 4px; }
+  .gap.drop { height: 6px; background: var(--primary); }
+
+  .ghost { position: fixed; z-index: 1000; pointer-events: none; padding: 6px 10px; border-radius: 7px; background: var(--primary); color: #fff;
+           font-size: 14px; font-weight: 600; box-shadow: 0 6px 18px rgba(0,0,0,.25); transform: translate(12px, -50%); white-space: nowrap; }
+  body.dragging, body.dragging * { cursor: grabbing !important; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  'use strict';
+
+  // ---- Streamlit component protocol (what streamlit-component-lib does) ----
+  function send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), '*');
+  }
+  function setValue(value) { send('streamlit:setComponentValue', { value: value, dataType: 'json' }); }
+  var lastHeight = -1;
+  function syncHeight() {
+    var h = Math.ceil(document.body.scrollHeight);
+    if (h !== lastHeight) { lastHeight = h; send('streamlit:setFrameHeight', { height: h }); }
+  }
+
+  var items = [];       // [{name, method, kind}] as the table has them; kind null for a sample run
+  var draft = [];       // [{i}] a run of the table, or [{i: null, name, method, kind}] a new inserted run
+  var sig = null;       // the items the draft was made for
+  var inserts = [];     // [{kind, label, method, base, every}] the kinds that can be inserted
+  var every = {};       // kind -> after every … sample runs (0: none)
+  var selected = null;  // the draft entry the arrow keys move
+  var drag = null;      // {from, to, ghost, startY, moved}
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+  }
+  function fresh() { return items.map(function (_, i) { return { i: i }; }); }
+  function info(e) { return e.i === null ? e : items[e.i]; }
+  function isWash(e) { return !!info(e).kind; }   // any inserted run: wash, QC standard, blank
+  function labelOf(kind) {
+    var k = inserts.filter(function (x) { return x.kind === kind; })[0];
+    return k ? k.label : kind;
+  }
+  function changed() {
+    return draft.length !== items.length || draft.some(function (e, p) { return e.i !== p; });
+  }
+  function move(from, to) {           // positions in the draft; `to` counts before the move
+    var v = draft.splice(from, 1)[0];
+    draft.splice(to > from ? to - 1 : to, 0, v);
+  }
+
+  // ---- Randomize: the sample runs change places, washes stay where they are ----
+  function randomize() {
+    var slots = [], runs = [];
+    draft.forEach(function (e, p) { if (!isWash(e)) { slots.push(p); runs.push(e); } });
+    for (var k = runs.length - 1; k > 0; k--) {
+      var j = Math.floor(Math.random() * (k + 1));
+      var t = runs[k]; runs[k] = runs[j]; runs[j] = t;
+    }
+    slots.forEach(function (p, k) { draft[p] = runs[k]; });
+    selected = null;
+    render();
+  }
+
+  // ---- Insert: each kind after every n-th sample run (none after the last) ----
+  function insertRuns() {
+    var samples = draft.filter(function (e) { return !isWash(e); });
+    var reuse = {};                   // kind -> its runs in the list, in order
+    draft.forEach(function (e) {
+      var k = info(e).kind;
+      if (k) (reuse[k] = reuse[k] || []).push(e);
+    });
+    var used = {};
+    items.forEach(function (it) { used[it.name.toLowerCase()] = true; });
+    var counter = {};
+    function newRun(ins) {
+      var name;
+      do { counter[ins.kind] = (counter[ins.kind] || 0) + 1; name = ins.base + '_' + counter[ins.kind]; }
+      while (used[name.toLowerCase()]);
+      used[name.toLowerCase()] = true;
+      return { i: null, name: name, method: ins.method, kind: ins.kind };
+    }
+    var out = [];
+    samples.forEach(function (e, k) {
+      out.push(e);
+      inserts.forEach(function (ins) {
+        var n = every[ins.kind] || 0;
+        if (n > 0 && (k + 1) % n === 0 && k + 1 < samples.length) {
+          var r = reuse[ins.kind];
+          out.push(r && r.length ? r.shift() : newRun(ins));
+        }
+      });
+    });
+    draft = out;
+    selected = null;
+    render();
+  }
+
+  function word(label) { return /^QC/.test(label) ? label : label.toLowerCase(); }
+  function plural(n, label) {
+    var l = word(label);
+    return n + ' ' + l + (n === 1 ? '' : (/(sh|s|x)$/.test(l) ? 'es' : 's'));
+  }
+  function summary() {
+    var parts = ['New order, not saved yet'];
+    var kept = {};
+    draft.forEach(function (e) { if (e.i !== null) kept[e.i] = true; });
+    var kinds = {};
+    inserts.forEach(function (x) { kinds[x.kind] = true; });
+    items.forEach(function (it) { if (it.kind) kinds[it.kind] = true; });
+    Object.keys(kinds).forEach(function (kind) {
+      var added = draft.filter(function (e) { return e.i === null && e.kind === kind; }).length;
+      var dropped = items.filter(function (it, i) { return it.kind === kind && !kept[i]; }).length;
+      if (added) parts.push('+' + plural(added, labelOf(kind)));
+      if (dropped) parts.push('−' + plural(dropped, labelOf(kind)));
+    });
+    return parts.join(' · ');
+  }
+
+  function render() {
+    var dirty = changed();
+    var html = '<div class="toolbar">'
+      + '<button class="btn" id="random" title="Shuffles the sample runs into a random order. Washes, QC standards and blanks stay where they are.">🎲 Randomize</button>';
+    if (inserts.length) {
+      html += '<span class="wash" title="Each kind after every n-th sample run, none after the last; when two fall on the same place, '
+        + 'they come in this order. Runs of a kind already in the list are reused, missing ones are added (named &lt;date&gt;_wash_1, _QC_1, …), '
+        + 'extra ones are removed. 0 removes every run of that kind.">';
+      html += inserts.map(function (ins) {
+        return '<span>' + esc(ins.label) + ' every <input class="every" data-kind="' + esc(ins.kind)
+          + '" type="number" min="0" max="99" value="' + (every[ins.kind] || 0) + '"> runs</span>';
+      }).join('<span class="sep">·</span>');
+      html += '<button class="btn" id="washes">Insert</button></span>';
+    }
+    html += '<span class="spacer"></span>'
+      + '<button class="btn" id="reset"' + (dirty ? '' : ' disabled') + '>↺ Undo changes</button>'
+      + '<button class="btn primary" id="save"' + (dirty ? '' : ' disabled') + '>Save order</button></div>'
+      + '<div class="status' + (dirty ? ' dirty' : '') + '">' + (dirty ? summary() : items.length + ' runs, in table order') + '</div>'
+      + '<div class="hint">Drag a run by its row to a new place. Or click a run and move it with ↑ ↓ '
+      + '(Home / End: to the top or the bottom).</div><div class="list" id="list">';
+    draft.forEach(function (e, pos) {
+      var it = info(e);
+      var was = e.i === null ? '<span class="was new">new</span>'
+        : '<span class="was">' + (e.i !== pos ? 'was ' + (e.i + 1) : '') + '</span>';
+      html += '<div class="gap' + (drag && drag.moved && drag.to === pos ? ' drop' : '') + '"></div>'
+        + '<div class="item' + (e === selected ? ' sel' : '') + (drag && drag.moved && drag.from === pos ? ' source' : '')
+        + (e.i !== null && e.i !== pos ? ' moved' : '') + (it.kind ? ' iswash' : '') + '" data-pos="' + pos + '" title="'
+        + esc(it.name) + ' · ' + esc(it.method) + (it.kind ? ' (' + esc(word(labelOf(it.kind))) + ')' : '') + '">'
+        + '<span class="grip">⋮⋮</span><span class="num">' + (pos + 1) + '</span>'
+        + '<span class="name">' + (esc(it.name) || '<i>unnamed</i>') + '</span>'
+        + '<span class="method">' + esc(it.method) + '</span>' + was + '</div>';
+    });
+    html += '<div class="gap' + (drag && drag.moved && drag.to === draft.length ? ' drop' : '') + '"></div></div>';
+    document.getElementById('app').innerHTML = html;
+    document.getElementById('random').onclick = randomize;
+    if (inserts.length) {
+      var inputs = document.querySelectorAll('input.every');
+      var read = function () {
+        inputs.forEach(function (inp) { every[inp.dataset.kind] = Math.max(0, Math.min(99, parseInt(inp.value, 10) || 0)); });
+      };
+      inputs.forEach(function (inp) { inp.onchange = read; });
+      document.getElementById('washes').onclick = function () { read(); insertRuns(); };
+    }
+    document.getElementById('save').onclick = function () {
+      setValue({ action: 'save', nonce: Date.now() + Math.random(),
+                 order: draft.map(function (e) { return e.i !== null ? e.i : { name: e.name, method: e.method, kind: e.kind }; }) });
+    };
+    document.getElementById('reset').onclick = function () { draft = fresh(); selected = null; render(); };
+    syncHeight();
+  }
+
+  // ---- Dragging (pointer events: mouse, pen and touch alike) ----
+  function targetFor(y) {             // the gap the pointer is nearest to
+    var rows = document.querySelectorAll('.item');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) return i;
+    }
+    return rows.length;
+  }
+  document.addEventListener('pointerdown', function (ev) {
+    var row = ev.target.closest && ev.target.closest('.item');
+    if (!row || ev.button !== 0) return;
+    var pos = +row.dataset.pos;
+    selected = draft[pos];
+    drag = { from: pos, to: pos, startY: ev.clientY, moved: false, ghost: null };
+    row.setPointerCapture && row.setPointerCapture(ev.pointerId);
+    render();
+  });
+  document.addEventListener('pointermove', function (ev) {
+    if (!drag) return;
+    if (!drag.moved && Math.abs(ev.clientY - drag.startY) < 4) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      document.body.classList.add('dragging');
+      drag.ghost = document.createElement('div');
+      drag.ghost.className = 'ghost';
+      drag.ghost.textContent = info(draft[drag.from]).name || 'unnamed';
+      document.body.appendChild(drag.ghost);
+    }
+    drag.ghost.style.left = ev.clientX + 'px';
+    drag.ghost.style.top = ev.clientY + 'px';
+    var to = targetFor(ev.clientY);
+    if (to !== drag.to) { drag.to = to; render(); }
+  });
+  function endDrag() {
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    document.body.classList.remove('dragging');
+    if (d.ghost) d.ghost.remove();
+    if (d.moved && d.to !== d.from && d.to !== d.from + 1) move(d.from, d.to);
+    render();
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+
+  // ---- Keyboard: move the clicked run ----
+  document.addEventListener('keydown', function (ev) {
+    if (selected === null || drag || (ev.target && ev.target.tagName === 'INPUT')) return;
+    var pos = draft.indexOf(selected);
+    if (pos < 0) return;
+    var to = { ArrowUp: pos - 1, ArrowDown: pos + 2, Home: 0, End: draft.length }[ev.key];
+    if (to === undefined) return;
+    ev.preventDefault();
+    if (to >= 0 && to <= draft.length && to !== pos && to !== pos + 1) { move(pos, to); render(); }
+  });
+
+  // ---- Render events from Streamlit ----
+  window.addEventListener('message', function (ev) {
+    var data = ev.data;
+    if (!data || data.type !== 'streamlit:render') return;
+    var theme = data.theme;
+    if (theme) {
+      var s = document.documentElement.style;
+      if (theme.primaryColor) s.setProperty('--primary', theme.primaryColor);
+      if (theme.backgroundColor) s.setProperty('--bg', theme.backgroundColor);
+      if (theme.secondaryBackgroundColor) s.setProperty('--bg2', theme.secondaryBackgroundColor);
+      if (theme.textColor) {
+        s.setProperty('--text', theme.textColor);
+        s.setProperty('--border', 'color-mix(in srgb, ' + theme.textColor + ' 20%, transparent)');
+        s.setProperty('--muted', 'color-mix(in srgb, ' + theme.textColor + ' 60%, transparent)');
+      }
+      if (theme.font) s.setProperty('--font', theme.font);
+    }
+    var args = data.args;
+    var nextSig = JSON.stringify([args.items, args.inserts]);
+    if (nextSig !== sig) {            // a new table or other methods for the kinds: start from the table
+      sig = nextSig;
+      items = args.items || [];
+      inserts = args.inserts || [];
+      inserts.forEach(function (ins) { if (!(ins.kind in every)) every[ins.kind] = ins.every || 0; });
+      draft = fresh();
+      selected = null;
+    }
+    if (!drag) render();
+  });
+
+  window.addEventListener('resize', syncHeight);
+  send('streamlit:componentReady', { apiVersion: 1 });
+})();
+</script>
+</body>
+</html>

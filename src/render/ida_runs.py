@@ -12,6 +12,8 @@ sequence (.sld) schedules and what FLASHIda is doing for each.
 
 import copy
 import hashlib
+import html
+import random
 import json
 import time
 from pathlib import Path
@@ -26,6 +28,7 @@ from src import flashida_folder as ff
 from src import flashida_method as fm
 from src import flashida_sequence as fs
 from src.render import ida_sections as sections
+from src.render.run_order import run_order
 
 _VERSION = 'ida-method-version'
 DIALOG_KEY = 'ida-open-dialog'  # 'import' or 'pattern'
@@ -707,12 +710,22 @@ def _mode_choice(runs: list, key: str) -> str:
                     else f'{_MODES[m]} ({len(runs)} run{"s" if len(runs) != 1 else ""} now)')
 
 
-def _duplicates_note(duplicates: list) -> None:
-    if duplicates:
-        st.warning(f'{len(duplicates)} name{"s are" if len(duplicates) != 1 else " is"} in the table '
-                   'more than once: ' + ', '.join(f'`{d}`' for d in duplicates[:10])
-                   + (' …' if len(duplicates) > 10 else '')
-                   + '. The runs are added and marked; rename or remove them before the run can start.')
+def _duplicates_note(duplicates: list, before: list = ()) -> None:
+    """Names the table would have more than once: those these runs bring in,
+    and apart from them those the table has twice already (``before``)."""
+    def listed(names):
+        return ', '.join(f'`{d}`' for d in names[:10]) + (' …' if len(names) > 10 else '')
+    old = {d.casefold() for d in before}
+    new = [d for d in duplicates if d.casefold() not in old]
+    kept = [d for d in duplicates if d.casefold() in old]
+    if new:
+        st.warning(f'{len(new)} of these name{"s are" if len(new) != 1 else " is"} in the table already: '
+                   + listed(new) + '. The runs are added and marked; rename or remove them before the '
+                   'run can start.')
+    if kept:
+        st.info(f'The table already has {len(kept)} name{"s" if len(kept) != 1 else ""} more than once, '
+                'not caused by these runs: ' + listed(kept) + '. Rename or remove one of each before the '
+                'run can start.')
 
 
 def _commit(workflow_dir, runs: list, added: int, duplicates: list) -> None:
@@ -783,7 +796,7 @@ def import_dialog(workflow_dir, folder) -> None:
                              hide_index=True, use_container_width=True, height=min(36 + 35 * len(parsed), 250))
     combined, duplicates = fs.combine(runs, parsed, mode)
     if parsed:
-        _duplicates_note(duplicates)
+        _duplicates_note(duplicates, fs.duplicate_names(runs) if mode == 'append' else [])
     if st.button(f'Import {len(parsed)} run{"s" if len(parsed) != 1 else ""}' if parsed else 'Import',
                  type='primary', disabled=not parsed, key='ida-imp-go'):
         if source == 'json':
@@ -797,6 +810,61 @@ def import_dialog(workflow_dir, folder) -> None:
         if missing:
             st.session_state['ida-missing'] = missing
         _commit(workflow_dir, combined, len(new), duplicates)
+
+
+@st.dialog('Reorder runs', width='large', on_dismiss='rerun')
+def order_dialog(workflow_dir, folder) -> None:
+    """The runs as a list to drag into a new order, shuffle, or give washes;
+    Save writes the table."""
+    runs = fm.load_runs(workflow_dir)
+    methods, favs = _folder_methods(folder)
+    inserts = []
+    if methods:
+        st.caption('Runs with these methods are put between the samples: 🎲 Randomize leaves them in '
+                   'place, and Insert adds or removes them. — leaves a kind out.')
+        cols = st.columns(len(fs.INSERT_KINDS))
+        for col, (kind, (label_, _)) in zip(cols, fs.INSERT_KINDS.items()):
+            options = [None] + methods
+            default = fs.WASH_PRESET if kind == 'wash' and fs.WASH_PRESET in methods else None
+            method = col.selectbox(f'{label_} method', options, index=options.index(default),
+                                   key=f'ida-order-{kind}', format_func=lambda m: '—' if m is None
+                                   else _method_label(favs)(m),
+                                   help=f'The method of the {label_.lower()} runs. Type to search.')
+            if method:
+                inserts.append({'kind': kind, 'label': label_, 'method': method,
+                                'base': fs.join([fs.today(), {'qc': 'QC'}.get(kind, kind)]),
+                                'every': 3 if kind == 'wash' else 0})
+    used = [i['method'] for i in inserts]
+    if len(set(used)) != len(used):
+        st.error('Two kinds have the same method: give each its own, or leave one out (—).')
+        return
+    # By the kind a run was inserted as, not by its method alone: a sample run
+    # that uses the wash method is still a sample run
+    in_use = {i['kind']: i['method'] for i in inserts}
+    kinds = [fs.insert_kind(r, in_use) for r in runs]
+    order = run_order([{'name': r.get('name'), 'method': r.get('method_file') or 'no method', 'kind': k}
+                       for r, k in zip(runs, kinds)],
+                      key='ida-run-order', inserts=inserts)
+    if order is not None:
+        # Every inserted run keeps its kind from now on, also one found by its name
+        new = [dict(runs[e], **({'kind': kinds[e]} if kinds[e] else {})) if isinstance(e, int)
+               else {'name': e['name'], 'method_file': e['method'], 'kind': e['kind']} for e in order]
+        fm.save_runs(workflow_dir, new)
+        _bump()
+        added = sum(not isinstance(e, int) for e in order)
+        kept = {e for e in order if isinstance(e, int)}
+        removed = sum(i not in kept for i in range(len(runs)))
+        st.toast('Saved the new order of the runs'
+                 + (f', {added} run{"s" if added != 1 else ""} added' if added else '')
+                 + (f', {removed} run{"s" if removed != 1 else ""} removed' if removed else '') + '.',
+                 icon='↕️')
+        st.rerun()
+
+
+def _kind_word(kind: str) -> str:
+    """'wash', 'QC standard', 'blank': a kind of inserted run inside a sentence."""
+    label_ = fs.INSERT_KINDS[kind][0]
+    return label_ if label_.startswith('QC') else label_.lower()
 
 
 @st.dialog('Add runs by pattern', width='large', on_dismiss='rerun')
@@ -819,20 +887,34 @@ def pattern_dialog(workflow_dir, folder) -> None:
         placeholder='BSA\nEcoli; comment=top3; replicates=3\nHeLa',
         help='A line may set its own values after the name: `; comment=…` and `; replicates=…`.')
     order = right.radio('Order', list(fs.ORDERS), key='ida-pat-order', format_func=fs.ORDERS.get)
+    # A random order stays the same while the dialog is edited; 🎲 draws a new one
+    seed = st.session_state.setdefault('ida-pat-seed', random.randrange(1 << 30))
+    if order == 'random' and right.button('🎲 Shuffle again', key='ida-pat-shuffle',
+                                          help='A new random order. Washes, QC standards and blanks '
+                                               'keep their places between the sample runs.'):
+        st.session_state['ida-pat-seed'] = seed = random.randrange(1 << 30)
     with right:
         pick = _method_pick('Method for the samples', methods, favs, 'ida-pat-method',
                             _default_method(methods, favs, runs))
 
     with st.container(border=True):
-        w1, w2, w3, w4 = st.columns([0.9, 1, 2, 1.8], vertical_alignment='bottom')
-        wash = w1.checkbox('Wash', key='ida-pat-wash')
-        every = w2.number_input('Every … runs', min_value=1, max_value=99, value=3, step=1,
-                                key='ida-pat-every', disabled=not wash)
-        wash_name = w3.text_input('Wash name', value=fs.DEFAULT_WASH_NAME, key='ida-pat-wname',
-                                  disabled=not wash, help='Takes {prefix}, {date}, {suffix} and {n}, the wash number.')
-        with w4:
-            wash_pick = _method_pick('Wash method', methods, favs, 'ida-pat-wmethod', fs.WASH_PRESET,
-                                     disabled=not wash)
+        st.caption('Runs between the samples: each kind after every few sample runs, none after the '
+                   'last. Names take {prefix}, {date}, {suffix} and {n}, the number of that kind.')
+        inserts, picks = [], {}
+        for kind, (label_, name_default) in fs.INSERT_KINDS.items():
+            # The wash keeps its former keys, so a dialog opened before keeps its values
+            k = {'wash': ('ida-pat-wash', 'ida-pat-every', 'ida-pat-wname', 'ida-pat-wmethod')}.get(
+                kind, tuple(f'ida-pat-{kind}-{x}' for x in ('on', 'every', 'name', 'method')))
+            w1, w2, w3, w4 = st.columns([1.1, 1, 2, 1.8], vertical_alignment='bottom')
+            on = w1.checkbox(label_, key=k[0])
+            every = w2.number_input('Every … runs', min_value=1, max_value=99,
+                                    value=3 if kind == 'wash' else 10, step=1, key=k[1], disabled=not on)
+            name = w3.text_input(f'{label_} name', value=name_default, key=k[2], disabled=not on)
+            with w4:
+                picks[kind] = _method_pick(f'{label_} method', methods, favs, k[3],
+                                           fs.WASH_PRESET if kind == 'wash' else None, disabled=not on)
+            if on:
+                inserts.append({'kind': kind, 'every': int(every), 'name': name})
 
     mode = _mode_choice(runs, 'ida-pat-mode')
 
@@ -842,31 +924,36 @@ def pattern_dialog(workflow_dir, folder) -> None:
     except ValueError as e:
         error = str(e)
     else:
-        if wash and fs.unknown_placeholders(wash_name):
-            error = 'Unknown placeholder in the wash name: ' + ', '.join(
-                '{' + p + '}' for p in fs.unknown_placeholders(wash_name))
+        unknown = [(fs.INSERT_KINDS[i['kind']][0], p) for i in inserts for p in fs.unknown_placeholders(i['name'])]
+        if unknown:
+            error = 'Unknown placeholder: ' + ', '.join(f'{{{p}}} in the {lab.lower()} name' for lab, p in unknown)
         else:
             names = fs.pattern_names(samples, prefix.strip(), date.strip(), suffix.strip(), rfmt, order,
-                                     int(every) if wash else 0, wash_name)
+                                     inserts=inserts, seed=seed,
+                                     taken=[r.get('name') or '' for r in runs] if mode == 'append' else ())
     if error:
         st.error(error)
     if not methods:
         st.warning('Set the method folder under Instrument PC first.')
-    new = [{'name': n['name'], 'method_file': wash_pick if n['wash'] else pick} for n in names]
+    new = [{'name': n['name'], 'method_file': pick} if n['kind'] == 'sample'
+           else {'name': n['name'], 'method_file': picks[n['kind']], 'kind': n['kind']} for n in names]
     combined, duplicates = fs.combine(runs, new, mode)
     dup = {d.casefold() for d in duplicates}
     if names:
-        washes = sum(n['wash'] for n in names)
         start = len(runs) if mode == 'append' else 0
-        st.markdown(f'**Preview:** {len(names) - washes} sample run{"s" if len(names) - washes != 1 else ""}'
-                    + (f' and {washes} wash{"es" if washes != 1 else ""}' if washes else ''))
+        counts = {kind: sum(n['kind'] == kind for n in names) for kind in ('sample', *fs.INSERT_KINDS)}
+        parts = [f"{counts[kind]} {_kind_word(kind)}{('es' if kind == 'wash' else 's') if counts[kind] != 1 else ''}"
+                 for kind in fs.INSERT_KINDS if counts[kind]]
+        st.markdown(f"**Preview:** {counts['sample']} sample run{'s' if counts['sample'] != 1 else ''}"
+                    + (', ' + ', '.join(parts) if parts else ''))
         st.dataframe(pd.DataFrame({
             '#': range(start + 1, start + len(names) + 1),
             'Raw file name': [n['name'] for n in names],
-            'Method': [f'{wash_pick} (wash run)' if n['wash'] else pick for n in names],
+            'Method': [pick if n['kind'] == 'sample'
+                       else f"{picks[n['kind']]} ({_kind_word(n['kind'])})" for n in names],
             '': ['⚠️ duplicate' if n['name'].casefold() in dup else '' for n in names],
         }), hide_index=True, use_container_width=True, height=min(36 + 35 * len(names), 300))
-        _duplicates_note(duplicates)
+        _duplicates_note(duplicates, fs.duplicate_names(runs) if mode == 'append' else [])
     elif not error:
         st.caption('Enter at least one sample to see the runs.')
     if st.button(f'Add {len(new)} run{"s" if len(new) != 1 else ""}' if new else 'Add runs',
@@ -877,13 +964,28 @@ def pattern_dialog(workflow_dir, folder) -> None:
 def _clipboard_bar(workflow_dir, runs: list, selected: list) -> None:
     clip = st.session_state.get(CLIPBOARD_KEY)
     with st.container(border=True):
-        a, b = st.columns([5, 1.9], vertical_alignment='center')
+        a, c, d, b = st.columns([3.2, 1.3, 1.3, 1.9], vertical_alignment='center')
         if clip:
             a.markdown(f"📋 Copied: the method **{clip['method_file']}** of {clip['name'] or 'an unnamed run'}. "
                        'Tick runs, then paste.')
         else:
-            a.caption('📋 No method copied. Copy one with the 📋 button of a run, tick the runs that '
+            a.caption('📋 No method copied. Tick one run and copy its method, tick the runs that '
                       'should get it, then paste.')
+        one = runs[selected[0]] if len(selected) == 1 else None
+        if c.button('📋 Copy method', use_container_width=True, key='ida-copy',
+                    disabled=not (one and one.get('method_file')),
+                    help='Copies the method of the ticked run' if one else 'Tick one run to copy its method'):
+            st.session_state[CLIPBOARD_KEY] = {'name': one['name'], 'method_file': one['method_file']}
+            _bump()  # untick it, ready to tick the runs that get the method
+            st.rerun(scope='fragment')
+        if d.button(f'⧉ Duplicate ({len(selected)})', use_container_width=True, key='ida-dup',
+                    disabled=not selected,
+                    help='Adds a copy of each ticked run right below it, with the next free name (R1 → R2)'):
+            for i in sorted(selected, reverse=True):
+                runs = ff.duplicate(runs, i)
+            fm.save_runs(workflow_dir, runs)
+            _bump()
+            st.rerun(scope='fragment')
         if len(selected) == 2 and all(runs[i].get('method_file') for i in selected):
             ma, mb = (runs[i]['method_file'] for i in selected)
             if b.button('⇄ Compare their methods', use_container_width=True, key='ida-compare-runs',
@@ -944,10 +1046,100 @@ _STATE = {
     'failed': '❌ FLASHIda failed (see the log)',
 }
 
+def _failed_notice(status: dict) -> None:
+    """Runs FLASHIda failed for, at the top of the table, and a toast the
+    first time this page sees each one: a long acquisition hides a ❌ row."""
+    failed = [name for name, s in (status.get('runs') or {}).items() if s.get('state') == 'failed']
+    if not failed:
+        return
+    st.error(f"**FLASHIda failed for {len(failed)} run{'s' if len(failed) != 1 else ''}:** "
+             + ', '.join(f'`{n}`' for n in failed) + '. The log below says why; the other runs go on.',
+             icon='❌')
+    seen = st.session_state.setdefault('ida-failed-seen', set())
+    started = status.get('started')
+    for name in failed:
+        if (started, name) not in seen:
+            seen.add((started, name))
+            st.toast(f"FLASHIda failed for '{name}'.", icon='❌')
+
+
 # Raw file names are long: a smaller monospace font lets them fit their column.
-_NAME_CSS = ("<style>[class*='st-key-ida-name-'] input{font-size:.7rem;"
+_NAME_CSS = ("<style>[class*='st-key-ida-name-'] input{font-size:.8rem;"
              "font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:-.01em;"
              "padding-left:.45rem;padding-right:.45rem}</style>")
+
+# Badges of the Seq. column, each with its own tooltip shown on hover. The
+# colors are mid tones, readable on the light and the dark theme.
+_BADGE_CSS = """<style>
+.ida-badges{display:flex;gap:.3rem;align-items:center;flex-wrap:nowrap}
+.ida-badge{position:relative;display:inline-block;padding:.05rem .4rem;border-radius:.4rem;
+  font-size:.95rem;font-weight:600;line-height:1.4;cursor:help;white-space:nowrap}
+.ida-badge.green{background:rgba(33,195,84,.16);color:#1f9d4c}
+.ida-badge.orange{background:rgba(255,164,33,.18);color:#d97706}
+.ida-badge.red{background:rgba(255,43,43,.14);color:#e53935}
+.ida-badge.gray{background:rgba(128,132,149,.18);color:#808495}
+.ida-badge .tip{visibility:hidden;opacity:0;transition:opacity .12s;position:absolute;z-index:1000;
+  right:0;top:calc(100% + 6px);width:22rem;padding:.55rem .7rem;border-radius:.5rem;
+  background:#262730;color:#fafafa;font-size:.8rem;font-weight:400;line-height:1.45;
+  white-space:pre-line;text-align:left;box-shadow:0 4px 14px rgba(0,0,0,.25);pointer-events:none}
+.ida-badge:hover .tip{visibility:visible;opacity:1}
+.ida-badge .tip b{color:#fff}
+</style>"""
+
+
+def _badge(color: str, text: str, title: str, body: str) -> str:
+    esc = html.escape
+    return (f'<span class="ida-badge {color}">{esc(text)}'
+            f'<span class="tip"><b>{esc(title)}</b>\n{esc(body)}</span></span>')
+
+
+def _seq_badges(run, method_file, method, problem, sequence, planned, present,
+                missing_file, folder) -> str:
+    """The Seq. column of a run: its place in the newest sequence, always,
+    and beside it what keeps the run from being acquired as planned."""
+    name = run.get('name') or ''
+    raw = f'{name}.raw' if name else 'its raw file'
+    with_method = f" with the method '{method_file}'" if method_file else ''
+    if not sequence:
+        out = [_badge('gray', '–', 'No sequence yet',
+                      'There is no Xcalibur sequence (.sld) in the raw file folder, so FLASHApp cannot '
+                      'tell which runs the instrument will acquire.\n'
+                      f'FLASHIda still starts{with_method} as soon as {raw} appears in the folder.')]
+    elif name in planned:
+        out = [_badge('green', f'✓ {planned[name]}', f"Row {planned[name]} of the newest sequence",
+                      f"The newest sequence '{sequence['name']}' writes {raw} in row {planned[name]}.\n"
+                      f'When the file appears in the raw file folder, FLASHIda starts{with_method}.')]
+    else:
+        out = [_badge('orange', '–', 'Not in the newest sequence',
+                      f"The newest sequence '{sequence['name']}' has no row that writes {raw}, so the "
+                      'instrument will probably not acquire this run.\n'
+                      'Check that the name matches the sequence (case does not matter). If the file '
+                      f'appears anyway, FLASHIda still starts{with_method}.')]
+    if name and name.casefold() in present:
+        out.append(_badge('gray', '⏭️', 'Raw file already there: skipped',
+                          f'{raw} is already in the raw file folder. FLASHIda starts only for raw files '
+                          'that appear after the acquisition starts, so it is not started for this run.\n'
+                          'To acquire it, give the run (and its sequence row) a new name, or move the '
+                          'old file out of the folder.'))
+    if problem and name:
+        out.append(_badge('red', '⚠️', 'Raw file name not usable',
+                          f'{problem}\nFLASHIda is not started for this run until the name is fixed; '
+                          'Run analysis stays off.'))
+    elif missing_file:
+        out.append(_badge('red', '⚠️', 'Method file missing',
+                          f"'{method_file}.json' is not in the method folder '{folder}'. It was renamed, "
+                          'moved or deleted.\nPick another method for this run, or put the file back.'))
+    elif method is not None:
+        issues = fm.check(method)
+        if issues:
+            listed = '\n'.join(f'• {p}' for p in issues[:6])
+            more = f'\n… and {len(issues) - 6} more' if len(issues) > 6 else ''
+            out.append(_badge('orange', '⚠️', "Method fails FLASHApp's check",
+                              f"'{method_file or 'The method'}' does not fit FLASHIda's method schema:\n"
+                              f'{listed}{more}\n'
+                              'FLASHIda checks the method itself when the run starts and may refuse it. '
+                              'Fix it with 📝 New or edit method, or start with ⚠️ Run anyway.'))
+    return _BADGE_CSS + '<div class="ida-badges">' + ''.join(out) + '</div>'
 
 
 def _prepare_folder(workflow_dir, presets_dir, folder) -> None:
@@ -1015,6 +1207,8 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             import_dialog(workflow_dir, folder)
         elif dialog == 'pattern':
             pattern_dialog(workflow_dir, folder)
+    if not running and dialog == 'order':
+        order_dialog(workflow_dir, folder)
     if 'ida-added' in st.session_state:
         added, duplicates = st.session_state.pop('ida-added')
         st.toast(f'Added {added} run{"s" if added != 1 else ""}.'
@@ -1058,18 +1252,59 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
                 ('FLASHIda still starts for a run whose raw file appears.' if running else ''))
         if not usable:
             st.info('📁 Set the **method folder** under Instrument PC: each run picks its method from there.')
+        if running:
+            _failed_notice(status)
+        if extra:
+            shown = extra[:8] + ([f'and {len(extra) - 8} more'] if len(extra) > 8 else [])
+            many = len(extra) != 1
+            them = 'them' if many else 'it'
+            st.warning(f"**{len(extra)} raw file{'s' if many else ''} of the sequence "
+                       f"{'are' if many else 'is'} not in the table**, so FLASHIda is not started "
+                       f"for {them}: " + ', '.join(f'`{e}`' for e in shown)
+                       + (f'. Stop the acquisition to add {them}.' if running else
+                          f'. Add {them} with **📋 Add from sequence** below the table.'),
+                       icon='⚠️')
+
+        # Raw files already in the folder: the start leaves their runs alone
+        present = set() if running or not raw_dir else {n.casefold() for n in flashida.raw_names(raw_dir)}
 
         v = _version()
+        fav_stamp = hashlib.md5('\n'.join(sorted(favs)).encode()).hexdigest()[:8]
         selected = [i for i in range(len(runs)) if st.session_state.get(f'ida-sel-{i}-{v}')]
         if not running and runs:
             _clipboard_bar(workflow_dir, runs, selected)
-        # select, #, name, method, favorite, copy, duplicate, sequence, [status], remove
-        widths = [0.3, 0.35, 3.3, 3.9, 0.5, 0.5, 0.5, 0.9] + ([2.4] if running else []) + [0.5]
-        titles = ['', '', 'Raw file name', 'Method', '', '', '', 'Seq.'] + (['Status'] if running else []) + ['']
+        # select, #, name, method, favorite, sequence, [status], remove
+        widths = [0.3, 0.35, 3.6, 4.1, 0.5, 1.2] + ([2.4] if running else []) + [0.5]
+        titles = ['', '', 'Raw file name', 'Method', '', 'Sequence'] + (['Status'] if running else []) + ['']
+        tips = {'Raw file name': 'The name of the raw file the instrument writes for this run, without .raw. '
+                                 'FLASHIda starts for the run when this file appears in the raw file folder.',
+                'Method': 'The FLASHIda method (a .json file in the method folder) the run is acquired with.',
+                'Sequence': "The run's row in the newest Xcalibur sequence (.sld) of the raw file folder, "
+                            'and beside it anything that keeps the run from being acquired as planned. '
+                            'Hover a badge for details.'}
         head = st.columns(widths, vertical_alignment='center')
         for col, title in zip(head, titles):
-            col.markdown(f'<span style="font-size:.8rem;opacity:.65;font-weight:600">{title}</span>',
-                         unsafe_allow_html=True)
+            if not title:
+                continue
+            col.markdown(f'<span title="{html.escape(tips.get(title, ""))}" style="font-size:.95rem;'
+                         f'opacity:.8;font-weight:700;cursor:{"help" if title in tips else "default"}">'
+                         f'{title}</span>', unsafe_allow_html=True)
+        if len(runs) > 1 and not running:
+            if head[1].button('↕', key='ida-reorder', type='tertiary',
+                              help='**Reorder runs**: drag the runs into a new order in a list, shuffle '
+                                   'them (🎲 Randomize) or put a wash after every few runs. The order is '
+                                   'the order of the exported sequence and of the duration estimate.'):
+                st.session_state[DIALOG_KEY] = 'order'
+                st.rerun()
+        if runs and not running:
+            def tick_all(keys=[f'ida-sel-{i}-{v}' for i in range(len(runs))], all_key=f'ida-sel-all-{v}'):
+                for k in keys:
+                    st.session_state[k] = st.session_state[all_key]
+            # Follows the rows, so ticking the last run by hand ticks it too
+            st.session_state[f'ida-sel-all-{v}'] = len(selected) == len(runs)
+            head[0].checkbox('Select all', key=f'ida-sel-all-{v}',
+                             label_visibility='collapsed', on_change=tick_all,
+                             help='Tick or untick every run')
         for i, run in enumerate(runs):
             c = st.columns(widths, vertical_alignment='center')
             c[0].checkbox('Select', key=f'ida-sel-{i}-{v}', label_visibility='collapsed',
@@ -1083,7 +1318,8 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             options = list(methods)
             if current and current not in options:
                 options = [current] + options
-            mkey = f'ida-m-{i}-{v}'
+            # The favorites in the key: a new star redraws the labels (★ name)
+            mkey = f'ida-m-{i}-{v}-{fav_stamp}'
             c[3].selectbox('Method', options, index=options.index(current) if current in options else None,
                            key=mkey, label_visibility='collapsed', placeholder='Pick a method',
                            format_func=_method_label(favs, methods), disabled=running or not methods,
@@ -1095,40 +1331,19 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
                                 'favorites, listed first in every method choice' if current else None):
                 ff.toggle_favorite(folder, current)
                 st.rerun(scope='fragment')
-            if c[5].button('📋', key=f'ida-copy-{i}', disabled=not current,
-                           help='Copy the method of this run'):
-                st.session_state[CLIPBOARD_KEY] = {'name': run['name'], 'method_file': current}
-                st.rerun(scope='fragment')
-            if c[6].button('⧉', key=f'ida-dup-{i}', disabled=running,
-                           help='Duplicate this run below, with the next free name (R1 → R2)'):
-                fm.save_runs(workflow_dir, ff.duplicate(runs, i))
-                _bump()
-                st.rerun(scope='fragment')
 
             problem = fm.name_problem(run['name'], [r['name'] for r in runs[:i]])
             method = ff.run_method(run, folder)
-            if problem and run['name']:
-                c[7].markdown(':red-badge[⚠️]', help=problem)
-            elif current and usable and current not in methods:
-                c[7].markdown(':red-badge[⚠️]', help=f"'{current}.json' is not in the method folder.")
-            elif method is not None and fm.check(method):
-                c[7].markdown(':orange-badge[⚠️]', help="The method fails FLASHApp's check; FLASHIda may refuse it.")
-            elif not sequence:
-                c[7].markdown(':gray-badge[–]', help='No sequence in the raw file folder.')
-            elif run['name'] in planned:
-                c[7].markdown(f':green-badge[✓ {planned[run["name"]]}]',
-                              help=f'Row {planned[run["name"]]} of the newest sequence.')
-            else:
-                c[7].markdown(':orange-badge[–]',
-                              help='Not in the newest sequence. FLASHIda still starts if this raw file appears.')
+            c[5].html(_seq_badges(run, current, method, problem, sequence, planned, present,
+                                  usable and current not in methods, folder))
             if running:
                 state = (status.get('runs') or {}).get(run['name'], {})
                 if state.get('state') == 'running':
                     minutes = int((time.time() - state.get('since', time.time())) // 60)
                     d = ff.duration(method)
-                    c[8].markdown(f'🟢 FLASHIda running · {minutes}' + (f' of {d:g} min' if d is not None else ' min'))
+                    c[6].markdown(f'🟢 FLASHIda running · {minutes}' + (f' of {d:g} min' if d is not None else ' min'))
                 else:
-                    c[8].markdown(_STATE.get(state.get('state'), '⏳ Waiting for its raw file'))
+                    c[6].markdown(_STATE.get(state.get('state'), '⏳ Waiting for its raw file'))
             if c[-1].button('🗑️', key=f'ida-del-{i}', disabled=running, help='Remove this run'):
                 del runs[i]
                 fm.save_runs(workflow_dir, runs)
@@ -1139,12 +1354,9 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             st.caption('No runs yet. Add one per acquisition, named as the sequence names its raw file.')
         else:
             st.markdown(_duration_line(runs, folder, running, status))
-        if extra:
-            st.caption('Also in the sequence, not in the table (FLASHIda is not started for these): '
-                       + ', '.join(f'`{e}`' for e in extra))
 
         if not running:
-            a, b, c3, d, e, g = st.columns([1.1, 2.3, 1.8, 1.4, 1.4, 1.9])
+            a, b, c3, d, e, g = st.columns([1.1, 2.0, 1.8, 1.4, 1.4, 1.9])
             if a.button('➕ Add run', use_container_width=True):
                 runs.append({'name': '', 'method_file': _default_method(methods, favs, runs)})
                 fm.save_runs(workflow_dir, runs)
@@ -1153,11 +1365,17 @@ def runs_table(workflow_dir, presets_dir, raw_dir: str, running: bool, footer=No
             seq_rows = _sequence_now(raw_dir).get('rows', []) if raw_dir else []
             have = {r['name'].casefold() for r in runs}
             new = [r['name'] for r in seq_rows if r['name'].casefold() not in have]
-            if b.button('📋 Add names from the newest sequence', use_container_width=True,
-                        disabled=not new,
-                        help='Adds a run for each raw file the newest .sld in the raw file folder '
-                             'writes that the table does not have yet.' if new else
-                             'No sequence in the raw file folder, or the table has all its names.'):
+            seq_name = (_sequence_now(raw_dir) or {}).get('name') if raw_dir else None
+            if b.button('📋 Add from sequence', use_container_width=True, disabled=not new,
+                        help=(f"**Adds the {len(new)} raw file{'s' if len(new) != 1 else ''} of the Xcalibur "
+                              f"sequence '{seq_name}' that the table does not have yet** "
+                              f"({', '.join(new[:5])}{', …' if len(new) > 5 else ''}).\n\n"
+                              'The sequence is the newest .sld in the raw file folder. The new runs get the '
+                              'method of the last run (else the first favorite); pick another per run '
+                              'afterwards. Runs already in the table stay as they are.') if new else
+                             ('**Adds the raw files of the Xcalibur sequence the table does not have yet.**'
+                              '\n\n' + (f"The table already has every raw file of '{seq_name}'." if seq_name
+                                        else 'There is no sequence (.sld) in the raw file folder yet.'))):
                 method_file = _default_method(methods, favs, runs)
                 runs.extend({'name': n, 'method_file': method_file} for n in new)
                 fm.save_runs(workflow_dir, runs)
@@ -1235,6 +1453,24 @@ def start_problems(workflow_dir, params: dict) -> list:
     if ff.usable(folder):
         problems += [f'Run {i + 1}: {text}' for i, text in ff.method_problems(runs, folder)]
     return problems
+
+
+def etd_notice(workflow_dir, folder: str = '') -> None:
+    """A warning that stands out when a run's method acquires with ETD: the
+    reagent is set up in Tune, which no method does."""
+    runs = []
+    for i, run in enumerate(fm.load_runs(workflow_dir)):
+        scans = sections.etd_scans(ff.run_method(run, folder))
+        if scans:
+            runs.append(f"Run {i + 1} `{run['name'] or 'unnamed'}` "
+                        f"({run.get('method_file') or 'its method'}: {', '.join(scans)})")
+    if not runs:
+        return
+    shown = runs[:5] + ([f'and {len(runs) - 5} more'] if len(runs) > 5 else [])
+    st.warning('**ETD: set up ETD in Tune before the acquisition starts.** '
+               f"{'This method uses' if len(runs) == 1 else 'These methods use'} ETD, "
+               'which FLASHIda cannot switch on itself.\n\n'
+               + '\n'.join(f'- {r}' for r in shown), icon='⚡')
 
 
 def method_warnings(workflow_dir, folder: str = '') -> list:

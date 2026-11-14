@@ -111,3 +111,25 @@ def test_summary_lines():
     method = fm.builtin_presets()['LC-MS real-time ID, MS2 only']
     assert sections.line(method, 'ms2').startswith('HCD 35 NCE · Orbitrap')
     assert 'no reference' in sections.line(method, 'ident')
+
+
+@pytest.mark.parametrize('method, scans', [
+    ({}, []),
+    ({'ms_settings': {'ms2': {'activation': 'HCD'}}}, []),
+    ({'ms_settings': {'ms2': {'activation': 'ETD'}}}, ['MS2']),
+    ({'ms_settings': {'ms2': {'activation': 'EThcD'}}}, ['MS2']),
+    # a scan FLASHIda does not send with the method as it is does not count
+    ({'ms_settings': {'ms3': {'activation': 'ETD'}}}, []),
+    ({'ms_settings': {'ms3': {'activation': 'ETD'}},
+      'identification': {'characterization': {'mode': 'coverage'}}}, ['MS3']),
+    ({'ms_settings': {'ms2_quant': {'activation': 'ETciD'}}}, []),
+    ({'ms_settings': {'ms2_quant': {'activation': 'ETciD'}}, 'quantification': {'enabled': True}},
+     ['Quant MS2']),
+    # an energy sweep over an ETD-family activation, scored, is sent too
+    ({'precursor_selection': {'exploration': {'metric': 'remaining_precursor',
+                                              'activations': ['HCD', 'EThcD']}}}, ['MS2 sweep']),
+    ({'precursor_selection': {'exploration': {'metric': 'none', 'activations': ['ETD']}}}, []),
+])
+def test_etd_scans(method, scans):
+    assert sections.etd_scans(method) == scans
+    assert sections.etd_scans(None) == []

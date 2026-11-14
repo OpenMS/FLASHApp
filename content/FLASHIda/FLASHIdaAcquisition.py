@@ -51,6 +51,7 @@ def start_bar() -> None:
         # The acquisition started or ended since the page was drawn
         st.rerun()
     st.write('')
+    ida_runs.etd_notice(wf.workflow_dir, method_dir)
     with st.container(border=True):
         a, b = st.columns([5, 1.4], vertical_alignment='center')
         if running:
@@ -60,9 +61,21 @@ def start_bar() -> None:
                 (f"**Running since {ida_runs._when(started)[:5]}.** " if started else '**Running.** ')
                 + 'The table shows what FLASHIda does for each run; the **Viewer** follows it live.'
             )
-            if b.button('⏹️ Stop', use_container_width=True):
-                wf.stop_workflow()
-                st.rerun()
+            if st.session_state.get('ida-confirm-stop'):
+                # A stray click must not end an acquisition: Stop asks first
+                st.warning('**Stop the acquisition?** FLASHIda is stopped now and not started for '
+                           'the runs still waiting.', icon='⏹️')
+                y, n, _ = st.columns([1.4, 1.4, 4])
+                if y.button('⏹️ Yes, stop', type='primary', use_container_width=True):
+                    st.session_state.pop('ida-confirm-stop', None)
+                    wf.stop_workflow()
+                    st.rerun()
+                if n.button('Keep running', use_container_width=True):
+                    st.session_state.pop('ida-confirm-stop', None)
+                    st.rerun(scope='fragment')
+            elif b.button('⏹️ Stop', use_container_width=True):
+                st.session_state['ida-confirm-stop'] = True
+                st.rerun(scope='fragment')
         else:
             current = wf.parameter_manager.get_parameters_from_json()
             problems = ida_runs.start_problems(wf.workflow_dir, current)
