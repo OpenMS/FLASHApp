@@ -231,7 +231,7 @@ def inspect_requested():
         return
     inspect_scan.store(workspace, data)
     # The matcher shows this proteoform, or keeps its own sequence
-    st.session_state.pop('matcher_seen_sequence', None)
+    st.session_state.pop('matcher_sequence_seen', None)
     if data['sequence']:
         StateManager(session_key=MATCHER_STATE).set_selection('sequence', data['sequence'])
     st.switch_page(MATCHER_PAGE)
