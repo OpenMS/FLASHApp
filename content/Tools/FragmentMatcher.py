@@ -14,6 +14,7 @@ of their own).
 
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -263,15 +264,23 @@ def run_masses(dataset_id, scan_number):
     return list(rows['MonoMass'][0]), rows['PrecursorMass'][0], method
 
 
-# Each visit starts empty: masses and sequence of an earlier session are dropped
+# Input another page handed over (the Viewer's inspect button) is taken; else
+# the first visit of a session starts empty, dropping an earlier session's input
+handed_over = fm_input.claim_hand_over(workspace)
 if not st.session_state.get('matcher_started'):
-    fm_input.clear_input(workspace)
+    if handed_over is None:
+        fm_input.clear_input(workspace)
     st.session_state['matcher_started'] = True
 # A scan of a run brings its fragmentation method (set before the widget is drawn)
 if st.session_state.get('matcher_fragmentation_next'):
     st.session_state['matcher_fragmentation'] = st.session_state.pop('matcher_fragmentation_next')
 stored = fm_input.load_input(workspace)
 manager = state()
+# A handed-over sequence goes to the sequence box and the view, as a new list's does
+if handed_over and handed_over.get('sequence'):
+    st.session_state['matcher_sequence'] = handed_over['sequence']
+    manager.set_selection('sequence', handed_over['sequence'])
+    request_proforma(handed_over['sequence'])
 
 # The masses box shows the stored masses whenever they change elsewhere (a
 # file, a run, the example, Delete all); the user's own edit keeps its text
@@ -359,6 +368,12 @@ with sequence_box:
         placeholder='e.g. MNKTQLIDVIAEK...\nor ProForma: [Acetyl]-MNK[Trimethyl]TQLIDVIAEK...\nor <[Carbamidomethyl]@C>PEPTCIDE',
         label_visibility='collapsed',
     )
+    # Ranges and unlocalized shifts are read by pyOpenMS (openms-insight with
+    # core.proforma): without it they are dropped, so say so instead of silently
+    if proforma_reader is None and re.search(r'\(|\]\??\^?\d*\?', st.session_state.get('matcher_sequence') or ''):
+        st.warning('Modification ranges `(EVTS)[+79.97]` and unlocalized shifts `[+42.01]?SEQ` need an '
+                   'openms-insight that reads ProForma with pyOpenMS (with `openms_insight.core.proforma`) '
+                   'and pyOpenMS 3.6 or later. This installation shows the sequence without them.')
     # The UniProt entry the sequence came from
     if st.session_state.get('matcher_uniprot_error'):
         st.error(st.session_state['matcher_uniprot_error'])

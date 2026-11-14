@@ -75,6 +75,23 @@ def test_clear_input(tmp_path):
     assert fm.load_input(tmp_path) is None
 
 
+def test_hand_over_is_taken_once(tmp_path):
+    """The Viewer's inspect button hands its spectrum over: the page takes it
+    once (and does not start empty), a later session starts empty again."""
+    assert fm.claim_hand_over(tmp_path) is None
+    fm.store_input(tmp_path, [1000.0], sequence='PEPK', name='scan 12', hand_over=True)
+    taken = fm.claim_hand_over(tmp_path)
+    assert taken['masses'] == [1000.0] and taken['sequence'] == 'PEPK'
+    assert 'hand_over' not in taken and 'hand_over' not in fm.load_input(tmp_path)
+    assert fm.claim_hand_over(tmp_path) is None
+    # the page's own input is never a hand-over
+    fm.store_input(tmp_path, [2000.0])
+    assert fm.claim_hand_over(tmp_path) is None
+    # the mark does not change which cache the view uses
+    assert fm.input_stamp(fm.store_input(tmp_path, [1.0], hand_over=True)) == \
+        fm.input_stamp(fm.store_input(tmp_path, [1.0]))
+
+
 def test_load_missing_or_broken(tmp_path):
     assert fm.load_input(tmp_path) is None
     fm.input_path(tmp_path).parent.mkdir(parents=True)

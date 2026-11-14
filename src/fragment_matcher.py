@@ -6,9 +6,10 @@ a TopFD/FLASHDeconv .msalign), and shows them in the sequence view against a
 sequence the user types or pastes there. Streamlit-free: this module parses
 and stores the input; the page draws it.
 
-Other pages open the matcher with a mass list of their own through
-``store_input`` (and then switch to the page), e.g. the masses of a selected
-spectrum and the sequence of an identification.
+The Viewer's inspect button opens the matcher with a spectrum of a run (its
+masses, and the sequence of its identification) through
+``store_input(..., hand_over=True)`` and then switches to the page, which
+takes that input with ``claim_hand_over`` instead of starting empty.
 
 A list of m/z values (a fragment spectrum's peaks) is turned into masses by
 ``deconvolve_mz``, FLASHDeconv's own spectral deconvolution in pyOpenMS.
@@ -163,16 +164,31 @@ def input_path(workspace):
 
 
 def store_input(workspace, masses, intensities=None, precursor_mass=None,
-                mass_type=MONOISOTOPIC, sequence=None, name=None):
+                mass_type=MONOISOTOPIC, sequence=None, name=None, hand_over=False):
     """Save the masses (and a sequence) the Match fragments page shows.
 
-    For another page that opens the matcher: call this, then
-    ``st.switch_page`` to the page. ``sequence`` (plain one-letter codes)
-    replaces the sequence shown when given."""
+    ``sequence`` (plain one-letter codes) replaces the sequence shown when
+    given. Another page that opens the matcher with input of its own (the
+    Viewer's inspect button, ``src/render/inspect_scan.py``) passes
+    ``hand_over=True`` and then switches to the page: the page takes that input
+    (``claim_hand_over``) instead of starting empty."""
     data = matcher_input(masses, intensities, precursor_mass, mass_type, sequence, name)
+    if hand_over:
+        data['hand_over'] = True
     path = input_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
+    return data
+
+
+def claim_hand_over(workspace):
+    """The input another page handed over (``store_input(hand_over=True)``),
+    taken once: the mark is removed, so a later session starts empty again.
+    None when nothing is waiting."""
+    data = load_input(workspace)
+    if not data or not data.pop('hand_over', False):
+        return None
+    input_path(workspace).write_text(json.dumps(data))
     return data
 
 

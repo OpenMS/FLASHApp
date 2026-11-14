@@ -38,6 +38,35 @@ def _coverage_from_ranges(starts, ends, seq_len):
     return coverage
 
 
+def _row_modifications(row):
+    """(starts, ends, masses, labels) of a FLASHTnT proteoform row's
+    modifications: 1-based windows of the protein, as FLASHTnT writes them."""
+    if row['ModCount'] > 0:
+        mod_masses = [float(m) for m in str(row['ModMass']).split(';')]
+        mod_starts = [int(float(s)) for s in str(row['ModStart']).split(';')]
+        mod_ends = [int(float(s)) for s in str(row['ModEnd']).split(';')]
+        if pd.isna(row['ModID']):
+            mod_labels = [''] * row['ModCount']
+        else:
+            mod_labels = [s[:-1].replace(',', '; ') for s in str(row['ModID']).split(';')]
+        return mod_starts, mod_ends, mod_masses, mod_labels
+    return [], [], [], []
+
+
+def _proteoform_fragments(sequence, start_index, end_index, mod_starts, mod_ends, mod_masses,
+                          coverage=None, max_coverage=None):
+    """Fragment masses of an identified proteoform (its stretch
+    ``start_index..end_index`` of the protein, 0-based), with its modification
+    windows moved to the proteoform. A window of one residue shifts the ions
+    holding it; a longer window makes the ions cut inside it ambiguous (both
+    masses), see ``getFragmentDataFromSeq``."""
+    modifications = [(s - start_index, e - start_index, m)
+                     for s, e, m in zip(mod_starts, mod_ends, mod_masses)]
+    return getFragmentDataFromSeq(
+        str(sequence)[start_index:end_index + 1], coverage, max_coverage, modifications
+    )
+
+
 def _linearize_tag_df(tag_df):
     """Expand ';'-packed multi-proteoform tag rows to one row per (tag, proteoform).
 
@@ -162,27 +191,10 @@ def parseTnT(
         end_index = len(sequence) - 1 if proteoform_end <= 0 else proteoform_end - 1
 
 
-        if row['ModCount'] > 0:
-            mod_masses = [float(m) for m in str(row['ModMass']).split(';')]
-            mod_starts = [int(float(s)) for s in str(row['ModStart']).split(';')]
-            mod_ends = [int(float(s)) for s in str(row['ModEnd']).split(';')]
-            if pd.isna(row['ModID']):
-                mod_labels = [''] * row['ModCount']
-            else:
-                mod_labels = [s[:-1].replace(',', '; ') for s in str(row['ModID']).split(';')]
-        else:
-            mod_masses = []
-            mod_starts = []
-            mod_ends = []
-            mod_labels = []
-        modifications = []
-        for s, e, m in zip(mod_starts, mod_ends, mod_masses):
-            modifications.append((s-start_index, e-start_index, m))
-        
+        mod_starts, mod_ends, mod_masses, mod_labels = _row_modifications(row)
         sequence = str(sequence)
-        sequence_data[pid] = getFragmentDataFromSeq(
-            str(sequence)[start_index:end_index+1], p_cov, np.max(coverage), 
-            modifications
+        sequence_data[pid] = _proteoform_fragments(
+            sequence, start_index, end_index, mod_starts, mod_ends, mod_masses, p_cov, np.max(coverage)
         )
 
         sequence_data[pid]['sequence'] = list(sequence)
