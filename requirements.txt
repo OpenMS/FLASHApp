@@ -159,7 +159,7 @@ pyyaml>=6.0
 # Its dependencies are listed in this file too; mygene and plotly are its
 # `analysis` extra (GO enrichment).
 openms-insight==0.7.5
-scikit-learn>=1.0
+scikit-learn>=1.9.1
 # Writes the processing report of a run as PDF (src/workflow/processing_report.py)
 reportlab>=4.0
 # JSON tree editor of the FLASHIda Method dialog (src/render/ida_runs.py)
