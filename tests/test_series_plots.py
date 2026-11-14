@@ -71,3 +71,34 @@ def test_row_height_lines_up_the_views_of_a_row():
     assert quant_cells.row_height(['quant_pvalues']) is None
     # The normalization view grows with the samples, and its partner with it
     assert quant_cells.row_height(['quant_totals', 'quant_normalization'], samples=20) == 44 * 20 + 140
+
+
+def test_supports_falls_back_for_a_series_plot_without_bars():
+    from src.render.series import supports
+
+    class Old:
+        def __init__(self, cache_id, data=None, x_column='x', y_column='y', mode='lines+markers', title=None):
+            pass
+
+    class New(Old):
+        def __init__(self, cache_id, data=None, x_column='x', y_column='y', mode='lines+markers', title=None,
+                     orientation='v', view_column=None, **kwargs):
+            pass
+
+    assert supports(Old, {'mode': 'lines', 'title': 't'})
+    assert not supports(Old, {'mode': 'bars'})
+    assert not supports(Old, {'mode': 'lines', 'view_column': 'c'})
+    assert supports(New, {'mode': 'bars', 'orientation': 'h', 'view_column': 'c'})
+
+
+def test_figure_draws_grouped_and_horizontal_bars():
+    from src.render.series import figure
+
+    frame = pl.DataFrame({'x': ['a', 'b', 'a', 'b'], 'y': [1, 2, 3, 4], 's': ['p', 'p', 'q', 'q']})
+    fig = figure(frame, series_column='s', series_colors={'p': '#ff0000'}, mode='bars')
+    assert [t.type for t in fig.data] == ['bar', 'bar'] and fig.layout.barmode == 'group'
+    assert fig.data[0].marker.color == '#ff0000'
+    fig = figure(frame.filter(pl.col('s') == 'p'), mode='bars', orientation='h', x_label='GO term')
+    assert fig.data[0].orientation == 'h' and list(fig.data[0].y) == ['a', 'b']
+    assert fig.layout.yaxis.title.text == 'GO term'
+    assert figure(frame, series_column='s', mode='box').data[0].type == 'box'
