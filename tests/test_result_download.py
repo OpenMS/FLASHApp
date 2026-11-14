@@ -67,3 +67,16 @@ def test_safe_name():
     assert rd.safe_name('Example: lysate, identified (E. coli / spike-in)') == \
         'Example - lysate, identified (E. coli _ spike-in)'
     assert rd.safe_name('..') == 'results'
+
+
+def test_compressed_files_are_stored_and_text_is_deflated(tmp_path):
+    text = Path(tmp_path, 'out.tsv')
+    text.write_text('mass\tintensity\n' * 1000)
+    cache = Path(tmp_path, 'mass_table.pq')
+    cache.write_bytes(os.urandom(4096))
+    target = rd.build_archive([text, cache], Path(tmp_path, 'results.zip'))
+    with zipfile.ZipFile(target) as zf:
+        assert zf.getinfo('out.tsv').compress_type == zipfile.ZIP_DEFLATED
+        assert zf.getinfo('mass_table.pq').compress_type == zipfile.ZIP_STORED
+        assert zf.read('out.tsv') == text.read_bytes()
+        assert zf.read('mass_table.pq') == cache.read_bytes()

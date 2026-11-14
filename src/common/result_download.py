@@ -8,7 +8,7 @@ of its files is newer.
 
 from io import BytesIO
 from pathlib import Path
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
 
 import streamlit as st
 
@@ -27,6 +27,14 @@ TARGETS = [
 # The archive the former Download page stored as a result; never part of a download
 ARCHIVE = 'download_archive'
 ARCHIVE_NAME = 'results.zip'
+
+# Files that are compressed already (parquet caches, gzipped pickles, ...).
+# Deflating them again takes most of the time a ZIP needs and saves next to
+# nothing, so they go into the ZIP as they are.
+STORED_SUFFIXES = {'.pq', '.parquet', '.gz', '.zip', '.zst', '.bz2', '.xz', '.png', '.jpg'}
+# Deflate level for the text files (mzML, TSV, FASTA): level 1 packs them about
+# twice as fast as the default level 6 and only a few percent larger.
+DEFLATE_LEVEL = 1
 
 
 def is_local():
@@ -67,6 +75,17 @@ def archive_path(file_manager, dataset_id):
     return Path(file_manager.cache_path, 'files', dataset_id, ARCHIVE_NAME)
 
 
+def add_to_zip(zf, path, arcname):
+    """Add `path` to the open ZIP `zf`: compressed files as they are, the rest
+    deflated at a fast level."""
+    path = Path(path)
+    if path.suffix.lower() in STORED_SUFFIXES:
+        zf.write(path, arcname=arcname, compress_type=ZIP_STORED)
+    else:
+        zf.write(path, arcname=arcname, compress_type=ZIP_DEFLATED,
+                 compresslevel=DEFLATE_LEVEL)
+
+
 def build_archive(files, target):
     """The ZIP of `files` at `target`, built again when missing or older than a file.
 
@@ -78,9 +97,9 @@ def build_archive(files, target):
     if not (target.exists() and target.stat().st_mtime >= newest):
         target.parent.mkdir(parents=True, exist_ok=True)
         partial = target.with_suffix('.part')
-        with ZipFile(partial, 'w', ZIP_DEFLATED) as zf:
+        with ZipFile(partial, 'w') as zf:
             for f in files:
-                zf.write(f, arcname=f.name)
+                add_to_zip(zf, f, f.name)
         partial.replace(target)
     return target
 
@@ -88,10 +107,10 @@ def build_archive(files, target):
 def zip_folders(folders):
     """One ZIP with a folder per run: `folders` maps folder name to files."""
     buffer = BytesIO()
-    with ZipFile(buffer, 'w', ZIP_DEFLATED) as zf:
+    with ZipFile(buffer, 'w') as zf:
         for folder, files in folders.items():
             for f in files:
-                zf.write(f, arcname=f'{folder}/{f.name}')
+                add_to_zip(zf, f, f'{folder}/{f.name}')
     return buffer.getvalue()
 
 
