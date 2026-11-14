@@ -1073,13 +1073,17 @@ class IdaWorkflow(WorkflowManager):
                     f"'{run_name}' (logs in '{log_dir}')..."
                 )
                 state[run_name] = {'state': 'running', 'since': time.time()}
-                flashida.write_status(self.workflow_dir, status)
+                if not flashida.write_status(self.workflow_dir, status):
+                    self.logger.log(f"WARNING: the status file could not be written: the page keeps "
+                                    f"the old status of '{run_name}' while FLASHIda runs.")
                 done = self.executor.run_command(
                     [exe, '-m', method_path, '-r', Path(raw_dir, name + '.raw')],
                     cwd=exe.parent,
                 )
                 state[run_name] = {'state': 'done' if done else 'failed',
                                    'since': state[run_name]['since'], 'ended': time.time()}
-                flashida.write_status(self.workflow_dir, status)
+                if not flashida.write_status(self.workflow_dir, status):
+                    self.logger.log("WARNING: the status file could not be written: "
+                                    "the page catches up at the next poll.")
                 self.logger.log(f"FLASHIda {'finished' if done else 'failed'} for '{name}.raw'.")
             time.sleep(self.poll_interval)

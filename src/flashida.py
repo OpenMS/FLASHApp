@@ -30,11 +30,23 @@ def raw_names(folder) -> set:
 
 def newest_sequence(folder):
     """The newest Xcalibur sequence (.sld) in a folder, or None."""
+    def sequence_file(p):
+        try:
+            return p.suffix.lower() == '.sld' and p.is_file()
+        except OSError:  # locked while it was looked at (is_file reads it too)
+            return False
+
     try:
-        slds = [p for p in Path(folder).iterdir() if p.suffix.lower() == '.sld' and p.is_file()]
+        slds = [p for p in Path(folder).iterdir() if sequence_file(p)]
     except OSError:
         return None
-    return max(slds, key=lambda p: p.stat().st_mtime, default=None)
+
+    def modified(p):
+        try:
+            return p.stat().st_mtime
+        except OSError:  # removed or locked while it was looked at
+            return 0.0
+    return max(slds, key=modified, default=None)
 
 
 # Every row of an Xcalibur sequence keeps its raw file name in a JSON blob
@@ -79,12 +91,34 @@ def read_status(workflow_dir) -> dict:
         return {}
 
 
-def write_status(workflow_dir, status: dict) -> None:
+def write_status(workflow_dir, status: dict, attempts: int = 20) -> bool:
+    """Write the status for the page; False when the file could not be replaced.
+
+    On Windows the replace is refused (PermissionError, WinError 5) while the
+    page, a virus scanner or OneDrive has the file open. The acquisition must
+    not stop for that: it tries again for about a second, and otherwise leaves
+    the old status until its next write (every poll)."""
     path = Path(workflow_dir, STATUS_FILE)
     status = dict(status, updated=time.time())
     tmp = path.with_name(path.name + '.tmp')
-    tmp.write_text(json.dumps(status, indent=2), encoding='utf-8')
-    tmp.replace(path)
+    try:
+        tmp.write_text(json.dumps(status, indent=2), encoding='utf-8')
+    except OSError:
+        return False
+    for attempt in range(attempts):
+        try:
+            tmp.replace(path)
+            return True
+        except PermissionError:
+            if attempt < attempts - 1:
+                time.sleep(0.05)
+        except OSError:
+            break
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    return False
 
 
 def available() -> bool:
@@ -120,7 +154,10 @@ def remember_log_folder(workflow_dir, folder) -> None:
     except OSError:
         folders = []
     folders = [f for f in folders if f != str(folder)] + [str(folder)]
-    file.write_text('\n'.join(folders[-20:]) + '\n', encoding='utf-8')
+    try:
+        file.write_text('\n'.join(folders[-20:]) + '\n', encoding='utf-8')
+    except OSError:  # open elsewhere: the Viewer misses this folder, the run goes on
+        pass
 
 
 def log_folders(workflow_dir) -> list:
