@@ -6,7 +6,7 @@ explanation of the component being drawn.
 from pathlib import Path
 
 from src.viz import series as library
-from src.viz.series import BOX_POINTS, thin  # noqa: F401  pylint: disable=unused-import  (comparison_plots and tests use them)
+from src.viz.series import BOX_POINTS, thin  # noqa: F401  pylint: disable=unused-import  (tests use them)
 
 
 def show_series(data, name: str, cache_path, key: str, height=None, state_manager=None, help=None, **plot_kwargs):  # pylint: disable=redefined-builtin
