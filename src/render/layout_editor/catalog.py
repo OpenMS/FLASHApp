@@ -131,7 +131,9 @@ DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
 TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['anno_spectrum', 'deconv_spectrum'],
                      ['structure_view'], ['tag_table'], ['combined_spectrum']]
 TNT_LYSATE_LAYOUT = [
-    ['protein_group_table', 'proteoform_table', 'proteoform_prsm_table'],
+    # Two tables per row: three side by side left each too narrow to read
+    ['protein_group_table', 'proteoform_table'],
+    ['proteoform_prsm_table'],
     ['proteoform_heatmap'],
     ['sequence_view'],
     ['anno_spectrum', 'deconv_spectrum'],

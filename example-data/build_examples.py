@@ -14,7 +14,7 @@ isobaric example uses one run of the ratio sample of PXD055510 (Matzanke,
 Kaulich et al., J Proteome Res 2025: E. coli proteoforms labelled at their
 cysteines with iodoTMT sixplex, channels 126 to 131 mixed 8:4:1:1:4:8, the
 two-scan method). A missing input is downloaded (a Thermo RAW file is
-converted with FileConverter) and cut to a short retention-time window with
+converted with FileConverter) and cut to a short retention-time window (the label-free comparison ships all four of its runs, cut to the 45 s in which its most differential proteoforms elute) with
 FileFilter, so the repository stays small.
 
 It needs the TOPP tools (FileConverter, FileFilter, FLASHDeconv, DecoyDatabase, FLASHTnT,
@@ -47,9 +47,10 @@ DATABASE = INPUTS / 'fasta-file' / 'example_database.fasta'
 
 MASSIVE = 'https://massive.ucsd.edu/ProteoSAFe/DownloadResultFile?forceDownload=true&file=f.MSV000091923/peak/'
 PRIDE = 'https://ftp.pride.ebi.ac.uk/pride/data/archive/2025/05/PXD055510/'
-# Retention time window kept of the SpikeIn runs (seconds): spike-in proteins
-# and E. coli background elute here
-SPIKEIN_RT = (3990, 4140)
+# Retention time window kept of the SpikeIn runs (seconds): the proteoforms
+# that differ most between the spike-in amounts elute here (30S ribosomal
+# proteins S8 and S5, among others), kept short so all four runs stay small
+SPIKEIN_RT = (3990, 4035)
 # Of the TMT run: None keeps the five minutes with the most fragmentation
 # spectra that hold all six reporter ions (reporter_window)
 TMT_RT = None
@@ -99,9 +100,14 @@ EXAMPLES = [
         'params': {'identify': True, 'quantification': 'label-free', **sample_preset('Lysate')},
         'conditions': ['Spike-in 1x', 'Spike-in 1x', 'Spike-in 0.1x', 'Spike-in 0.1x'],
         'replicates': [1, 2, 1, 2],
-        # The first run is the lysate example. The comparison keeps its own
-        # tables, so the other runs' results are not shipped (None).
-        'runs': [('example_lysate_identified', 'Example: lysate, identified (E. coli + spike-in)'), None, None, None],
+        # The first run is the lysate example; all four are shipped, so the
+        # comparison opens on each run's own results (Single run, Files of)
+        'runs': [
+            ('example_lysate_identified', 'Example: lysate, identified (E. coli + spike-in)'),
+            ('example_label_free_1x_r2', 'Example: label-free, spike-in 1x, replicate 2'),
+            ('example_label_free_01x_r1', 'Example: label-free, spike-in 0.1x, replicate 1'),
+            ('example_label_free_01x_r2', 'Example: label-free, spike-in 0.1x, replicate 2'),
+        ],
         'comparison': ('example_label_free', 'Example: label-free comparison (spike-in 1x vs 0.1x)'),
     },
     {
@@ -317,6 +323,13 @@ def main():
                 kept.append(entry[0])
             if comparison is not None:
                 rename(cache, comparison, *example['comparison'])
+                # The comparison names the runs it was made from by their new ids
+                file_manager = FileManager(workspace / 'flashtnt', cache)
+                new_ids = {old: entry[0] for old, entry in zip(run_ids, example['runs']) if entry}
+                manifest = file_manager.get_results(example['comparison'][0], ['quant_manifest'])['quant_manifest']
+                sources = manifest.get('sources', {})
+                sources['runs'] = [new_ids.get(run_id, run_id) for run_id in sources.get('runs', [])]
+                file_manager.store_data(example['comparison'][0], 'quant_manifest', manifest)
                 if 'comparison_settings' in example:
                     from src.quant.session import QuantSession
                     session = QuantSession(FileManager(workspace / 'flashtnt', cache), example['comparison'][0])

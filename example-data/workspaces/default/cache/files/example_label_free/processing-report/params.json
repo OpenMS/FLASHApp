@@ -1,0 +1,41 @@
+{
+    "identify": true,
+    "quantification": "label-free",
+    "FLASHTnT": {
+        "native": false
+    },
+    "FLASHAnnotator": {
+        "algorithm:internal_ions": "false"
+    },
+    "few_proteins": false,
+    "mzML-files": [
+        "/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Label-free_SpikeIn-1x_R1.mzML",
+        "/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Label-free_SpikeIn-1x_R2.mzML",
+        "/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Label-free_SpikeIn-0.1x_R1.mzML",
+        "/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Label-free_SpikeIn-0.1x_R2.mzML"
+    ],
+    "_flag_params": {
+        "FLASHDeconv": [
+            "keep_empty_out",
+            "write_detail",
+            "quant"
+        ],
+        "FLASHTnT": [
+            "only_single_hit",
+            "discard_underdetermined",
+            "keep_decoy",
+            "protein_level_only",
+            "native",
+            "decoy_precursor",
+            "learn_var_mod_penalty",
+            "gapped:stop_at_first_size",
+            "raw:report_decoy_envelopes",
+            "ex:skip_precursor_inference",
+            "tag:allow_gap"
+        ],
+        "FLASHAnnotator": [
+            "algorithm:report_decoy_envelopes"
+        ]
+    },
+    "fasta-file": "/repo/example-data/workspaces/default/flashtnt/input-files/fasta-file/example_database.fasta"
+}

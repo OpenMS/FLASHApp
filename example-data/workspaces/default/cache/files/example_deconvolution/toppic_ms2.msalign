@@ -11,7 +11,7 @@
 #min_snr: [0.25, 0.25]
 ####################### Parameters ######################
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3098
 TITLE=Scan_3099
 SCANS=3099
@@ -24,7 +24,7 @@ PRECURSOR_WINDOW_END=1304.99
 ACTIVATION=CID
 PRECURSOR_MZ=1301.772339
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9105.347162
+PRECURSOR_MASS=9105.347868
 PRECURSOR_INTENSITY=212183824.00
 PRECURSOR_FEATURE_ID=1
 PRECURSOR_QSCORE=1.00
@@ -58,7 +58,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3099
 TITLE=Scan_3100
 SCANS=3100
@@ -71,7 +71,7 @@ PRECURSOR_WINDOW_END=1347.26
 ACTIVATION=CID
 PRECURSOR_MZ=1344.764404
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9399.277462
+PRECURSOR_MASS=9399.273001
 PRECURSOR_INTENSITY=3403649.50
 PRECURSOR_FEATURE_ID=39
 PRECURSOR_QSCORE=1.00
@@ -101,7 +101,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3100
 TITLE=Scan_3101
 SCANS=3101
@@ -114,7 +114,7 @@ PRECURSOR_WINDOW_END=1327.55
 ACTIVATION=CID
 PRECURSOR_MZ=1325.049072
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9242.283153
+PRECURSOR_MASS=9242.280273
 PRECURSOR_INTENSITY=4475717.00
 PRECURSOR_FEATURE_ID=41
 PRECURSOR_QSCORE=1.00
@@ -157,7 +157,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3102
 TITLE=Scan_3103
 SCANS=3103
@@ -170,7 +170,7 @@ PRECURSOR_WINDOW_END=1017.66
 ACTIVATION=CID
 PRECURSOR_MZ=1012.713257
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9105.344556
+PRECURSOR_MASS=9105.347868
 PRECURSOR_INTENSITY=35862564.00
 PRECURSOR_FEATURE_ID=1
 PRECURSOR_QSCORE=1.00
@@ -212,7 +212,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3103
 TITLE=Scan_3104
 SCANS=3104
@@ -258,7 +258,7 @@ PRECURSOR_QSCORE=0.47
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3104
 TITLE=Scan_3105
 SCANS=3105
@@ -271,7 +271,7 @@ PRECURSOR_WINDOW_END=1136.68
 ACTIVATION=CID
 PRECURSOR_MZ=1134.176147
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9047.294062
+PRECURSOR_MASS=9047.286415
 PRECURSOR_INTENSITY=3268734.50
 PRECURSOR_FEATURE_ID=29
 PRECURSOR_QSCORE=1.00
@@ -307,7 +307,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3106
 TITLE=Scan_3107
 SCANS=3107
@@ -320,7 +320,7 @@ PRECURSOR_WINDOW_END=1157.17
 ACTIVATION=CID
 PRECURSOR_MZ=1154.672363
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9203.330089
+PRECURSOR_MASS=9203.320342
 PRECURSOR_INTENSITY=3604886.75
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -354,7 +354,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3107
 TITLE=Scan_3108
 SCANS=3108
@@ -367,7 +367,7 @@ PRECURSOR_WINDOW_END=1122.55
 ACTIVATION=CID
 PRECURSOR_MZ=1120.046143
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=8947.283609
+PRECURSOR_MASS=8947.283070
 PRECURSOR_INTENSITY=1474856.88
 PRECURSOR_FEATURE_ID=15
 PRECURSOR_QSCORE=1.00
@@ -428,7 +428,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3108
 TITLE=Scan_3109
 SCANS=3109
@@ -441,7 +441,7 @@ PRECURSOR_WINDOW_END=998.32
 ACTIVATION=CID
 PRECURSOR_MZ=995.817993
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=8947.283609
+PRECURSOR_MASS=8947.283070
 PRECURSOR_INTENSITY=1122522.00
 PRECURSOR_FEATURE_ID=15
 PRECURSOR_QSCORE=1.00
@@ -500,7 +500,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3110
 TITLE=Scan_3111
 SCANS=3111
@@ -513,7 +513,7 @@ PRECURSOR_WINDOW_END=1140.68
 ACTIVATION=CID
 PRECURSOR_MZ=1138.175049
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9105.352942
+PRECURSOR_MASS=9105.347868
 PRECURSOR_INTENSITY=19277358.00
 PRECURSOR_FEATURE_ID=1
 PRECURSOR_QSCORE=1.00
@@ -548,7 +548,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3111
 TITLE=Scan_3112
 SCANS=3112
@@ -561,7 +561,7 @@ PRECURSOR_WINDOW_END=1300.41
 ACTIVATION=CID
 PRECURSOR_MZ=1297.905640
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9090.339134
+PRECURSOR_MASS=9090.334661
 PRECURSOR_INTENSITY=715250.19
 PRECURSOR_FEATURE_ID=10
 PRECURSOR_QSCORE=1.00
@@ -595,7 +595,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3112
 TITLE=Scan_3113
 SCANS=3113
@@ -608,7 +608,7 @@ PRECURSOR_WINDOW_END=1303.13
 ACTIVATION=CID
 PRECURSOR_MZ=1300.630737
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9105.352942
+PRECURSOR_MASS=9105.347868
 PRECURSOR_INTENSITY=4919303.50
 PRECURSOR_FEATURE_ID=1
 PRECURSOR_QSCORE=1.00
@@ -644,7 +644,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3114
 TITLE=Scan_3115
 SCANS=3115
@@ -657,7 +657,7 @@ PRECURSOR_WINDOW_END=1282.69
 ACTIVATION=CID
 PRECURSOR_MZ=1280.193604
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=8947.285950
+PRECURSOR_MASS=8947.283070
 PRECURSOR_INTENSITY=710782.00
 PRECURSOR_FEATURE_ID=15
 PRECURSOR_QSCORE=1.00
@@ -693,7 +693,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3115
 TITLE=Scan_3116
 SCANS=3116
@@ -706,7 +706,7 @@ PRECURSOR_WINDOW_END=1019.55
 ACTIVATION=CID
 PRECURSOR_MZ=1017.045044
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9122.329984
+PRECURSOR_MASS=9122.335997
 PRECURSOR_INTENSITY=1827948.38
 PRECURSOR_FEATURE_ID=23
 PRECURSOR_QSCORE=1.00
@@ -758,7 +758,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3116
 TITLE=Scan_3117
 SCANS=3117
@@ -771,7 +771,7 @@ PRECURSOR_WINDOW_END=1296.40
 ACTIVATION=CID
 PRECURSOR_MZ=1293.904175
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9046.281860
+PRECURSOR_MASS=9046.284044
 PRECURSOR_INTENSITY=535579.00
 PRECURSOR_FEATURE_ID=29
 PRECURSOR_QSCORE=1.00
@@ -807,7 +807,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3118
 TITLE=Scan_3119
 SCANS=3119
@@ -820,7 +820,7 @@ PRECURSOR_WINDOW_END=1142.30
 ACTIVATION=CID
 PRECURSOR_MZ=1139.177612
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9105.351979
+PRECURSOR_MASS=9105.347868
 PRECURSOR_INTENSITY=22314942.00
 PRECURSOR_FEATURE_ID=1
 PRECURSOR_QSCORE=1.00
@@ -865,7 +865,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3119
 TITLE=Scan_3120
 SCANS=3120
@@ -878,7 +878,7 @@ PRECURSOR_WINDOW_END=1308.27
 ACTIVATION=CID
 PRECURSOR_MZ=1305.772461
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9123.335974
+PRECURSOR_MASS=9123.330651
 PRECURSOR_INTENSITY=3515670.00
 PRECURSOR_FEATURE_ID=21
 PRECURSOR_QSCORE=1.00
@@ -930,7 +930,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3120
 TITLE=Scan_3121
 SCANS=3121
@@ -943,7 +943,7 @@ PRECURSOR_WINDOW_END=898.84
 ACTIVATION=CID
 PRECURSOR_MZ=896.336121
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=8947.285675
+PRECURSOR_MASS=8947.283070
 PRECURSOR_INTENSITY=666335.75
 PRECURSOR_FEATURE_ID=15
 PRECURSOR_QSCORE=1.00
@@ -991,7 +991,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3122
 TITLE=Scan_3123
 SCANS=3123
@@ -1004,7 +1004,7 @@ PRECURSOR_WINDOW_END=1144.43
 ACTIVATION=CID
 PRECURSOR_MZ=1141.925415
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9106.352803
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=5175793.50
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -1048,7 +1048,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3123
 TITLE=Scan_3124
 SCANS=3124
@@ -1061,7 +1061,7 @@ PRECURSOR_WINDOW_END=1159.30
 ACTIVATION=CID
 PRECURSOR_MZ=1156.796631
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9222.323557
+PRECURSOR_MASS=9222.320428
 PRECURSOR_INTENSITY=415132.41
 PRECURSOR_FEATURE_ID=8
 PRECURSOR_QSCORE=0.98
@@ -1116,7 +1116,7 @@ PRECURSOR_QSCORE=0.98
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3124
 TITLE=Scan_3125
 SCANS=3125
@@ -1147,7 +1147,7 @@ PRECURSOR_QSCORE=0.37
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3126
 TITLE=Scan_3127
 SCANS=3127
@@ -1160,7 +1160,7 @@ PRECURSOR_WINDOW_END=1147.05
 ACTIVATION=CID
 PRECURSOR_MZ=1144.548462
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9122.330779
+PRECURSOR_MASS=9122.335997
 PRECURSOR_INTENSITY=944958.38
 PRECURSOR_FEATURE_ID=23
 PRECURSOR_QSCORE=1.00
@@ -1226,7 +1226,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3127
 TITLE=Scan_3128
 SCANS=3128
@@ -1285,7 +1285,7 @@ PRECURSOR_QSCORE=0.87
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3129
 TITLE=Scan_3130
 SCANS=3130
@@ -1298,7 +1298,7 @@ PRECURSOR_WINDOW_END=1149.68
 ACTIVATION=CID
 PRECURSOR_MZ=1147.176025
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9143.311125
+PRECURSOR_MASS=9143.309753
 PRECURSOR_INTENSITY=713147.62
 PRECURSOR_FEATURE_ID=3
 PRECURSOR_QSCORE=1.00
@@ -1362,7 +1362,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3132
 TITLE=Scan_3133
 SCANS=3133
@@ -1375,7 +1375,7 @@ PRECURSOR_WINDOW_END=1022.33
 ACTIVATION=CID
 PRECURSOR_MZ=1019.825989
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9144.304210
+PRECURSOR_MASS=9144.298979
 PRECURSOR_INTENSITY=323629.78
 PRECURSOR_FEATURE_ID=11
 PRECURSOR_QSCORE=1.00
@@ -1432,7 +1432,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3135
 TITLE=Scan_3136
 SCANS=3136
@@ -1445,7 +1445,7 @@ PRECURSOR_WINDOW_END=914.64
 ACTIVATION=CID
 PRECURSOR_MZ=911.641418
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=9106.337084
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=5488512.00
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -1546,7 +1546,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3136
 TITLE=Scan_3137
 SCANS=3137
@@ -1559,7 +1559,7 @@ PRECURSOR_WINDOW_END=1319.13
 ACTIVATION=CID
 PRECURSOR_MZ=1316.625732
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9204.315606
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=4568317.00
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -1596,7 +1596,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3138
 TITLE=Scan_3139
 SCANS=3139
@@ -1609,7 +1609,7 @@ PRECURSOR_WINDOW_END=1154.80
 ACTIVATION=CID
 PRECURSOR_MZ=1151.546753
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9204.311638
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=6158755.50
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -1662,7 +1662,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3139
 TITLE=Scan_3140
 SCANS=3140
@@ -1675,7 +1675,7 @@ PRECURSOR_WINDOW_END=1522.23
 ACTIVATION=CID
 PRECURSOR_MZ=1519.733276
 PRECURSOR_CHARGE=6
-PRECURSOR_MASS=9106.331513
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=4241576.50
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -1723,7 +1723,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3141
 TITLE=Scan_3142
 SCANS=3142
@@ -1736,7 +1736,7 @@ PRECURSOR_WINDOW_END=1538.23
 ACTIVATION=CID
 PRECURSOR_MZ=1535.727051
 PRECURSOR_CHARGE=6
-PRECURSOR_MASS=9204.318397
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=3795422.25
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -1774,7 +1774,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3142
 TITLE=Scan_3143
 SCANS=3143
@@ -1787,7 +1787,7 @@ PRECURSOR_WINDOW_END=1333.26
 ACTIVATION=CID
 PRECURSOR_MZ=1330.764648
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9286.251177
+PRECURSOR_MASS=9286.327403
 PRECURSOR_INTENSITY=3290332.00
 PRECURSOR_FEATURE_ID=51
 PRECURSOR_QSCORE=0.67
@@ -1818,7 +1818,7 @@ PRECURSOR_QSCORE=0.67
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3144
 TITLE=Scan_3145
 SCANS=3145
@@ -1831,7 +1831,7 @@ PRECURSOR_WINDOW_END=1554.89
 ACTIVATION=CID
 PRECURSOR_MZ=1552.393066
 PRECURSOR_CHARGE=6
-PRECURSOR_MASS=9302.288879
+PRECURSOR_MASS=9302.301433
 PRECURSOR_INTENSITY=1417200.75
 PRECURSOR_FEATURE_ID=28
 PRECURSOR_QSCORE=1.00
@@ -1859,7 +1859,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3145
 TITLE=Scan_3146
 SCANS=3146
@@ -1872,7 +1872,7 @@ PRECURSOR_WINDOW_END=1525.90
 ACTIVATION=CID
 PRECURSOR_MZ=1523.397705
 PRECURSOR_CHARGE=6
-PRECURSOR_MASS=9129.320099
+PRECURSOR_MASS=9129.321275
 PRECURSOR_INTENSITY=1653214.25
 PRECURSOR_FEATURE_ID=25
 PRECURSOR_QSCORE=0.96
@@ -1933,7 +1933,7 @@ PRECURSOR_QSCORE=0.96
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3147
 TITLE=Scan_3148
 SCANS=3148
@@ -1946,7 +1946,7 @@ PRECURSOR_WINDOW_END=1542.23
 ACTIVATION=CID
 PRECURSOR_MZ=1539.725708
 PRECURSOR_CHARGE=6
-PRECURSOR_MASS=9204.310423
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=1393793.75
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -1975,7 +1975,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3148
 TITLE=Scan_3149
 SCANS=3149
@@ -1988,7 +1988,7 @@ PRECURSOR_WINDOW_END=1166.92
 ACTIVATION=CID
 PRECURSOR_MZ=1164.419312
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9302.287338
+PRECURSOR_MASS=9302.301433
 PRECURSOR_INTENSITY=1089941.75
 PRECURSOR_FEATURE_ID=28
 PRECURSOR_QSCORE=1.00
@@ -2021,7 +2021,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3150
 TITLE=Scan_3151
 SCANS=3151
@@ -2034,7 +2034,7 @@ PRECURSOR_WINDOW_END=1322.12
 ACTIVATION=CID
 PRECURSOR_MZ=1319.622559
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9226.307718
+PRECURSOR_MASS=9226.300960
 PRECURSOR_INTENSITY=1795703.38
 PRECURSOR_FEATURE_ID=12
 PRECURSOR_QSCORE=1.00
@@ -2061,7 +2061,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3151
 TITLE=Scan_3152
 SCANS=3152
@@ -2074,7 +2074,7 @@ PRECURSOR_WINDOW_END=831.81
 ACTIVATION=CID
 PRECURSOR_MZ=829.311340
 PRECURSOR_CHARGE=11
-PRECURSOR_MASS=9106.339386
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=1073798.75
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -2131,7 +2131,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3153
 TITLE=Scan_3154
 SCANS=3154
@@ -2144,7 +2144,7 @@ PRECURSOR_WINDOW_END=1027.10
 ACTIVATION=CID
 PRECURSOR_MZ=1024.601074
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9204.319765
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=609589.75
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -2194,7 +2194,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3154
 TITLE=Scan_3155
 SCANS=3155
@@ -2207,7 +2207,7 @@ PRECURSOR_WINDOW_END=1324.55
 ACTIVATION=CID
 PRECURSOR_MZ=1322.046509
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9244.286291
+PRECURSOR_MASS=9244.285015
 PRECURSOR_INTENSITY=616301.06
 PRECURSOR_FEATURE_ID=41
 PRECURSOR_QSCORE=1.00
@@ -2240,7 +2240,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3156
 TITLE=Scan_3157
 SCANS=3157
@@ -2253,7 +2253,7 @@ PRECURSOR_WINDOW_END=1313.56
 ACTIVATION=CID
 PRECURSOR_MZ=1311.057007
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9164.345214
+PRECURSOR_MASS=9164.317842
 PRECURSOR_INTENSITY=345361.78
 PRECURSOR_FEATURE_ID=13
 PRECURSOR_QSCORE=1.00
@@ -2291,7 +2291,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3157
 TITLE=Scan_3158
 SCANS=3158
@@ -2304,7 +2304,7 @@ PRECURSOR_WINDOW_END=916.44
 ACTIVATION=CID
 PRECURSOR_MZ=913.943176
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=9106.339904
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=783209.56
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -2364,7 +2364,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3159
 TITLE=Scan_3160
 SCANS=3160
@@ -2414,7 +2414,7 @@ PRECURSOR_QSCORE=0.50
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3160
 TITLE=Scan_3161
 SCANS=3161
@@ -2427,7 +2427,7 @@ PRECURSOR_WINDOW_END=538.67
 ACTIVATION=CID
 PRECURSOR_MZ=536.165405
 PRECURSOR_CHARGE=4
-PRECURSOR_MASS=2130.914973
+PRECURSOR_MASS=2130.885080
 PRECURSOR_INTENSITY=70845.14
 PRECURSOR_FEATURE_ID=327
 PRECURSOR_QSCORE=0.81
@@ -2455,7 +2455,7 @@ PRECURSOR_QSCORE=0.81
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3162
 TITLE=Scan_3163
 SCANS=3163
@@ -2491,7 +2491,7 @@ PRECURSOR_QSCORE=0.26
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3163
 TITLE=Scan_3164
 SCANS=3164
@@ -2504,7 +2504,7 @@ PRECURSOR_WINDOW_END=455.34
 ACTIVATION=CID
 PRECURSOR_MZ=452.843658
 PRECURSOR_CHARGE=2
-PRECURSOR_MASS=907.720560
+PRECURSOR_MASS=907.719965
 PRECURSOR_INTENSITY=45102.50
 PRECURSOR_FEATURE_ID=378
 PRECURSOR_QSCORE=0.87
@@ -2518,7 +2518,7 @@ PRECURSOR_QSCORE=0.87
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3165
 TITLE=Scan_3166
 SCANS=3166
@@ -2531,7 +2531,7 @@ PRECURSOR_WINDOW_END=1042.44
 ACTIVATION=CID
 PRECURSOR_MZ=1039.938843
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9345.371715
+PRECURSOR_MASS=9345.374037
 PRECURSOR_INTENSITY=258507.84
 PRECURSOR_FEATURE_ID=37
 PRECURSOR_QSCORE=1.00
@@ -2578,7 +2578,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3166
 TITLE=Scan_3167
 SCANS=3167
@@ -2611,7 +2611,7 @@ PRECURSOR_QSCORE=0.34
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3168
 TITLE=Scan_3169
 SCANS=3169
@@ -2624,7 +2624,7 @@ PRECURSOR_WINDOW_END=1015.88
 ACTIVATION=CID
 PRECURSOR_MZ=1013.380005
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9106.340018
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=1880091.88
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -2696,7 +2696,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3169
 TITLE=Scan_3170
 SCANS=3170
@@ -2709,7 +2709,7 @@ PRECURSOR_WINDOW_END=1172.31
 ACTIVATION=CID
 PRECURSOR_MZ=1169.179443
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9345.375586
+PRECURSOR_MASS=9345.374037
 PRECURSOR_INTENSITY=381877.53
 PRECURSOR_FEATURE_ID=37
 PRECURSOR_QSCORE=1.00
@@ -2751,7 +2751,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3171
 TITLE=Scan_3172
 SCANS=3172
@@ -2764,7 +2764,7 @@ PRECURSOR_WINDOW_END=1304.99
 ACTIVATION=CID
 PRECURSOR_MZ=1302.486206
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9106.341739
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=1179943.88
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -2808,7 +2808,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3172
 TITLE=Scan_3173
 SCANS=3173
@@ -2821,7 +2821,7 @@ PRECURSOR_WINDOW_END=1017.66
 ACTIVATION=CID
 PRECURSOR_MZ=1015.157837
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9106.341739
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=1271354.38
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -2887,7 +2887,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3174
 TITLE=Scan_3175
 SCANS=3175
@@ -2900,7 +2900,7 @@ PRECURSOR_WINDOW_END=1156.93
 ACTIVATION=CID
 PRECURSOR_MZ=1154.425049
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9204.317613
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=236879.00
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -2943,7 +2943,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3175
 TITLE=Scan_3176
 SCANS=3176
@@ -2956,7 +2956,7 @@ PRECURSOR_WINDOW_END=1339.28
 ACTIVATION=CID
 PRECURSOR_MZ=1336.777344
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9346.375515
+PRECURSOR_MASS=9346.376408
 PRECURSOR_INTENSITY=126506.21
 PRECURSOR_FEATURE_ID=37
 PRECURSOR_QSCORE=1.00
@@ -2983,7 +2983,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3178
 TITLE=Scan_3179
 SCANS=3179
@@ -3049,7 +3049,7 @@ PRECURSOR_QSCORE=0.55
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3180
 TITLE=Scan_3181
 SCANS=3181
@@ -3062,7 +3062,7 @@ PRECURSOR_WINDOW_END=1142.55
 ACTIVATION=CID
 PRECURSOR_MZ=1140.051270
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9106.344933
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=1788184.00
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -3118,7 +3118,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3181
 TITLE=Scan_3182
 SCANS=3182
@@ -3131,7 +3131,7 @@ PRECURSOR_WINDOW_END=1147.68
 ACTIVATION=CID
 PRECURSOR_MZ=1145.178711
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9122.339473
+PRECURSOR_MASS=9122.335997
 PRECURSOR_INTENSITY=346198.53
 PRECURSOR_FEATURE_ID=23
 PRECURSOR_QSCORE=1.00
@@ -3173,7 +3173,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3183
 TITLE=Scan_3184
 SCANS=3184
@@ -3186,7 +3186,7 @@ PRECURSOR_WINDOW_END=1144.68
 ACTIVATION=CID
 PRECURSOR_MZ=1142.176025
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9106.345907
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=756535.62
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -3234,7 +3234,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3184
 TITLE=Scan_3185
 SCANS=3185
@@ -3247,7 +3247,7 @@ PRECURSOR_WINDOW_END=1020.44
 ACTIVATION=CID
 PRECURSOR_MZ=1017.828247
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9148.359378
+PRECURSOR_MASS=9148.359104
 PRECURSOR_INTENSITY=345448.47
 PRECURSOR_FEATURE_ID=36
 PRECURSOR_QSCORE=1.00
@@ -3293,7 +3293,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3186
 TITLE=Scan_3187
 SCANS=3187
@@ -3306,7 +3306,7 @@ PRECURSOR_WINDOW_END=914.84
 ACTIVATION=CID
 PRECURSOR_MZ=912.343140
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=9106.341351
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=522222.59
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -3353,7 +3353,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3190
 TITLE=Scan_3191
 SCANS=3191
@@ -3366,7 +3366,7 @@ PRECURSOR_WINDOW_END=1310.99
 ACTIVATION=CID
 PRECURSOR_MZ=1308.488037
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9147.353625
+PRECURSOR_MASS=9147.356733
 PRECURSOR_INTENSITY=343905.38
 PRECURSOR_FEATURE_ID=36
 PRECURSOR_QSCORE=1.00
@@ -3406,7 +3406,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3192
 TITLE=Scan_3193
 SCANS=3193
@@ -3419,7 +3419,7 @@ PRECURSOR_WINDOW_END=1154.67
 ACTIVATION=CID
 PRECURSOR_MZ=1152.174072
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9204.316912
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=249912.91
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -3461,7 +3461,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3193
 TITLE=Scan_3194
 SCANS=3194
@@ -3474,7 +3474,7 @@ PRECURSOR_WINDOW_END=1319.13
 ACTIVATION=CID
 PRECURSOR_MZ=1316.626099
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9204.316912
+PRECURSOR_MASS=9204.322713
 PRECURSOR_INTENSITY=300843.19
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -3504,7 +3504,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3195
 TITLE=Scan_3196
 SCANS=3196
@@ -3517,7 +3517,7 @@ PRECURSOR_WINDOW_END=1522.23
 ACTIVATION=CID
 PRECURSOR_MZ=1519.733398
 PRECURSOR_CHARGE=6
-PRECURSOR_MASS=9106.341957
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=281183.31
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -3546,7 +3546,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3196
 TITLE=Scan_3197
 SCANS=3197
@@ -3570,7 +3570,7 @@ PRECURSOR_QSCORE=0.78
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3198
 TITLE=Scan_3199
 SCANS=3199
@@ -3598,7 +3598,7 @@ PRECURSOR_QSCORE=0.52
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3199
 TITLE=Scan_3200
 SCANS=3200
@@ -3611,7 +3611,7 @@ PRECURSOR_WINDOW_END=1538.23
 ACTIVATION=CID
 PRECURSOR_MZ=1535.729858
 PRECURSOR_CHARGE=6
-PRECURSOR_MASS=9205.317554
+PRECURSOR_MASS=9205.325084
 PRECURSOR_INTENSITY=176674.62
 PRECURSOR_FEATURE_ID=48
 PRECURSOR_QSCORE=1.00
@@ -3636,7 +3636,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3201
 TITLE=Scan_3202
 SCANS=3202
@@ -3649,7 +3649,7 @@ PRECURSOR_WINDOW_END=1150.05
 ACTIVATION=CID
 PRECURSOR_MZ=1147.550293
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9163.336330
+PRECURSOR_MASS=9163.338137
 PRECURSOR_INTENSITY=247612.88
 PRECURSOR_FEATURE_ID=33
 PRECURSOR_QSCORE=0.98
@@ -3703,7 +3703,7 @@ PRECURSOR_QSCORE=0.98
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3202
 TITLE=Scan_3203
 SCANS=3203
@@ -3716,7 +3716,7 @@ PRECURSOR_WINDOW_END=1333.26
 ACTIVATION=CID
 PRECURSOR_MZ=1330.622070
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9302.297292
+PRECURSOR_MASS=9302.301433
 PRECURSOR_INTENSITY=134862.48
 PRECURSOR_FEATURE_ID=28
 PRECURSOR_QSCORE=1.00
@@ -3748,7 +3748,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3204
 TITLE=Scan_3205
 SCANS=3205
@@ -3761,7 +3761,7 @@ PRECURSOR_WINDOW_END=464.65
 ACTIVATION=CID
 PRECURSOR_MZ=462.146545
 PRECURSOR_CHARGE=3
-PRECURSOR_MASS=1379.491514
+PRECURSOR_MASS=1379.476733
 PRECURSOR_INTENSITY=47718.12
 PRECURSOR_FEATURE_ID=369
 PRECURSOR_QSCORE=0.96
@@ -3782,7 +3782,7 @@ PRECURSOR_QSCORE=0.96
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3205
 TITLE=Scan_3206
 SCANS=3206
@@ -3835,7 +3835,7 @@ PRECURSOR_QSCORE=0.36
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3207
 TITLE=Scan_3208
 SCANS=3208
@@ -3891,7 +3891,7 @@ PRECURSOR_QSCORE=0.49
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3208
 TITLE=Scan_3209
 SCANS=3209
@@ -3904,7 +3904,7 @@ PRECURSOR_WINDOW_END=1033.22
 ACTIVATION=CID
 PRECURSOR_MZ=1030.719727
 PRECURSOR_CHARGE=11
-PRECURSOR_MASS=11299.390336
+PRECURSOR_MASS=11299.389887
 PRECURSOR_INTENSITY=222038.64
 PRECURSOR_FEATURE_ID=50
 PRECURSOR_QSCORE=0.99
@@ -3956,7 +3956,7 @@ PRECURSOR_QSCORE=0.99
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3210
 TITLE=Scan_3211
 SCANS=3211
@@ -4006,7 +4006,7 @@ PRECURSOR_QSCORE=0.31
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3211
 TITLE=Scan_3212
 SCANS=3212
@@ -4019,7 +4019,7 @@ PRECURSOR_WINDOW_END=997.27
 ACTIVATION=CID
 PRECURSOR_MZ=994.769897
 PRECURSOR_CHARGE=2
-PRECURSOR_MASS=1987.570213
+PRECURSOR_MASS=1987.566250
 PRECURSOR_INTENSITY=118808.54
 PRECURSOR_FEATURE_ID=338
 PRECURSOR_QSCORE=0.52
@@ -4029,7 +4029,7 @@ PRECURSOR_QSCORE=0.52
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3213
 TITLE=Scan_3214
 SCANS=3214
@@ -4042,7 +4042,7 @@ PRECURSOR_WINDOW_END=538.67
 ACTIVATION=CID
 PRECURSOR_MZ=536.165527
 PRECURSOR_CHARGE=1
-PRECURSOR_MASS=535.157601
+PRECURSOR_MASS=535.157589
 PRECURSOR_INTENSITY=111857.12
 PRECURSOR_FEATURE_ID=158
 PRECURSOR_QSCORE=0.99
@@ -4057,7 +4057,7 @@ PRECURSOR_QSCORE=0.99
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3214
 TITLE=Scan_3215
 SCANS=3215
@@ -4083,7 +4083,7 @@ PRECURSOR_QSCORE=0.32
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3216
 TITLE=Scan_3217
 SCANS=3217
@@ -4120,7 +4120,7 @@ PRECURSOR_QSCORE=0.45
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3217
 TITLE=Scan_3218
 SCANS=3218
@@ -4133,7 +4133,7 @@ PRECURSOR_WINDOW_END=421.82
 ACTIVATION=CID
 PRECURSOR_MZ=419.315521
 PRECURSOR_CHARGE=1
-PRECURSOR_MASS=418.308557
+PRECURSOR_MASS=418.308541
 PRECURSOR_INTENSITY=32009.25
 PRECURSOR_FEATURE_ID=231
 PRECURSOR_QSCORE=1.00
@@ -4147,7 +4147,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3219
 TITLE=Scan_3220
 SCANS=3220
@@ -4202,7 +4202,7 @@ PRECURSOR_QSCORE=0.43
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3222
 TITLE=Scan_3223
 SCANS=3223
@@ -4215,7 +4215,7 @@ PRECURSOR_WINDOW_END=1015.66
 ACTIVATION=CID
 PRECURSOR_MZ=1013.158508
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9106.351337
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=356025.44
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -4260,7 +4260,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3223
 TITLE=Scan_3224
 SCANS=3224
@@ -4273,7 +4273,7 @@ PRECURSOR_WINDOW_END=1305.13
 ACTIVATION=CID
 PRECURSOR_MZ=1302.631958
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9106.351337
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=207533.67
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -4306,7 +4306,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3225
 TITLE=Scan_3226
 SCANS=3226
@@ -4319,7 +4319,7 @@ PRECURSOR_WINDOW_END=505.61
 ACTIVATION=CID
 PRECURSOR_MZ=503.107819
 PRECURSOR_CHARGE=2
-PRECURSOR_MASS=1004.199923
+PRECURSOR_MASS=1004.199465
 PRECURSOR_INTENSITY=57964.47
 PRECURSOR_FEATURE_ID=264
 PRECURSOR_QSCORE=0.63
@@ -4334,7 +4334,7 @@ PRECURSOR_QSCORE=0.63
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3226
 TITLE=Scan_3227
 SCANS=3227
@@ -4347,7 +4347,7 @@ PRECURSOR_WINDOW_END=415.77
 ACTIVATION=CID
 PRECURSOR_MZ=413.266144
 PRECURSOR_CHARGE=5
-PRECURSOR_MASS=2069.137437
+PRECURSOR_MASS=2069.135587
 PRECURSOR_INTENSITY=38960.23
 PRECURSOR_FEATURE_ID=81
 PRECURSOR_QSCORE=0.89
@@ -4357,7 +4357,7 @@ PRECURSOR_QSCORE=0.89
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3228
 TITLE=Scan_3229
 SCANS=3229
@@ -4382,7 +4382,7 @@ PRECURSOR_QSCORE=0.77
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3229
 TITLE=Scan_3230
 SCANS=3230
@@ -4395,7 +4395,7 @@ PRECURSOR_WINDOW_END=1307.27
 ACTIVATION=CID
 PRECURSOR_MZ=1304.774536
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9121.344448
+PRECURSOR_MASS=9121.348099
 PRECURSOR_INTENSITY=83445.87
 PRECURSOR_FEATURE_ID=45
 PRECURSOR_QSCORE=1.00
@@ -4423,7 +4423,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3231
 TITLE=Scan_3232
 SCANS=3232
@@ -4436,7 +4436,7 @@ PRECURSOR_WINDOW_END=1147.68
 ACTIVATION=CID
 PRECURSOR_MZ=1145.179321
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9147.365690
+PRECURSOR_MASS=9147.356733
 PRECURSOR_INTENSITY=462703.66
 PRECURSOR_FEATURE_ID=36
 PRECURSOR_QSCORE=1.00
@@ -4475,7 +4475,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3232
 TITLE=Scan_3233
 SCANS=3233
@@ -4488,7 +4488,7 @@ PRECURSOR_WINDOW_END=921.11
 ACTIVATION=CID
 PRECURSOR_MZ=918.606445
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=9147.365690
+PRECURSOR_MASS=9147.356733
 PRECURSOR_INTENSITY=346197.22
 PRECURSOR_FEATURE_ID=36
 PRECURSOR_QSCORE=1.00
@@ -4543,7 +4543,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3234
 TITLE=Scan_3235
 SCANS=3235
@@ -4556,7 +4556,7 @@ PRECURSOR_WINDOW_END=1142.43
 ACTIVATION=CID
 PRECURSOR_MZ=1139.927368
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9106.346983
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=539596.25
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -4597,7 +4597,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3235
 TITLE=Scan_3236
 SCANS=3236
@@ -4610,7 +4610,7 @@ PRECURSOR_WINDOW_END=1020.33
 ACTIVATION=CID
 PRECURSOR_MZ=1017.826965
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9147.362424
+PRECURSOR_MASS=9147.356733
 PRECURSOR_INTENSITY=406984.16
 PRECURSOR_FEATURE_ID=36
 PRECURSOR_QSCORE=1.00
@@ -4658,7 +4658,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3237
 TITLE=Scan_3238
 SCANS=3238
@@ -4707,7 +4707,7 @@ PRECURSOR_QSCORE=0.55
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3238
 TITLE=Scan_3239
 SCANS=3239
@@ -4720,7 +4720,7 @@ PRECURSOR_WINDOW_END=914.64
 ACTIVATION=CID
 PRECURSOR_MZ=912.142273
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=9106.351275
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=226433.08
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -4765,7 +4765,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3240
 TITLE=Scan_3241
 SCANS=3241
@@ -4792,7 +4792,7 @@ PRECURSOR_QSCORE=0.23
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3243
 TITLE=Scan_3244
 SCANS=3244
@@ -4805,7 +4805,7 @@ PRECURSOR_WINDOW_END=1311.13
 ACTIVATION=CID
 PRECURSOR_MZ=1308.633057
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9148.364053
+PRECURSOR_MASS=9148.359104
 PRECURSOR_INTENSITY=135036.09
 PRECURSOR_FEATURE_ID=36
 PRECURSOR_QSCORE=1.00
@@ -4827,7 +4827,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3244
 TITLE=Scan_3245
 SCANS=3245
@@ -4887,7 +4887,7 @@ PRECURSOR_QSCORE=0.26
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3246
 TITLE=Scan_3247
 SCANS=3247
@@ -4946,7 +4946,7 @@ PRECURSOR_QSCORE=0.23
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3247
 TITLE=Scan_3248
 SCANS=3248
@@ -4973,7 +4973,7 @@ PRECURSOR_QSCORE=0.43
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3249
 TITLE=Scan_3250
 SCANS=3250
@@ -5017,7 +5017,7 @@ PRECURSOR_QSCORE=0.30
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3250
 TITLE=Scan_3251
 SCANS=3251
@@ -5055,7 +5055,7 @@ PRECURSOR_QSCORE=0.32
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3252
 TITLE=Scan_3253
 SCANS=3253
@@ -5068,7 +5068,7 @@ PRECURSOR_WINDOW_END=1017.77
 ACTIVATION=CID
 PRECURSOR_MZ=1015.269409
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9106.354703
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=129669.23
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -5111,7 +5111,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3253
 TITLE=Scan_3254
 SCANS=3254
@@ -5139,7 +5139,7 @@ PRECURSOR_QSCORE=0.81
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3255
 TITLE=Scan_3256
 SCANS=3256
@@ -5198,7 +5198,7 @@ PRECURSOR_QSCORE=0.37
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3258
 TITLE=Scan_3259
 SCANS=3259
@@ -5254,7 +5254,7 @@ PRECURSOR_QSCORE=0.47
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3259
 TITLE=Scan_3260
 SCANS=3260
@@ -5286,7 +5286,7 @@ PRECURSOR_QSCORE=0.29
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3261
 TITLE=Scan_3262
 SCANS=3262
@@ -5338,7 +5338,7 @@ PRECURSOR_QSCORE=0.71
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3264
 TITLE=Scan_3265
 SCANS=3265
@@ -5404,7 +5404,7 @@ PRECURSOR_QSCORE=0.29
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3265
 TITLE=Scan_3266
 SCANS=3266
@@ -5465,7 +5465,7 @@ PRECURSOR_QSCORE=0.58
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3267
 TITLE=Scan_3268
 SCANS=3268
@@ -5532,7 +5532,7 @@ PRECURSOR_QSCORE=0.24
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3268
 TITLE=Scan_3269
 SCANS=3269
@@ -5586,7 +5586,7 @@ PRECURSOR_QSCORE=0.30
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3270
 TITLE=Scan_3271
 SCANS=3271
@@ -5599,7 +5599,7 @@ PRECURSOR_WINDOW_END=612.68
 ACTIVATION=CID
 PRECURSOR_MZ=610.184265
 PRECURSOR_CHARGE=1
-PRECURSOR_MASS=609.176875
+PRECURSOR_MASS=609.176489
 PRECURSOR_INTENSITY=127057.95
 PRECURSOR_FEATURE_ID=241
 PRECURSOR_QSCORE=0.99
@@ -5614,7 +5614,7 @@ PRECURSOR_QSCORE=0.99
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3271
 TITLE=Scan_3272
 SCANS=3272
@@ -5667,7 +5667,7 @@ PRECURSOR_QSCORE=0.28
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3273
 TITLE=Scan_3274
 SCANS=3274
@@ -5700,7 +5700,7 @@ PRECURSOR_QSCORE=0.22
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3274
 TITLE=Scan_3275
 SCANS=3275
@@ -5713,7 +5713,7 @@ PRECURSOR_WINDOW_END=1015.88
 ACTIVATION=CID
 PRECURSOR_MZ=1013.380432
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9106.353996
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=247279.16
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -5762,7 +5762,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3276
 TITLE=Scan_3277
 SCANS=3277
@@ -5775,7 +5775,7 @@ PRECURSOR_WINDOW_END=1305.13
 ACTIVATION=CID
 PRECURSOR_MZ=1302.633789
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=9106.349161
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=186339.05
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -5803,7 +5803,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3277
 TITLE=Scan_3278
 SCANS=3278
@@ -5842,7 +5842,7 @@ PRECURSOR_QSCORE=0.65
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3280
 TITLE=Scan_3281
 SCANS=3281
@@ -5897,7 +5897,7 @@ PRECURSOR_QSCORE=0.43
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3282
 TITLE=Scan_3283
 SCANS=3283
@@ -5910,7 +5910,7 @@ PRECURSOR_WINDOW_END=415.77
 ACTIVATION=CID
 PRECURSOR_MZ=413.266144
 PRECURSOR_CHARGE=5
-PRECURSOR_MASS=2069.137765
+PRECURSOR_MASS=2069.135587
 PRECURSOR_INTENSITY=35574.23
 PRECURSOR_FEATURE_ID=81
 PRECURSOR_QSCORE=0.89
@@ -5923,7 +5923,7 @@ PRECURSOR_QSCORE=0.89
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3285
 TITLE=Scan_3286
 SCANS=3286
@@ -5936,7 +5936,7 @@ PRECURSOR_WINDOW_END=1142.30
 ACTIVATION=CID
 PRECURSOR_MZ=1139.803589
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9106.357230
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=226787.80
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -5973,7 +5973,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3286
 TITLE=Scan_3287
 SCANS=3287
@@ -5986,7 +5986,7 @@ PRECURSOR_WINDOW_END=505.61
 ACTIVATION=CID
 PRECURSOR_MZ=503.107574
 PRECURSOR_CHARGE=3
-PRECURSOR_MASS=1512.292712
+PRECURSOR_MASS=1512.290858
 PRECURSOR_INTENSITY=48615.01
 PRECURSOR_FEATURE_ID=380
 PRECURSOR_QSCORE=0.70
@@ -6009,7 +6009,7 @@ PRECURSOR_QSCORE=0.70
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3288
 TITLE=Scan_3289
 SCANS=3289
@@ -6044,7 +6044,7 @@ PRECURSOR_QSCORE=0.29
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3289
 TITLE=Scan_3290
 SCANS=3290
@@ -6099,7 +6099,7 @@ PRECURSOR_QSCORE=0.54
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3292
 TITLE=Scan_3293
 SCANS=3293
@@ -6139,7 +6139,7 @@ PRECURSOR_QSCORE=0.51
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3295
 TITLE=Scan_3296
 SCANS=3296
@@ -6152,7 +6152,7 @@ PRECURSOR_WINDOW_END=853.23
 ACTIVATION=CID
 PRECURSOR_MZ=850.725159
 PRECURSOR_CHARGE=14
-PRECURSOR_MASS=11890.050479
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=247819.50
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -6205,7 +6205,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3298
 TITLE=Scan_3299
 SCANS=3299
@@ -6218,7 +6218,7 @@ PRECURSOR_WINDOW_END=1490.51
 ACTIVATION=CID
 PRECURSOR_MZ=1488.013428
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=11890.040849
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=120568.14
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -6253,7 +6253,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3300
 TITLE=Scan_3301
 SCANS=3301
@@ -6266,7 +6266,7 @@ PRECURSOR_WINDOW_END=995.01
 ACTIVATION=CID
 PRECURSOR_MZ=992.512390
 PRECURSOR_CHARGE=12
-PRECURSOR_MASS=11890.047747
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=269515.38
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -6329,7 +6329,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3301
 TITLE=Scan_3302
 SCANS=3302
@@ -6342,7 +6342,7 @@ PRECURSOR_WINDOW_END=918.67
 ACTIVATION=CID
 PRECURSOR_MZ=916.166016
 PRECURSOR_CHARGE=13
-PRECURSOR_MASS=11890.047747
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=320313.59
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -6414,7 +6414,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3303
 TITLE=Scan_3304
 SCANS=3304
@@ -6427,7 +6427,7 @@ PRECURSOR_WINDOW_END=1085.06
 ACTIVATION=CID
 PRECURSOR_MZ=1082.558350
 PRECURSOR_CHARGE=11
-PRECURSOR_MASS=11890.045982
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=188841.94
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -6479,7 +6479,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3304
 TITLE=Scan_3305
 SCANS=3305
@@ -6539,7 +6539,7 @@ PRECURSOR_QSCORE=0.41
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3306
 TITLE=Scan_3307
 SCANS=3307
@@ -6552,7 +6552,7 @@ PRECURSOR_WINDOW_END=796.71
 ACTIVATION=CID
 PRECURSOR_MZ=794.210693
 PRECURSOR_CHARGE=15
-PRECURSOR_MASS=11890.047310
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=366495.53
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -6607,7 +6607,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3309
 TITLE=Scan_3310
 SCANS=3310
@@ -6652,7 +6652,7 @@ PRECURSOR_QSCORE=0.22
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3310
 TITLE=Scan_3311
 SCANS=3311
@@ -6685,7 +6685,7 @@ PRECURSOR_QSCORE=0.33
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3312
 TITLE=Scan_3313
 SCANS=3313
@@ -6715,7 +6715,7 @@ PRECURSOR_QSCORE=0.53
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3313
 TITLE=Scan_3314
 SCANS=3314
@@ -6728,7 +6728,7 @@ PRECURSOR_WINDOW_END=421.82
 ACTIVATION=CID
 PRECURSOR_MZ=419.315491
 PRECURSOR_CHARGE=1
-PRECURSOR_MASS=418.308449
+PRECURSOR_MASS=418.308541
 PRECURSOR_INTENSITY=33982.90
 PRECURSOR_FEATURE_ID=231
 PRECURSOR_QSCORE=1.00
@@ -6741,7 +6741,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3315
 TITLE=Scan_3316
 SCANS=3316
@@ -6801,7 +6801,7 @@ PRECURSOR_QSCORE=0.47
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3316
 TITLE=Scan_3317
 SCANS=3317
@@ -6853,7 +6853,7 @@ PRECURSOR_QSCORE=0.70
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3318
 TITLE=Scan_3319
 SCANS=3319
@@ -6885,7 +6885,7 @@ PRECURSOR_QSCORE=0.23
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3319
 TITLE=Scan_3320
 SCANS=3320
@@ -6955,7 +6955,7 @@ PRECURSOR_QSCORE=0.23
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3321
 TITLE=Scan_3322
 SCANS=3322
@@ -7013,7 +7013,7 @@ PRECURSOR_QSCORE=0.23
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3322
 TITLE=Scan_3323
 SCANS=3323
@@ -7026,7 +7026,7 @@ PRECURSOR_WINDOW_END=612.68
 ACTIVATION=CID
 PRECURSOR_MZ=610.184509
 PRECURSOR_CHARGE=2
-PRECURSOR_MASS=1218.348018
+PRECURSOR_MASS=1218.349702
 PRECURSOR_INTENSITY=114110.30
 PRECURSOR_FEATURE_ID=237
 PRECURSOR_QSCORE=0.84
@@ -7036,7 +7036,7 @@ PRECURSOR_QSCORE=0.84
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3324
 TITLE=Scan_3325
 SCANS=3325
@@ -7049,7 +7049,7 @@ PRECURSOR_WINDOW_END=1015.99
 ACTIVATION=CID
 PRECURSOR_MZ=1013.493042
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9106.346869
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=221882.84
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -7092,7 +7092,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3325
 TITLE=Scan_3326
 SCANS=3326
@@ -7128,7 +7128,7 @@ PRECURSOR_QSCORE=0.81
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3327
 TITLE=Scan_3328
 SCANS=3328
@@ -7141,7 +7141,7 @@ PRECURSOR_WINDOW_END=799.29
 ACTIVATION=CID
 PRECURSOR_MZ=796.785461
 PRECURSOR_CHARGE=15
-PRECURSOR_MASS=11907.047576
+PRECURSOR_MASS=11907.031750
 PRECURSOR_INTENSITY=252315.75
 PRECURSOR_FEATURE_ID=40
 PRECURSOR_QSCORE=0.40
@@ -7191,7 +7191,7 @@ PRECURSOR_QSCORE=0.40
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3328
 TITLE=Scan_3329
 SCANS=3329
@@ -7244,7 +7244,7 @@ PRECURSOR_QSCORE=0.59
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3331
 TITLE=Scan_3332
 SCANS=3332
@@ -7257,7 +7257,7 @@ PRECURSOR_WINDOW_END=914.84
 ACTIVATION=CID
 PRECURSOR_MZ=912.342163
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=9106.356223
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=215007.44
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -7299,7 +7299,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3334
 TITLE=Scan_3335
 SCANS=3335
@@ -7312,7 +7312,7 @@ PRECURSOR_WINDOW_END=992.99
 ACTIVATION=CID
 PRECURSOR_MZ=990.494568
 PRECURSOR_CHARGE=12
-PRECURSOR_MASS=11890.036491
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=279718.19
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -7365,7 +7365,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3336
 TITLE=Scan_3337
 SCANS=3337
@@ -7396,7 +7396,7 @@ PRECURSOR_QSCORE=0.69
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3337
 TITLE=Scan_3338
 SCANS=3338
@@ -7435,7 +7435,7 @@ PRECURSOR_QSCORE=0.40
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3339
 TITLE=Scan_3340
 SCANS=3340
@@ -7448,7 +7448,7 @@ PRECURSOR_WINDOW_END=1142.18
 ACTIVATION=CID
 PRECURSOR_MZ=1139.675903
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=9106.360560
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=161122.56
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -7477,7 +7477,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3346
 TITLE=Scan_3347
 SCANS=3347
@@ -7490,7 +7490,7 @@ PRECURSOR_WINDOW_END=415.77
 ACTIVATION=CID
 PRECURSOR_MZ=413.266327
 PRECURSOR_CHARGE=2
-PRECURSOR_MASS=824.518057
+PRECURSOR_MASS=824.518158
 PRECURSOR_INTENSITY=32696.90
 PRECURSOR_FEATURE_ID=292
 PRECURSOR_QSCORE=0.66
@@ -7504,7 +7504,7 @@ PRECURSOR_QSCORE=0.66
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3348
 TITLE=Scan_3349
 SCANS=3349
@@ -7533,7 +7533,7 @@ PRECURSOR_QSCORE=0.69
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3349
 TITLE=Scan_3350
 SCANS=3350
@@ -7573,7 +7573,7 @@ PRECURSOR_QSCORE=0.71
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3351
 TITLE=Scan_3352
 SCANS=3352
@@ -7586,7 +7586,7 @@ PRECURSOR_WINDOW_END=918.67
 ACTIVATION=CID
 PRECURSOR_MZ=916.166199
 PRECURSOR_CHARGE=13
-PRECURSOR_MASS=11890.042872
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=385986.47
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -7670,7 +7670,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3352
 TITLE=Scan_3353
 SCANS=3353
@@ -7683,7 +7683,7 @@ PRECURSOR_WINDOW_END=994.93
 ACTIVATION=CID
 PRECURSOR_MZ=992.430359
 PRECURSOR_CHARGE=12
-PRECURSOR_MASS=11890.042872
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=346229.59
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -7758,7 +7758,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3354
 TITLE=Scan_3355
 SCANS=3355
@@ -7771,7 +7771,7 @@ PRECURSOR_WINDOW_END=853.44
 ACTIVATION=CID
 PRECURSOR_MZ=850.939697
 PRECURSOR_CHARGE=14
-PRECURSOR_MASS=11890.047208
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=471720.06
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -7831,7 +7831,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3355
 TITLE=Scan_3356
 SCANS=3356
@@ -7844,7 +7844,7 @@ PRECURSOR_WINDOW_END=1193.21
 ACTIVATION=CID
 PRECURSOR_MZ=1190.712769
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=11890.047208
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=209171.73
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -7876,7 +7876,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3357
 TITLE=Scan_3358
 SCANS=3358
@@ -7889,7 +7889,7 @@ PRECURSOR_WINDOW_END=1084.88
 ACTIVATION=CID
 PRECURSOR_MZ=1082.376587
 PRECURSOR_CHARGE=11
-PRECURSOR_MASS=11890.042005
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=400712.00
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -7939,7 +7939,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3358
 TITLE=Scan_3359
 SCANS=3359
@@ -7952,7 +7952,7 @@ PRECURSOR_WINDOW_END=1325.29
 ACTIVATION=CID
 PRECURSOR_MZ=1322.791748
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=11890.042005
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=273209.75
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -7992,7 +7992,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3360
 TITLE=Scan_3361
 SCANS=3361
@@ -8005,7 +8005,7 @@ PRECURSOR_WINDOW_END=796.64
 ACTIVATION=CID
 PRECURSOR_MZ=794.144836
 PRECURSOR_CHARGE=15
-PRECURSOR_MASS=11890.048419
+PRECURSOR_MASS=11890.041748
 PRECURSOR_INTENSITY=437227.91
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -8068,7 +8068,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3363
 TITLE=Scan_3364
 SCANS=3364
@@ -8081,7 +8081,7 @@ PRECURSOR_WINDOW_END=521.64
 ACTIVATION=CID
 PRECURSOR_MZ=519.138916
 PRECURSOR_CHARGE=2
-PRECURSOR_MASS=1036.262126
+PRECURSOR_MASS=1036.262353
 PRECURSOR_INTENSITY=102066.51
 PRECURSOR_FEATURE_ID=185
 PRECURSOR_QSCORE=0.43
@@ -8098,7 +8098,7 @@ PRECURSOR_QSCORE=0.43
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3364
 TITLE=Scan_3365
 SCANS=3365
@@ -8111,7 +8111,7 @@ PRECURSOR_WINDOW_END=1490.77
 ACTIVATION=CID
 PRECURSOR_MZ=1488.266602
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=11874.050816
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=139999.02
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -8195,7 +8195,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3366
 TITLE=Scan_3367
 SCANS=3367
@@ -8208,7 +8208,7 @@ PRECURSOR_WINDOW_END=1194.79
 ACTIVATION=CID
 PRECURSOR_MZ=1192.288940
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=11891.045088
+PRECURSOR_MASS=11891.044119
 PRECURSOR_INTENSITY=162824.61
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -8233,7 +8233,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3367
 TITLE=Scan_3368
 SCANS=3368
@@ -8246,7 +8246,7 @@ PRECURSOR_WINDOW_END=1323.63
 ACTIVATION=CID
 PRECURSOR_MZ=1321.127686
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=11874.049139
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=157596.09
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -8348,7 +8348,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3369
 TITLE=Scan_3370
 SCANS=3370
@@ -8361,7 +8361,7 @@ PRECURSOR_WINDOW_END=1488.64
 ACTIVATION=CID
 PRECURSOR_MZ=1486.142090
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=11874.050468
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=552646.50
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -8409,7 +8409,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3370
 TITLE=Scan_3371
 SCANS=3371
@@ -8422,7 +8422,7 @@ PRECURSOR_WINDOW_END=1083.33
 ACTIVATION=CID
 PRECURSOR_MZ=1080.828979
 PRECURSOR_CHARGE=11
-PRECURSOR_MASS=11874.050468
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=594045.62
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -8556,7 +8556,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3372
 TITLE=Scan_3373
 SCANS=3373
@@ -8569,7 +8569,7 @@ PRECURSOR_WINDOW_END=1191.61
 ACTIVATION=CID
 PRECURSOR_MZ=1189.113770
 PRECURSOR_CHARGE=10
-PRECURSOR_MASS=11874.050863
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=942067.50
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -8706,7 +8706,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3373
 TITLE=Scan_3374
 SCANS=3374
@@ -8719,7 +8719,7 @@ PRECURSOR_WINDOW_END=1501.01
 ACTIVATION=CID
 PRECURSOR_MZ=1498.513550
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=11972.030537
+PRECURSOR_MASS=11972.026903
 PRECURSOR_INTENSITY=592823.50
 PRECURSOR_FEATURE_ID=70
 PRECURSOR_QSCORE=1.00
@@ -8790,7 +8790,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3375
 TITLE=Scan_3376
 SCANS=3376
@@ -8803,7 +8803,7 @@ PRECURSOR_WINDOW_END=917.13
 ACTIVATION=CID
 PRECURSOR_MZ=914.627380
 PRECURSOR_CHARGE=13
-PRECURSOR_MASS=11874.048495
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=3357129.75
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -8941,7 +8941,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3376
 TITLE=Scan_3377
 SCANS=3377
@@ -8954,7 +8954,7 @@ PRECURSOR_WINDOW_END=851.87
 ACTIVATION=CID
 PRECURSOR_MZ=849.368591
 PRECURSOR_CHARGE=14
-PRECURSOR_MASS=11874.048495
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=3197940.50
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -9073,7 +9073,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3378
 TITLE=Scan_3379
 SCANS=3379
@@ -9086,7 +9086,7 @@ PRECURSOR_WINDOW_END=746.07
 ACTIVATION=CID
 PRECURSOR_MZ=743.573853
 PRECURSOR_CHARGE=16
-PRECURSOR_MASS=11874.044733
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=951451.81
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -9183,7 +9183,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3379
 TITLE=Scan_3380
 SCANS=3380
@@ -9196,7 +9196,7 @@ PRECURSOR_WINDOW_END=1334.62
 ACTIVATION=CID
 PRECURSOR_MZ=1332.124023
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=11972.025369
+PRECURSOR_MASS=11972.026903
 PRECURSOR_INTENSITY=401706.62
 PRECURSOR_FEATURE_ID=70
 PRECURSOR_QSCORE=1.00
@@ -9241,7 +9241,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3382
 TITLE=Scan_3383
 SCANS=3383
@@ -9254,7 +9254,7 @@ PRECURSOR_WINDOW_END=1493.51
 ACTIVATION=CID
 PRECURSOR_MZ=1491.005981
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=11891.042692
+PRECURSOR_MASS=11891.044119
 PRECURSOR_INTENSITY=194540.59
 PRECURSOR_FEATURE_ID=35
 PRECURSOR_QSCORE=1.00
@@ -9293,7 +9293,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3384
 TITLE=Scan_3385
 SCANS=3385
@@ -9306,7 +9306,7 @@ PRECURSOR_WINDOW_END=993.43
 ACTIVATION=CID
 PRECURSOR_MZ=990.929199
 PRECURSOR_CHARGE=12
-PRECURSOR_MASS=11874.051364
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=1704882.75
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -9401,7 +9401,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3387
 TITLE=Scan_3388
 SCANS=3388
@@ -9414,7 +9414,7 @@ PRECURSOR_WINDOW_END=1015.77
 ACTIVATION=CID
 PRECURSOR_MZ=1013.271973
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=9106.346253
+PRECURSOR_MASS=9106.336623
 PRECURSOR_INTENSITY=196717.78
 PRECURSOR_FEATURE_ID=2
 PRECURSOR_QSCORE=1.00
@@ -9465,7 +9465,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3388
 TITLE=Scan_3389
 SCANS=3389
@@ -9478,7 +9478,7 @@ PRECURSOR_WINDOW_END=464.65
 ACTIVATION=CID
 PRECURSOR_MZ=462.146576
 PRECURSOR_CHARGE=9
-PRECURSOR_MASS=4139.369849
+PRECURSOR_MASS=4139.375304
 PRECURSOR_INTENSITY=35326.18
 PRECURSOR_FEATURE_ID=224
 PRECURSOR_QSCORE=0.26
@@ -9495,7 +9495,7 @@ PRECURSOR_QSCORE=0.26
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3391
 TITLE=Scan_3392
 SCANS=3392
@@ -9531,7 +9531,7 @@ PRECURSOR_QSCORE=0.53
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3394
 TITLE=Scan_3395
 SCANS=3395
@@ -9582,7 +9582,7 @@ PRECURSOR_QSCORE=0.27
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3397
 TITLE=Scan_3398
 SCANS=3398
@@ -9618,7 +9618,7 @@ PRECURSOR_QSCORE=0.42
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3399
 TITLE=Scan_3400
 SCANS=3400
@@ -9674,7 +9674,7 @@ PRECURSOR_QSCORE=0.48
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3400
 TITLE=Scan_3401
 SCANS=3401
@@ -9687,7 +9687,7 @@ PRECURSOR_WINDOW_END=701.22
 ACTIVATION=CID
 PRECURSOR_MZ=698.723083
 PRECURSOR_CHARGE=17
-PRECURSOR_MASS=11874.048699
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=217247.80
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -9731,7 +9731,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3402
 TITLE=Scan_3403
 SCANS=3403
@@ -9765,7 +9765,7 @@ PRECURSOR_QSCORE=0.40
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3403
 TITLE=Scan_3404
 SCANS=3404
@@ -9824,7 +9824,7 @@ PRECURSOR_QSCORE=0.42
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3405
 TITLE=Scan_3406
 SCANS=3406
@@ -9837,7 +9837,7 @@ PRECURSOR_WINDOW_END=1700.94
 ACTIVATION=CID
 PRECURSOR_MZ=1698.443726
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=11874.048699
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=159450.28
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -9886,7 +9886,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3406
 TITLE=Scan_3407
 SCANS=3407
@@ -9899,7 +9899,7 @@ PRECURSOR_WINDOW_END=1513.13
 ACTIVATION=CID
 PRECURSOR_MZ=1510.633789
 PRECURSOR_CHARGE=8
-PRECURSOR_MASS=12069.996271
+PRECURSOR_MASS=12070.002775
 PRECURSOR_INTENSITY=190640.81
 PRECURSOR_FEATURE_ID=46
 PRECURSOR_QSCORE=1.00
@@ -9910,7 +9910,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3408
 TITLE=Scan_3409
 SCANS=3409
@@ -9923,7 +9923,7 @@ PRECURSOR_WINDOW_END=1714.80
 ACTIVATION=CID
 PRECURSOR_MZ=1712.298828
 PRECURSOR_CHARGE=7
-PRECURSOR_MASS=11973.028079
+PRECURSOR_MASS=11973.029274
 PRECURSOR_INTENSITY=158675.05
 PRECURSOR_FEATURE_ID=70
 PRECURSOR_QSCORE=1.00
@@ -9945,7 +9945,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3409
 TITLE=Scan_3410
 SCANS=3410
@@ -10029,7 +10029,7 @@ PRECURSOR_QSCORE=0.70
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3411
 TITLE=Scan_3412
 SCANS=3412
@@ -10042,7 +10042,7 @@ PRECURSOR_WINDOW_END=795.58
 ACTIVATION=CID
 PRECURSOR_MZ=793.078003
 PRECURSOR_CHARGE=15
-PRECURSOR_MASS=11874.045101
+PRECURSOR_MASS=11874.048345
 PRECURSOR_INTENSITY=1590772.38
 PRECURSOR_FEATURE_ID=4
 PRECURSOR_QSCORE=1.00
@@ -10147,7 +10147,7 @@ PRECURSOR_QSCORE=1.00
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3412
 TITLE=Scan_3413
 SCANS=3413

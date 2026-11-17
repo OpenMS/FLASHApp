@@ -11,7 +11,7 @@
 #min_snr: [0.25, 0.25]
 ####################### Parameters ######################
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3097
 TITLE=Scan_3098
 SCANS=3098
@@ -74,7 +74,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3101
 TITLE=Scan_3102
 SCANS=3102
@@ -140,7 +140,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3105
 TITLE=Scan_3106
 SCANS=3106
@@ -208,7 +208,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3109
 TITLE=Scan_3110
 SCANS=3110
@@ -289,7 +289,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3113
 TITLE=Scan_3114
 SCANS=3114
@@ -386,7 +386,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3117
 TITLE=Scan_3118
 SCANS=3118
@@ -470,7 +470,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3121
 TITLE=Scan_3122
 SCANS=3122
@@ -567,7 +567,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3125
 TITLE=Scan_3126
 SCANS=3126
@@ -660,7 +660,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3128
 TITLE=Scan_3129
 SCANS=3129
@@ -748,7 +748,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3131
 TITLE=Scan_3132
 SCANS=3132
@@ -832,7 +832,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3134
 TITLE=Scan_3135
 SCANS=3135
@@ -915,7 +915,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3137
 TITLE=Scan_3138
 SCANS=3138
@@ -962,7 +962,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3140
 TITLE=Scan_3141
 SCANS=3141
@@ -1022,7 +1022,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3143
 TITLE=Scan_3144
 SCANS=3144
@@ -1087,7 +1087,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3146
 TITLE=Scan_3147
 SCANS=3147
@@ -1154,7 +1154,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3149
 TITLE=Scan_3150
 SCANS=3150
@@ -1249,7 +1249,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3152
 TITLE=Scan_3153
 SCANS=3153
@@ -1365,7 +1365,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3155
 TITLE=Scan_3156
 SCANS=3156
@@ -1471,7 +1471,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3158
 TITLE=Scan_3159
 SCANS=3159
@@ -1568,7 +1568,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3161
 TITLE=Scan_3162
 SCANS=3162
@@ -1676,7 +1676,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3164
 TITLE=Scan_3165
 SCANS=3165
@@ -1767,7 +1767,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3167
 TITLE=Scan_3168
 SCANS=3168
@@ -1870,7 +1870,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3170
 TITLE=Scan_3171
 SCANS=3171
@@ -1967,7 +1967,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3173
 TITLE=Scan_3174
 SCANS=3174
@@ -2068,7 +2068,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3176
 TITLE=Scan_3177
 SCANS=3177
@@ -2152,7 +2152,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3179
 TITLE=Scan_3180
 SCANS=3180
@@ -2244,7 +2244,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3182
 TITLE=Scan_3183
 SCANS=3183
@@ -2361,7 +2361,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3185
 TITLE=Scan_3186
 SCANS=3186
@@ -2467,7 +2467,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3188
 TITLE=Scan_3189
 SCANS=3189
@@ -2582,7 +2582,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3191
 TITLE=Scan_3192
 SCANS=3192
@@ -2700,7 +2700,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3194
 TITLE=Scan_3195
 SCANS=3195
@@ -2816,7 +2816,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3197
 TITLE=Scan_3198
 SCANS=3198
@@ -2920,7 +2920,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3200
 TITLE=Scan_3201
 SCANS=3201
@@ -3027,7 +3027,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3203
 TITLE=Scan_3204
 SCANS=3204
@@ -3122,7 +3122,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3206
 TITLE=Scan_3207
 SCANS=3207
@@ -3213,7 +3213,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3209
 TITLE=Scan_3210
 SCANS=3210
@@ -3312,7 +3312,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3212
 TITLE=Scan_3213
 SCANS=3213
@@ -3419,7 +3419,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3215
 TITLE=Scan_3216
 SCANS=3216
@@ -3523,7 +3523,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3218
 TITLE=Scan_3219
 SCANS=3219
@@ -3613,7 +3613,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3221
 TITLE=Scan_3222
 SCANS=3222
@@ -3710,7 +3710,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3224
 TITLE=Scan_3225
 SCANS=3225
@@ -3808,7 +3808,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3227
 TITLE=Scan_3228
 SCANS=3228
@@ -3899,7 +3899,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3230
 TITLE=Scan_3231
 SCANS=3231
@@ -4002,7 +4002,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3233
 TITLE=Scan_3234
 SCANS=3234
@@ -4094,7 +4094,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3236
 TITLE=Scan_3237
 SCANS=3237
@@ -4185,7 +4185,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3239
 TITLE=Scan_3240
 SCANS=3240
@@ -4299,7 +4299,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3242
 TITLE=Scan_3243
 SCANS=3243
@@ -4380,7 +4380,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3245
 TITLE=Scan_3246
 SCANS=3246
@@ -4468,7 +4468,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3248
 TITLE=Scan_3249
 SCANS=3249
@@ -4574,7 +4574,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3251
 TITLE=Scan_3252
 SCANS=3252
@@ -4682,7 +4682,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3254
 TITLE=Scan_3255
 SCANS=3255
@@ -4784,7 +4784,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3257
 TITLE=Scan_3258
 SCANS=3258
@@ -4885,7 +4885,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3260
 TITLE=Scan_3261
 SCANS=3261
@@ -4977,7 +4977,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3263
 TITLE=Scan_3264
 SCANS=3264
@@ -5073,7 +5073,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3266
 TITLE=Scan_3267
 SCANS=3267
@@ -5162,7 +5162,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3269
 TITLE=Scan_3270
 SCANS=3270
@@ -5264,7 +5264,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3272
 TITLE=Scan_3273
 SCANS=3273
@@ -5344,7 +5344,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3275
 TITLE=Scan_3276
 SCANS=3276
@@ -5443,7 +5443,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3278
 TITLE=Scan_3279
 SCANS=3279
@@ -5548,7 +5548,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3281
 TITLE=Scan_3282
 SCANS=3282
@@ -5637,7 +5637,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3284
 TITLE=Scan_3285
 SCANS=3285
@@ -5733,7 +5733,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3287
 TITLE=Scan_3288
 SCANS=3288
@@ -5836,7 +5836,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3290
 TITLE=Scan_3291
 SCANS=3291
@@ -5935,7 +5935,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3293
 TITLE=Scan_3294
 SCANS=3294
@@ -6022,7 +6022,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3296
 TITLE=Scan_3297
 SCANS=3297
@@ -6113,7 +6113,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3299
 TITLE=Scan_3300
 SCANS=3300
@@ -6211,7 +6211,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3302
 TITLE=Scan_3303
 SCANS=3303
@@ -6301,7 +6301,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3305
 TITLE=Scan_3306
 SCANS=3306
@@ -6395,7 +6395,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3308
 TITLE=Scan_3309
 SCANS=3309
@@ -6497,7 +6497,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3311
 TITLE=Scan_3312
 SCANS=3312
@@ -6582,7 +6582,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3314
 TITLE=Scan_3315
 SCANS=3315
@@ -6673,7 +6673,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3317
 TITLE=Scan_3318
 SCANS=3318
@@ -6777,7 +6777,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3320
 TITLE=Scan_3321
 SCANS=3321
@@ -6873,7 +6873,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3323
 TITLE=Scan_3324
 SCANS=3324
@@ -6965,7 +6965,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3326
 TITLE=Scan_3327
 SCANS=3327
@@ -7046,7 +7046,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3329
 TITLE=Scan_3330
 SCANS=3330
@@ -7146,7 +7146,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3332
 TITLE=Scan_3333
 SCANS=3333
@@ -7254,7 +7254,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3335
 TITLE=Scan_3336
 SCANS=3336
@@ -7354,7 +7354,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3338
 TITLE=Scan_3339
 SCANS=3339
@@ -7442,7 +7442,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3341
 TITLE=Scan_3342
 SCANS=3342
@@ -7518,7 +7518,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3344
 TITLE=Scan_3345
 SCANS=3345
@@ -7630,7 +7630,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3347
 TITLE=Scan_3348
 SCANS=3348
@@ -7726,7 +7726,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3350
 TITLE=Scan_3351
 SCANS=3351
@@ -7820,7 +7820,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3353
 TITLE=Scan_3354
 SCANS=3354
@@ -7913,7 +7913,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3356
 TITLE=Scan_3357
 SCANS=3357
@@ -8007,7 +8007,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3359
 TITLE=Scan_3360
 SCANS=3360
@@ -8108,7 +8108,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3362
 TITLE=Scan_3363
 SCANS=3363
@@ -8205,7 +8205,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3365
 TITLE=Scan_3366
 SCANS=3366
@@ -8292,7 +8292,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3368
 TITLE=Scan_3369
 SCANS=3369
@@ -8409,7 +8409,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3371
 TITLE=Scan_3372
 SCANS=3372
@@ -8500,7 +8500,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3374
 TITLE=Scan_3375
 SCANS=3375
@@ -8601,7 +8601,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3377
 TITLE=Scan_3378
 SCANS=3378
@@ -8684,7 +8684,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3380
 TITLE=Scan_3381
 SCANS=3381
@@ -8769,7 +8769,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3383
 TITLE=Scan_3384
 SCANS=3384
@@ -8862,7 +8862,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3386
 TITLE=Scan_3387
 SCANS=3387
@@ -8955,7 +8955,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3389
 TITLE=Scan_3390
 SCANS=3390
@@ -9054,7 +9054,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3392
 TITLE=Scan_3393
 SCANS=3393
@@ -9157,7 +9157,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3395
 TITLE=Scan_3396
 SCANS=3396
@@ -9241,7 +9241,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3398
 TITLE=Scan_3399
 SCANS=3399
@@ -9340,7 +9340,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3401
 TITLE=Scan_3402
 SCANS=3402
@@ -9430,7 +9430,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3404
 TITLE=Scan_3405
 SCANS=3405
@@ -9526,7 +9526,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3407
 TITLE=Scan_3408
 SCANS=3408
@@ -9638,7 +9638,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3410
 TITLE=Scan_3411
 SCANS=3411
@@ -9724,7 +9724,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML
 SPECTRUM_ID=3413
 TITLE=Scan_3414
 SCANS=3414
