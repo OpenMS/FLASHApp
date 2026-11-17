@@ -17,15 +17,16 @@ import streamlit as st
 
 from openms_insight import ClusteredHeatmap, Heatmap, PCAPlot, SeriesPlot, Table, VolcanoPlot
 
-from src.common.common import show_fig
 from src.parse import differential as diff
 from src.quant import qc, sources
 from src.quant.session import LEVEL_NAMES, RESULTS, STATUS_LABELS
 from src.render import comparison_plots, go_terms, insight_data
 from src.render.postprocessing_plots import (
+    IMPUTED_COLORS, IMPUTED_SERIES, MISSING_COLORS, MISSING_SERIES, STAGE_COLORS, STAGE_SERIES,
     imputed_value_preview, missingness_vs_intensity, pvalue_histogram, sample_distributions,
 )
 from src.render.render import RECLICK, MissingResult, _component, _fixed
+from src.render.series import show_series
 
 
 CONDITION_COLORS = ['#3366CC', '#DC3912', '#FF9900', '#109618', '#990099', '#0099C6']
@@ -44,6 +45,12 @@ def comparison_groups(conditions):
     last one's, in sorted order)."""
     names = sorted(set(conditions))
     return (names[0], names[-1]) if len(names) >= 2 else None
+
+
+def _plot(session, name, spec, key, state_manager, height):
+    """Draw a plot of src/render/comparison_plots.py (its settings and ``data``)."""
+    show_series(spec.pop('data'), name, session.file_manager.cache_path, key, height=height,
+                state_manager=state_manager, **spec)
 
 
 def condition_colors(names):
@@ -359,10 +366,6 @@ def build_pca(session, state_manager, key, height):
         st.info(f'PCA could not be computed: {e}')
         return
     pca(key=key, state_manager=state_manager, height=height, pc_x=1, pc_y=2)
-    ratios = pca.get_variance_ratio()
-    st.caption('Explained variance: ' + ', '.join(
-        f'PC{i + 1} {r * 100:.1f}%' for i, r in enumerate(ratios[:3])
-    ) + f'. The 500 most variable {_noun(session, True)}.')
 
 
 def build_heatmap(session, state_manager, key, height):
@@ -402,29 +405,22 @@ def _id_noun(session, level):
     return LEVEL_NAMES[level].lower()
 
 
-def _not_identified_note(session, level):
-    if level == 'feature' and session.manifest.get('tool') != 'flashtnt' and not session.isobaric:
-        st.caption('These runs were not identified, so the features each run detected are counted. '
-                   'Add identification to the runs to count proteoforms.')
-
 
 def build_id_counts(session, state_manager, key, height=None):
     """Entities each run detected itself and those matched from other runs."""
-    del state_manager, height
     level = _id_level(session)
     counts = qc.counts_per_run(session.long(level).collect(), session.runs)
-    show_fig(comparison_plots.counts_per_run(counts, _id_noun(session, level), _sample(session)),
-             f'{key}-id-counts')
-    _not_identified_note(session, level)
+    _plot(session, f'quant-id-counts-{level}',
+          comparison_plots.counts_per_run(counts, _id_noun(session, level), _sample(session)),
+          key, state_manager, height)
 
 
 def build_id_frequency(session, state_manager, key, height=None):
     """How many entities were found in 1, 2, ... all runs."""
-    del state_manager, height
     level = _id_level(session)
     table = qc.frequency(session.long(level).collect(), session.runs)
-    show_fig(comparison_plots.frequency(table, _id_noun(session, level), _sample(session)),
-             f'{key}-id-frequency')
+    _plot(session, f'quant-id-frequency-{level}',
+          comparison_plots.frequency(table, _id_noun(session, level), _sample(session)), key, state_manager, height)
 
 
 def build_id_overlap(session, state_manager, key, height):
@@ -493,17 +489,14 @@ def build_id_table(session, state_manager, key, height):
 def build_totals(session, state_manager, key, height=None):
     """Summed intensity of every run or labelled channel: unequal totals
     mean the samples were not loaded alike (normalization corrects for it)."""
-    del state_manager, height
     conditions = session.conditions()
     frame = qc.totals(session.long().collect(), session.runs)
-    show_fig(comparison_plots.totals(frame, condition_colors(set(conditions.values())), conditions,
-                                     _sample(session)), f'{key}-totals')
+    _plot(session, 'quant-totals', comparison_plots.totals(
+        frame, condition_colors(set(conditions.values())), conditions, _sample(session)), key, state_manager, height)
     unlike = qc.unlike_replicates(frame, conditions)
     if unlike:
-        st.caption(f'Under half or over twice the total of their replicates: {", ".join(unlike)}. '
+        st.warning(f'Under half or over twice the total of their replicates: {", ".join(unlike)}. '
                    'Check how they were loaded; normalization corrects for it.')
-    elif conditions:
-        st.caption('Replicates of a condition were loaded alike (within a factor of two).')
 
 
 def build_correlation(session, state_manager, key, height):
@@ -533,7 +526,6 @@ def build_correlation(session, state_manager, key, height):
 def build_cv(session, state_manager, key, height=None):
     """CV of every entity within each condition, from the values measured
     (before imputation and normalization)."""
-    del state_manager, height
     if not _ready(session):
         return
     conditions = session.conditions()
@@ -541,25 +533,20 @@ def build_cv(session, state_manager, key, height=None):
     if frame.height == 0:
         st.info('A CV needs at least two replicates of a condition.')
         return
-    show_fig(comparison_plots.coefficients_of_variation(frame, condition_colors(set(conditions.values()))),
-             f'{key}-cv')
-    st.caption(f'Of the {_noun(session, True)} measured in at least two replicates, before imputation and '
-               'normalization.')
+    _plot(session, 'quant-cv', comparison_plots.coefficients_of_variation(
+        frame, condition_colors(set(conditions.values()))), key, state_manager, height)
 
 
 def build_match_quality(session, state_manager, key, height=None):
     """How well the values matched between runs (match between runs) scored,
     against the matches that were rejected."""
-    del state_manager, height
     frame = qc.match_quality(session.long('feature').collect(), session.runs)
     if session.isobaric or frame.height == 0:
         st.info('No values were matched between runs: the samples were measured together '
                 '(isobaric labels) or every run found every feature itself.')
         return
-    show_fig(comparison_plots.match_quality(frame, session.runs, _sample(session)), f'{key}-match-quality')
-    matched = frame.filter(frame['outcome'] != 'not matched').height
-    st.caption(f'{matched:,} feature values matched from other runs (match between runs, FDR 1%), '
-               f'{frame.height - matched:,} rejected.')
+    _plot(session, 'quant-match-quality', comparison_plots.match_quality(frame, session.runs, _sample(session)),
+          key, state_manager, height)
 
 
 # The steps of the comparison chain, each a plot of its own in the layout.
@@ -569,41 +556,68 @@ def build_match_quality(session, state_manager, key, height=None):
 def build_missing_values(session, state_manager, key, height=None):
     """Where missing values occur: mean intensity of complete entries and of
     entries with gaps."""
-    del state_manager, height
     if not _ready(session):
         return
     runs = list(session.conditions())
-    show_fig(missingness_vs_intensity(_frame(session, 'filtered'), runs), f'{key}-missing-values')
+    data, gaps = missingness_vs_intensity(_frame(session, 'filtered'), runs)
+    show_series(
+        data, 'quant-missing-values', session.file_manager.cache_path, key, height=height,
+        state_manager=state_manager, x_column='x', y_column='y', series_column='series',
+        series_names=MISSING_SERIES, series_colors=MISSING_COLORS,
+        title=f'Where missing values occur ({gaps} of {len(_frame(session, "filtered"))} have gaps)',
+        x_label='Mean log2 intensity', y_label='Density',
+    )
 
 
 def build_imputed_values(session, state_manager, key, height=None):
     """The values imputed for the gaps against the measured ones."""
-    del state_manager, height
     if not _ready(session):
         return
     runs = list(session.conditions())
-    show_fig(imputed_value_preview(_frame(session, 'filtered'), _frame(session, 'imputed'), runs),
-             f'{key}-imputed-values')
+    show_series(
+        imputed_value_preview(_frame(session, 'filtered'), _frame(session, 'imputed'), runs),
+        'quant-imputed-values', session.file_manager.cache_path, key, height=height,
+        state_manager=state_manager, x_column='x', y_column='y', series_column='series',
+        series_names=IMPUTED_SERIES, series_colors=IMPUTED_COLORS,
+        title='Observed values and the values imputation fills in', x_label='log2 intensity', y_label='Values',
+    )
+
+
+def _normalization_height(samples):
+    """A box per sample, laid out horizontally."""
+    return 44 * samples + 140
 
 
 def build_normalization(session, state_manager, key, height=None):
     """Intensity distribution of each sample before and after normalization."""
-    del state_manager, height
     if not _ready(session):
         return
-    conditions = session.conditions()
-    show_fig(sample_distributions(
-        _frame(session, 'imputed'), _frame(session, 'normalized_wide'), list(conditions), conditions,
+    samples = list(session.conditions())
+    data = sample_distributions(
+        _frame(session, 'imputed'), _frame(session, 'normalized_wide'), samples,
         after_is_log=session.settings['postproc-transform'] != 'None',
-    ), f'{key}-run-distributions')
+    )
+    show_series(
+        data, 'quant-run-distributions', session.file_manager.cache_path, key,
+        height=max(height or 0, _normalization_height(len(samples))), state_manager=state_manager,
+        x_column='Sample', y_column='Intensity', series_column='Stage', series_names=STAGE_SERIES,
+        series_colors=STAGE_COLORS, mode='box', orientation='h',
+        title='Intensity distributions before and after normalization', x_label=_sample(session),
+        y_label='log2 intensity', y_range_mode='normal',
+    )
 
 
 def build_pvalues(session, state_manager, key, height=None):
     """Distribution of the p-values of the group comparison."""
-    del state_manager, height
     if not _ready(session):
         return
-    show_fig(pvalue_histogram(_frame(session, 'statistics')), f'{key}-p-values')
+    data, expected = pvalue_histogram(_frame(session, 'statistics'))
+    show_series(
+        data, 'quant-p-values', session.file_manager.cache_path, key, height=height,
+        state_manager=state_manager, x_column='p-value', y_column='Proteoforms', mode='bars', show_legend=False,
+        title=f'p-value distribution ({expected:.0f} per bin if nothing changes)', x_label='p-value',
+        y_label=_noun(session, True).capitalize(),
+    )
 
 
 def build_go(session, state_manager, key, height=None):
@@ -788,26 +802,22 @@ def _plex_label(session):
 
 def build_reporter_intensities(session, state_manager, key, height=None):
     """Intensity of every label's reporter ions, and how often each label was found."""
-    del state_manager, height
     got = _reporter_ions(session)
     if got is None:
         return
     ions, channels = got
     conditions = session.conditions()
     presence = sources.channel_presence(ions, channels)
-    show_fig(comparison_plots.reporter_intensities(presence, ions, condition_colors(set(conditions.values())),
-                                                   conditions), f'{key}-reporter-intensities')
+    _plot(session, 'quant-reporter-intensities', comparison_plots.reporter_intensities(
+        presence, ions, condition_colors(set(conditions.values())), conditions), key, state_manager, height)
     low = [f"{r['channel']} ({r['sample']})" for r in presence.iter_rows(named=True) if r['present'] < 50]
     if low:
-        st.caption(f'Found in under half of the labelled spectra: {", ".join(low)}. Check the labelling '
+        st.warning(f'Found in under half of the labelled spectra: {", ".join(low)}. Check the labelling '
                    'and the channel assignment.')
-    else:
-        st.caption('Every label was found in at least half of the labelled spectra.')
 
 
 def build_reporter_ratios(session, state_manager, key, height=None):
     """Ratio of every label to the first label in the same spectrum."""
-    del state_manager, height
     got = _reporter_ions(session)
     if got is None:
         return
@@ -818,22 +828,19 @@ def build_reporter_ratios(session, state_manager, key, height=None):
     reference = channels[0]
     ratios = sources.reporter_ratios(ions, reference)
     names = dict(zip(channels, session.runs))
-    show_fig(comparison_plots.reporter_ratios(ratios, f'{reference} ({names.get(reference, reference)})',
-                                              [(c, names.get(c, c)) for c in channels[1:]]),
-             f'{key}-reporter-ratios')
-    st.caption('Of the spectra with both reporter ions. Labels of the same condition as the reference '
-               'should centre on 0, the others on their expected ratio.')
+    _plot(session, 'quant-reporter-ratios', comparison_plots.reporter_ratios(
+        ratios, f'{reference} ({names.get(reference, reference)})', [(c, names.get(c, c)) for c in channels[1:]]),
+        key, state_manager, height)
 
 
 def build_reporter_labels(session, state_manager, key, height=None):
     """How many spectra carry 0, 1, ... all reporter ions."""
-    del state_manager, height
     got = _reporter_ions(session)
     if got is None:
         return
     ions, channels = got
-    show_fig(comparison_plots.labels_found(sources.labels_found(ions, channels), _plex_label(session)),
-             f'{key}-reporter-labels')
+    _plot(session, 'quant-reporter-labels', comparison_plots.labels_found(
+        sources.labels_found(ions, channels), _plex_label(session)), key, state_manager, height)
 
 
 def _fraction_state(session, key, picker):
@@ -904,13 +911,10 @@ def build_feature_map(session, state_manager, key, height):
 
 def build_feature_intensity(session, state_manager, key, height=None):
     """Intensity of the features each run detected and of those matched into it."""
-    del state_manager, height
     long, overview = _features(session)
     values = sources.feature_values(long, overview, session.runs)
-    show_fig(comparison_plots.feature_intensity(values, session.runs, _sample(session)),
-             f'{key}-feature-intensity')
-    st.caption('Matched values are usually lower: match between runs fills in features close to the '
-               'detection limit of a run.')
+    _plot(session, 'quant-feature-intensity', comparison_plots.feature_intensity(
+        values, session.runs, _sample(session)), key, state_manager, height)
 
 
 def build_feature_table(session, state_manager, key, height):
@@ -1011,8 +1015,26 @@ BUILDERS = {
 }
 
 
-def render_cell(comp_name, session, state_manager, key):
-    builder, height = BUILDERS[comp_name]
+# Views that size themselves (metrics, GO, a run's own sequence and spectra)
+FREE_HEIGHT = {'quant_summary', 'quant_go', 'quant_prsm_sequence', 'quant_prsm_spectrum',
+               'quant_reporter_spectra', 'quant_reporter_ions'}
+DEFAULT_HEIGHT = 400
+
+
+def row_height(row, samples=0):
+    """One height for the views of a grid row, so their panels line up: the
+    tallest view of the row sets it. ``samples``: how many samples the
+    comparison has (the normalization view grows with them)."""
+    heights = [BUILDERS[name][1] or DEFAULT_HEIGHT for name in row
+               if name in BUILDERS and name not in FREE_HEIGHT]
+    if 'quant_normalization' in row:
+        heights.append(_normalization_height(samples))
+    return max(heights) if len(row) > 1 and heights else None
+
+
+def render_cell(comp_name, session, state_manager, key, height=None):
+    builder, default = BUILDERS[comp_name]
+    height = height or default
     try:
         builder(session, state_manager, key, height)
     except MissingResult as e:

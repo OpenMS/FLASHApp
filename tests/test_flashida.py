@@ -5,6 +5,7 @@ import json
 import os
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from src import flashida
@@ -110,16 +111,17 @@ COMMANDS = [
 ]
 RESULTS = [
     "tracking_id\tms_level\trt\tmass_count\ttag_count\texploration_score\tvariant_index"
-    "\ttotal_variants\twinner_tracking_id\tdeconv_masses\tdeconv_intensities\tgroup_verdict",
-    "T0\t1\t0.5\t2\t-1\t-1\t-1\t0\t\t12351.39;5000.5\t10,20;5\t",
-    "T1\t2\t0.6\t100\t40\t100\t0\t2\t\t\t\t",
-    "T2\t2\t0.6\t120\t50\t120\t1\t2\tT2\t\t\t",
-    "T4\t1\t0.9\t0\t-1\t-1\t-1\t0\t\t\t\t",
+    "\ttotal_variants\twinner_tracking_id\tdeconv_masses\tdeconv_intensities\tgroup_verdict"
+    "\tdeconv_qscores",
+    "T0\t1\t0.5\t2\t-1\t-1\t-1\t0\t\t12351.39;5000.5\t10,20;5\t\t0.9;0.4",
+    "T1\t2\t0.6\t100\t40\t100\t0\t2\t\t\t\t\t",
+    "T2\t2\t0.6\t120\t50\t120\t1\t2\tT2\t\t\t\t",
+    "T4\t1\t0.9\t0\t-1\t-1\t-1\t0\t\t\t\t\t",
 ]
 IDENTIFICATION = [
-    "tracking_id\tms_level\tprecursor_id\tproteoform\tflash_extender_score",
-    "T1\t2\t1\tPEPTIDE\t200",
-    "T2\t2\t1\tPEPTIDEK\t260",
+    "tracking_id\tms_level\tprecursor_id\tproteoform\tflash_extender_score\tms2_fragments",
+    "T1\t2\t1\tPEPTIDE\t200\tb3",
+    "T2\t2\t1\tPEPTIDEK\t260\tb3;b4;;y5",
 ]
 POOLED = [
     "trigger_scan_id\ttrigger\tprecursor_id\tupdate_index\tproteoform\tflash_extender_score\tcoverage_pct",
@@ -153,7 +155,7 @@ def test_a_line_being_written_is_not_read(tmp_path):
     assert results["tracking_id"].tolist() == ["T0", "T1", "T2", "T4"]
     before = ida_log.stamp(run)
     with open(run / "scan_results.tsv", "a") as f:
-        f.write("\t-1\t-1\t-1\t0\t\t\t\t\n")
+        f.write("\t-1\t-1\t-1\t0\t\t\t\t\t\n")
     assert ida_log.read_table(run / "scan_results.tsv")["tracking_id"].tolist()[-1] == "T5"
     assert ida_log.stamp(run) != before
 
@@ -193,7 +195,34 @@ def test_decisions(tmp_path):
     survey = points[points["Decision"] == "Deconvolved"]
     assert survey["mass"].tolist() == [12351.39, 5000.5]
     assert survey["intensity"].tolist() == [30, 5]
+    assert survey["qscore"].tolist() == [0.9, 0.4]
     assert set(points["Decision"]) == {"Deconvolved", "Identified", "Chosen"}
+    assert set(points["Layer"]) == {"Survey masses", "Identified precursors", "Chosen precursors"}
+
+
+def test_values_the_map_can_be_colored_by(tmp_path):
+    result = ida_log.decisions(ida_log.read_run(_run(tmp_path / "run")))
+
+    # Fragment ions: the ';'-separated ms2_fragments of the best identification
+    scans = result["scans"].set_index("Scan")
+    assert scans.loc["T2", "Fragment ions"] == 3 and scans.loc["T1", "Fragment ions"] == 1
+    assert np.isnan(scans.loc["T5", "Fragment ions"])
+
+    precursors = result["precursors"].set_index("precursor")
+    assert precursors.loc[1, "MS2 masses"] == 120 and precursors.loc[1, "Fragment ions"] == 3
+    assert np.isnan(precursors.loc[2, "MS2 masses"]) and np.isnan(precursors.loc[2, "Fragment ions"])
+
+    points = result["points"].set_index("precursor")
+    first = points.loc[1]
+    # Drawn as the most intense, so downsampling keeps it; its own intensity is kept too
+    assert first["intensity"] == 30 and first["survey_intensity"] == 30
+    assert (first["qscore"], first["ms2_masses"], first["fragment_ions"]) == (0.92, 120, 3)
+    assert first["Layer"] == "Identified precursors"
+    assert "Survey intensity" in first["label"]
+    # Precursor 2 (5000.5 Da) has no survey mass of its own in its scan
+    assert np.isnan(points.loc[2, "survey_intensity"])
+    survey = points.loc[0]
+    assert survey["ms2_masses"].isna().all() and survey["fragment_ions"].isna().all()
 
 
 def test_an_empty_run(tmp_path):

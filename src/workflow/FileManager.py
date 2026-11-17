@@ -14,6 +14,19 @@ from io import BytesIO
 from pathlib import Path
 from typing import Union, List
 
+def _unlink_if_link(path: Path) -> None:
+    """
+    Remove ``path`` when it is a link, before a result is written there.
+
+    A workspace started from a demo links the demo's large result files
+    (``copy_demo_workspace``). Writing through such a link would change the
+    demo every new workspace shares, so a result written again replaces the
+    link with a file of the workspace's own.
+    """
+    if path.is_symlink():
+        path.unlink()
+
+
 class FileManager:
     """
     Manages file paths for operations such as changing file extensions, organizing files
@@ -318,6 +331,8 @@ class FileManager:
 
         path = Path(self.cache_path, 'files', dataset_id)
         path.mkdir(parents=True, exist_ok=True)
+        for suffix in ('.pq', '.pkl.gz'):
+            _unlink_if_link(Path(path, f"{name_tag}{suffix}"))
 
         # Polars DataFrames and LazyFrames are stored as parquet
         if isinstance(data, (pl.DataFrame, pl.LazyFrame)):
@@ -414,6 +429,7 @@ class FileManager:
                 self.cache_path, 'files', dataset_id, file_name
         )
         target_path.parent.mkdir(parents=True, exist_ok=True)
+        _unlink_if_link(target_path)
 
         # Store file in path
         if isinstance(file, BytesIO):

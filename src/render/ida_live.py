@@ -7,6 +7,7 @@ rebuilt whenever the logs grow; the selection is kept.
 """
 
 import hashlib
+import inspect
 import shutil
 import time
 from pathlib import Path
@@ -26,6 +27,16 @@ CODE_VERSION = hashlib.md5(
 ).hexdigest()[:8]
 
 COLORS = {'Deconvolved': '#9aa5b1', 'Chosen': '#f08c00', 'Identified': '#2b8a3e'}
+
+# What the map can be colored by besides the intensity (toolbar "Color"), and
+# its layers (toolbar "Layers"). Needs an openms-insight whose Heatmap takes
+# `color_columns`; an older one keeps the map colored by decision.
+COLOR_COLUMNS = {
+    'QScore': 'qscore',
+    '# deconvolved MS2 masses': 'ms2_masses',
+    '# fragment ions': 'fragment_ions',
+}
+HAS_COLOR_OPTIONS = 'color_columns' in inspect.signature(Heatmap.__init__).parameters
 
 
 def _fixed(precision=4):
@@ -123,6 +134,41 @@ def _component(cls, name, cache_path, stamp, build, **styling):
         return cls(cache_id=cache_id, cache_path=str(cache_path), **build(), **styling)
 
 
+# Streamlit greys out every element of a fragment while it reruns, until the
+# element is sent again. A live view reruns every few seconds and takes a
+# second or two to read the logs, so its plots and tables were grey half the
+# time; inside this container they keep showing the last data until the new
+# data replaces it.
+NO_STALE_CSS = (
+    '<style>.st-key-{key} [data-stale="true"]'
+    '{{opacity:1 !important;transition:none !important}}</style>'
+)
+
+
+def live_container(key: str):
+    """Container for a live view whose elements are not greyed out while it
+    refreshes."""
+    st.html(NO_STALE_CSS.format(key=key))
+    return st.container(key=key)
+
+
+_DECISIONS = {}
+
+
+def run_decisions(run: Path, stamp: str) -> dict:
+    """What FLASHIda decided in `run`, read again only when its logs changed
+    (`stamp`): a refresh while FLASHIda writes nothing then costs no parsing."""
+    cached = _DECISIONS.get(str(run))
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    result = ida_log.decisions(ida_log.read_run(run))
+    # One run per Viewer is shown at a time: keep a few, not every run opened
+    if len(_DECISIONS) >= 4 and str(run) not in _DECISIONS:
+        _DECISIONS.pop(next(iter(_DECISIONS)))
+    _DECISIONS[str(run)] = (stamp, result)
+    return result
+
+
 def _frame(df):
     if 'MS3' in df.columns and 'Waiting' in df.columns:
         df = df.assign(**{'MS2/MS3': [f'{a} / {b}' for a, b in zip(df['MS2'], df['MS3'])]})
@@ -159,7 +205,7 @@ def summary_metrics(summary, last_change):
 def show_run(run: Path, cache_root: Path, key: str):
     """Overview of a run's decisions; rebuilt when its logs grow."""
     stamp = ida_log.stamp(run)
-    result = ida_log.decisions(ida_log.read_run(run))
+    result = run_decisions(run, stamp)
     summary_metrics(result['summary'], ida_log.last_change(run))
     if not len(result['points']) and not len(result['precursors']):
         st.info('FLASHIda has not logged any scans for this run yet.')
@@ -175,22 +221,34 @@ def show_run(run: Path, cache_root: Path, key: str):
         st.session_state[run_key] = str(run)
 
     points = result['points']
-    heatmap = _component(
-        Heatmap, 'decision_map', cache_path, stamp, lambda: dict(
-            data=_frame(points), x_column='rt', y_column='mass', intensity_column='intensity',
-            category_column='Decision',
-            interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
-            hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
-            title='Survey masses and chosen precursors', x_label='Retention time (min)',
-            y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
-            svg_filename='FLASHIda-decisions', scroll_zoom=False,
-        ),
-        # Render-time styling, not stored with the cache
-        category_colors=COLORS,
+    common = dict(
+        x_column='rt', y_column='mass', intensity_column='intensity',
+        interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
+        hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
+        title='Survey masses and chosen precursors', x_label='Retention time (min)',
+        y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
+        svg_filename='FLASHIda-decisions', scroll_zoom=False,
     )
+    if HAS_COLOR_OPTIONS:
+        # Colored by a value, chosen in the toolbar; survey masses, chosen and
+        # identified precursors are layers to show or hide
+        heatmap = _component(
+            Heatmap, 'decision_map_values', cache_path, stamp,
+            lambda: dict(data=_frame(points), **common),
+            # Render-time options, not stored with the cache
+            color_columns=COLOR_COLUMNS, layer_column='Layer',
+        )
+    else:
+        heatmap = _component(
+            Heatmap, 'decision_map', cache_path, stamp,
+            lambda: dict(data=_frame(points), category_column='Decision', **common),
+            # Render-time styling, not stored with the cache
+            category_colors=COLORS,
+        )
     precursors = _component(
         Table, 'precursors', cache_path, stamp, lambda: dict(
             data=_frame(result['precursors']), title='Chosen precursors',
+            pagination_identifier=f'flashida_live_precursors_page_{key}',
             index_field='precursor', go_to_fields=['precursor', 'Mass'],
             interactivity={'precursor': 'precursor'}, column_definitions=_no_collapse(PRECURSOR_COLUMNS),
             initial_sort=[{'column': 'precursor', 'dir': 'desc'}],
@@ -202,6 +260,7 @@ def show_run(run: Path, cache_root: Path, key: str):
     scans = _component(
         Table, 'scans', cache_path, stamp, lambda: dict(
             data=_frame(result['scans']), title='Scans commanded for the precursor',
+            pagination_identifier=f'flashida_live_scans_page_{key}',
             index_field='scan', filters={'precursor': 'precursor'},
             column_definitions=_no_collapse(SCAN_COLUMNS), reclick='keep', scroll_position='top',
             default_row_selects=False,

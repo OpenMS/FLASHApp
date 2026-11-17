@@ -1,0 +1,66 @@
+{
+  "global": {
+    "method_name": "FLASHIda defaults",
+    "method_description": "FLASHIda's defaults, with the scan settings of the method FLASHIda ships (src/Flash/etc/method.json of FlashIDA)"
+  },
+  "ms_settings": {
+    "ms1": {
+      "analyzer": "Orbitrap",
+      "first_mass": 400,
+      "last_mass": 2000,
+      "resolution": 240000,
+      "agc_target": 4000000,
+      "max_it": 502,
+      "microscans": 4,
+      "rf_lens": 60,
+      "source_cid": 15,
+      "source_cid_scaling": 0,
+      "data_type": "Profile"
+    },
+    "ms2": {
+      "analyzer": "Orbitrap",
+      "activation": "HCD",
+      "collision_energy": 35,
+      "resolution": 120000,
+      "agc_target": 500000,
+      "max_it": 246,
+      "first_mass": 150,
+      "last_mass": 2000,
+      "microscans": 4,
+      "data_type": "Profile",
+      "reaction_time": 0,
+      "reagent_max_it": 0,
+      "reagent_agc_target": 0
+    },
+    "ms2_quant": {
+      "analyzer": "Orbitrap",
+      "activation": "HCD",
+      "collision_energy": 30,
+      "resolution": 120000,
+      "agc_target": 500000,
+      "max_it": 100,
+      "first_mass": 100,
+      "last_mass": 2000,
+      "microscans": 4,
+      "data_type": "Profile",
+      "reaction_time": 0,
+      "reagent_max_it": 0,
+      "reagent_agc_target": 0
+    },
+    "ms3": {
+      "analyzer": "Orbitrap",
+      "activation": "CID",
+      "collision_energy": 30,
+      "resolution": 120000,
+      "agc_target": 500000000,
+      "max_it": 500,
+      "first_mass": 200,
+      "last_mass": 2000,
+      "microscans": 8,
+      "data_type": "Profile",
+      "reaction_time": 0,
+      "reagent_max_it": 0,
+      "reagent_agc_target": 0
+    }
+  }
+}

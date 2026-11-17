@@ -429,6 +429,7 @@ def render(file_manager, dataset_id, rows=None):
     with defer_reruns():
         for row_index, row in enumerate(rows if rows is not None else layout(file_manager)):
             columns = st.columns(len(row))
+            height = quant_cells.row_height(row, len(session.conditions()))
             for col_index, (column, comp_name) in enumerate(zip(columns, row)):
                 with column:
                     missing = missing_analyses([comp_name], QUANT_COMPONENTS, has)
@@ -440,4 +441,5 @@ def render(file_manager, dataset_id, rows=None):
                         continue
                     quant_cells.render_cell(
                         comp_name, session, state_manager, f'quant_{tool}_{level}_{row_index}_{col_index}_{comp_name}',
+                        height=height,
                     )
