@@ -169,9 +169,15 @@ To test GO terms, select entries in the volcano plot (press **All changed**, **H
 
 **Other tools › Match fragments** matches a list of fragment masses against a sequence, without a deconvolution run:
 
-1. Under **Observed masses**, say whether the masses are monoisotopic or average and neutral (M) or protonated (MH+), then **Paste** them (mass and intensity per line), load them **From a file** (text, tsv, csv or .msalign) or take them **From a run** of the workspace. The precursor mass is optional. **Load an example** fills in a scan of the lysate example.
-2. Press **Match these masses** (**Match the masses of this file**, **Match this scan**).
-3. Set the sequence in the sequence view with **Change sequence** (plain or ProForma), and add modifications by right-clicking a residue. The matched fragments are shown on the sequence.
+1. Type or paste the masses into **Fragment masses**: one per line, optionally with its intensity, or a semicolon list. The **Precursor mass** below it is optional; **Delete all** empties the masses, the precursor and the sequence.
+2. Type the sequence into **Sequence (plain or ProForma)**, for example `[Acetyl]-MNK[Trimethyl]TQLIDVIAEK`. The sequence view below follows the box, and a change made in the view (**Change sequence**, a sequence fetched by UniProt accession, a modification set by right-clicking a residue) shows in the box. The view is there before any masses are given, so the sequence can come first.
+3. **More ways to give masses** sets whether the masses are monoisotopic or average and neutral (M) or protonated (MH+), and takes them **From a file** (text, tsv, csv or .msalign; **Match the masses of this file**) or **From a run** of the workspace (**Match this scan**). **Load an example** fills in a scan of the lysate example with its protein.
+
+The fragment table of the sequence view also lists the masses no fragment explains, with the nearest fragment ion; the filter preset **Hide unmatched masses** hides them (it is on at first).
+
+**Compare proteoforms**: change the sequence, its modifications or the ion types in the view and press **Add this proteoform** for each one you try. **Proteoforms tried** compares them against the same masses: matched fragments, the share of bonds cleaved and the mass difference to the precursor; ★ marks the one with the most matched fragments. Pick a row to **Show in the view** again or **Remove** it.
+
+From **Explore results**, the 🧩 button of a row in the scan, protein, proteoform or PrSM table (**Inspect this spectrum in Match fragments**) opens that spectrum here with its masses and precursor, and for an identification its proteoform.
 
 ---
 
