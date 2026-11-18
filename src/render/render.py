@@ -34,7 +34,7 @@ except ImportError:
 
 from src.render import (
     envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
-    prsm_data, prsm_overview, qc_data, validation_data,
+    id_diagnosis, prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.cache_dirs import build_lock, insight_cache_dir
 from src.render.fragmentation import mzml_scan_methods
@@ -56,7 +56,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
-        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__,
+        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__, id_diagnosis.__file__,
         str(Path(__file__).with_name('quant_cells.py')),
     ):
         try:
@@ -1620,6 +1620,44 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
                 height=min(TABLE_HEIGHT, 90 + 34 * groups.height))
 
 
+# Identification diagnostics (src/render/id_diagnosis.py)
+_DIAGNOSIS_COLUMNS = [
+    {'title': 'Step', 'field': 'step', 'hozAlign': 'left', 'widthGrow': 3, 'headerSort': False},
+    {'title': 'MS2 spectra', 'field': 'spectra', 'hozAlign': 'right', 'minWidth': 120, 'widthGrow': 1, 'headerSort': False},
+    {'title': '% of MS2', 'field': 'share', 'hozAlign': 'right', 'minWidth': 110, 'widthGrow': 1, 'headerSort': False,
+     **_fixed(1),
+     'headerTooltip': 'Share of the run\'s MS2 spectra left after this step.'},
+    {'title': 'Likely cause', 'field': 'cause', 'formatter': 'textarea', 'hozAlign': 'left', 'widthGrow': 7, 'headerSort': False,
+     'headerTooltip': 'Named where a step loses more spectra than is usual, the most telling '
+                      f'{id_diagnosis.MAX_CAUSES} at most.'},
+]
+
+
+def _render_id_diagnostics(file_manager, dataset_id, state_manager, key):
+    """The run's MS2 spectra step by step to a PrSM (deconvolved, with a
+    precursor mass, tagged, matched, within the FDR), with the likely cause
+    beside each step that loses more than is usual."""
+    counts = id_diagnosis.steps(file_manager, dataset_id)
+    if counts is None:
+        st.info('This dataset has no data for this view (scan_table).')
+        return
+    table = id_diagnosis.diagnose(counts)
+    st.caption(id_diagnosis.headline(counts))
+    sources = ['scan_table', 'protein_dfs', 'tag_dfs', 'settings']
+    component = _component(
+        Table, 'id_diagnostics', file_manager, dataset_id, sources,
+        lambda: dict(
+            data=table.with_row_index('row').lazy(), column_definitions=_DIAGNOSIS_COLUMNS,
+            index_field='row', title='Identification diagnostics', layout='fitColumns',
+            default_row=-1, fill_height=True, pagination=False,
+        ),
+        required=['scan_table'],
+    )
+    rows_with_causes = sum(bool(cause) for cause in table['cause'])
+    component(key=key, state_manager=state_manager,
+              height=min(TABLE_HEIGHT + 300, 200 + 36 * table.height + 60 * rows_with_causes))
+
+
 INSPECT_LABEL = 'Inspect this spectrum in Match fragments'
 
 
@@ -1674,6 +1712,9 @@ def _render_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, 
         return
     if comp_name == 'mass_shifts':
         _render_mass_shifts(file_manager, dataset_id, state_manager, key)
+        return
+    if comp_name == 'id_diagnostics':
+        _render_id_diagnostics(file_manager, dataset_id, state_manager, key)
         return
     if comp_name == 'go_enrichment':
         from src.render import go_view
