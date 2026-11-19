@@ -1022,6 +1022,15 @@ class IdaWorkflow(WorkflowManager):
                 self.logger.log(f"'{name}.raw' is already in the folder: FLASHIda is not started for it.")
                 state[methods[name.casefold()][0]] = {'state': 'skipped'}
 
+        # FLASHIda has its own OpenMS installation: started with the desktop
+        # app's environment it would look for its data in the app's
+        # share/OpenMS. This process only watches and starts FLASHIda, so its
+        # environment becomes the one FLASHIda gets from a console.
+        import os
+        ida_env = flashida.external_environment(dict(os.environ), Path(__file__).resolve().parents[1])
+        os.environ.clear()
+        os.environ.update(ida_env)
+
         sequence_key = None
         self.logger.log(f"Watching '{raw_dir}' for the newest sequence and new raw files...")
         while True:

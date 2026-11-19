@@ -14,6 +14,7 @@ use it.
 """
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -94,6 +95,35 @@ def available() -> bool:
 
     settings = st.session_state.get('settings') or {}
     return not settings.get('online_deployment', True) and is_developer()
+
+
+# Variables the desktop app sets for its own OpenMS (electron/src/payload.js).
+# FLASHIda is installed on its own, with its own OpenMS: pointed at the app's
+# share/OpenMS it does not find its data, and the app's openms/bin first on
+# PATH could give it the app's OpenMS libraries.
+_APP_DIR_VARIABLES = ('OPENMS_DATA_PATH', 'DOTNET_ROOT')
+
+
+def _inside(path: str, root: Path) -> bool:
+    try:
+        return Path(path).resolve().is_relative_to(root)
+    except (OSError, ValueError):
+        return False
+
+
+def external_environment(env: dict, app_dir) -> dict:
+    """The environment FLASHIda is started with: ``env`` without what the
+    desktop app added for its own OpenMS (the variables that point into
+    ``app_dir`` and its folders on PATH), so FLASHIda finds its own
+    installation as when started from a console. A variable set by the user,
+    pointing elsewhere, is kept."""
+    root = Path(app_dir).resolve()
+    out = {k: v for k, v in env.items()
+           if not (k.upper() in _APP_DIR_VARIABLES and _inside(v, root))}
+    for key in [k for k in out if k.upper() == 'PATH']:
+        parts = [p for p in out[key].split(os.pathsep) if p and not _inside(p, root)]
+        out[key] = os.pathsep.join(parts)
+    return out
 
 
 # The log folders of the methods FLASHIda was started with, newest last, in

@@ -232,3 +232,32 @@ def test_an_empty_run(tmp_path):
     result = ida_log.decisions(ida_log.read_run(run))
     assert result["summary"]["precursors"] == 0
     assert result["points"].empty
+
+
+def test_external_environment_drops_the_apps_own_openms(tmp_path):
+    import os
+    from src.flashida import external_environment
+
+    app = tmp_path / 'app'
+    (app / 'share' / 'OpenMS').mkdir(parents=True)
+    (app / 'openms' / 'bin').mkdir(parents=True)
+    system = tmp_path / 'Program Files' / 'OpenMS' / 'bin'
+    system.mkdir(parents=True)
+    env = {
+        'OPENMS_DATA_PATH': str(app / 'share' / 'OpenMS'),
+        'DOTNET_ROOT': str(app / 'dotnet'),
+        'Path': os.pathsep.join([str(app), str(app / 'openms' / 'bin'), str(system)]),
+        'OTHER': 'kept',
+    }
+    out = external_environment(env, app)
+    assert 'OPENMS_DATA_PATH' not in out and 'DOTNET_ROOT' not in out
+    assert out['Path'] == str(system)
+    assert out['OTHER'] == 'kept'
+
+
+def test_external_environment_keeps_a_users_own_data_path(tmp_path):
+    from src.flashida import external_environment
+
+    own = str(tmp_path / 'elsewhere' / 'share')
+    out = external_environment({'OPENMS_DATA_PATH': own}, tmp_path / 'app')
+    assert out['OPENMS_DATA_PATH'] == own
