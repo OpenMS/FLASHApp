@@ -455,22 +455,21 @@ def render_whats_new():
         st.markdown(
             """
             <div class="whats-new">
-                <h3>✨ What's new in FLASHApp 2.0 (alpha 11)</h3>
+                <h3>✨ What's new in FLASHApp 2.0 (alpha 12)</h3>
                 <div class="whats-new-columns">
                     <div>
-                        <h4>Explore results your way</h4>
+                        <h4>Compare runs</h4>
                         <ul>
-                            <li>Switch between ready-made views or make your own; each keeps its zoom and selection.</li>
-                            <li>Compare runs in Quantification, Identification and QC views, with the QC of a label-free or TMT/iTRAQ comparison.</li>
-                            <li>New: 3D MS1 map, precursor spectrum, isotope envelope and mass shifts of identified proteoforms.</li>
+                            <li>Comparison and GO enrichment plots are drawn as interactive bar and box plots, linked to the rest of the view.</li>
+                            <li>Imports from PRIDE are faster.</li>
                         </ul>
                     </div>
                     <div>
-                        <h4>Sequences and identifications</h4>
+                        <h4>FLASHIda acquisition (developer feature)</h4>
                         <ul>
-                            <li>Edit an identified proteoform, paste or copy ProForma, and pick variable modifications from a library.</li>
-                            <li>Matched fragment ions are marked on the raw and deconvolved spectra.</li>
-                            <li>Add identification to a deconvolved run without deconvolving it again, or match a mass list against a sequence.</li>
+                            <li>Single run: steer a raw file the instrument is already writing.</li>
+                            <li>Reorder runs, insert washes, QC standards and blanks, copy and duplicate methods, and a notice for ETD methods.</li>
+                            <li>A status file Windows will not replace no longer stops the acquisition.</li>
                         </ul>
                     </div>
                 </div>
