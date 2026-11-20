@@ -51,6 +51,7 @@ def start_bar() -> None:
         # The acquisition started or ended since the page was drawn
         st.rerun()
     st.write('')
+    ida_runs.etd_notice(wf.workflow_dir, method_dir)
     with st.container(border=True):
         a, b = st.columns([5, 1.4], vertical_alignment='center')
         if running:
@@ -60,9 +61,21 @@ def start_bar() -> None:
                 (f"**Running since {ida_runs._when(started)[:5]}.** " if started else '**Running.** ')
                 + 'The table shows what FLASHIda does for each run; the **Viewer** follows it live.'
             )
-            if b.button('⏹️ Stop', use_container_width=True):
-                wf.stop_workflow()
-                st.rerun()
+            if st.session_state.get('ida-confirm-stop'):
+                # A stray click must not end an acquisition: Stop asks first
+                st.warning('**Stop the acquisition?** FLASHIda is stopped now and not started for '
+                           'the runs still waiting.', icon='⏹️')
+                y, n, _ = st.columns([1.4, 1.4, 4])
+                if y.button('⏹️ Yes, stop', type='primary', use_container_width=True):
+                    st.session_state.pop('ida-confirm-stop', None)
+                    wf.stop_workflow()
+                    st.rerun()
+                if n.button('Keep running', use_container_width=True):
+                    st.session_state.pop('ida-confirm-stop', None)
+                    st.rerun(scope='fragment')
+            elif b.button('⏹️ Stop', use_container_width=True):
+                st.session_state['ida-confirm-stop'] = True
+                st.rerun(scope='fragment')
         else:
             current = wf.parameter_manager.get_parameters_from_json()
             problems = ida_runs.start_problems(wf.workflow_dir, current)
@@ -75,13 +88,35 @@ def start_bar() -> None:
                 'and the raw files it writes, and starts FLASHIda for each run of the table.'
             )
             override = bool(warnings) and not problems
-            if b.button('⚠️ Run anyway' if override else '🚀 Run analysis',
-                        type='secondary' if override else 'primary', use_container_width=True,
-                        disabled=bool(problems),
-                        help="Starts with the methods as they are, overriding FLASHApp's method check. "
-                             'FLASHIda checks each method itself when its run starts.' if override else None):
-                wf.start_workflow()
-                st.rerun()
+            etd = [] if problems else ida_runs.etd_runs(wf.workflow_dir, method_dir)
+            if st.session_state.get('ida-confirm-etd') and etd:
+                # ETD is switched on in Tune, not by a method: Run asks first
+                st.warning('**Is ETD set up in Tune?** '
+                           f"{'This method acquires' if len(etd) == 1 else 'These methods acquire'} with ETD, "
+                           'which FLASHIda cannot switch on itself. Without it the ETD scans fail.\n\n'
+                           + ida_runs.etd_lines(etd), icon='⚡')
+                y, n, _ = st.columns([2.2, 1.2, 3.6])
+                if y.button('⚡ Yes, ETD is set up: start', type='primary', use_container_width=True):
+                    st.session_state.pop('ida-confirm-etd', None)
+                    wf.start_workflow()
+                    st.rerun()
+                if n.button('Cancel', use_container_width=True):
+                    st.session_state.pop('ida-confirm-etd', None)
+                    st.rerun(scope='fragment')
+            elif b.button('⚠️ Run anyway' if override else '🚀 Run analysis',
+                          type='secondary' if override else 'primary', use_container_width=True,
+                          disabled=bool(problems),
+                          help="Starts with the methods as they are, overriding FLASHApp's method check. "
+                               'FLASHIda checks each method itself when its run starts.' if override else None):
+                if etd:
+                    st.session_state['ida-confirm-etd'] = True
+                    st.rerun(scope='fragment')
+                else:
+                    wf.start_workflow()
+                    st.rerun()
+            else:
+                # A question left open while the table changed is not asked again by itself
+                st.session_state.pop('ida-confirm-etd', None)
 
 ida_runs.runs_table(wf.workflow_dir, local_workspaces_dir(st.session_state.settings), raw_dir, running,
                     footer=start_bar, folder=method_dir)
