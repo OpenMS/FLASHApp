@@ -937,6 +937,42 @@ class IdaWorkflow(WorkflowManager):
             reactive=True,
         )
 
+    def _single_run(self, exe, raw_dir, folder, single) -> bool:
+        """FLASHIda for one raw file the instrument is writing already, with a
+        method of the method folder: started at once, no sequence watched."""
+        from src import flashida_folder, flashida_method
+
+        name, method_file = single['raw'], single['method_file']
+        raw = Path(raw_dir, name + '.raw')
+        if not raw.is_file():
+            self.logger.log(f"Raw file '{raw.name}' is not in '{raw_dir}'.")
+            return False
+        try:
+            method = flashida_folder.read(folder, method_file)
+        except ValueError as e:
+            self.logger.log(str(e))
+            return False
+        if flashida_method.check(method):
+            self.logger.log(f"WARNING: the method '{method_file}' fails FLASHApp's check; FLASHIda checks it.")
+        method_dir = Path(self.workflow_dir, 'methods')
+        method_dir.mkdir(exist_ok=True)
+        method_path = Path(method_dir, flashida_method.method_file_name(name))
+        method_path.write_text(json.dumps(method, indent=2), encoding='utf-8')
+        status = {'raw_dir': str(raw_dir), 'started': time.time(), 'single': dict(single),
+                  'runs': {name: {'state': 'running', 'since': time.time()}},
+                  'sequence': None, 'scheduled': {}, 'extra': []}
+        flashida.write_status(self.workflow_dir, status)
+        log_dir = flashida.method_log_dir(method_path, exe.parent)
+        flashida.remember_log_folder(self.workflow_dir, log_dir)
+        self.logger.log(f"Single run: starting FLASHIda for '{raw.name}' with the method '{method_file}' "
+                        f"(logs in '{log_dir}')...")
+        done = self.executor.run_command([exe, '-m', method_path, '-r', raw], cwd=exe.parent)
+        status['runs'][name] = {'state': 'done' if done else 'failed',
+                                'since': status['runs'][name]['since'], 'ended': time.time()}
+        flashida.write_status(self.workflow_dir, status)
+        self.logger.log(f"FLASHIda {'finished' if done else 'failed'} for '{raw.name}'.")
+        return bool(done)
+
     def execution(self) -> bool:
         from src import flashida_folder, flashida_method
 
@@ -954,6 +990,13 @@ class IdaWorkflow(WorkflowManager):
         if str(raw_dir) in ('', '.') or not raw_dir.is_dir():
             self.logger.log(f"Raw file folder '{raw_dir}' is not a folder.")
             return False
+
+        single = flashida.read_single_run(self.workflow_dir)
+        if single:
+            try:
+                return self._single_run(exe, raw_dir, folder, single)
+            finally:
+                flashida.clear_single_run(self.workflow_dir)
 
         runs = flashida_method.load_runs(self.workflow_dir)
         if not runs:
