@@ -54,6 +54,7 @@ TNT_COMPONENTS = [
     {'name': 'precursor_xic', 'label': 'Precursor XIC by charge', 'group': 'Validation', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'run_qc', 'label': 'Run QC (masses, charges, QScores)', 'group': 'Quality control'},
     {'name': 'id_qc', 'label': 'Identification QC (scores, IDs over time, coverage, fragment error)', 'group': 'Quality control'},
+    {'name': 'id_diagnostics', 'label': 'Identification diagnostics (why few PrSMs)', 'group': 'Quality control'},
     {'name': 'proteoform_heatmap', 'label': 'Proteoform heatmap (PrSMs by RT and mass)', 'group': 'Heatmaps'},
     {'name': 'mass_shifts', 'label': 'Mass shifts (modifications of the proteoforms)', 'group': 'Spectra & plots'},
     {'name': 'go_enrichment', 'label': 'GO enrichment of the selected proteins', 'group': 'Functional analysis',
@@ -137,6 +138,7 @@ TNT_LYSATE_LAYOUT = [
     ['anno_spectrum', 'deconv_spectrum'],
     ['fragment_error_plot', 'precursor_xic'],
     ['id_qc'],
+    ['id_diagnostics'],
     ['go_enrichment'],
 ]
 TNT_DEFAULT_LAYOUT = TNT_NATIVE_LAYOUT
