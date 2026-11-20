@@ -455,11 +455,12 @@ def render_whats_new():
         st.markdown(
             """
             <div class="whats-new">
-                <h3>✨ What's new in FLASHApp 2.0 (alpha 12)</h3>
+                <h3>✨ What's new in FLASHApp 2.0 (alpha 13)</h3>
                 <div class="whats-new-columns">
                     <div>
                         <h4>Compare runs</h4>
                         <ul>
+                            <li>In the online app, comparing runs responds several times faster: selecting, sorting and switching views no longer wait on repeated reads of stored results.</li>
                             <li>Comparison and GO enrichment plots are drawn as interactive bar and box plots, linked to the rest of the view.</li>
                             <li>Imports from PRIDE are faster.</li>
                         </ul>
