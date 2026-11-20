@@ -83,6 +83,7 @@ def store(workspace, data):
     return fragment_matcher.store_input(
         workspace, data['masses'], None, data['precursor_mass'],
         fragment_matcher.MONOISOTOPIC, sequence=data['sequence'], name=data['name'],
+        hand_over=True,
     )
 
 
