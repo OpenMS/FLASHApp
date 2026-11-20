@@ -1455,22 +1455,31 @@ def start_problems(workflow_dir, params: dict) -> list:
     return problems
 
 
-def etd_notice(workflow_dir, folder: str = '') -> None:
-    """A warning that stands out when a run's method acquires with ETD: the
-    reagent is set up in Tune, which no method does."""
+def etd_runs(workflow_dir, folder: str = '') -> list:
+    """The runs whose method acquires with ETD, one line each ("Run 2 `name`
+    (method: MS2)"): the reagent is set up in Tune, which no method does."""
     runs = []
     for i, run in enumerate(fm.load_runs(workflow_dir)):
         scans = sections.etd_scans(ff.run_method(run, folder))
         if scans:
             runs.append(f"Run {i + 1} `{run['name'] or 'unnamed'}` "
                         f"({run.get('method_file') or 'its method'}: {', '.join(scans)})")
+    return runs
+
+
+def etd_lines(runs: list, most: int = 5) -> str:
+    shown = runs[:most] + ([f'and {len(runs) - most} more'] if len(runs) > most else [])
+    return '\n'.join(f'- {r}' for r in shown)
+
+
+def etd_notice(workflow_dir, folder: str = '') -> None:
+    """A warning that stands out when a run's method acquires with ETD."""
+    runs = etd_runs(workflow_dir, folder)
     if not runs:
         return
-    shown = runs[:5] + ([f'and {len(runs) - 5} more'] if len(runs) > 5 else [])
     st.warning('**ETD: set up ETD in Tune before the acquisition starts.** '
                f"{'This method uses' if len(runs) == 1 else 'These methods use'} ETD, "
-               'which FLASHIda cannot switch on itself.\n\n'
-               + '\n'.join(f'- {r}' for r in shown), icon='⚡')
+               'which FLASHIda cannot switch on itself.\n\n' + etd_lines(runs), icon='⚡')
 
 
 def method_warnings(workflow_dir, folder: str = '') -> list:
