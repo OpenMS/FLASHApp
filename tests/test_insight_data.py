@@ -168,3 +168,22 @@ def test_ms1_peak_map_keeps_the_strongest_peaks_of_each_spectrum(fd):
     strongest = raw.filter(pl.col('scan_idx') == first)['intensity'].sort(descending=True).head(5)
     kept = peaks.filter(pl.col('scan_idx') == first)['intensity'].sort(descending=True)
     assert kept.to_list() == pytest.approx(strongest.cast(pl.Float64).to_list())
+
+
+@pytest.mark.parametrize('name_tag', ['ms1_deconv_heatmap', 'ms2_deconv_heatmap'])
+def test_mass_scores_join_the_heatmap_by_spectrum_and_mass(fd, name_tag):
+    heatmap = insight_data.scan(fd, FD_DATASET, name_tag)
+    scored = insight_data.with_mass_scores(fd, FD_DATASET, heatmap).collect()
+    assert scored.height == heatmap.collect().height
+    for column in [*insight_data.MASS_SCORE_COLUMNS.values(), insight_data.CHARGE_STATES_COLUMN]:
+        assert scored[column].null_count() == 0
+    assert set(scored[insight_data.CHARGE_STATES_COLUMN]) <= {'1 charge', '2 charges', '3 or more'}
+
+    # A point gets the scores of its own mass in the mass table
+    masses = insight_data.mass_table(fd, FD_DATASET).collect()
+    point = scored.row(0, named=True)
+    mass = masses.filter(
+        (pl.col('scan_idx') == point['scan_idx']) & (pl.col('mass_idx') == point['mass_idx'])
+    ).row(0, named=True)
+    assert point['qscore'] == pytest.approx(mass['QScore'])
+    assert point['mass'] == pytest.approx(mass['MonoMass'])

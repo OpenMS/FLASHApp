@@ -44,6 +44,43 @@ def heatmap_levels(file_manager, dataset_id, name_tag):
     return names
 
 
+
+# Scores of a deconvolved mass the deconvolved heatmaps can be colored by
+# (toolbar "Color"), as label to column of `with_mass_scores`
+MASS_SCORE_COLUMNS = {'QScore': 'qscore', 'Cosine score': 'cosine', 'SNR': 'snr'}
+# Column whose values the toolbar's "Layers" shows or hides: in how many charge
+# states a mass was found
+CHARGE_STATES_COLUMN = 'charge_states'
+
+
+def with_mass_scores(file_manager, dataset_id, heatmap):
+    """A deconvolved heatmap frame (or one of its levels) with each mass's
+    QScore, cosine score, SNR and the number of charge states it was found
+    in (1, 2 or "3 or more"), taken from the mass table by scan and mass."""
+    scores = (
+        scan(file_manager, dataset_id, 'mass_table')
+        .select(
+            pl.col('index').cast(pl.UInt32).alias('scan_idx'),
+            'QScore', 'CosineScore', 'SNR', 'MinCharges', 'MaxCharges',
+        )
+        .explode(['QScore', 'CosineScore', 'SNR', 'MinCharges', 'MaxCharges'])
+        .with_columns(pl.int_range(pl.len()).over('scan_idx').cast(pl.Int64).alias('mass_idx'))
+        .select(
+            'scan_idx', 'mass_idx',
+            pl.col('QScore').cast(pl.Float64).alias('qscore'),
+            pl.col('CosineScore').cast(pl.Float64).alias('cosine'),
+            pl.col('SNR').cast(pl.Float64).alias('snr'),
+            (pl.col('MaxCharges') - pl.col('MinCharges') + 1)
+            .clip(upper_bound=3).cast(pl.Utf8)
+            .replace({'1': '1 charge', '2': '2 charges', '3': '3 or more'})
+            .alias(CHARGE_STATES_COLUMN),
+        )
+    )
+    return (
+        heatmap.with_columns(pl.col('scan_idx').cast(pl.UInt32), pl.col('mass_idx').cast(pl.Int64))
+        .join(scores, on=['scan_idx', 'mass_idx'], how='left')
+    )
+
 # Peaks per MS1 spectrum the 3D MS1 map draws: the strongest of each
 MS1_MAP_PEAKS_PER_SPECTRUM = 40
 

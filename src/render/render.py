@@ -544,13 +544,24 @@ def _heatmap(comp_name, file_manager, dataset_id):
         raise MissingResult(result)
     # The levels the parse downsampled; without them Insight builds its own
     levels = insight_data.heatmap_levels(file_manager, dataset_id, result)
+    # A deconvolved map can be colored by each mass's scores and show or hide
+    # masses by the number of charge states they were found in (toolbar)
+    scored = sets_mass and insight_data.result_path(file_manager, dataset_id, 'mass_table') is not None
+
+    def frame(name):
+        data = insight_data.scan(file_manager, dataset_id, name)
+        return insight_data.with_mass_scores(file_manager, dataset_id, data) if scored else data
+
+    options = dict(
+        color_columns=insight_data.MASS_SCORE_COLUMNS,
+        layer_column=insight_data.CHARGE_STATES_COLUMN,
+    ) if scored else {}
     return _component(
-        Heatmap, comp_name, file_manager, dataset_id, [result, *(levels or [])],
+        Heatmap, comp_name, file_manager, dataset_id,
+        [result, *(levels or []), *(['mass_table'] if scored else [])],
         lambda: dict(
-            data=insight_data.scan(file_manager, dataset_id, result),
-            levels=None if levels is None else [
-                insight_data.scan(file_manager, dataset_id, name) for name in levels
-            ],
+            data=frame(result),
+            levels=None if levels is None else [frame(name) for name in levels],
             x_column='rt', y_column='mass', intensity_column='intensity',
             interactivity=interactivity,
             title=title, x_label='Retention Time', y_label=y_label,
@@ -562,6 +573,7 @@ def _heatmap(comp_name, file_manager, dataset_id):
             # FLASHViewer's export name; its wheel scrolled the page
             svg_filename='FLASHViewer-heatmap', scroll_zoom=False,
         ),
+        render=options,
     )
 
 
