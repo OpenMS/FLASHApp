@@ -43,7 +43,7 @@ EXAMPLE_SEQUENCE = 'MNKTQLIDVIAEKAELSKTQAKAALESTLAAITESLKEGDAVQLVGFGTFKVNHRAERTG
 
 params = page_setup()
 workspace = Path(st.session_state['workspace'])
-file_manager = FileManager(workspace, Path(workspace, 'cache'))
+file_manager = FileManager(workspace, cache_path=Path(workspace, 'cache'))
 
 st.title('🧩 Match fragments')
 page_intro(

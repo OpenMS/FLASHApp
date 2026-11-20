@@ -56,7 +56,7 @@ class FakeUploadedFile(BytesIO):
 
 @pytest.fixture
 def file_manager(tmp_path):
-    return FileManager(tmp_path, Path(tmp_path, 'cache'))
+    return FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
 
 
 def store_upload(file_manager, file_names, file_types=UPLOAD_FILE_TYPES,

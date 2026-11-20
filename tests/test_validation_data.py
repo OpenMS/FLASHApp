@@ -28,7 +28,7 @@ def _file_manager(tmp_path, tool):
     cache.mkdir()
     shutil.copy(WORKSPACE / 'cache' / 'cache.db', cache / 'cache.db')
     (cache / 'files').symlink_to(WORKSPACE / 'cache' / 'files')
-    return FileManager(cache, cache)
+    return FileManager(cache, cache_path=cache)
 
 
 @pytest.fixture

@@ -1,18 +1,23 @@
 import gzip
-import shutil
-import string
-import random
-import sqlite3
-
-import pandas as pd
-import polars as pl
 import pickle as pkl
-import pyarrow.dataset as ds
-
+import random
+import re
+import shutil
+import sqlite3
+import string
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
-from typing import Union, List
+from typing import List, Union
+
+# Tables of the result index: one row per dataset, one column per result.
+_TABLES = ("stored_data", "stored_files")
+# Columns of an index table that are not results.
+_INTERNAL_COLUMNS = ("id", "display_name")
+# A result name becomes a column name. Kept to these characters so it can be
+# quoted safely; FLASHApp's names ("deconv_dfs", "anno_annotated", ...) fit.
+_NAME_TAG = re.compile(r"^[A-Za-z0-9_\-\.]+$")
+
 
 def _unlink_if_link(path: Path) -> None:
     """
@@ -27,80 +32,144 @@ def _unlink_if_link(path: Path) -> None:
         path.unlink()
 
 
+def _quote(name: str) -> str:
+    """A result name as an SQL identifier; refuses names it cannot quote."""
+    if not isinstance(name, str) or not _NAME_TAG.match(name):
+        raise ValueError(
+            f"Result name {name!r}: use letters, digits, '_', '-' or '.'."
+        )
+    return f'"{name}"'
+
+
+def _is_polars(data) -> bool:
+    module = type(data).__module__ or ""
+    return module.startswith("polars")
+
+
+def _is_pandas(data) -> bool:
+    module = type(data).__module__ or ""
+    return module.startswith("pandas") and type(data).__name__ == "DataFrame"
+
+
+def cache_path_for(workflow_dir, share_cache: bool = False) -> Path:
+    """The result store's folder: ``<workflow_dir>/cache``, or
+    ``<workspace>/cache`` for a workflow that shares it."""
+    workflow_dir = Path(workflow_dir)
+    return Path(workflow_dir.parent if share_cache else workflow_dir, "cache")
+
+
 class FileManager:
     """
-    Manages file paths for operations such as changing file extensions, organizing files
-    into result directories, and handling file collections for processing tools. Designed
-    to be flexible for handling both individual files and lists of files, with integration
-    into a Streamlit workflow.
-    
-    Features advanced caching with optimized storage formats:
-    - Polars/Pandas DataFrames and LazyFrames: stored as parquet files for optimal performance
-    - Other data structures: stored as compressed pickle files
-    
-    Maintains backward compatibility while providing performance benefits for polars workflows.
+    Paths of a workflow's files, and the store of its results.
 
-    Methods:
-        get_files: Returns a list of file paths as strings for the specified files, optionally with new file type and results subdirectory.
-        collect: Collects all files in a single list (e.g. to pass to tools which can handle multiple input files at once).
-        store_data: Stores data with automatic format detection (polars/pandas/pickle).
-        get_results: Retrieves data with proper format restoration.
+    **Paths.** ``get_files`` changes the type of input paths, puts them in a
+    subdirectory of the results directory and collects them for tools that
+    take many inputs at once.
+
+    **Result store** (optional; nothing is created until it is used). A
+    workflow keeps what it parsed from its tools' output under a dataset id
+    (one run or one input file) and a result name: ``store_data`` writes a
+    polars or pandas DataFrame (or a polars LazyFrame) as parquet and any other
+    object as a compressed pickle, ``store_file`` copies a file; both land in
+    ``<cache_path>/files/<dataset_id>/`` and are listed in the SQLite index
+    ``<cache_path>/cache.db``. ``get_results`` reads them back (pandas by
+    default, a polars LazyFrame with ``use_polars``, a pyarrow dataset with
+    ``use_pyarrow``), ``get_results_list`` lists the datasets that hold given
+    results, ``result_exists`` / ``get_result_path`` look one up,
+    ``rename_dataset`` / ``get_display_name`` keep a name a user gave it, and
+    ``remove_results`` / ``clear_cache`` delete them, together with the
+    folders ``extra_cache_dirs`` names (caches an app builds from them).
+
+    The object pickles (a queued run gets it): the SQLite connection is
+    dropped and opened again on first use.
     """
 
     def __init__(
         self,
         workflow_dir: Path,
-        cache_path: Path = None,
         results_dir: Path = None,
+        *,
+        cache_path: Path = None,
     ):
         """
-        Initializes the FileManager object with a the current workflow results directory.
-
         Args:
             workflow_dir (Path): The workflow directory.
-            cache_path (Path, optional): The cache directory. Defaults to
-                ``<workflow_dir>/cache``.
             results_dir (Path, optional): Where ``set_results_dir`` creates its
                 subdirectories. Defaults to ``<workflow_dir>/results``; a
                 multi-run workflow points it at the current run.
+            cache_path (Path, optional): Where the result store keeps its
+                files and index. Defaults to ``<workflow_dir>/cache``; a
+                workflow with ``share_cache = True`` gets ``<workspace>/cache``.
         """
         self.workflow_dir = workflow_dir
         self.results_dir = Path(results_dir or Path(workflow_dir, "results"))
-
-        # Setup Caching
-        self.cache_path = cache_path if cache_path is not None else Path(workflow_dir, "cache")
-        Path(self.cache_path, 'files').mkdir(parents=True, exist_ok=True)
-        self._connect_to_sql()
-        
-    def _connect_to_sql(self):
-        self.cache_connection = sqlite3.connect(
-            Path(self.cache_path, 'cache.db'), isolation_level=None
+        self.cache_path = Path(
+            cache_path if cache_path is not None else Path(workflow_dir, "cache")
         )
-        self.cache_cursor = self.cache_connection.cursor()
-        self.cache_cursor.execute("""
-                          CREATE TABLE IF NOT EXISTS stored_data (
-                            id TEXT PRIMARY KEY
-                          );
-        """)
-        self.cache_cursor.execute("""
-                          CREATE TABLE IF NOT EXISTS stored_files (
-                            id TEXT PRIMARY KEY
-                          );
-        """)
-        
-        # Add display_name column to both tables
-        self._add_column('stored_data', 'display_name')
-        self._add_column('stored_files', 'display_name')
+        self._connection = None
+        self._cursor = None
+
+    # ------------------------------------------------------------------
+    # SQLite index, opened on first use
+    # ------------------------------------------------------------------
+
+    def _connect_to_sql(self) -> None:
+        Path(self.cache_path, "files").mkdir(parents=True, exist_ok=True)
+        self._connection = sqlite3.connect(
+            Path(self.cache_path, "cache.db"), isolation_level=None
+        )
+        self._cursor = self._connection.cursor()
+        self._create_tables()
+
+    def _create_tables(self) -> None:
+        for table in _TABLES:
+            self._cursor.execute(
+                f"CREATE TABLE IF NOT EXISTS {table} (id TEXT PRIMARY KEY);"
+            )
+            self._add_column(table, "display_name")
+
+    @property
+    def cache_connection(self) -> sqlite3.Connection:
+        if self._connection is None:
+            self._connect_to_sql()
+        return self._connection
+
+    @property
+    def cache_cursor(self) -> sqlite3.Cursor:
+        if self._cursor is None:
+            self._connect_to_sql()
+        return self._cursor
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        del state['cache_connection']
-        del state['cache_cursor']
+        state["_connection"] = None
+        state["_cursor"] = None
         return state
-    
+
     def __setstate__(self, state):
+        state.setdefault("_connection", None)
+        state.setdefault("_cursor", None)
         self.__dict__.update(state)
-        self._connect_to_sql()
+
+    # Callables ``(cache_path, dataset_id) -> Path | None`` naming folders an
+    # app builds from stored results (viewer caches, for example), deleted
+    # with them: ``remove_results`` passes the dataset, ``clear_cache`` None
+    # (the folder of every dataset). An app appends to it where it defines
+    # those caches: ``FileManager.cache_dir_hooks.append(my_dirs)``.
+    cache_dir_hooks: list = []
+
+    def extra_cache_dirs(self, dataset_id: str = None) -> List[Path]:
+        """
+        Folders deleted with a dataset's results (``dataset_id``) or with the
+        whole store (None): those ``cache_dir_hooks`` name. A subclass may
+        override it instead.
+        """
+        dirs = []
+        for hook in self.cache_dir_hooks:
+            path = hook(self.cache_path, dataset_id)
+            if path is not None:
+                dirs.append(Path(path))
+        return dirs
 
     def get_files(
         self,
@@ -254,93 +323,63 @@ class FileManager:
         path = Path(self.results_dir, name)
         path.mkdir(parents=True, exist_ok=True)
         return str(path)
-    
+
+    # ------------------------------------------------------------------
+    # Result store
+    # ------------------------------------------------------------------
+
     def _get_column_list(self, table_name: str) -> List[str]:
-        """
-        Get a list of columns in the table.
-
-        Args:
-            table_name (str): The name of the table.
-
-        Returns:
-            columns (List): The columns in the table.
-        """
+        """The columns of an index table (``id``, ``display_name``, results)."""
+        if table_name not in _TABLES:
+            raise ValueError(f"Unknown table {table_name!r}")
         self.cache_cursor.execute(f"PRAGMA table_info({table_name});")
         return [col[1] for col in self.cache_cursor.fetchall()]
 
-    
     def _add_column(self, table_name: str, column_name: str) -> None:
-        """
-        Checks if a column is in the cache table and if it is not adds 
-        it to the table.
-
-        Args:
-            table_name (str): The name of the table
-            column_name (str): The name of the column
-        """
-
-        # Fetch list of columns
-        columns = self._get_column_list(table_name)
-
-        # Add column to table if it does not exist
-        if column_name not in columns:
-            self.cache_cursor.execute(
-                f"ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT;"
+        """Adds a result column to an index table unless it is there."""
+        if column_name not in self._get_column_list(table_name):
+            self._cursor.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {_quote(column_name)} TEXT;"
             )
 
-    def _add_entry(self, table_name: str, dataset_id: str, 
-                   column_name: str, path: str) -> None:
-        """
-        Adds an entry to the cache index.
-
-        Args:
-            table_name (str): The name of the table
-            dataset_id (str): The name of the dataset the data is 
-                attached to.
-            column_name (str): The name of the column
-            path (str): The path to be inserted
-        """
-
-        # Ensure column exists
+    def _add_entry(
+        self, table_name: str, dataset_id: str, column_name: str, path
+    ) -> None:
+        """Records where a dataset's result is stored (relative to the cache)."""
         self._add_column(table_name, column_name)
+        column = _quote(column_name)
+        self.cache_cursor.execute(
+            f"INSERT INTO {table_name} (id, {column}) VALUES (?, ?) "
+            f"ON CONFLICT(id) DO UPDATE SET {column} = excluded.{column};",
+            (str(dataset_id), str(path)),
+        )
 
-        # Store reference
-        self.cache_cursor.execute(f"""
-            INSERT INTO {table_name} (id, {column_name})
-            VALUES ("{dataset_id}", "{path}")
-            ON CONFLICT(id) 
-            DO UPDATE SET {column_name} = excluded.{column_name};
-        """)
+    def _dataset_dir(self, dataset_id: str) -> Path:
+        dataset_id = str(dataset_id)
+        if not dataset_id or Path(dataset_id).name != dataset_id or dataset_id in (".", ".."):
+            raise ValueError(f"Dataset id {dataset_id!r} is not a folder name.")
+        return Path(self.cache_path, "files", dataset_id)
 
-    def _store_data(self, dataset_id: str, name_tag: str, data, row_group_size=None) -> None:
+    def _relative(self, path: Path) -> Path:
+        return Path(path).resolve().relative_to(self.cache_path.resolve())
+
+    def _store_data(self, dataset_id: str, name_tag: str, data, row_group_size=None) -> Path:
         """
-        Stores data as a cached file. Pandas/Polars DataFrames are stored as
-        parquet files, while all other data structures are stored as
-        compressed pickle.
-        Args:
-            dataset_id (str): The name of the dataset the data is
-                attached to.
-            name_tag (str): The name of the associated data structure.
-            data: Any pickleable data structure.
-            row_group_size (int, optional): Row group size for parquet files.
-                If None, the library default is used.
-
-        Returns:
-            file_path (Path): The file path of the stored file.
+        Writes ``data`` below the dataset's folder: polars and pandas
+        DataFrames and polars LazyFrames as parquet, anything else as a
+        compressed pickle. Returns the path written.
         """
-
-        path = Path(self.cache_path, 'files', dataset_id)
+        _quote(name_tag)
+        path = self._dataset_dir(dataset_id)
         path.mkdir(parents=True, exist_ok=True)
-        for suffix in ('.pq', '.pkl.gz'):
+        for suffix in (".pq", ".pkl.gz"):
             _unlink_if_link(Path(path, f"{name_tag}{suffix}"))
 
-        # Polars DataFrames and LazyFrames are stored as parquet
-        if isinstance(data, (pl.DataFrame, pl.LazyFrame)):
+        if _is_polars(data) and type(data).__name__ in ("DataFrame", "LazyFrame"):
             path = Path(path, f"{name_tag}.pq")
-            if isinstance(data, pl.LazyFrame):
-                # Keep the streaming sink when no bounded row groups are requested
-                # (default callers). Only materialize when row_group_size is set,
-                # since sink_parquet on this polars version rejects the kwarg.
+            if type(data).__name__ == "LazyFrame":
+                # Stream to disk unless bounded row groups are asked for:
+                # sink_parquet does not take row_group_size on every polars.
                 if row_group_size is None:
                     data.sink_parquet(path)
                 else:
@@ -348,370 +387,260 @@ class FileManager:
             else:
                 data.write_parquet(path, row_group_size=row_group_size)
             return path
-        # Pandas DataFrames are stored as parquet
-        elif isinstance(data, pd.DataFrame):
+        if _is_pandas(data):
             path = Path(path, f"{name_tag}.pq")
-            with open(path, 'wb') as f:
+            with open(path, "wb") as f:
                 data.to_parquet(f, row_group_size=row_group_size)
             return path
-        # Other data structures are stored as compressed pickle
-        else:
-            path = Path(path, f"{name_tag}.pkl.gz")
-            with gzip.open(path, 'wb') as f:
-                pkl.dump(data, f)
-            return path
+        path = Path(path, f"{name_tag}.pkl.gz")
+        with gzip.open(path, "wb") as f:
+            pkl.dump(data, f)
+        return path
 
     def store_data(self, dataset_id: str, name_tag: str, data, row_group_size=None) -> None:
         """
-        Stores a given data structure.
+        Stores a result of a dataset.
 
         Args:
-            dataset_id (str): The name of the dataset the data is
-                attached to.
-            name_tag (str): The name of the associated data structure.
-            data: Any pickleable data structure.
-            row_group_size (int, optional): Row group size for parquet files.
-                If None, the library default is used.
+            dataset_id (str): The dataset (a run, an input file) it belongs to.
+            name_tag (str): The name of the result.
+            data: A polars or pandas DataFrame, a polars LazyFrame (stored as
+                parquet) or any other picklable object.
+            row_group_size (int, optional): Row group size of a parquet file.
         """
-
-        # Store datastructure as file
         data_path = self._store_data(dataset_id, name_tag, data, row_group_size=row_group_size)
-
-        # Store reference in index
-        data_path = data_path.resolve()
-        cache_path = self.cache_path.resolve()
-        relative_data_path = data_path.relative_to(cache_path)
-        self._add_entry('stored_data', dataset_id, name_tag, relative_data_path)
+        self._add_entry("stored_data", dataset_id, name_tag, self._relative(data_path))
 
     @contextmanager
-    def parquet_sink(self, dataset_id, name_tag):
-        """Reserve target path, write to <target>.tmp, atomically rename and register
-        SQLite index entry on clean exit; remove tmp on exception."""
-        final_path = Path(self.cache_path, 'files', dataset_id, f"{name_tag}.pq")
+    def parquet_sink(self, dataset_id: str, name_tag: str):
+        """
+        Yields a path to write a parquet result to. On a clean exit the file
+        is moved into place and recorded; on an exception it is removed and
+        nothing is recorded.
+        """
+        _quote(name_tag)
+        final_path = Path(self._dataset_dir(dataset_id), f"{name_tag}.pq")
         final_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = final_path.with_suffix('.pq.tmp')
+        tmp_path = final_path.with_suffix(".pq.tmp")
         try:
             yield tmp_path
+            _unlink_if_link(final_path)
             tmp_path.replace(final_path)
-            self._add_entry('stored_data', dataset_id, name_tag,
-                            final_path.relative_to(self.cache_path))
+            self._add_entry("stored_data", dataset_id, name_tag, self._relative(final_path))
         except Exception:
             tmp_path.unlink(missing_ok=True)
             raise
 
-    def store_file(self, dataset_id: str, name_tag: str, file: Path | BytesIO,
-                   remove: bool = True, file_name = None) -> None:
+    def store_file(
+        self,
+        dataset_id: str,
+        name_tag: str,
+        file: Union[Path, str, BytesIO],
+        remove: bool = True,
+        file_name: str = None,
+    ) -> None:
         """
-        Stores a given file.
+        Stores a file as a result of a dataset.
 
         Args:
-            dataset_id (str): The name of the dataset the data is 
-                attached to.
-            name_tag (str): The name of the associated data structure.
-            file (Path of File-Like): The file that should be stored.
-            remove (bool): Wether or not the file should be removed
-                after copying it.
-            file_name (str): The name to store the file under. Only
-                neccessary if the input has no file extension to derive
-                it from.
+            dataset_id (str): The dataset it belongs to.
+            name_tag (str): The name of the result.
+            file (Path | str | file-like): The file, or its content (an
+                uploaded file, a ``BytesIO``).
+            remove (bool): Remove the file after copying it.
+            file_name (str, optional): The name to store it under; by default
+                the result name with the file's extension.
         """
-
-        # Define storage path
+        _quote(name_tag)
         if file_name is None:
             # File-like objects have no `suffix`; Streamlit's UploadedFile
-            # carries the original file name in `name` instead.
-            suffix = getattr(file, 'suffix', None)
-            if suffix is None:
-                suffix = Path(getattr(file, 'name', '')).suffix
+            # carries the original file name in `name`.
+            if isinstance(file, (str, Path)):
+                suffix = Path(file).suffix
+            else:
+                suffix = Path(getattr(file, "name", "") or "").suffix
             file_name = f"{name_tag}{suffix}"
-        
-        target_path = Path(
-                self.cache_path, 'files', dataset_id, file_name
-        )
+
+        target_path = Path(self._dataset_dir(dataset_id), file_name)
         target_path.parent.mkdir(parents=True, exist_ok=True)
         _unlink_if_link(target_path)
 
-        # Store file in path
-        if isinstance(file, BytesIO):
-            with open(target_path, 'wb') as f:
+        if hasattr(file, "getbuffer"):
+            with open(target_path, "wb") as f:
                 f.write(file.getbuffer())
         else:
-            file = Path(file)            
+            file = Path(file)
             shutil.copy(file, target_path)
             if remove:
                 file.unlink()
+        self._add_entry("stored_files", dataset_id, name_tag, self._relative(target_path))
 
-        # Store reference in index
-        target_path = target_path.resolve()
-        cache_path = self.cache_path.resolve()
-        relative_target_path = target_path.relative_to(cache_path)
-        self._add_entry('stored_files', dataset_id, name_tag, relative_target_path)
-
-    def get_results_list(self, name_tags: List[str], partial=False) -> List[str]:
+    def get_results_list(self, name_tags: List[str], partial: bool = False) -> List[str]:
         """
-        Get all results that contain data for specified fields.
-
-        Args:
-            name_tags (List): the fields to be considered.
+        The datasets that hold all (``partial`` False) or any of the results
+        named, sorted by id. Names no dataset holds are left out.
         """
-        # Some columns might not have been created yet (or ever)..
-        available_columns = (
-            set(self._get_column_list('stored_data')) 
-            | set(self._get_column_list('stored_files'))
+        if isinstance(name_tags, str):
+            name_tags = [name_tags]
+        available = set(self._get_column_list("stored_data")) | set(
+            self._get_column_list("stored_files")
         )
-        name_tags = [n for n in name_tags if n in available_columns]
-        if len(name_tags) == 0:
+        name_tags = [n for n in name_tags if n in available and n not in _INTERNAL_COLUMNS]
+        if not name_tags:
             return []
-        
-        # Fetch data
-        selection_operator = 'OR' if partial else 'AND'
-        selection_statement = (
-            f" IS NOT NULL {selection_operator} ".join(name_tags)
-            + " IS NOT NULL;"
+        data_columns = set(self._get_column_list("stored_data"))
+        file_columns = set(self._get_column_list("stored_files"))
+
+        def has(name):
+            parts = []
+            if name in data_columns:
+                parts.append(f"sd.{_quote(name)} IS NOT NULL")
+            if name in file_columns:
+                parts.append(f"sf.{_quote(name)} IS NOT NULL")
+            return "(" + " OR ".join(parts) + ")"
+
+        where = (" OR " if partial else " AND ").join(has(n) for n in name_tags)
+        self.cache_cursor.execute(
+            f"""
+            SELECT ids.id FROM (
+                SELECT id FROM stored_data UNION SELECT id FROM stored_files
+            ) ids
+            LEFT JOIN stored_data sd ON sd.id = ids.id
+            LEFT JOIN stored_files sf ON sf.id = ids.id
+            WHERE {where}
+            ORDER BY ids.id
+            """
         )
-        self.cache_cursor.execute(f"""
-            SELECT id
-            FROM (
-                SELECT sd.id AS id, sd.*, sf.*
-                FROM stored_data sd
-                LEFT JOIN stored_files sf ON sd.id = sf.id
-
-                UNION
-
-                SELECT sf.id AS id, sd.*, sf.*
-                FROM stored_files sf
-                LEFT JOIN stored_data sd ON sf.id = sd.id
-            ) combined
-            WHERE {selection_statement}
-        """)
-
         return [row[0] for row in self.cache_cursor.fetchall()]
-    
-    def get_results(self, dataset_id, name_tags, partial=False, use_pyarrow=False, use_polars=False):
+
+    def _row(self, table: str, dataset_id: str, columns: List[str]):
+        self.cache_cursor.execute(
+            f"SELECT {', '.join(_quote(c) for c in columns)} FROM {table} WHERE id = ?",
+            (str(dataset_id),),
+        )
+        return self.cache_cursor.fetchone()
+
+    def get_results(
+        self,
+        dataset_id: str,
+        name_tags: List[str],
+        partial: bool = False,
+        use_pyarrow: bool = False,
+        use_polars: bool = False,
+    ) -> dict:
+        """
+        Reads results of a dataset: ``{name: value}``. A stored file comes back
+        as its ``Path``; a parquet result as a pandas DataFrame, a polars
+        LazyFrame (``use_polars``) or a pyarrow dataset (``use_pyarrow``);
+        anything else as the object stored. A result stored for other
+        datasets but not this one raises ``KeyError`` unless ``partial``; a
+        name no dataset holds is left out.
+        """
         results = {}
-        # Retrieve files as Path objects
-        file_columns = self._get_column_list('stored_files')
-        file_columns = [c for c in file_columns if c in name_tags]
-        if len(file_columns) > 0:
-            self.cache_cursor.execute(f"""
-                SELECT {', '.join(file_columns)}
-                FROM stored_files
-                WHERE id = '{dataset_id}';
-            """)
-            result = self.cache_cursor.fetchone()
-            for c, r in zip(file_columns, result):
-                if r is None:
+        name_tags = [name_tags] if isinstance(name_tags, str) else list(name_tags)
+        for table in ("stored_files", "stored_data"):
+            columns = [
+                c for c in self._get_column_list(table)
+                if c in name_tags and c not in _INTERNAL_COLUMNS
+            ]
+            if not columns:
+                continue
+            row = self._row(table, dataset_id, columns) or (None,) * len(columns)
+            for column, value in zip(columns, row):
+                if value is None:
                     if partial:
                         continue
-                    else:
-                        raise KeyError(f"{c} does not exist for {dataset_id}")
-                results[c] = Path(self.cache_path, r)
-        
-        # Retrieve data as Python objects
-        data_columns = self._get_column_list('stored_data')
-        data_columns = [c for c in data_columns if c in name_tags]
-        if len(data_columns) > 0:
-            self.cache_cursor.execute(f"""
-                SELECT {', '.join(data_columns)}
-                FROM stored_data
-                WHERE id = '{dataset_id}';
-            """)
-            result = self.cache_cursor.fetchone()
-            for c, r in zip(data_columns, result):
-                if r is None:
-                    if partial:
-                        continue
-                    else:
-                        raise KeyError(f"{c} does not exist for {dataset_id}")
-                file_path = Path(self.cache_path, r)
-                if file_path.suffix == '.pq':
-                    if use_pyarrow:
-                        data = ds.dataset(file_path, format="parquet")
-                    elif use_polars:
-                        # Load as polars DataFrame
-                        data = pl.scan_parquet(file_path)
-                    else:
-                        # Default to pandas for backward compatibility
-                        data = pd.read_parquet(file_path)
-                else:
-                    with gzip.open(file_path, 'rb') as f:
-                        data = pkl.load(f)
-                results[c] = data
+                    raise KeyError(f"{column} does not exist for {dataset_id}")
+                path = Path(self.cache_path, value)
+                results[column] = path if table == "stored_files" else self._read(
+                    path, use_pyarrow=use_pyarrow, use_polars=use_polars
+                )
         return results
-    
+
+    @staticmethod
+    def _read(path: Path, use_pyarrow: bool = False, use_polars: bool = False):
+        if path.suffix == ".pq":
+            if use_pyarrow:
+                import pyarrow.dataset as ds
+
+                return ds.dataset(path, format="parquet")
+            if use_polars:
+                import polars as pl
+
+                return pl.scan_parquet(path)
+            import pandas as pd
+
+            return pd.read_parquet(path)
+        with gzip.open(path, "rb") as f:
+            return pkl.load(f)
+
     def get_all_files_except(self, dataset_id: str, exclude_tags: List[str]) -> dict:
-        """
-        Retrieves all files for a dataset except those specified in the exclusion list.
-        
-        Args:
-            dataset_id (str): The ID of the dataset to retrieve files for.
-            exclude_tags (List[str]): List of name tags to exclude from the results.
-            
-        Returns:
-            dict: Dictionary mapping name_tags to file paths for all files except excluded ones.
-        """
-        # Get all column names from stored_files table
-        all_columns = self._get_column_list('stored_files')
-        
-        # Exclude internal columns
-        internal_columns = ['id', 'display_name']
-        
-        # Filter out internal columns and excluded tags
-        included_tags = [
-            col for col in all_columns 
-            if col not in internal_columns and col not in exclude_tags
+        """Every stored file of a dataset (``{name: Path}``) but those named."""
+        names = [
+            c for c in self._get_column_list("stored_files")
+            if c not in _INTERNAL_COLUMNS and c not in exclude_tags
         ]
-        
-        # Retrieve the actual file paths using get_results with partial=True
-        results = self.get_results(dataset_id, included_tags, partial=True)
-        
-        return results
-    
-    def result_exists(self, dataset_id, name_tag):
-        
-        # Check which table is correct
-        if name_tag in self._get_column_list('stored_data'):
-            table = 'stored_data'
-        elif name_tag in self._get_column_list('stored_files'):
-            table = 'stored_files'
-        else:
-            return False
-        
-        # Check if field value is set
-        self.cache_cursor.execute(f"""
-            SELECT {name_tag} 
-            FROM {table} 
-            WHERE id = '{dataset_id}' AND {name_tag} IS NOT NULL
-        """)
-        if self.cache_cursor.fetchone():
-            return True
-        return False
+        return self.get_results(dataset_id, names, partial=True)
 
-    def get_result_path(self, dataset_id, name_tag):
-        """
-        Path of a stored result (parquet, pickle or file), or None.
+    def result_exists(self, dataset_id: str, name_tag: str) -> bool:
+        """Whether a dataset holds the result named."""
+        return self.get_result_path(dataset_id, name_tag) is not None
 
-        Args:
-            dataset_id (str): The ID of the dataset.
-            name_tag (str): The name of the result.
-
-        Returns:
-            Path | None: Where the result is stored, None if it was not stored.
-        """
-        for table in ('stored_data', 'stored_files'):
+    def get_result_path(self, dataset_id: str, name_tag: str):
+        """Where a result (parquet, pickle or file) is stored, or None."""
+        if name_tag in _INTERNAL_COLUMNS:
+            return None
+        for table in _TABLES:
             if name_tag not in self._get_column_list(table):
                 continue
-            self.cache_cursor.execute(
-                f'SELECT "{name_tag}" FROM {table} WHERE id = ?', (dataset_id,)
-            )
-            row = self.cache_cursor.fetchone()
+            row = self._row(table, dataset_id, [name_tag])
             if row is not None and row[0] is not None:
                 return Path(self.cache_path, row[0])
         return None
 
-    def remove_results(self, dataset_id):
-    
-        # Remove references
-        self.cache_cursor.execute(f"""
-            DELETE FROM stored_data
-            WHERE id = '{dataset_id}';
-        """)
-        self.cache_cursor.execute(f"""
-            DELETE FROM stored_files
-            WHERE id = '{dataset_id}';
-        """)
+    def remove_results(self, dataset_id: str) -> None:
+        """Deletes a dataset's results, its index rows and its extra caches."""
+        for table in _TABLES:
+            self.cache_cursor.execute(f"DELETE FROM {table} WHERE id = ?", (str(dataset_id),))
+        shutil.rmtree(self._dataset_dir(dataset_id), ignore_errors=True)
+        for path in self.extra_cache_dirs(dataset_id):
+            shutil.rmtree(path, ignore_errors=True)
 
-        # Remove stored files
-        shutil.rmtree(Path(self.cache_path, 'files', dataset_id))
-        # Viewer component caches built from them (see src/render/render.py)
-        from src.render.cache_dirs import insight_cache_dir
-        shutil.rmtree(insight_cache_dir(self.cache_path, dataset_id), ignore_errors=True)
+    def clear_cache(self) -> None:
+        """Deletes every stored result, the index and the extra caches."""
+        shutil.rmtree(Path(self.cache_path, "files"), ignore_errors=True)
+        Path(self.cache_path, "files").mkdir(parents=True, exist_ok=True)
+        for path in self.extra_cache_dirs(None):
+            shutil.rmtree(path, ignore_errors=True)
+        for table in _TABLES:
+            self.cache_cursor.execute(f"DROP TABLE IF EXISTS {table};")
+        self._create_tables()
 
-    def clear_cache(self):
-        shutil.rmtree(Path(self.cache_path, 'files'))
-        Path(self.cache_path, 'files').mkdir()
-        shutil.rmtree(Path(self.cache_path, 'insight'), ignore_errors=True)
-        self.cache_cursor.execute(f"DROP TABLE IF EXISTS stored_data;")
-        self.cache_cursor.execute(f"DROP TABLE IF EXISTS stored_files;")
-        self.cache_cursor.execute("""
-                          CREATE TABLE IF NOT EXISTS stored_data (
-                            id TEXT PRIMARY KEY
-                          );
-        """)
-        self.cache_cursor.execute("""
-                          CREATE TABLE IF NOT EXISTS stored_files (
-                            id TEXT PRIMARY KEY
-                          );
-        """)
-    
     def get_display_name(self, dataset_id: str) -> str:
-        """
-        Returns the display name for a dataset, falling back to dataset_id
-        if no custom display name exists.
-        
-        Args:
-            dataset_id (str): The ID of the dataset.
-            
-        Returns:
-            str: The display name or dataset_id as fallback.
-        """
-        # Try to get display_name from stored_data table
-        self.cache_cursor.execute("""
-            SELECT display_name
-            FROM stored_data
-            WHERE id = ? AND display_name IS NOT NULL
-        """, (dataset_id,))
-        result = self.cache_cursor.fetchone()
-        if result and result[0]:
-            return result[0]
-        
-        # Try to get display_name from stored_files table
-        self.cache_cursor.execute("""
-            SELECT display_name
-            FROM stored_files
-            WHERE id = ? AND display_name IS NOT NULL
-        """, (dataset_id,))
-        result = self.cache_cursor.fetchone()
-        if result and result[0]:
-            return result[0]
-        
-        # Fallback to dataset_id
+        """The name a user gave the dataset, else its id."""
+        for table in _TABLES:
+            self.cache_cursor.execute(
+                f"SELECT display_name FROM {table} WHERE id = ? AND display_name IS NOT NULL",
+                (str(dataset_id),),
+            )
+            row = self.cache_cursor.fetchone()
+            if row and row[0]:
+                return row[0]
         return dataset_id
-    
+
     def rename_dataset(self, dataset_id: str, new_display_name: str) -> bool:
         """
-        Validates and updates the display name for a dataset.
-        
-        Args:
-            dataset_id (str): The ID of the dataset to rename.
-            new_display_name (str): The new display name.
-            
-        Returns:
-            bool: True on success, False on failure.
+        Gives a dataset a display name (1 to 100 characters, trimmed).
+        False when the name is empty or too long.
         """
-        # Validation: non-empty name
         if not new_display_name or not new_display_name.strip():
             return False
-        
-        # Validation: reasonable length limit (100 characters)
         if len(new_display_name) > 100:
             return False
-        
-        # Trim whitespace
         new_display_name = new_display_name.strip()
-
-        # Update display_name in stored_data table if entry exists
-        self.cache_cursor.execute("""
-            UPDATE stored_data
-            SET display_name = ?
-            WHERE id = ?
-        """, (new_display_name, dataset_id))
-        
-        # Update display_name in stored_files table if entry exists
-        self.cache_cursor.execute("""
-            UPDATE stored_files
-            SET display_name = ?
-            WHERE id = ?
-        """, (new_display_name, dataset_id))
-
+        for table in _TABLES:
+            self.cache_cursor.execute(
+                f"UPDATE {table} SET display_name = ? WHERE id = ?",
+                (new_display_name, str(dataset_id)),
+            )
         return True

@@ -14,7 +14,7 @@ DEMO = Path('example-data', 'workspaces', 'default')
 
 
 def _file_manager(tmp_path):
-    return FileManager(tmp_path, DEMO / 'cache')
+    return FileManager(tmp_path, cache_path=DEMO / 'cache')
 
 
 def test_every_example_is_named_after_what_it_shows(tmp_path):

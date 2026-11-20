@@ -22,6 +22,8 @@ from src.quant.run import (
 from src import flashida
 from src import history
 from src import former_examples
+# Viewer caches are deleted with the results they were built from
+from src.render import cache_dirs  # noqa: F401
 from src.workflow.WorkflowManager import WorkflowManager
 from src.workflow.StreamlitUI import editor_table
 

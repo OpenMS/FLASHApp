@@ -81,7 +81,7 @@ class WorkflowManager:
         else:
             cache_path = Path(self.workflow_dir, 'cache')
         
-        self.file_manager = FileManager(self.workflow_dir, cache_path, self.results_dir)
+        self.file_manager = FileManager(self.workflow_dir, self.results_dir, cache_path=cache_path)
         self.logger = Logger(self.workflow_dir)
         self.parameter_manager = ParameterManager(self.workflow_dir, workflow_name=name)
         self.executor = CommandExecutor(self.workflow_dir, self.logger, self.parameter_manager)
