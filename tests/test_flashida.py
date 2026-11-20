@@ -81,6 +81,30 @@ def test_newest_sequence_and_raw_names(tmp_path):
     assert flashida.raw_names(tmp_path / "missing") == set()
 
 
+def test_raw_files_newest_first(tmp_path):
+    for name, t in (("old", 100), ("new", 300), ("mid", 200)):
+        (tmp_path / f"{name}.raw").write_text("")
+        os.utime(tmp_path / f"{name}.raw", (t, t))
+    (tmp_path / "x.mzML").write_text("")
+    (tmp_path / "d.raw").mkdir()
+    assert flashida.raw_files_newest_first(tmp_path) == [("new", 300), ("mid", 200), ("old", 100)]
+    assert flashida.raw_files_newest_first(tmp_path / "missing") == []
+
+
+def test_single_run_file(tmp_path):
+    assert flashida.read_single_run(tmp_path) is None
+    flashida.write_single_run(tmp_path, "HeLa_R2", "Top-down EThcD")
+    assert flashida.read_single_run(tmp_path) == {"raw": "HeLa_R2", "method_file": "Top-down EThcD"}
+    flashida.clear_single_run(tmp_path)
+    assert flashida.read_single_run(tmp_path) is None
+    flashida.clear_single_run(tmp_path)  # nothing to remove
+    # A file without both a raw file and a method is not a single run
+    (tmp_path / flashida.SINGLE_RUN_FILE).write_text('{"raw": "HeLa_R2"}', encoding="utf-8")
+    assert flashida.read_single_run(tmp_path) is None
+    (tmp_path / flashida.SINGLE_RUN_FILE).write_text("not json", encoding="utf-8")
+    assert flashida.read_single_run(tmp_path) is None
+
+
 def test_log_folder_of_a_method(tmp_path):
     exe_dir = tmp_path / "bin"
     exe_dir.mkdir()

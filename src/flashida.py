@@ -68,6 +68,46 @@ def scheduled(rows: list, names) -> dict:
     return {n: by_name[n.casefold()] for n in names if n.casefold() in by_name}
 
 
+# A single run started on the page: {raw, method_file}, read by IdaWorkflow
+SINGLE_RUN_FILE = 'ida-single-run.json'
+
+
+def write_single_run(workflow_dir, raw_name: str, method_file: str) -> None:
+    Path(workflow_dir, SINGLE_RUN_FILE).write_text(
+        json.dumps({'raw': raw_name, 'method_file': method_file}), encoding='utf-8')
+
+
+def read_single_run(workflow_dir):
+    """{raw, method_file} of a single run to start, or None (a sequence)."""
+    try:
+        data = json.loads(Path(workflow_dir, SINGLE_RUN_FILE).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and data.get('raw') and data.get('method_file') else None
+
+
+def clear_single_run(workflow_dir) -> None:
+    try:
+        Path(workflow_dir, SINGLE_RUN_FILE).unlink()
+    except OSError:
+        pass
+
+
+def raw_files_newest_first(folder) -> list:
+    """(name without .raw, modified time) of the raw files in a folder, newest first."""
+    found = []
+    try:
+        for p in Path(folder).iterdir():
+            if p.suffix.lower() == '.raw' and p.is_file():
+                try:
+                    found.append((p.stem, p.stat().st_mtime))
+                except OSError:
+                    continue
+    except OSError:
+        return []
+    return sorted(found, key=lambda f: f[1], reverse=True)
+
+
 # What the running acquisition reports to the page.
 STATUS_FILE = 'ida-status.json'
 
