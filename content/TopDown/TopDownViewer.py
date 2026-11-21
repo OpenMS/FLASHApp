@@ -33,8 +33,9 @@ from src import analysis, former_examples, sample_type
 from openms_insight import StateManager
 from src.render.render import _state_manager, render_grid
 from src.render import topdown_layout
+from src.render.view_state import ViewState
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
-from src.layout_manager import request_analysis, view_bar
+from src.layout_manager import linked_datasets, request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
 from src.render import inspect_scan
@@ -248,8 +249,11 @@ def view_selector():
         available=missing_analysis.available(file_manager, first if first in display_id_to_name else None),
         analyses=missing_analysis.ANALYSES, unavailable_options=missing_options,
         max_experiments=MAX_EXPERIMENTS, target='the Viewer',
+        # 🔗: a link that opens this view with each run and what is picked in it
+        link=True,
         # A view of one's own keeps each experiment's zoom and selection (📌)
-        states=lambda i: _state_manager(TOOL, selection_key(i), st.session_state.get(selection_key(i))),
+        # (without what the components publish themselves, such as the matched fragments)
+        states=lambda i: ViewState(_state_manager(TOOL, selection_key(i), st.session_state.get(selection_key(i)))),
         datasets=lambda i: st.session_state.get(selection_key(i)),
         help_text=(
             "Drag a view to order the bar, untick it to keep it under More. Your own views take up "
@@ -418,6 +422,11 @@ if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False
 
 apply_pending()
 inspect_requested()
+# Opened with a link to a view: show the runs it names (its view, selection
+# and zoom are applied by the view bar)
+for _index, _dataset in enumerate(linked_datasets(VIEW_KEY)[:MAX_EXPERIMENTS]):
+    if _dataset in display_id_to_name:
+        st.session_state[selection_key(_index)] = _dataset
 # Nothing (or something gone) shown: the first experiment
 if st.session_state.get(selection_key(0)) not in display_id_to_name:
     first_groups = experiment_groups()
