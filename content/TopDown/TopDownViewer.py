@@ -34,7 +34,7 @@ from openms_insight import StateManager
 from src.render.render import _state_manager, render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
-from src.layout_manager import request_analysis, view_bar
+from src.layout_manager import linked_datasets, request_analysis, view_bar
 from src.render import missing_analysis
 from src.render import quant_view
 from src.render import inspect_scan
@@ -247,7 +247,7 @@ def view_selector():
         key=VIEW_KEY, default_view=topdown_layout.default_view(identified, kind, file_manager),
         available=missing_analysis.available(file_manager, first if first in display_id_to_name else None),
         analyses=missing_analysis.ANALYSES, unavailable_options=missing_options,
-        max_experiments=MAX_EXPERIMENTS, target='the Viewer',
+        max_experiments=MAX_EXPERIMENTS, target='the Viewer', link=True,
         # A view of one's own keeps each experiment's zoom and selection (📌)
         states=lambda i: _state_manager(TOOL, selection_key(i), st.session_state.get(selection_key(i))),
         datasets=lambda i: st.session_state.get(selection_key(i)),
@@ -418,6 +418,11 @@ if st.session_state.pop(latest_results_key(Path(workspace, WORKFLOW_DIR)), False
 
 apply_pending()
 inspect_requested()
+# Opened with a link to a view: the runs it shows, once (the view bar applies
+# the rest). A comparison has a view bar of its own, so only runs are taken.
+for exp_index, linked in enumerate(linked_datasets(VIEW_KEY)):
+    if linked in display_id_to_name and linked not in comparison_ids:
+        st.session_state[selection_key(exp_index)] = linked
 # Nothing (or something gone) shown: the first experiment
 if st.session_state.get(selection_key(0)) not in display_id_to_name:
     first_groups = experiment_groups()
