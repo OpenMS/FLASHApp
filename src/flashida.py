@@ -84,6 +84,21 @@ def scheduled(rows: list, names) -> dict:
 SINGLE_RUN_FILE = 'ida-single-run.json'
 
 
+def flash_command(exe, method_path, raw, wait_for_contact_closure: bool = True) -> list:
+    """The command line that starts FLASHIda (Flash.exe) for one raw file.
+
+    FLASHIda waits for the instrument's contact closure (the start signal of
+    the LC) before it sends its first scan, unless it gets ``-o``. A run whose
+    raw file is being written already (single-run mode) has had its contact
+    closure, and direct infusion has none, so both pass
+    ``wait_for_contact_closure=False``: without ``-o`` FLASHIda would wait the
+    whole acquisition and the raw file holds the instrument method alone."""
+    command = [exe, '-m', method_path, '-r', raw]
+    if not wait_for_contact_closure:
+        command.append('-o')
+    return command
+
+
 def write_single_run(workflow_dir, raw_name: str, method_file: str) -> None:
     Path(workflow_dir, SINGLE_RUN_FILE).write_text(
         json.dumps({'raw': raw_name, 'method_file': method_file}), encoding='utf-8')

@@ -3,6 +3,7 @@ the log folder of a method and the run logs the live viewer reads."""
 import hashlib
 import json
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -304,3 +305,17 @@ def test_newest_sequence_skips_a_file_it_cannot_read(tmp_path, monkeypatch):
 
     monkeypatch.setattr(flashida.Path, 'stat', stat)
     assert flashida.newest_sequence(tmp_path).name == 'a.sld'
+
+
+def test_flash_command_waits_for_the_contact_closure_only_when_asked():
+    exe, method, raw = Path("C:/FLASHIda/Flash.exe"), Path("m.json"), Path("D:/raw/R1.raw")
+    assert flashida.flash_command(exe, method, raw) == [exe, "-m", method, "-r", raw]
+    # A raw file being written has had its contact closure, direct infusion has none
+    assert flashida.flash_command(exe, method, raw, wait_for_contact_closure=False) == \
+        [exe, "-m", method, "-r", raw, "-o"]
+
+
+def test_a_single_run_starts_flashida_without_waiting_for_a_contact_closure():
+    source = (Path(__file__).parent.parent / "src" / "Workflow.py").read_text(encoding="utf-8")
+    single = source.split("def _single_run", 1)[1].split("def execution", 1)[0]
+    assert "wait_for_contact_closure=False" in single
