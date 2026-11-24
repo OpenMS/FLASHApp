@@ -422,8 +422,8 @@ def _remove_hypothesis(stored, index):
     state().set_selection(HYPOTHESIS_IDENTIFIER, None)
 
 
-# Proteoforms tried against these masses
-# They need masses to compare against.
+# Proteoforms tried against these masses (only once there are masses to
+# compare them against)
 if stored is not None and hasattr(view, 'set_fragment_matches_proteoform'):
     st.subheader('Compare proteoforms')
     st.caption(

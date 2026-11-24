@@ -14,6 +14,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Union, List
 
+from src.workflow.linked_folders import own_folder, remove_folder
+
 def _unlink_if_link(path: Path) -> None:
     """
     Remove ``path`` when it is a link, before a result is written there.
@@ -312,6 +314,17 @@ class FileManager:
             DO UPDATE SET {column_name} = excluded.{column_name};
         """)
 
+    def dataset_dir(self, dataset_id: str) -> Path:
+        """The folder of ``dataset_id``'s files, the workspace's own to write into.
+
+        A workspace started from a demo links the demo's result folders whole
+        (``link_folders`` in settings.json). Before a file is written there,
+        the linked folder becomes a real one holding links to the demo's
+        files, so a result written, a report or an archive never lands in the
+        demo every new workspace shares.
+        """
+        return own_folder(Path(self.cache_path, 'files', dataset_id), self.cache_path)
+
     def _store_data(self, dataset_id: str, name_tag: str, data, row_group_size=None) -> None:
         """
         Stores data as a cached file. Pandas/Polars DataFrames are stored as
@@ -329,7 +342,7 @@ class FileManager:
             file_path (Path): The file path of the stored file.
         """
 
-        path = Path(self.cache_path, 'files', dataset_id)
+        path = self.dataset_dir(dataset_id)
         path.mkdir(parents=True, exist_ok=True)
         for suffix in ('.pq', '.pkl.gz'):
             _unlink_if_link(Path(path, f"{name_tag}{suffix}"))
@@ -387,7 +400,7 @@ class FileManager:
     def parquet_sink(self, dataset_id, name_tag):
         """Reserve target path, write to <target>.tmp, atomically rename and register
         SQLite index entry on clean exit; remove tmp on exception."""
-        final_path = Path(self.cache_path, 'files', dataset_id, f"{name_tag}.pq")
+        final_path = Path(self.dataset_dir(dataset_id), f"{name_tag}.pq")
         final_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = final_path.with_suffix('.pq.tmp')
         try:
@@ -425,9 +438,7 @@ class FileManager:
                 suffix = Path(getattr(file, 'name', '')).suffix
             file_name = f"{name_tag}{suffix}"
         
-        target_path = Path(
-                self.cache_path, 'files', dataset_id, file_name
-        )
+        target_path = Path(self.dataset_dir(dataset_id), file_name)
         target_path.parent.mkdir(parents=True, exist_ok=True)
         _unlink_if_link(target_path)
 
@@ -621,8 +632,8 @@ class FileManager:
             WHERE id = '{dataset_id}';
         """)
 
-        # Remove stored files
-        shutil.rmtree(Path(self.cache_path, 'files', dataset_id))
+        # Remove stored files (a folder linked from the demo loses only its link)
+        remove_folder(Path(self.cache_path, 'files', dataset_id), self.cache_path)
         # Viewer component caches built from them (see src/render/render.py)
         from src.render.cache_dirs import insight_cache_dir
         shutil.rmtree(insight_cache_dir(self.cache_path, dataset_id), ignore_errors=True)
