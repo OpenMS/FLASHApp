@@ -1,0 +1,30 @@
+{
+    "identify": false,
+    "quantification": "none",
+    "mzML-files": [
+        "/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Deconvolution-only_ProteinMix_LC-MS.mzML"
+    ],
+    "_flag_params": {
+        "FLASHDeconv": [
+            "keep_empty_out",
+            "write_detail",
+            "quant"
+        ],
+        "FLASHTnT": [
+            "only_single_hit",
+            "discard_underdetermined",
+            "keep_decoy",
+            "protein_level_only",
+            "native",
+            "decoy_precursor",
+            "learn_var_mod_penalty",
+            "gapped:stop_at_first_size",
+            "raw:report_decoy_envelopes",
+            "ex:skip_precursor_inference",
+            "tag:allow_gap"
+        ],
+        "FLASHAnnotator": [
+            "algorithm:report_decoy_envelopes"
+        ]
+    }
+}

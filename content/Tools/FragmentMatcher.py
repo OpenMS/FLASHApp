@@ -313,7 +313,8 @@ view = ProteinSequenceView(
 if hasattr(view, 'set_modification_picker'):
     view.set_modification_picker(_modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids)
 _sequence_view_options(view)
-if hasattr(view, 'set_fragment_matches_proteoform'):
+# They need masses to compare against.
+if stored is not None and hasattr(view, 'set_fragment_matches_proteoform'):
     # The matched proteoform comes with its fragments, for the comparison below
     view.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     view.set_fragment_matches_proteoform()
