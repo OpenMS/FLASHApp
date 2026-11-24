@@ -633,7 +633,7 @@ class FileManager:
         """)
 
         # Remove stored files (a folder linked from the demo loses only its link)
-        remove_folder(Path(self.cache_path, 'files', dataset_id))
+        remove_folder(Path(self.cache_path, 'files', dataset_id), self.cache_path)
         # Viewer component caches built from them (see src/render/render.py)
         from src.render.cache_dirs import insight_cache_dir
         shutil.rmtree(insight_cache_dir(self.cache_path, dataset_id), ignore_errors=True)
