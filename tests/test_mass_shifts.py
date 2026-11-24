@@ -89,7 +89,7 @@ def test_lysate_demo(tmp_path):
     cache.mkdir()
     shutil.copy(WORKSPACE / 'cache' / 'cache.db', cache / 'cache.db')
     (cache / 'files').symlink_to(WORKSPACE / 'cache' / 'files')
-    hits = hierarchy_data.prsms(FileManager(cache, cache), LYSATE)
+    hits = hierarchy_data.prsms(FileManager(cache, cache_path=cache), LYSATE)
     groups, histogram, prsms = mass_shifts.summary(mass_shifts.prsm_shifts(hits))
     assert groups.height > 0
     assert groups['prsms'].sum() == prsms.height == histogram['prsms'].sum()

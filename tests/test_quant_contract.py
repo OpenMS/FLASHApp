@@ -76,7 +76,7 @@ def test_write_produces_the_contract_files(tmp_path):
 
 @pytest.fixture
 def stored(tmp_path):
-    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    file_manager = FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
     levels, runs = contract.build(CONSENSUS, IDENTIFICATIONS)
     design = {runs[0]: ('control', 1), runs[1]: ('treated', 1)}
     session.store(file_manager, 'comparison_20260101-120000', levels, runs, design, {}, 'flashtnt')

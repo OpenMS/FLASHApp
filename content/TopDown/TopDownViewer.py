@@ -80,7 +80,7 @@ workspace = Path(st.session_state['workspace'])
 former_examples.add_example_results(Path(st.session_state['workspace'], 'cache'))
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'cache')
+    cache_path=Path(st.session_state['workspace'], 'cache'),
 )
 quant_view.migrate_layout(file_manager)
 quant_view.adopt_saved_layout(file_manager, workspace)

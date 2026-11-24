@@ -246,7 +246,7 @@ def run(example, workspace):
     cache = workspace / 'cache'
 
     def stored():
-        file_manager = FileManager(workflow_dir, cache)
+        file_manager = FileManager(workflow_dir, cache_path=cache)
         return (set(file_manager.get_results_list(['threedim_SN_plot'])),
                 set(file_manager.get_results_list(['quant_manifest'])))
 
@@ -317,7 +317,7 @@ def main():
             run_ids, comparison = run(example, workspace)
             for old_id, entry in zip(run_ids, example['runs']):
                 if entry is None:
-                    FileManager(workspace / 'flashtnt', cache).remove_results(old_id)
+                    FileManager(workspace / 'flashtnt', cache_path=cache).remove_results(old_id)
                     continue
                 rename(cache, old_id, *entry)
                 kept.append(entry[0])
@@ -332,7 +332,7 @@ def main():
                 file_manager.store_data(example['comparison'][0], 'quant_manifest', manifest)
                 if 'comparison_settings' in example:
                     from src.quant.session import QuantSession
-                    session = QuantSession(FileManager(workspace / 'flashtnt', cache), example['comparison'][0])
+                    session = QuantSession(FileManager(workspace / 'flashtnt', cache_path=cache), example['comparison'][0])
                     session.save_settings({**session.settings, **example['comparison_settings']})
                 kept.append(example['comparison'][0])
         target = DEMO / 'cache'

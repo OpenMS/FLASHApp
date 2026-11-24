@@ -4,7 +4,7 @@ from src.common.common import page_setup, themed_asset, v_space
 from src.common.contributors import render_contributors
 from src.common.installers import render_installer_buttons
 
-page_setup(page="main")
+page_setup(page="main", captcha=False)
 
 CLI_TOOLS_URL = "https://abibuilder.cs.uni-tuebingen.de/archive/openms/OpenMSInstaller/experimental/FVdeploy/"
 
