@@ -5,7 +5,7 @@ from .Logger import Logger
 from .ParameterManager import InvalidParameterFileError, ParameterManager
 from .CommandExecutor import CommandExecutor
 from .StreamlitUI import StreamlitUI
-from .FileManager import FileManager
+from .FileManager import FileManager, cache_path_for
 from .input_check import clash_message, selection_clashes
 from ._log_status import classify_log_outcome
 from .RunManager import RunManager, FINISHED, FAILED, CANCELLED, RUNNING, FOLLOW_UP_KEY, FOLLOW_UP_FILE, RUN_NAME_KEY, RUN_NAME_FILE, MAX_NAME_LENGTH, apply_settings, same_files_info
@@ -57,9 +57,12 @@ class WorkflowManager:
     # run has finished; next_steps() links both.
     results_page = None
     export_page = None
+    # Keep the result store in <workspace>/cache, shared by the workspace's
+    # workflows; the worker reads this from the class.
+    share_cache = False
 
     # Core workflow logic using the above classes
-    def __init__(self, name: str, workspace: str, share_cache: bool = False):
+    def __init__(self, name: str, workspace: str):
         self.name = name
         self.workflow_dir = Path(workspace, name.replace(" ", "-").lower())
         # Where execution() writes and results() reads. For a multi-run
@@ -75,13 +78,10 @@ class WorkflowManager:
             self.run_id = get_selected_run(self.runs)
             if self.run_id:
                 self.results_dir = self.runs.results_dir(self.run_id)
-
-        if share_cache:
-            cache_path = Path(workspace, 'cache')
-        else:
-            cache_path = Path(self.workflow_dir, 'cache')
-        
-        self.file_manager = FileManager(self.workflow_dir, self.results_dir, cache_path=cache_path)
+        self.file_manager = FileManager(
+            self.workflow_dir, self.results_dir,
+            cache_path=cache_path_for(self.workflow_dir, self.share_cache),
+        )
         self.logger = Logger(self.workflow_dir)
         self.parameter_manager = ParameterManager(self.workflow_dir, workflow_name=name)
         self.executor = CommandExecutor(self.workflow_dir, self.logger, self.parameter_manager)

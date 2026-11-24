@@ -288,7 +288,7 @@ class TopDownWorkflow(WorkflowManager):
     name_runs = True
 
     def __init__(self) -> None:
-        super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
+        super().__init__("FLASHTnT", st.session_state["workspace"])
         self.tool_name = 'FLASHTaggerViewer'
         adopt_legacy_inputs(st.session_state["workspace"], self.workflow_dir)
         # A workspace from an earlier release still holds that release's
