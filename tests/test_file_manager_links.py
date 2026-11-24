@@ -46,6 +46,7 @@ def _linked_folder(tmp_path):
     (demo_run / "masses.pq").write_bytes(b"demo")
     fm = FileManager(tmp_path / "wf")
     folder = Path(fm.cache_path, "files", "run")
+    folder.parent.mkdir(parents=True, exist_ok=True)
     folder.symlink_to(demo_run, target_is_directory=True)
     return fm, demo_run, folder
 
