@@ -192,8 +192,10 @@ def correlation(long, samples, min_shared=3):
 
 def coefficients_of_variation(wide, conditions):
     """CV (in percent) of every entity within each condition, from the raw
-    intensities of ``wide`` (one column per sample): ``condition``, ``cv``.
-    Only entities with values in at least two samples of a condition."""
+    intensities of ``wide`` (one column per sample): ``condition``, ``cv``,
+    and ``ConsensusIndex`` when ``wide`` has it, so a picked entity can be
+    marked. Only entities with values in at least two samples of a condition."""
+    keep = ['ConsensusIndex'] if 'ConsensusIndex' in wide.columns else []
     by_condition = {}
     for sample, condition in conditions.items():
         if sample in wide.columns:
@@ -202,18 +204,18 @@ def coefficients_of_variation(wide, conditions):
     for condition, columns in sorted(by_condition.items()):
         if len(columns) < 2:
             continue
-        values = wide.select([
+        values = wide.select(*keep, *[
             pl.when(pl.col(c).cast(pl.Float64) > 0).then(pl.col(c).cast(pl.Float64)).alias(c) for c in columns
         ])
         stats = values.select(
-            pl.concat_list(columns).list.drop_nulls().alias('v'),
+            *keep, pl.concat_list(columns).list.drop_nulls().alias('v'),
         ).with_columns(
             pl.col('v').list.len().alias('n'),
             pl.col('v').list.mean().alias('mean'),
             pl.col('v').list.std().alias('sd'),
         ).filter((pl.col('n') >= 2) & (pl.col('mean') > 0))
         parts.append(stats.select(
-            pl.lit(condition).alias('condition'), (100.0 * pl.col('sd') / pl.col('mean')).alias('cv'),
+            *keep, pl.lit(condition).alias('condition'), (100.0 * pl.col('sd') / pl.col('mean')).alias('cv'),
         ))
     if not parts:
         return pl.DataFrame(schema={'condition': pl.Utf8, 'cv': pl.Float64})
