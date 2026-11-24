@@ -15,6 +15,7 @@ Viewer lists a comparison next to the runs it links. Stored names:
 Streamlit-free.
 """
 
+import copy
 import hashlib
 import json
 
@@ -86,13 +87,34 @@ class QuantSession:
     def __init__(self, file_manager, dataset_id):
         self.file_manager = file_manager
         self.dataset_id = dataset_id
+        # What this session read from the cache. The Viewer makes one session
+        # per rerun and every component asks it for the same few results
+        # (settings, design, stamp, tables), so each is read once per rerun
+        # instead of once per component: on network storage every read is a
+        # round trip. A write through the session forgets what it read.
+        self._read = {}
+        self._found = {}
         self.manifest = self._get('quant_manifest')
 
     def _get(self, name, polars=False):
-        return self.file_manager.get_results(self.dataset_id, [name], use_polars=polars)[name]
+        key = (name, polars)
+        if key not in self._read:
+            self._read[key] = self.file_manager.get_results(self.dataset_id, [name], use_polars=polars)[name]
+        value = self._read[key]
+        # A polars frame (or lazy frame) is never changed in place; anything
+        # else (dicts of settings) is copied, so a caller cannot change what
+        # the next one reads.
+        return value if isinstance(value, (pl.LazyFrame, pl.DataFrame)) else copy.deepcopy(value)
 
     def exists(self, name):
-        return self.file_manager.result_exists(self.dataset_id, name)
+        if name not in self._found:
+            self._found[name] = self.file_manager.result_exists(self.dataset_id, name)
+        return self._found[name]
+
+    def _store(self, name, data):
+        self.file_manager.store_data(self.dataset_id, name, data)
+        self._read.clear()
+        self._found.clear()
 
     # -- what is stored -------------------------------------------------
     @property
@@ -165,10 +187,10 @@ class QuantSession:
         return self._get(f'quant_{level or self.level}_annotations', polars=True)
 
     def save_design(self, design):
-        self.file_manager.store_data(self.dataset_id, 'quant_design', design)
+        self._store('quant_design', design)
 
     def save_settings(self, settings):
-        self.file_manager.store_data(self.dataset_id, 'quant_settings', settings)
+        self._store('quant_settings', settings)
 
     # -- the comparison chain --------------------------------------------
     def problem(self):
@@ -231,8 +253,8 @@ class QuantSession:
             'zscores': quant_compare.zscores(statistics, samples),
         }
         for result, frame in results.items():
-            self.file_manager.store_data(self.dataset_id, self.result_name(result, level), frame)
-        self.file_manager.store_data(self.dataset_id, name, stamp)
+            self._store(self.result_name(result, level), frame)
+        self._store(name, stamp)
         return None
 
     def result(self, name, level=None):

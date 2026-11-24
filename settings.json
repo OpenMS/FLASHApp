@@ -1,7 +1,7 @@
 {
     "app-name": "FLASHApp",
     "github-user": "OpenMS",
-    "version": "2.0.0-alpha.11",
+    "version": "2.0.0-alpha.13",
     "repository-name": "FLASHApp",
     "legal_links": {
         "impressum": "https://openms.de/impressum",
@@ -20,7 +20,8 @@
         "matomo": {
             "enabled": true,
             "url": "https://cdn.matomo.cloud/openms.matomo.cloud",
-            "tag": "yDGK8bfY"
+            "tag": "yDGK8bfY",
+            "track_downloads": true
         }
     },
     "contributors": {
@@ -42,7 +43,10 @@
         "source_dirs": [
             "example-data/workspaces"
         ],
-        "new_workspace": "default"
+        "new_workspace": "default",
+        "link_folders": [
+            "cache/files/*"
+        ]
     },
     "developer_mode": {
         "password_hash": "scrypt$32768$8$1$CwnCVY6ank4Z/A/DPYwE0w==$+dGcNOheTng6nFMqkp9qBGk0oChkVmdOyn/b5Mer7Uc="

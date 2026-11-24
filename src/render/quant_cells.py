@@ -22,16 +22,27 @@ from openms_insight import ClusteredHeatmap, Heatmap, PCAPlot, SeriesPlot, Table
 from src.parse import differential as diff
 from src.quant import qc, sources
 from src.quant.session import LEVEL_NAMES, STATUS_LABELS
-from src.render import comparison_plots, go_terms, insight_data, teaching
+from src.render import go_terms, insight_data, teaching
 from src.render.render import RECLICK, MissingResult, _component, _fixed
 from src.render.series import show_series
-from src.viz import comparison_steps as steps
-from src.viz.heatmap import clustered_settings
-from src.viz.pca import most_variable, pca_settings, sample_metadata
+from src.viz.identification import (identification_frequency, identifications_across_runs,
+                                    identifications_per_run, shared_identifications)
 from src.viz.plumbing import group_colors as condition_colors
-from src.viz.comparison_table import comparison_columns, comparison_table
-from src.viz.profile import picked_set, profile_settings, profile_table
-from src.viz.volcano import volcano_settings
+from src.viz.quantification import (entry_per_run, feature_intensity, feature_map, feature_profile, feature_table,
+                                    labels_found, match_quality, replicate_cv, reporter_intensities,
+                                    reporter_ratios, sample_correlation, steps, total_intensity)
+from src.viz.quantification.abundance_profile import picked_set, profile_settings, profile_table
+from src.viz.quantification.clustered_heatmap import clustered_settings
+from src.viz.quantification.comparison_table import comparison_columns, comparison_table
+from src.viz.quantification.imputed_values import show_imputed_values
+from src.viz.quantification.missing_values import show_missing_values
+from src.viz.quantification.normalization import show_normalization
+from src.viz.quantification.pca import most_variable, pca_settings, sample_metadata
+from src.viz.quantification.pvalue_histogram import show_pvalues
+from src.viz.quantification.volcano import volcano_settings
+
+# The row of an entity in the level shown, shared by the cells of a comparison
+CONSENSUS = 'consensus'
 
 
 # OpenDDA's cut-offs for calling a change
@@ -50,7 +61,7 @@ def comparison_groups(conditions):
 
 
 def _plot(session, name, spec, key, state_manager, height):
-    """Draw a plot of src/render/comparison_plots.py (its settings and ``data``)."""
+    """Draw a plot of the library (its settings and ``data``)."""
     show_series(spec.pop('data'), name, session.file_manager.cache_path, key, height=height,
                 state_manager=state_manager, **spec)
 
@@ -166,7 +177,7 @@ def build_summary(session, state_manager, key, height=None):
     del state_manager, height
     if not _ready(session):
         return
-    reference, compared = comparison_groups(session.conditions().values())
+    _, compared = comparison_groups(session.conditions().values())
     fc, padj = _cutoffs(session)
     statistics = session.result('statistics').collect()
     tested = statistics.drop_nulls(['log2FC', 'p-adj'])
@@ -344,22 +355,13 @@ def build_runs(session, state_manager, key, height):
         _sources(session, 'statistics') + [f'quant_{session.level}'],
         lambda: dict(
             data=_runs_frame(session),
-            column_definitions=[
-                {'title': _sample(session), 'field': 'Run', 'sorter': 'string'},
-                {'title': 'Condition', 'field': 'Condition', 'sorter': 'string'},
-                {'title': 'Abundance', 'field': 'Abundance', 'sorter': 'number',
-                 'formatter': 'scientific', 'formatterParams': {'precision': 3},
-                 'headerTooltip': 'Raw signal (intensity × seconds), before normalization; summed over the features of a proteoform or protein.'},
-                {'title': 'Status', 'field': 'Status', 'sorter': 'string',
-                 'headerTooltip': 'detected: FLASHDeconv found it in this run. transferred: measured where another run found it (match between runs, FDR 1%); identified: and a PrSM of this run confirms it.'},
-                {'title': 'Match score', 'field': 'MatchScore', 'sorter': 'number', **_fixed(3)},
-                {'title': 'Match q-value', 'field': 'MatchQvalue', 'sorter': 'number', **_P},
-            ],
-            title=f'Selected {_noun(session)} per {_sample(session).lower()}', index_field='RowIndex',
-            filters={'consensus': 'ConsensusIndex'}, go_to_fields=[], reclick=RECLICK, pagination=False,
+            **entry_per_run.settings(
+                _noun(session), _sample(session), selection=CONSENSUS,
+                abundance_help='Raw signal (intensity × seconds), before normalization; summed over the features of a proteoform or protein.',
+                status_help='detected: FLASHDeconv found it in this run. transferred: measured where another run found it (match between runs, FDR 1%); identified: and a PrSM of this run confirms it.',
+            ),
         ),
-        # Few rows of several columns: all of them shown, never folded into rows
-        render={'collapse_columns': False},
+        render=entry_per_run.RENDER,
     )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
@@ -432,7 +434,7 @@ def build_id_counts(session, state_manager, key, height=None):
     level = _id_level(session)
     counts = qc.counts_per_run(session.long(level).collect(), session.runs)
     _plot(session, f'quant-id-counts-{level}',
-          comparison_plots.counts_per_run(counts, _id_noun(session, level), _sample(session)),
+          identifications_per_run.settings(counts, _id_noun(session, level), _sample(session)),
           key, state_manager, height)
 
 
@@ -441,7 +443,7 @@ def build_id_frequency(session, state_manager, key, height=None):
     level = _id_level(session)
     table = qc.frequency(session.long(level).collect(), session.runs)
     _plot(session, f'quant-id-frequency-{level}',
-          comparison_plots.frequency(table, _id_noun(session, level), _sample(session)), key, state_manager, height)
+          identification_frequency.settings(table, _id_noun(session, level), _sample(session)), key, state_manager, height)
 
 
 def build_id_overlap(session, state_manager, key, height):
@@ -457,12 +459,12 @@ def build_id_overlap(session, state_manager, key, height):
         ClusteredHeatmap, f'quant_id_overlap_{level}', session.file_manager, session.dataset_id,
         [f'quant_{level}', 'quant_design', 'quant_settings'],
         lambda: dict(
-            data=qc.overlap(session.long(level).collect(), runs).lazy(), id_col='Sample',
-            metadata=_metadata(conditions) if conditions else None,
-            title=f'Shared {_id_noun(session, level)} (% of those either {_sample(session).lower()} detected)',
-            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Shared (%)',
-            colorscale='Blues', reversescale=True,
-            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            data=qc.overlap(session.long(level).collect(), runs).lazy(),
+            **shared_identifications.settings(
+                _id_noun(session, level), _sample(session),
+                metadata=_metadata(conditions) if conditions else None,
+                group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            ),
         ),
         required=[f'quant_{level}'],
     )(key=key, state_manager=state_manager, height=height, help=teaching.help())
@@ -474,32 +476,15 @@ def build_id_table(session, state_manager, key, height):
     runs = session.runs
     table = qc.identification_table(session.long(level).collect(), session.annotations(level).collect(), runs)
     noun = _id_noun(session, level)
-    columns = [{'title': noun[:-1].capitalize() if noun.endswith('s') else noun, 'field': 'label', 'sorter': 'string'}]
-    if 'protein_label' in table.columns and level == 'proteoform':
-        columns.append({'title': 'Protein', 'field': 'protein_label', 'sorter': 'string'})
-    if 'mass' in table.columns:
-        columns.append({'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)})
-    if 'proteoforms' in table.columns:
-        columns.append({'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number'})
-    if 'PrSMs' in table.columns:
-        columns.append({'title': 'PrSMs', 'field': 'PrSMs', 'sorter': 'number',
-                        'headerTooltip': 'Spectra (PrSMs) that identify it, over all runs.'})
-    columns += [
-        {'title': 'Detected', 'field': 'Detected', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s that found it themselves.'},
-        {'title': 'Found', 'field': 'Found', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s that found it themselves or matched it from another one.'},
-    ]
-    for run in runs:
-        columns.append({'title': run, 'field': run, 'sorter': 'string',
-                        'headerTooltip': 'detected; matched, identified (match between runs, identified in the run); matched (match between runs); missing'})
+    columns = identifications_across_runs.columns(
+        table.columns, runs, noun, _sample(session), with_protein=level == 'proteoform')
     _component(
         Table, f'quant_id_table_{level}', session.file_manager, session.dataset_id,
         [f'quant_{level}', f'quant_{level}_annotations', 'quant_design', 'quant_settings'],
         lambda: dict(
-            data=table.lazy(), column_definitions=columns, index_field='RowIndex',
-            title=f'{LEVEL_NAMES[level]} across the {_sample(session).lower()}s',
-            go_to_fields=['label'], row_overview='{label}', interactivity={'quant_form': 'RowIndex'},
+            data=table.lazy(),
+            **identifications_across_runs.settings(
+                columns, f'{LEVEL_NAMES[level]} across the {_sample(session).lower()}s', selection='quant_form'),
         ),
         required=[f'quant_{level}', f'quant_{level}_annotations'],
     )(key=key, state_manager=state_manager, height=height, help=teaching.help())
@@ -512,7 +497,7 @@ def build_totals(session, state_manager, key, height=None):
     mean the samples were not loaded alike (normalization corrects for it)."""
     conditions = session.conditions()
     frame = qc.totals(session.long().collect(), session.runs)
-    _plot(session, 'quant-totals', comparison_plots.totals(
+    _plot(session, 'quant-totals', total_intensity.settings(
         frame, condition_colors(set(conditions.values())), conditions, _sample(session)), key, state_manager, height)
     unlike = qc.unlike_replicates(frame, conditions)
     if unlike:
@@ -533,12 +518,12 @@ def build_correlation(session, state_manager, key, height):
         ClusteredHeatmap, f'quant_correlation_{level}', session.file_manager, session.dataset_id,
         [f'quant_{level}', 'quant_design', 'quant_settings'],
         lambda: dict(
-            data=qc.correlation(session.long(level).collect(), runs).lazy(), id_col='Sample',
-            metadata=_metadata(conditions) if conditions else None,
-            title=f'Correlation of the {_sample(session).lower()}s (log2 intensities of {_noun(session, True)})',
-            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Pearson r',
-            colorscale='Viridis', reversescale=False,
-            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            data=qc.correlation(session.long(level).collect(), runs).lazy(),
+            **sample_correlation.settings(
+                _noun(session, True), _sample(session),
+                metadata=_metadata(conditions) if conditions else None,
+                group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            ),
         ),
         required=[f'quant_{level}'],
     )(key=key, state_manager=state_manager, height=height, help=teaching.help())
@@ -554,8 +539,8 @@ def build_cv(session, state_manager, key, height=None):
     if frame.height == 0:
         st.info('A CV needs at least two replicates of a condition.')
         return
-    _plot(session, 'quant-cv', comparison_plots.coefficients_of_variation(
-        frame, condition_colors(set(conditions.values()))), key, state_manager, height)
+    _plot(session, 'quant-cv', replicate_cv.settings(
+        frame, condition_colors(set(conditions.values())), selection=CONSENSUS), key, state_manager, height)
 
 
 def build_match_quality(session, state_manager, key, height=None):
@@ -566,7 +551,7 @@ def build_match_quality(session, state_manager, key, height=None):
         st.info('No values were matched between runs: the samples were measured together '
                 '(isobaric labels) or every run found every feature itself.')
         return
-    _plot(session, 'quant-match-quality', comparison_plots.match_quality(frame, session.runs, _sample(session)),
+    _plot(session, 'quant-match-quality', match_quality.settings(frame, session.runs, _sample(session)),
           key, state_manager, height)
 
 
@@ -585,7 +570,7 @@ def build_missing_values(session, state_manager, key, height=None):
     entries with gaps."""
     if not _ready(session):
         return
-    steps.show_missing_values(
+    show_missing_values(
         _frame(session, 'filtered'), list(session.conditions()), 'quant-missing-values',
         x_label='Mean log2 intensity', **_step(session, key, state_manager, height),
     )
@@ -595,7 +580,7 @@ def build_imputed_values(session, state_manager, key, height=None):
     """The values imputed for the gaps against the measured ones."""
     if not _ready(session):
         return
-    steps.show_imputed_values(
+    show_imputed_values(
         _frame(session, 'filtered'), _frame(session, 'imputed'), list(session.conditions()),
         'quant-imputed-values', x_label='log2 intensity', **_step(session, key, state_manager, height),
     )
@@ -605,7 +590,7 @@ def build_normalization(session, state_manager, key, height=None):
     """Intensity distribution of each sample before and after normalization."""
     if not _ready(session):
         return
-    steps.show_normalization(
+    show_normalization(
         _frame(session, 'imputed'), _frame(session, 'normalized_wide'), list(session.conditions()),
         session.settings['postproc-transform'] != 'None', 'quant-run-distributions',
         sample_label=_sample(session), y_label='log2 intensity', **_step(session, key, state_manager, height),
@@ -616,7 +601,7 @@ def build_pvalues(session, state_manager, key, height=None):
     """Distribution of the p-values of the group comparison."""
     if not _ready(session):
         return
-    steps.show_pvalues(
+    show_pvalues(
         _frame(session, 'statistics'), 'quant-p-values', noun=_noun(session, True).capitalize(),
         **_step(session, key, state_manager, height),
     )
@@ -837,7 +822,7 @@ def build_reporter_intensities(session, state_manager, key, height=None):
     ions, channels = got
     conditions = session.conditions()
     presence = sources.channel_presence(ions, channels)
-    _plot(session, 'quant-reporter-intensities', comparison_plots.reporter_intensities(
+    _plot(session, 'quant-reporter-intensities', reporter_intensities.settings(
         presence, ions, condition_colors(set(conditions.values())), conditions), key, state_manager, height)
     low = [f"{r['channel']} ({r['sample']})" for r in presence.iter_rows(named=True) if r['present'] < 50]
     if low:
@@ -857,7 +842,7 @@ def build_reporter_ratios(session, state_manager, key, height=None):
     reference = channels[0]
     ratios = sources.reporter_ratios(ions, reference)
     names = dict(zip(channels, session.runs))
-    _plot(session, 'quant-reporter-ratios', comparison_plots.reporter_ratios(
+    _plot(session, 'quant-reporter-ratios', reporter_ratios.settings(
         ratios, f'{reference} ({names.get(reference, reference)})', [(c, names.get(c, c)) for c in channels[1:]]),
         key, state_manager, height)
 
@@ -868,7 +853,7 @@ def build_reporter_labels(session, state_manager, key, height=None):
     if got is None:
         return
     ions, channels = got
-    _plot(session, 'quant-reporter-labels', comparison_plots.labels_found(
+    _plot(session, 'quant-reporter-labels', labels_found.settings(
         sources.labels_found(ions, channels), _plex_label(session)), key, state_manager, height)
 
 
@@ -927,12 +912,8 @@ def build_feature_map(session, state_manager, key, height):
         Heatmap, 'quant_feature_map', session.file_manager, session.dataset_id,
         ['quant_feature', 'quant_feature_annotations'],
         lambda: dict(
-            data=overview.filter(pl.col('rt').is_not_null() & pl.col('mass').is_not_null()).lazy(),
-            x_column='rt', y_column='mass', intensity_column='Detected', log_scale=False,
-            interactivity={'quant_feature': 'RowIndex'}, highlight={'quant_feature': 'RowIndex'},
-            title=f'Consensus features (colour: {_sample(session).lower()}s that detected them)',
-            x_label='Retention time (min)', y_label='Monoisotopic mass (Da)',
-            intensity_label=f'Detected in ({_sample(session).lower()}s)', colorscale='Viridis',
+            data=feature_map.rows(overview).lazy(),
+            **feature_map.settings(_sample(session), selection='quant_feature'),
         ),
     )(key=key, state_manager=state_manager, height=height, help=teaching.help())
     del long
@@ -942,44 +923,20 @@ def build_feature_intensity(session, state_manager, key, height=None):
     """Intensity of the features each run detected and of those matched into it."""
     long, overview = _features(session)
     values = sources.feature_values(long, overview, session.runs)
-    _plot(session, 'quant-feature-intensity', comparison_plots.feature_intensity(
-        values, session.runs, _sample(session)), key, state_manager, height)
+    _plot(session, 'quant-feature-intensity', feature_intensity.settings(
+        values, session.runs, _sample(session), selection='quant_feature'), key, state_manager, height)
 
 
 def build_feature_table(session, state_manager, key, height):
     """Every consensus feature: mass, retention time, charges and how many
     runs detected it, matched it or miss it."""
     _, overview = _features(session)
-    columns = [
-        {'title': 'Feature', 'field': 'label', 'sorter': 'string'},
-        {'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)},
-        {'title': 'RT (min)', 'field': 'rt', 'sorter': 'number', **_fixed(2)},
-        {'title': 'Charges', 'field': 'charges', 'sorter': 'string'},
-        {'title': 'Detected', 'field': 'Detected', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s that detected it themselves.'},
-        {'title': 'Matched', 'field': 'Matched', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s it was matched into (match between runs).'},
-        {'title': 'Missing', 'field': 'Missing', 'sorter': 'number'},
-        {'title': 'Proteoform', 'field': 'proteoform', 'sorter': 'string'},
-    ]
-    frame = overview
-    if 'MinCharge' in frame.columns and 'MaxCharge' in frame.columns:
-        frame = frame.with_columns(
-            pl.when(pl.col('MinCharge') == pl.col('MaxCharge')).then(pl.col('MinCharge').cast(pl.Utf8))
-            .otherwise(pl.col('MinCharge').cast(pl.Utf8) + '–' + pl.col('MaxCharge').cast(pl.Utf8))
-            .alias('charges'),
-        )
-    else:
-        frame = frame.with_columns(pl.lit(None, pl.Utf8).alias('charges'))
-    if 'label' not in frame.columns:
-        frame = frame.with_columns(pl.col('id').alias('label'))
+    frame = feature_table.rows(overview)
     _component(
         Table, 'quant_feature_table', session.file_manager, session.dataset_id,
         ['quant_feature', 'quant_feature_annotations'],
         lambda: dict(
-            data=frame.lazy(), column_definitions=columns, index_field='RowIndex',
-            title='Consensus features', go_to_fields=['label'], interactivity={'quant_feature': 'RowIndex'},
-            reclick=RECLICK, reset_sort=True,
+            data=frame.lazy(), **feature_table.settings(_sample(session), selection='quant_feature'),
         ),
     )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
@@ -987,23 +944,12 @@ def build_feature_table(session, state_manager, key, height):
 def build_feature_profile(session, state_manager, key, height):
     """The picked consensus feature in every run: detected, matched or missing."""
     long, overview = _features(session)
-    values = sources.feature_values(long, overview, session.runs).with_columns(
-        (2 ** pl.col('log2_intensity')).alias('intensity'),
-    )
-    columns = [
-        {'title': _sample(session), 'field': 'Run', 'sorter': 'string'},
-        {'title': 'Found', 'field': 'Found', 'sorter': 'string'},
-        {'title': 'Intensity', 'field': 'intensity', 'sorter': 'number', **_P},
-        {'title': 'log2 intensity', 'field': 'log2_intensity', 'sorter': 'number', **_fixed(2)},
-    ]
+    values = feature_profile.rows(sources.feature_values(long, overview, session.runs))
     _component(
         Table, 'quant_feature_profile', session.file_manager, session.dataset_id,
         ['quant_feature', 'quant_feature_annotations'],
         lambda: dict(
-            data=values.with_row_index('ValueIndex').with_columns(pl.col('ValueIndex').cast(pl.Int64)).lazy(),
-            column_definitions=columns, index_field='ValueIndex',
-            title=f'Selected feature per {_sample(session).lower()}', filters={'quant_feature': 'RowIndex'},
-            pagination=False, default_row_selects=False,
+            data=values.lazy(), **feature_profile.settings(_sample(session), selection='quant_feature'),
         ),
     )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 

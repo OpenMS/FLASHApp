@@ -107,6 +107,14 @@ def test_the_viewer_opens_the_matcher_page_with_its_state():
     assert "MATCHER_PAGE = 'content/Tools/FragmentMatcher.py'" in viewer
 
 
+
+def test_the_matcher_compares_proteoforms_only_once_masses_are_stored():
+    # A fresh workspace has no masses: the comparison of proteoforms reads
+    # the stored input, so it waits for one (it raised on None before)
+    root = Path(__file__).resolve().parent.parent
+    matcher = (root / 'content' / 'Tools' / 'FragmentMatcher.py').read_text()
+    assert "if stored is not None and hasattr(view, 'set_fragment_matches_proteoform'):" in matcher
+
 def _table_rows(fm, table):
     """The data each spectrum table is drawn from, as render.py builds it."""
     from src.render import hierarchy_data

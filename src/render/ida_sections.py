@@ -502,6 +502,30 @@ RULES.extend([
 ])
 
 
+def etd_scans(method) -> list:
+    """The scans and sweeps FLASHIda sends with an ETD-family activation (ETD,
+    EThcD, ETciD), by name. ETD needs the reagent set up in Tune, which a
+    method cannot do, so the Acquisition page warns about these methods."""
+    if not isinstance(method, dict):
+        return []
+    sent = {
+        'ms2': True,
+        'ms3': value(method, 'identification.characterization.mode') is not None,
+        'ms2_quant': bool(value(method, 'quantification.enabled')),
+        'ms3_quant': (bool(value(method, 'quantification.enabled'))
+                      and value(method, 'quantification.scan') in ('ms3', 'both')),
+    }
+    found = [_SCAN_NAMES[scan] for scan, on in sent.items()
+             if on and value(method, f'ms_settings.{scan}.activation') in ETD_ACTIVATIONS]
+    for label, prefix in SWEEPS.items():
+        scan = 'ms3' if prefix.startswith('identification.') else 'ms2'
+        if ((scan == 'ms2' or sent['ms3'])
+                and value(method, f'{prefix}.metric') not in (None, 'none')
+                and any(a in ETD_ACTIVATIONS for a in _swept(method, prefix, scan))):
+            found.append(label)
+    return found
+
+
 _G = TABS
 
 

@@ -318,3 +318,45 @@ def test_edit_comparison(tmp_path):
     at.button(key="c_comparison_button").click().run()
     at.button(key="c_comparison_reset").click().run()
     assert at.session_state["reset"] and at.session_state["c_comparison_open"]
+
+
+def _picks_spec(pick=None):
+    from src.layout_manager.viewer import ViewerSpec
+    spec = ViewerSpec.__new__(ViewerSpec)
+    spec.key, spec.datasets, spec.members, spec.pick = "v", ["a", "b", "c"], None, pick
+    return spec
+
+
+def test_link_sets_every_experiment_and_a_pick_is_seen(monkeypatch):
+    from src.layout_manager import viewer
+    state = {}
+    monkeypatch.setattr(viewer.st, "session_state", state)
+    viewer._apply_picks(_picks_spec(pick="c"), ["b", None, "a"])
+    assert state[viewer._selection_key("v", 0)] == "b"
+    assert viewer._selection_key("v", 1) not in state
+    assert state[viewer._selection_key("v", 2)] == "a"
+    # The pick of another page lost to the link, but is not taken for a new one later
+    state[viewer._selection_key("v", 0)] = "b"
+    viewer._apply_picks(_picks_spec(pick="c"), [])
+    assert state[viewer._selection_key("v", 0)] == "b"
+    viewer._apply_picks(_picks_spec(pick="a"), [])
+    assert state[viewer._selection_key("v", 0)] == "a"
+
+
+def test_a_link_to_a_kind_without_links_is_applied_once(tmp_path):
+    """A link naming a dataset whose kind has no links is used up on the first run,
+    so the user's later picks stay."""
+    from src.layout_manager.layout import link_params
+    source = _APP.format(root=str(tmp_path), mode="switch").replace(
+        'buttons=lambda ctx: st.button(f"run button', 'link=True, buttons=lambda ctx: st.button(f"run button')
+    at = AppTest.from_string(source)
+    for name, value in link_params("plots", [{"dataset": "cmp"}]).items():
+        at.query_params[name] = value
+    at.run()
+    assert not at.exception
+    assert _texts(at) == ["comparison grid cmp [['plot']]"]
+    assert not any(name in at.query_params for name in link_params("plots"))
+    at.selectbox(key="v_experiment_0_select").set_value("r3").run()
+    assert _texts(at) == ["0:run:r3:None:plot"]
+    at.run()
+    assert _texts(at) == ["0:run:r3:None:plot"]
