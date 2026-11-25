@@ -56,6 +56,24 @@ patches:
       - op: replace
         path: /spec/resources/requests/storage
         value: 50Gi
+  # The worker spread assertion needs at least two workers to observe
+  # anything; production may run one (memory-tier-high) or more than a
+  # runner can hold. CI runs two.
+  - target:
+      kind: Deployment
+      name: rq-worker
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  # Production runs 10 Streamlit pods; a 4-cpu runner holds two.
+  - target:
+      kind: Deployment
+      name: streamlit
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
   - path: worker-resources.yaml
     target:
       kind: Deployment
