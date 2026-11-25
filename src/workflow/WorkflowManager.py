@@ -13,12 +13,12 @@ from .pid_files import reap
 from .process_state import local_workflow_running, owned_workflow_running, pid_markers, prune_exited_marker, register_process_marker, signal_owned_process
 from .file_lock import file_lock
 import multiprocessing
+import streamlit as st
 import shutil
 import subprocess
 import sys
 import uuid
 import traceback
-import streamlit as st
 
 # The app folder, which holds src/. Put first on sys.path in the workflow
 # process (see _start_workflow_local).
@@ -38,6 +38,10 @@ class WorkflowManager:
     # instead of overwriting <workflow_dir>/results/. Set to True in a subclass
     # to opt in, and read and write results through self.results_dir.
     multi_run = False
+    # Keep the result store (file_manager.store_data / store_file) in
+    # <workspace>/cache, shared by the workspace's workflows, instead of
+    # <workflow_dir>/cache.
+    share_cache = False
     # The page that shows a running start (its execution section), opened by
     # the Start button that settings adding files to an experiment draw on the
     # configure page. None: that button stays on the configure page.
@@ -57,9 +61,6 @@ class WorkflowManager:
     # run has finished; next_steps() links both.
     results_page = None
     export_page = None
-    # Keep the result store in <workspace>/cache, shared by the workspace's
-    # workflows; the worker reads this from the class.
-    share_cache = False
 
     # Core workflow logic using the above classes
     def __init__(self, name: str, workspace: str):
@@ -953,8 +954,17 @@ class WorkflowManager:
             exclude=exclude, results_dir=self.results_dir
         )
 
+    def analysis_section(self) -> None:
+        """
+        The "Your analysis" box of Describe experiment: input files, what to
+        do with them and the summary of a start (see describe_ui). Drawn by
+        the Describe experiment page before show_parameter_section().
+        """
+        pass
+
     def upload(self) -> None:
         """
+        Optional, for apps that keep an upload page.
         Add your file upload widgets here
         """
         ###################################

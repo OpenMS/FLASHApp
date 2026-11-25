@@ -240,6 +240,46 @@ def test_all_files_except_leaves_data_out(tmp_path):
     assert set(files) == {"tsv"}
 
 
+def _linked_demo(tmp_path):
+    """A workspace whose dataset folder ``run1`` is a link to a demo's folder."""
+    fm = _fm(tmp_path)
+    fm.store_data("run1", "x", 1)
+    stored = fm.get_result_path("run1", "x")
+    demo = Path(tmp_path, "demo", "run1")
+    demo.parent.mkdir()
+    stored.parent.rename(demo)
+    stored.parent.symlink_to(demo, target_is_directory=True)
+    return fm, demo
+
+
+def test_writing_into_a_linked_dataset_leaves_the_demo(tmp_path):
+    fm, demo = _linked_demo(tmp_path)
+    before = sorted(p.name for p in demo.iterdir())
+    fm.store_data("run1", "x", 2)
+    fm.store_data("run1", "y", 3)
+    folder = fm.dataset_dir("run1")
+    assert not folder.is_symlink()
+    assert sorted(p.name for p in demo.iterdir()) == before
+    assert fm.get_results("run1", ["x", "y"]) == {"x": 2, "y": 3}
+
+
+def test_removing_a_linked_dataset_keeps_the_demo(tmp_path):
+    fm, demo = _linked_demo(tmp_path)
+    fm.remove_results("run1")
+    assert demo.is_dir() and any(demo.iterdir())
+    assert fm.get_results_list(["x"]) == []
+
+
+def test_storing_a_file_onto_itself_keeps_it(tmp_path):
+    fm = _fm(tmp_path)
+    folder = fm.dataset_dir("run1")
+    folder.mkdir(parents=True)
+    target = Path(folder, "out.tsv")
+    target.write_text("x")
+    fm.store_file("run1", "out", target)
+    assert Path(fm.get_results("run1", "out")["out"]).read_text() == "x"
+
+
 def test_a_linked_index_is_copied_before_writing(tmp_path):
     demo = _fm(Path(tmp_path, "demo"))
     demo.store_data("run1", "x", 1)
