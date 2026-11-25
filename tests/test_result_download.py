@@ -10,7 +10,7 @@ from src.workflow.FileManager import FileManager
 
 
 def _manager(tmp_path):
-    fm = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    fm = FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
     for run in ('run_a', 'run_b'):
         for tag, name in (('out_tsv', 'out.tsv'), ('spec1_tsv', 'spec1.tsv')):
             fm.store_file(run, tag, BytesIO(f'{run} {tag}'.encode()), file_name=name)

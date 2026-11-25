@@ -12,7 +12,7 @@ DEMO = Path('example-data', 'workspaces', 'default')
 
 
 def _file_manager(tmp_path):
-    return FileManager(tmp_path, DEMO / 'cache')
+    return FileManager(tmp_path, cache_path=DEMO / 'cache')
 
 
 def test_components_name_the_analysis_they_need():
@@ -134,7 +134,7 @@ def test_execution_reuses_the_runs_deconvolution(tmp_path):
     workflow = object.__new__(TopDownWorkflow)  # as tasks.execute_workflow builds it
     workflow.workflow_dir = Path(tmp_path, 'flashtnt')
     workflow.workflow_dir.mkdir()
-    workflow.file_manager = FileManager(tmp_path, cache)
+    workflow.file_manager = FileManager(tmp_path, cache_path=cache)
     assert workflow._reused_deconvolution(1) == [None]
 
     Path(workflow.workflow_dir, 'last-follow-up.json').write_text(json.dumps(
@@ -156,7 +156,7 @@ def test_more_files_compare_the_added_files_with_the_run(tmp_path):
 
     mzml = Path(tmp_path, 'a.mzML')
     mzml.write_text('')
-    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    file_manager = FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
     record = run_record(True, analysis.LABEL_FREE, None, mzml, ('control', 1))
     file_manager.store_data('a_20260101-000000', 'analysis_settings', record)
 

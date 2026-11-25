@@ -20,4 +20,4 @@ def _own_file_manager(file_manager):
     A dialog reruns as a fragment, possibly on another script thread, and an
     SQLite connection may only be used by the thread that opened it.
     """
-    return FileManager(file_manager.workflow_dir, file_manager.cache_path)
+    return FileManager(file_manager.workflow_dir, cache_path=file_manager.cache_path)

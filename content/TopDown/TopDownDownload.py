@@ -7,6 +7,7 @@ from src.common.guide import next_steps, page_intro
 from src.common import result_download as rd
 from src.workflow.FileManager import FileManager
 from src.render.history_ui import history_section
+from src.render import cache_dirs  # noqa: F401  (viewer caches go with removed runs)
 from src import former_examples
 
 
@@ -31,7 +32,7 @@ page_intro(
 former_examples.add_example_results(Path(st.session_state['workspace'], 'cache'))
 file_manager = FileManager(
     st.session_state["workspace"],
-    Path(st.session_state['workspace'], 'cache')
+    cache_path=Path(st.session_state['workspace'], 'cache'),
 )
 experiments = rd.downloadable_runs(file_manager)
 

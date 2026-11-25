@@ -11,7 +11,7 @@
 #min_snr: [0.25, 0.25]
 ####################### Parameters ######################
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7798
 TITLE=Scan_7799
 SCANS=7799
@@ -53,7 +53,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7805
 TITLE=Scan_7806
 SCANS=7806
@@ -128,7 +128,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7810
 TITLE=Scan_7811
 SCANS=7811
@@ -188,7 +188,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7815
 TITLE=Scan_7816
 SCANS=7816
@@ -266,7 +266,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7820
 TITLE=Scan_7821
 SCANS=7821
@@ -334,7 +334,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7827
 TITLE=Scan_7828
 SCANS=7828
@@ -404,7 +404,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7832
 TITLE=Scan_7833
 SCANS=7833
@@ -463,7 +463,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7837
 TITLE=Scan_7838
 SCANS=7838
@@ -527,7 +527,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7844
 TITLE=Scan_7845
 SCANS=7845
@@ -599,7 +599,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7851
 TITLE=Scan_7852
 SCANS=7852
@@ -663,7 +663,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7856
 TITLE=Scan_7857
 SCANS=7857
@@ -721,7 +721,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7861
 TITLE=Scan_7862
 SCANS=7862
@@ -812,7 +812,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7868
 TITLE=Scan_7869
 SCANS=7869
@@ -895,7 +895,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7875
 TITLE=Scan_7876
 SCANS=7876
@@ -970,7 +970,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7880
 TITLE=Scan_7881
 SCANS=7881
@@ -1028,7 +1028,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7885
 TITLE=Scan_7886
 SCANS=7886
@@ -1107,7 +1107,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7892
 TITLE=Scan_7893
 SCANS=7893
@@ -1174,7 +1174,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7899
 TITLE=Scan_7900
 SCANS=7900
@@ -1244,7 +1244,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7904
 TITLE=Scan_7905
 SCANS=7905
@@ -1317,7 +1317,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7909
 TITLE=Scan_7910
 SCANS=7910
@@ -1351,7 +1351,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7914
 TITLE=Scan_7915
 SCANS=7915
@@ -1400,7 +1400,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7921
 TITLE=Scan_7922
 SCANS=7922
@@ -1482,7 +1482,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7926
 TITLE=Scan_7927
 SCANS=7927
@@ -1534,7 +1534,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7931
 TITLE=Scan_7932
 SCANS=7932
@@ -1576,7 +1576,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7936
 TITLE=Scan_7937
 SCANS=7937
@@ -1627,7 +1627,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7943
 TITLE=Scan_7944
 SCANS=7944
@@ -1697,7 +1697,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7948
 TITLE=Scan_7949
 SCANS=7949
@@ -1764,7 +1764,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7953
 TITLE=Scan_7954
 SCANS=7954
@@ -1824,7 +1824,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7960
 TITLE=Scan_7961
 SCANS=7961
@@ -1868,7 +1868,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7969
 TITLE=Scan_7970
 SCANS=7970
@@ -1942,7 +1942,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7974
 TITLE=Scan_7975
 SCANS=7975
@@ -2007,7 +2007,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7979
 TITLE=Scan_7980
 SCANS=7980
@@ -2080,7 +2080,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7984
 TITLE=Scan_7985
 SCANS=7985
@@ -2163,7 +2163,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7991
 TITLE=Scan_7992
 SCANS=7992
@@ -2239,7 +2239,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=7996
 TITLE=Scan_7997
 SCANS=7997
@@ -2307,7 +2307,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8001
 TITLE=Scan_8002
 SCANS=8002
@@ -2385,7 +2385,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8008
 TITLE=Scan_8009
 SCANS=8009
@@ -2459,7 +2459,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8015
 TITLE=Scan_8016
 SCANS=8016
@@ -2543,7 +2543,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8020
 TITLE=Scan_8021
 SCANS=8021
@@ -2601,7 +2601,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8025
 TITLE=Scan_8026
 SCANS=8026
@@ -2672,7 +2672,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8032
 TITLE=Scan_8033
 SCANS=8033
@@ -2748,7 +2748,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8039
 TITLE=Scan_8040
 SCANS=8040
@@ -2829,7 +2829,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8044
 TITLE=Scan_8045
 SCANS=8045
@@ -2885,7 +2885,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8049
 TITLE=Scan_8050
 SCANS=8050
@@ -2959,7 +2959,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8056
 TITLE=Scan_8057
 SCANS=8057
@@ -3043,7 +3043,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8063
 TITLE=Scan_8064
 SCANS=8064
@@ -3125,7 +3125,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8068
 TITLE=Scan_8069
 SCANS=8069
@@ -3193,7 +3193,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8073
 TITLE=Scan_8074
 SCANS=8074
@@ -3267,7 +3267,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8078
 TITLE=Scan_8079
 SCANS=8079
@@ -3343,7 +3343,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8085
 TITLE=Scan_8086
 SCANS=8086
@@ -3429,7 +3429,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8090
 TITLE=Scan_8091
 SCANS=8091
@@ -3479,7 +3479,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8095
 TITLE=Scan_8096
 SCANS=8096
@@ -3552,7 +3552,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8100
 TITLE=Scan_8101
 SCANS=8101
@@ -3637,7 +3637,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8107
 TITLE=Scan_8108
 SCANS=8108
@@ -3708,7 +3708,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8112
 TITLE=Scan_8113
 SCANS=8113
@@ -3772,7 +3772,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8117
 TITLE=Scan_8118
 SCANS=8118
@@ -3845,7 +3845,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8122
 TITLE=Scan_8123
 SCANS=8123
@@ -3934,7 +3934,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8131
 TITLE=Scan_8132
 SCANS=8132
@@ -4029,7 +4029,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8136
 TITLE=Scan_8137
 SCANS=8137
@@ -4085,7 +4085,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8141
 TITLE=Scan_8142
 SCANS=8142
@@ -4157,7 +4157,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8146
 TITLE=Scan_8147
 SCANS=8147
@@ -4242,7 +4242,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8153
 TITLE=Scan_8154
 SCANS=8154
@@ -4326,7 +4326,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8158
 TITLE=Scan_8159
 SCANS=8159
@@ -4391,7 +4391,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8163
 TITLE=Scan_8164
 SCANS=8164
@@ -4471,7 +4471,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8168
 TITLE=Scan_8169
 SCANS=8169
@@ -4559,7 +4559,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8175
 TITLE=Scan_8176
 SCANS=8176
@@ -4634,7 +4634,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8180
 TITLE=Scan_8181
 SCANS=8181
@@ -4697,7 +4697,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8185
 TITLE=Scan_8186
 SCANS=8186
@@ -4772,7 +4772,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8192
 TITLE=Scan_8193
 SCANS=8193
@@ -4865,7 +4865,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8199
 TITLE=Scan_8200
 SCANS=8200
@@ -4943,7 +4943,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8204
 TITLE=Scan_8205
 SCANS=8205
@@ -5000,7 +5000,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8209
 TITLE=Scan_8210
 SCANS=8210
@@ -5069,7 +5069,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8216
 TITLE=Scan_8217
 SCANS=8217
@@ -5139,7 +5139,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8223
 TITLE=Scan_8224
 SCANS=8224
@@ -5212,7 +5212,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8228
 TITLE=Scan_8229
 SCANS=8229
@@ -5282,7 +5282,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8233
 TITLE=Scan_8234
 SCANS=8234
@@ -5345,7 +5345,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8240
 TITLE=Scan_8241
 SCANS=8241
@@ -5414,7 +5414,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8247
 TITLE=Scan_8248
 SCANS=8248
@@ -5504,7 +5504,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8252
 TITLE=Scan_8253
 SCANS=8253
@@ -5577,7 +5577,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8257
 TITLE=Scan_8258
 SCANS=8258
@@ -5635,7 +5635,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8262
 TITLE=Scan_8263
 SCANS=8263
@@ -5727,7 +5727,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8269
 TITLE=Scan_8270
 SCANS=8270
@@ -5798,7 +5798,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8274
 TITLE=Scan_8275
 SCANS=8275
@@ -5865,7 +5865,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8279
 TITLE=Scan_8280
 SCANS=8280
@@ -5936,7 +5936,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8284
 TITLE=Scan_8285
 SCANS=8285
@@ -6017,7 +6017,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8291
 TITLE=Scan_8292
 SCANS=8292
@@ -6080,7 +6080,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8296
 TITLE=Scan_8297
 SCANS=8297
@@ -6152,7 +6152,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8301
 TITLE=Scan_8302
 SCANS=8302
@@ -6220,7 +6220,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8308
 TITLE=Scan_8309
 SCANS=8309
@@ -6306,7 +6306,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8315
 TITLE=Scan_8316
 SCANS=8316
@@ -6368,7 +6368,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8320
 TITLE=Scan_8321
 SCANS=8321
@@ -6434,7 +6434,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8325
 TITLE=Scan_8326
 SCANS=8326
@@ -6504,7 +6504,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8332
 TITLE=Scan_8333
 SCANS=8333
@@ -6576,7 +6576,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8339
 TITLE=Scan_8340
 SCANS=8340
@@ -6661,7 +6661,7 @@ LEVEL=1
 END IONS
 
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Isobaric_TMT6_Ecoli-Ratio.mzML
 SPECTRUM_ID=8344
 TITLE=Scan_8345
 SCANS=8345
