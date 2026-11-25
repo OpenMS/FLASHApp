@@ -36,6 +36,7 @@ from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
 from src.layout_manager import DatasetKind, ViewerSpec, show_dataset, show_viewer
 from src.render import missing_analysis
+from src.render.view_state import ViewState
 from src.render import quant_view
 from src.render import inspect_scan
 from src.render.tool_results import tool_results_button, tool_results_dialog
@@ -206,8 +207,11 @@ RUNS = DatasetKind(
         on_missing=lambda missing, component, c=ctx: c.request_analysis(missing, component),
         on_inspect=request_inspect,
     ),
-    # A view of one's own keeps each experiment's zoom and selection (📌)
-    states=lambda ctx: _state_manager(TOOL, selection_key(ctx.index), ctx.dataset),
+    # 🔗: a link that opens this view with each run and what is picked in it
+    link=True,
+    # A view of one's own keeps each experiment's zoom and selection (📌), without
+    # what the components publish themselves (the matched fragments)
+    states=lambda ctx: ViewState(_state_manager(TOOL, selection_key(ctx.index), ctx.dataset)),
     available=lambda ctx: missing_analysis.available(file_manager, ctx.dataset),
     analyses=missing_analysis.ANALYSES,
     unavailable_options=lambda missing, view, ctx: (
