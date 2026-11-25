@@ -52,6 +52,7 @@ from src.viz.features import (
     deconvolved_heatmap, isotope_envelope, mass_table, precursor_xic, qscore_fdr, run_qc, signal_noise_3d,
 )
 from src.viz.identification import (
+    identification_steps,
     _hierarchy, fragment_errors, identification_qc, mass_shift_histogram, mass_shift_table, prsm_mass_table,
     prsm_table, proteoform_heatmap, proteoform_prsms, proteoforms, protein_groups, score_distribution,
     sequence_view, structure_view, tag_table,
@@ -1132,18 +1133,6 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
 
 
 # Identification diagnostics (src/render/id_diagnosis.py)
-_DIAGNOSIS_COLUMNS = [
-    {'title': 'Step', 'field': 'step', 'hozAlign': 'left', 'widthGrow': 3, 'headerSort': False},
-    {'title': 'MS2 spectra', 'field': 'spectra', 'hozAlign': 'right', 'minWidth': 120, 'widthGrow': 1, 'headerSort': False},
-    {'title': '% of MS2', 'field': 'share', 'hozAlign': 'right', 'minWidth': 110, 'widthGrow': 1, 'headerSort': False,
-     **_fixed(1),
-     'headerTooltip': 'Share of the run\'s MS2 spectra left after this step.'},
-    {'title': 'Likely cause', 'field': 'cause', 'formatter': 'textarea', 'hozAlign': 'left', 'widthGrow': 7, 'headerSort': False,
-     'headerTooltip': 'Named where a step loses more spectra than is usual, the most telling '
-                      f'{id_diagnosis.MAX_CAUSES} at most.'},
-]
-
-
 def _render_id_diagnostics(file_manager, dataset_id, state_manager, key):
     """The run's MS2 spectra step by step to a PrSM (deconvolved, with a
     precursor mass, tagged, matched, within the FDR), with the likely cause
@@ -1158,9 +1147,8 @@ def _render_id_diagnostics(file_manager, dataset_id, state_manager, key):
     component = _component(
         Table, 'id_diagnostics', file_manager, dataset_id, sources,
         lambda: dict(
-            data=table.with_row_index('row').lazy(), column_definitions=_DIAGNOSIS_COLUMNS,
-            index_field='row', title='Identification diagnostics', layout='fitColumns',
-            default_row=-1, fill_height=True, pagination=False,
+            data=table.with_row_index('row').lazy(),
+            **identification_steps.settings(max_causes=id_diagnosis.MAX_CAUSES),
         ),
         required=['scan_table'],
     )
