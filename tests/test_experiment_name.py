@@ -23,7 +23,7 @@ def _workflow(tmp_path, name):
         Path(wf.workflow_dir, RUN_NAME_FILE).write_text(name)
     cache = Path(tmp_path, 'cache')
     cache.mkdir(exist_ok=True)
-    wf.file_manager = FileManager(cache, cache)
+    wf.file_manager = FileManager(cache, cache_path=cache)
     wf.logger = mock.MagicMock()
     return wf
 

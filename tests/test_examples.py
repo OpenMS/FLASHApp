@@ -14,7 +14,7 @@ DEMO = Path('example-data', 'workspaces', 'default')
 
 
 def _file_manager(tmp_path):
-    return FileManager(tmp_path, DEMO / 'cache')
+    return FileManager(tmp_path, cache_path=DEMO / 'cache')
 
 
 def test_every_example_is_named_after_what_it_shows(tmp_path):
@@ -25,6 +25,9 @@ def test_every_example_is_named_after_what_it_shows(tmp_path):
         'example_deconvolution': 'Example: deconvolution only (protein mix, LC-MS)',
         'example_native_identified': 'Example: native, identified (GapA)',
         'example_lysate_identified': 'Example: lysate, identified (E. coli + spike-in)',
+        'example_label_free_1x_r2': 'Example: label-free, spike-in 1x, replicate 2',
+        'example_label_free_01x_r1': 'Example: label-free, spike-in 0.1x, replicate 1',
+        'example_label_free_01x_r2': 'Example: label-free, spike-in 0.1x, replicate 2',
         'example_isobaric': 'Example: TMT 6-plex, deconvolution only (E. coli, ratio mix)',
     }
 

@@ -7,7 +7,6 @@ rebuilt whenever the logs grow; the selection is kept.
 """
 
 import hashlib
-import inspect
 import shutil
 import time
 from pathlib import Path
@@ -20,96 +19,17 @@ from openms_insight.core.cache import CacheMissError
 
 from src.parse import ida_log
 from src.render.cache_dirs import build_lock, short_name
+from src.viz.ms_data import acquisition_map, chosen_precursors, commanded_scans
+from src.viz.plumbing import accepts
 
 # Code of the frame builders and of this module: part of every cache id
 CODE_VERSION = hashlib.md5(
     Path(__file__).read_bytes() + Path(ida_log.__file__).read_bytes()
 ).hexdigest()[:8]
 
-COLORS = {'Deconvolved': '#9aa5b1', 'Chosen': '#f08c00', 'Identified': '#2b8a3e'}
-
-# What the map can be colored by besides the intensity (toolbar "Color"), and
-# its layers (toolbar "Layers"). Needs an openms-insight whose Heatmap takes
-# `color_columns`; an older one keeps the map colored by decision.
-COLOR_COLUMNS = {
-    'QScore': 'qscore',
-    '# deconvolved MS2 masses': 'ms2_masses',
-    '# fragment ions': 'fragment_ions',
-}
-HAS_COLOR_OPTIONS = 'color_columns' in inspect.signature(Heatmap.__init__).parameters
-
-
-def _fixed(precision=4):
-    return {'formatter': 'fixed', 'formatterParams': {'precision': precision, 'minLength': 4}}
-
-
-def _tick():
-    return {'formatter': 'tickCross', 'hozAlign': 'center'}
-
-
-PRECURSOR_COLUMNS = [
-    {'title': '#', 'field': 'precursor', 'sorter': 'number',
-     'headerTooltip': 'Precursors in the order FLASHIda chose them.'},
-    {'title': 'RT', 'field': 'RT', 'sorter': 'number', **_fixed(2),
-     'headerTooltip': 'Retention time (min) of the survey scan it was chosen from.'},
-    {'title': 'Mass', 'field': 'Mass', 'sorter': 'number', **_fixed(),
-     'headerTooltip': 'Monoisotopic mass.'},
-    {'title': 'z', 'field': 'z', 'sorter': 'number'},
-    {'title': 'QScore', 'field': 'QScore', 'sorter': 'number', **_fixed(3)},
-    {'title': 'MS2/MS3', 'field': 'MS2/MS3',
-     'headerTooltip': 'MS2 scans commanded for it / MS3 scans for its fragments.'},
-    {'title': 'Scans for', 'field': 'Decisions',
-     'headerTooltip': 'What its scans were for: recording, exploration, quantification, ...'},
-    {'title': 'Best CE', 'field': 'Best energy', 'sorter': 'number',
-     'headerTooltip': 'Energy of the winning variant of an exploration.'},
-    {'title': 'Quant', 'field': 'Quant verdict',
-     'headerTooltip': 'Quantification verdict.'},
-    {'title': 'Identified', 'field': 'Identified', **_tick()},
-    {'title': 'Score', 'field': 'Score', 'sorter': 'number', **_fixed(0)},
-    {'title': 'Cov. %', 'field': 'Coverage', 'sorter': 'number', **_fixed(1),
-     'headerTooltip': 'Sequence coverage of the fragments pooled over its scans.'},
-    {'title': 'Proteoform', 'field': 'Proteoform', 'hozAlign': 'left'},
-]
-
-SCAN_COLUMNS = [
-    {'title': 'Scan', 'field': 'Scan',
-     'headerTooltip': "FLASHIda's id of the commanded scan."},
-    {'title': 'Status', 'field': 'Status'},
-    {'title': 'Decision', 'field': 'Decision'},
-    {'title': 'MS', 'field': 'MS', 'sorter': 'number'},
-    {'title': 'RT', 'field': 'RT', 'sorter': 'number', **_fixed(2),
-     'headerTooltip': 'Retention time (min) of the acquired scan.'},
-    {'title': 'Fragment', 'field': 'Fragment',
-     'headerTooltip': 'Fragment ion isolated for an MS3 scan.'},
-    {'title': 'Mass', 'field': 'Mass', 'sorter': 'number', **_fixed()},
-    {'title': 'z', 'field': 'z', 'sorter': 'number'},
-    {'title': 'm/z', 'field': 'm/z', 'sorter': 'number', **_fixed()},
-    {'title': 'Width', 'field': 'Width', 'sorter': 'number', **_fixed(2),
-     'headerTooltip': 'Isolation width (Th).'},
-    {'title': 'Activation', 'field': 'Activation'},
-    {'title': 'Energy', 'field': 'Energy', 'sorter': 'number'},
-    {'title': 'Variant', 'field': 'Variant',
-     'headerTooltip': 'Variant of an exploration (e.g. a collision energy step).'},
-    {'title': 'Expl. score', 'field': 'Exploration score', 'sorter': 'number', **_fixed(2)},
-    {'title': 'Winner', 'field': 'Winner', **_tick(),
-     'headerTooltip': 'The variant the exploration chose.'},
-    {'title': 'Masses', 'field': 'Masses', 'sorter': 'number',
-     'headerTooltip': 'Masses deconvolved from the scan.'},
-    {'title': 'Tags', 'field': 'Tags', 'sorter': 'number'},
-    {'title': 'Quant', 'field': 'Quant verdict'},
-    {'title': 'Score', 'field': 'Score', 'sorter': 'number', **_fixed(0)},
-    {'title': 'Proteoform', 'field': 'Proteoform', 'hozAlign': 'left'},
-    {'title': 'QScore', 'field': 'QScore', 'sorter': 'number', **_fixed(3)},
-    {'title': 'Priority', 'field': 'Priority', 'sorter': 'number'},
-    {'title': 'Parent', 'field': 'Parent',
-     'headerTooltip': 'The scan this one was decided from.'},
-]
-
-
-def _no_collapse(columns):
-    """Columns that never fold into a row's details: a table too narrow for
-    them scrolls instead."""
-    return [{**c, 'responsive': 0} for c in columns]
+# Needs an openms-insight whose Heatmap takes `color_columns`; an older one
+# keeps the map colored by decision.
+HAS_COLOR_OPTIONS = accepts(Heatmap, 'color_columns')
 
 
 def _component(cls, name, cache_path, stamp, build, **styling):
@@ -221,52 +141,28 @@ def show_run(run: Path, cache_root: Path, key: str):
         st.session_state[run_key] = str(run)
 
     points = result['points']
-    common = dict(
-        x_column='rt', y_column='mass', intensity_column='intensity',
-        interactivity={'precursor': 'precursor'}, highlight={'precursor': 'precursor'},
-        hover_column='label', zoom_identifier=f'flashida_live_zoom_{key}',
-        title='Survey masses and chosen precursors', x_label='Retention time (min)',
-        y_label='Monoisotopic mass (Da)', min_points=50000, downsample_zoomed=False,
-        svg_filename='FLASHIda-decisions', scroll_zoom=False,
+    by_value = HAS_COLOR_OPTIONS
+    map_settings = acquisition_map.settings(
+        zoom=f'flashida_live_zoom_{key}', filename='FLASHIda-decisions', by_value=by_value)
+    # Colored by a value, chosen in the toolbar (survey masses, chosen and
+    # identified precursors are layers to show or hide), or by decision
+    heatmap = _component(
+        Heatmap, 'decision_map_values' if by_value else 'decision_map', cache_path, stamp,
+        lambda: dict(data=_frame(points), **map_settings),
+        # Render-time options, not stored with the cache
+        **acquisition_map.render(by_value),
     )
-    if HAS_COLOR_OPTIONS:
-        # Colored by a value, chosen in the toolbar; survey masses, chosen and
-        # identified precursors are layers to show or hide
-        heatmap = _component(
-            Heatmap, 'decision_map_values', cache_path, stamp,
-            lambda: dict(data=_frame(points), **common),
-            # Render-time options, not stored with the cache
-            color_columns=COLOR_COLUMNS, layer_column='Layer',
-        )
-    else:
-        heatmap = _component(
-            Heatmap, 'decision_map', cache_path, stamp,
-            lambda: dict(data=_frame(points), category_column='Decision', **common),
-            # Render-time styling, not stored with the cache
-            category_colors=COLORS,
-        )
     precursors = _component(
         Table, 'precursors', cache_path, stamp, lambda: dict(
-            data=_frame(result['precursors']), title='Chosen precursors',
-            pagination_identifier=f'flashida_live_precursors_page_{key}',
-            index_field='precursor', go_to_fields=['precursor', 'Mass'],
-            interactivity={'precursor': 'precursor'}, column_definitions=_no_collapse(PRECURSOR_COLUMNS),
-            initial_sort=[{'column': 'precursor', 'dir': 'desc'}],
-            reclick='keep', scroll_position='top',
-            toggle_filters=[{'label': 'Identified', 'column': 'Identified', 'default': False}],
-        ),
-        hidden_columns=['Identified'],
+            data=_frame(result['precursors']),
+            **chosen_precursors.settings(page=f'flashida_live_precursors_page_{key}')),
+        hidden_columns=chosen_precursors.HIDDEN,
     )
     scans = _component(
         Table, 'scans', cache_path, stamp, lambda: dict(
-            data=_frame(result['scans']), title='Scans commanded for the precursor',
-            pagination_identifier=f'flashida_live_scans_page_{key}',
-            index_field='scan', filters={'precursor': 'precursor'},
-            column_definitions=_no_collapse(SCAN_COLUMNS), reclick='keep', scroll_position='top',
-            default_row_selects=False,
-        ),
-        hidden_columns=['m/z', 'Width', 'Exploration score', 'Tags', 'Quant verdict', 'QScore',
-                        'Priority', 'Parent'],
+            data=_frame(result['scans']),
+            **commanded_scans.settings(page=f'flashida_live_scans_page_{key}')),
+        hidden_columns=commanded_scans.HIDDEN,
     )
     with defer_reruns():
         heatmap(key=f'{key}_map', state_manager=state_manager, height=420)

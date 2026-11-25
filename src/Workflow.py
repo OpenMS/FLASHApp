@@ -22,6 +22,8 @@ from src.quant.run import (
 from src import flashida
 from src import history
 from src import former_examples
+# Viewer caches are deleted with the results they were built from
+from src.render import cache_dirs  # noqa: F401
 from src.workflow.WorkflowManager import WorkflowManager
 from src.workflow.StreamlitUI import editor_table
 
@@ -277,11 +279,16 @@ class TopDownWorkflow(WorkflowManager):
     share_cache = True
     # Start analysis (settings adding files to an experiment) opens the Run page
     run_page = Path('content', 'TopDown', 'TopDownRun.py')
+    # The four steps (src/workflow/guide.py): Describe experiment, Run analysis,
+    # Explore results, Export results
+    configure_page = Path('content', 'TopDown', 'TopDownConfigure.py')
+    results_page = Path('content', 'TopDown', 'TopDownViewer.py')
+    export_page = Path('content', 'TopDown', 'TopDownDownload.py')
     # Describe experiment names the start beside its Run button (run_name())
     name_runs = True
 
     def __init__(self) -> None:
-        super().__init__("FLASHTnT", st.session_state["workspace"], share_cache=True)
+        super().__init__("FLASHTnT", st.session_state["workspace"])
         self.tool_name = 'FLASHTaggerViewer'
         adopt_legacy_inputs(st.session_state["workspace"], self.workflow_dir)
         # A workspace from an earlier release still holds that release's
@@ -345,34 +352,11 @@ class TopDownWorkflow(WorkflowManager):
     def current_params(self) -> dict:
         """The parameters with the values the widgets hold in this rerun
         (self.params is stale within a fragment rerun)."""
-        prefix = self.parameter_manager.param_prefix
-        current = dict(self.params)
-        current.update({k[len(prefix):]: v for k, v in st.session_state.items() if k.startswith(prefix)})
-        return current
+        return self.ui.current_params()
 
     def identifying(self) -> bool:
         """Whether the runs are searched (the reactive widget's current value)."""
         return bool(self.current_params().get(IDENTIFY_KEY, True))
-
-    def _choice(self, key, options, labels, default, label, help=None, selectbox=False):
-        """A segmented choice (or a selectbox) stored as the workflow parameter `key`."""
-        widget = f'{self.parameter_manager.param_prefix}{key}'
-        if st.session_state.get(widget) not in options:
-            stored = self.params.get(key, default)
-            st.session_state[widget] = stored if stored in options else default
-        if selectbox:
-            st.selectbox(label, options, format_func=lambda o: labels[o], key=widget, help=help)
-        else:
-            st.segmented_control(label, options, format_func=lambda o: labels[o], key=widget, help=help,
-                                 on_change=self._keep_choice, args=(widget, default))
-        self.parameter_manager.save_parameters()
-        return st.session_state[widget]
-
-    @staticmethod
-    def _keep_choice(widget, default):
-        # A click on the chosen option clears a segmented control: keep a choice
-        if st.session_state.get(widget) is None:
-            st.session_state[widget] = default
 
     def _current_sample_type(self):
         native_key = f"{self.parameter_manager.topp_param_prefix}FLASHTnT:1:native"
@@ -386,26 +370,17 @@ class TopDownWorkflow(WorkflowManager):
 
     def _sample_type_choice(self, current):
         """Native or lysate sample: picking one applies its settings (presets.json)."""
-        key = 'topdown_sample_type'
-        st.session_state[key] = current
-        st.segmented_control(
-            'Sample', list(analysis.SAMPLE_LABELS), format_func=lambda o: analysis.SAMPLE_LABELS[o],
-            key=key, on_change=self._apply_sample_type, args=(key, current),
+        self.ui.preset_choice(
+            'topdown_sample_type', 'Sample', list(analysis.SAMPLE_LABELS), current,
+            labels=analysis.SAMPLE_LABELS,
             help=' '.join(f'**{analysis.SAMPLE_LABELS[t]}**: {h}' for t, h in analysis.SAMPLE_HELP.items()),
         )
-
-    def _apply_sample_type(self, key, current):
-        chosen = st.session_state.get(key)
-        if chosen and chosen != current:
-            self.ui._apply_preset_callback(chosen)
 
     def analysis_section(self) -> None:
         """Your analysis: the runs, whether and how they are identified and
         quantified, and what a start will do. Drawn above the parameters, not
         in a fragment: the tabs of configure() follow these choices."""
-        self.ui.follow_up_notice()
-        with st.container(border=True):
-            st.markdown('##### Your analysis')
+        with self.ui.analysis_box():
             # reactive: drawn in the page itself, so a change reruns the page
             # Browse opens the runs by folder, with the upload and imports in the same dialog
             self.ui.select_input_file(
@@ -440,13 +415,13 @@ class TopDownWorkflow(WorkflowManager):
                            + (f' ({isobaric.label(analysis.plex(self.params))})' if quant == analysis.ISOBARIC else '')
                            + f', as {kept} was processed: its deconvolution is reused.')
             else:
-                quant = self._choice(
+                quant = self.ui.choice(
                     analysis.QUANT_KEY, list(analysis.QUANT_LABELS), analysis.QUANT_LABELS,
                     analysis.quantification(self.params), 'Quantification',
-                    help=' '.join(f'**{analysis.QUANT_LABELS[q]}**: {h}' for q, h in analysis.QUANT_HELP.items()),
+                    option_help=analysis.QUANT_HELP,
                 )
             if quant == analysis.ISOBARIC and not kept:
-                self._choice(
+                self.ui.choice(
                     analysis.PLEX_KEY, list(isobaric.PLEXES), {p: isobaric.label(p) for p in isobaric.PLEXES},
                     isobaric.DEFAULT_PLEX, 'Labels', selectbox=True,
                     help='The isobaric labelling reagent of the samples (FLASHDeconv -iq:type).',
@@ -458,10 +433,10 @@ class TopDownWorkflow(WorkflowManager):
             selected = params.get('mzML-files') or []
             selected = [selected] if isinstance(selected, str) else selected
             database = params.get('fasta-file')
-            st.info(analysis.summary(
+            self.ui.analysis_summary(analysis.summary(
                 len(selected), identify, current_sample, database if isinstance(database, str) else None,
                 quant, analysis.plex(params),
-            ), icon='🧭')
+            ))
 
     def kept_deconvolution(self):
         """The name of the run whose deconvolution the next start reuses
@@ -518,7 +493,7 @@ class TopDownWorkflow(WorkflowManager):
             steps += ["Identification", "Fragment annotation"]
         if quant == analysis.LABEL_FREE:
             steps += ["Linking runs"]
-        t = dict(zip(steps, st.tabs([f"**{i} · {step}**" for i, step in enumerate(steps, start=1)])))
+        t = self.ui.step_tabs(steps)
         if "Samples and groups" in t:
             with t["Samples and groups"]:
                 samples_and_groups(self, quant, identify)
@@ -581,24 +556,16 @@ class TopDownWorkflow(WorkflowManager):
             tuple(selected), str(converted_dir), mtimes
         )
         if recommendation.sample_type is None:
-            if recommendation.runs:
-                st.warning(recommendation.reason(), icon="⚠️")
+            text = recommendation.reason() if recommendation.runs else ""
+            self.ui.recommendation(text, None, current, "", "apply_recommended_sample_type")
             return
         label = analysis.SAMPLE_LABELS[recommendation.sample_type].lower()
         text = f"**These runs look like {label}.** {recommendation.reason()}"
         if recommendation.unreadable:
             text += " Files not yet converted to mzML are not counted."
-        if current == recommendation.sample_type:
-            st.success(text, icon="✅")
-            return
-        c1, c2 = st.columns([4, 1], vertical_alignment="center")
-        c1.info(text, icon="💡")
-        c2.button(
-            f"Use {recommendation.sample_type.lower()} settings",
-            key="apply_recommended_sample_type",
-            on_click=self.ui._apply_preset_callback,
-            args=(recommendation.sample_type,),
-            use_container_width=True,
+        self.ui.recommendation(
+            text, recommendation.sample_type, current,
+            f"Use {recommendation.sample_type.lower()} settings", "apply_recommended_sample_type",
         )
 
     def _store_parameters(self, dataset_id, folder_path, tool, name, settings=None):
@@ -937,6 +904,42 @@ class IdaWorkflow(WorkflowManager):
             reactive=True,
         )
 
+    def _single_run(self, exe, raw_dir, folder, single) -> bool:
+        """FLASHIda for one raw file the instrument is writing already, with a
+        method of the method folder: started at once, no sequence watched."""
+        from src import flashida_folder, flashida_method
+
+        name, method_file = single['raw'], single['method_file']
+        raw = Path(raw_dir, name + '.raw')
+        if not raw.is_file():
+            self.logger.log(f"Raw file '{raw.name}' is not in '{raw_dir}'.")
+            return False
+        try:
+            method = flashida_folder.read(folder, method_file)
+        except ValueError as e:
+            self.logger.log(str(e))
+            return False
+        if flashida_method.check(method):
+            self.logger.log(f"WARNING: the method '{method_file}' fails FLASHApp's check; FLASHIda checks it.")
+        method_dir = Path(self.workflow_dir, 'methods')
+        method_dir.mkdir(exist_ok=True)
+        method_path = Path(method_dir, flashida_method.method_file_name(name))
+        method_path.write_text(json.dumps(method, indent=2), encoding='utf-8')
+        status = {'raw_dir': str(raw_dir), 'started': time.time(), 'single': dict(single),
+                  'runs': {name: {'state': 'running', 'since': time.time()}},
+                  'sequence': None, 'scheduled': {}, 'extra': []}
+        flashida.write_status(self.workflow_dir, status)
+        log_dir = flashida.method_log_dir(method_path, exe.parent)
+        flashida.remember_log_folder(self.workflow_dir, log_dir)
+        self.logger.log(f"Single run: starting FLASHIda for '{raw.name}' with the method '{method_file}' "
+                        f"(logs in '{log_dir}')...")
+        done = self.executor.run_command([exe, '-m', method_path, '-r', raw], cwd=exe.parent)
+        status['runs'][name] = {'state': 'done' if done else 'failed',
+                                'since': status['runs'][name]['since'], 'ended': time.time()}
+        flashida.write_status(self.workflow_dir, status)
+        self.logger.log(f"FLASHIda {'finished' if done else 'failed'} for '{raw.name}'.")
+        return bool(done)
+
     def execution(self) -> bool:
         from src import flashida_folder, flashida_method
 
@@ -954,6 +957,13 @@ class IdaWorkflow(WorkflowManager):
         if str(raw_dir) in ('', '.') or not raw_dir.is_dir():
             self.logger.log(f"Raw file folder '{raw_dir}' is not a folder.")
             return False
+
+        single = flashida.read_single_run(self.workflow_dir)
+        if single:
+            try:
+                return self._single_run(exe, raw_dir, folder, single)
+            finally:
+                flashida.clear_single_run(self.workflow_dir)
 
         runs = flashida_method.load_runs(self.workflow_dir)
         if not runs:
@@ -1073,13 +1083,17 @@ class IdaWorkflow(WorkflowManager):
                     f"'{run_name}' (logs in '{log_dir}')..."
                 )
                 state[run_name] = {'state': 'running', 'since': time.time()}
-                flashida.write_status(self.workflow_dir, status)
+                if not flashida.write_status(self.workflow_dir, status):
+                    self.logger.log(f"WARNING: the status file could not be written: the page keeps "
+                                    f"the old status of '{run_name}' while FLASHIda runs.")
                 done = self.executor.run_command(
                     [exe, '-m', method_path, '-r', Path(raw_dir, name + '.raw')],
                     cwd=exe.parent,
                 )
                 state[run_name] = {'state': 'done' if done else 'failed',
                                    'since': state[run_name]['since'], 'ended': time.time()}
-                flashida.write_status(self.workflow_dir, status)
+                if not flashida.write_status(self.workflow_dir, status):
+                    self.logger.log("WARNING: the status file could not be written: "
+                                    "the page catches up at the next poll.")
                 self.logger.log(f"FLASHIda {'finished' if done else 'failed'} for '{name}.raw'.")
             time.sleep(self.poll_interval)

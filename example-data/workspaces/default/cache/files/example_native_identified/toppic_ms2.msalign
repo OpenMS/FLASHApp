@@ -11,7 +11,7 @@
 #min_snr: [0.25, 0.25]
 ####################### Parameters ######################
 BEGIN IONS
-FILE_NAME=/__w/FLASHApp/FLASHApp/example-data/workspaces/default/flashtnt/input-files/mzML-files/Native-identified_GapA_HCD.mzML
+FILE_NAME=/repo/example-data/workspaces/default/flashtnt/input-files/mzML-files/Native-identified_GapA_HCD.mzML
 SPECTRUM_ID=0
 TITLE=Scan_1
 SCANS=1

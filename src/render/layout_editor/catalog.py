@@ -5,7 +5,14 @@ the Viewer pages, so it must not change. ``requires`` names another component
 that has to be in the same experiment (e.g. the mass table follows the scan
 table's selection), or lists several of which one has to be there
 (``requires_label`` then names them briefly in the editor).
+
+``group`` is one of the four component groups every OpenMS app's Explore
+results uses (``src/workflow/guide.py``): MS data, Features and masses,
+Identification, Quantification. QC and functional analysis go with the data
+they are about (``_GROUPS`` below).
 """
+
+from src.workflow.guide import COMPONENT_GROUPS, FEATURES, IDENTIFICATION as ID_GROUP, MS_DATA, QUANTIFICATION
 
 DECONV_COMPONENTS = [
     {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
@@ -91,6 +98,41 @@ IDENTIFICATION_ONLY = (
 ISOBARIC_ONLY = {c['name'] for c in ISOBARIC_COMPONENTS}
 
 
+# The component group of each component (see the module docstring)
+_GROUPS = {
+    MS_DATA: [
+        'ms1_raw_heatmap', 'ms2_raw_heatmap', 'ms1_3d_map', 'scan_table', 'anno_spectrum',
+        'survey_spectrum', 'chromatogram', 'precursor_xic',
+    ],
+    FEATURES: [
+        'ms1_deconv_heat_map', 'ms2_deconv_heat_map', 'mass_table', 'deconv_spectrum', '3D_SN_plot',
+        'fdr_plot', 'isotope_envelope', 'run_qc',
+        'quant_feature_map', 'quant_feature_intensity', 'quant_feature_table', 'quant_feature_profile',
+    ],
+    ID_GROUP: [
+        'protein_table', 'protein_group_table', 'proteoform_table', 'proteoform_prsm_table',
+        'prsm_mass_table', 'tag_table', 'sequence_view', 'internal_fragment_map', 'structure_view',
+        'combined_spectrum', 'proteoform_heatmap', 'id_fdr_plot', 'fragment_error_plot', 'mass_shifts',
+        'id_qc', 'go_enrichment',
+        'quant_id_counts', 'quant_id_frequency', 'quant_id_overlap', 'quant_id_table', 'quant_id_prsms',
+        'quant_prsm_sequence', 'quant_prsm_spectrum',
+    ],
+}
+_GROUP_OF = {name: group for group, names in _GROUPS.items() for name in names}
+
+
+def _grouped(components):
+    """Set each component's group (anything not listed is Quantification)."""
+    for component in components:
+        component['group'] = _GROUP_OF.get(component['name'], QUANTIFICATION)
+    return components
+
+
+for _list in (DECONV_COMPONENTS, DECONV_SEQUENCE_COMPONENTS, TNT_COMPONENTS, ISOBARIC_COMPONENTS):
+    _grouped(_list)
+del _list
+
+
 def _combined():
     by_name = {}
     for component in DECONV_COMPONENTS + TNT_COMPONENTS:
@@ -110,11 +152,7 @@ def _combined():
         by_name[name]['needs'] = ISOBARIC
     by_name['fdr_plot']['label'] = 'Score distribution plot (masses)'
     by_name['id_fdr_plot']['label'] = 'Score distribution plot (identifications)'
-    groups = [
-        'Heatmaps', 'Tables', 'Spectra & plots', 'Sequence', 'Quantification', 'Functional analysis',
-        'Validation', 'Quality control',
-    ]
-    return sorted(by_name.values(), key=lambda c: groups.index(c['group']))
+    return sorted(by_name.values(), key=lambda c: COMPONENT_GROUPS.index(c['group']))
 
 
 TOPDOWN_COMPONENTS = _combined()
@@ -132,7 +170,9 @@ DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
 TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['anno_spectrum', 'deconv_spectrum'],
                      ['structure_view'], ['tag_table'], ['combined_spectrum']]
 TNT_LYSATE_LAYOUT = [
-    ['protein_group_table', 'proteoform_table', 'proteoform_prsm_table'],
+    # Two tables per row: three side by side left each too narrow to read
+    ['protein_group_table', 'proteoform_table'],
+    ['proteoform_prsm_table'],
     ['proteoform_heatmap'],
     ['sequence_view'],
     ['anno_spectrum', 'deconv_spectrum'],
@@ -194,6 +234,8 @@ for _component in QUANT_COMPONENTS:
     if _component['name'] in QUANT_IDENTIFICATION_ONLY:
         _component['needs'] = IDENTIFICATION
 del _component
+_grouped(QUANT_COMPONENTS)
+QUANT_COMPONENTS.sort(key=lambda c: COMPONENT_GROUPS.index(c['group']))
 # The four plots above, which the layouts saved before they were split name
 # together (src/render/quant_view.py, split_diagnostics)
 QUANT_DIAGNOSTICS = [

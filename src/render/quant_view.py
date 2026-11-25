@@ -382,23 +382,31 @@ def view_selector(file_manager, workspace, dataset_id):
     )
 
 
-@st.dialog('Edit comparison', width='large')
-def _comparison_dialog(file_manager, dataset_id):
-    from src.render import quant_cells  # needs openms_insight
-    session = QuantSession(_own_file_manager(file_manager), dataset_id)
-    st.caption(
-        'Which runs (or labelled samples) belong to which condition, which level to compare and how. '
-        'The defaults suit most experiments; **Apply** recomputes the comparison.'
-    )
-    if quant_cells.settings_form(session):
-        st.rerun()
+COMPARISON_INTRO = (
+    'Which runs (or labelled samples) belong to which condition, which level to compare and how. '
+    'The defaults suit most experiments; **Done** recomputes the comparison.'
+)
+
+
+def comparison_key(dataset_id):
+    """The key of a comparison's Edit comparison dialog (``open_comparison`` takes it)."""
+    return f'quant_{dataset_id}'
 
 
 def buttons(file_manager, dataset_id):
-    """Edit comparison, right of the experiment selector."""
-    if st.button('Edit comparison', icon=':material/tune:', key='edit_comparison', width='content',
-                 help='Conditions of the runs, level and analysis settings'):
-        _comparison_dialog(file_manager, dataset_id)
+    """Edit comparison, right of the experiment selector: the template's dialog
+    with one tab per step of the comparison."""
+    from src.layout_manager import edit_comparison
+    from src.render import quant_cells  # needs openms_insight
+    session = QuantSession(_own_file_manager(file_manager), dataset_id)
+    steps, apply, reset = quant_cells.comparison_steps(session)
+    edit_comparison(
+        comparison_key(dataset_id), steps, intro=COMPARISON_INTRO,
+        on_reset=reset, on_done=apply,
+        reset_help='The recommended filter, missing values, normalization and test; '
+                   'the conditions and the level stay.',
+        button_help='Conditions of the runs, level and analysis settings',
+    )
 
 
 def render(file_manager, dataset_id, rows=None):
@@ -422,8 +430,6 @@ def render(file_manager, dataset_id, rows=None):
                     + (f' over {fractions} runs' if fractions > 1 else ''))
     else:
         compared = f'{len(session.runs)} runs'
-    st.caption(f'Comparing **{LEVEL_NAMES[level].lower()}** of {compared}. '
-               'Switch the level and set the conditions with **Edit comparison**.')
     # Selections are per comparison and level: an index means another entry on another level
     state_manager = StateManager(session_key=f'flash_quant_state_{tool}_{dataset_id}_{level}')
     with defer_reruns():

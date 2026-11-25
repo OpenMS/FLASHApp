@@ -23,7 +23,7 @@ def tnt(tmp_path):
     cache.mkdir()
     shutil.copy(WORKSPACE / 'cache' / 'cache.db', cache / 'cache.db')
     (cache / 'files').symlink_to(WORKSPACE / 'cache' / 'files')
-    return FileManager(cache, cache)
+    return FileManager(cache, cache_path=cache)
 
 
 def _entry():

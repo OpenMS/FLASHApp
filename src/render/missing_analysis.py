@@ -72,6 +72,9 @@ EXAMPLE_INPUTS = {
     'example_deconvolution': 'Deconvolution-only_ProteinMix_LC-MS',
     'example_native_identified': 'Native-identified_GapA_HCD',
     'example_lysate_identified': 'Label-free_SpikeIn-1x_R1',
+    'example_label_free_1x_r2': 'Label-free_SpikeIn-1x_R2',
+    'example_label_free_01x_r1': 'Label-free_SpikeIn-0.1x_R1',
+    'example_label_free_01x_r2': 'Label-free_SpikeIn-0.1x_R2',
     'example_isobaric': 'Isobaric_TMT6_Ecoli-Ratio',
 }
 
