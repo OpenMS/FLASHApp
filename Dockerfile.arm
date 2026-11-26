@@ -17,9 +17,8 @@
 # The same file builds amd64 and arm64.
 
 FROM ubuntu:24.04 AS setup-build-system
-# FDmerge: the OpenMS branch with FLASHAnnotator (same as the desktop build).
-ARG OPENMS_REPO=https://github.com/t0mdavid-m/OpenMS.git
-ARG OPENMS_BRANCH=FDmerge
+ARG OPENMS_REPO=https://github.com/OpenMS/OpenMS.git
+ARG OPENMS_BRANCH=v3.6.0
 ARG PORT=8501
 # GitHub repository whose latest release supplies the bundled Windows
 # installer. Empty: `github-user` and `repository-name` from settings.json,
@@ -122,13 +121,11 @@ ENV PATH="${PATH}:/usr/share/dotnet"
 # pyopenms_wheel target only in the nanobind generation.
 # cython<3.3: Cython 3.3.0 (2026-08-22) removed Cython.Compiler.Nodes.CConstOrVolatileTypeNode,
 # which autowrap up to 0.24 needs, breaking `make pyopenms`.
-# FLASHApp: for FDmerge (requirements_bld.txt) autowrap is pinned to 0.23.0: its
-# create_cpp_extension.py passes include_boost, which autowrap 0.24 removed.
 RUN pip install --upgrade pip && python -m pip install -U setuptools wheel pandas numpy pytest \
     && if grep -q pyopenms_wheel src/CMakeLists.txt; then \
         python -c "import tomllib; print('\n'.join(tomllib.load(open('src/pyOpenMS/pyproject.toml', 'rb'))['build-system']['requires']))" > /tmp/pyopenms-build.txt; \
     elif [ -f src/pyOpenMS/requirements_bld.txt ]; then \
-        { cat src/pyOpenMS/requirements_bld.txt; echo; printf '%s\n' nose "cython<3.3" "autowrap==0.23.0"; } > /tmp/pyopenms-build.txt; \
+        { cat src/pyOpenMS/requirements_bld.txt; echo; printf '%s\n' nose "cython<3.3" "autowrap<=0.24"; } > /tmp/pyopenms-build.txt; \
     else \
         printf '%s\n' nose "cython>=3.1.0,<3.3" "autowrap<=0.24" > /tmp/pyopenms-build.txt; \
     fi \
@@ -168,7 +165,6 @@ RUN cmake -S /OpenMS -B /openms-build \
         -DCMAKE_PREFIX_PATH='/usr/;/usr/local' \
         -DHAS_XSERVER=OFF \
         -DBOOST_USE_STATIC=OFF \
-        -DOPENMP=ON \
         -DOPENMS_USE_VCPKG=OFF \
         -DWITH_UV=OFF \
         -DWITH_THERMO_RAW=$([ -x /usr/share/dotnet/dotnet ] && echo ON || echo OFF) \
@@ -364,27 +360,23 @@ RUN jq '.online_deployment = true' settings.json > tmp.json && mv tmp.json setti
 # the user starts the container with `-v /host/path:/mounted-data`.
 RUN jq '.local_data_dir = "/mounted-data"' settings.json > tmp.json && mv tmp.json settings.json
 
-# Download the Windows installer of the latest release, if it has one.
+# Download the Windows installer of the latest release, if it has one, or of
+# the release RELEASE_TAG names (CI passes the tag of a release build, which
+# build-desktop-app.yaml starts once that release's installers are uploaded).
 # The token arrives as a BuildKit secret (`--secret id=github_token,env=GITHUB_TOKEN`),
 # so it is never written to the image or its build cache. INSTALLER_REFRESH
 # (CI passes the run id) re-runs this step on every build, as the token used to.
 ARG INSTALLER_REFRESH
+ARG RELEASE_TAG
 # Declared again: a build argument does not reach a later stage on its own.
 ARG GITHUB_USER
 ARG GITHUB_REPO
-# FLASHApp: RELEASE_TAG pins the download to the release being published (set
-# by the build-and-test workflow on release events). Empty: the latest release.
-ARG RELEASE_TAG
 RUN --mount=type=secret,id=github_token \
     repo="${GITHUB_USER:-$(jq -r '."github-user"' settings.json)}/${GITHUB_REPO:-$(jq -r '."repository-name"' settings.json)}"; \
     if [ -s /run/secrets/github_token ]; then \
         echo "GitHub token secret is set, proceeding to download the release asset..."; \
-        if [ -n "$RELEASE_TAG" ]; then \
-            GH_TOKEN="$(cat /run/secrets/github_token)" gh release download "$RELEASE_TAG" -R "$repo" -p "*-Setup.exe" -O /app/OpenMS-App-Setup.exe; \
-        else \
-            GH_TOKEN="$(cat /run/secrets/github_token)" gh release download -R "$repo" -p "*-Setup.exe" -O /app/OpenMS-App-Setup.exe \
-                || echo "The latest release has no Windows installer, skipping."; \
-        fi; \
+        GH_TOKEN="$(cat /run/secrets/github_token)" gh release download $RELEASE_TAG -R "$repo" -p "*-Setup.exe" -O /app/OpenMS-App-Setup.exe \
+            || echo "The release ${RELEASE_TAG:-(latest)} has no Windows installer, skipping."; \
     else \
         echo "No github_token secret, skipping the release asset download."; \
     fi

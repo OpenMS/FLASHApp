@@ -85,6 +85,7 @@ file_manager = FileManager(
 quant_view.migrate_layout(file_manager)
 quant_view.adopt_saved_layout(file_manager, workspace)
 topdown_layout.adopt_saved_layout(file_manager, workspace)
+topdown_layout.merge_saved_views(workspace)
 
 # Every deconvolved run, of which some were identified, then the comparisons
 results = file_manager.get_results_list(['threedim_SN_plot'])
