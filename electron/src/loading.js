@@ -98,8 +98,64 @@ function barRects(fill, cls) {
   }).join("");
 }
 
+// An app's own logo, from loading_logo in its settings.json: an SVG file per
+// theme, relative to the app folder ({"light": "assets/x-light.svg", "dark":
+// "assets/x-dark.svg"}, the one drawn on a light and on a dark background;
+// one alone serves both). null, and so the OpenMS logo, when the key is
+// missing or neither file can be read.
+function readLogo(payloadDir, settings) {
+  const spec = settings && settings.loading_logo;
+  if (!spec || typeof spec !== "object") return null;
+  const read = (rel) => {
+    if (typeof rel !== "string" || !rel) return null;
+    try {
+      return fs.readFileSync(path.join(payloadDir, rel), "utf8");
+    } catch {
+      return null;
+    }
+  };
+  const logo = { light: read(spec.light), dark: read(spec.dark) };
+  return logo.light || logo.dark ? logo : null;
+}
+
+// The logo as markup for both themes. Each ray (<line> in the mark's first
+// <g>) pulses from its inner end, and each dot (<circle>) rides on the tip of
+// the ray pointing at it, so the mark breathes like a live spectrum.
+function logoMarkup(logo) {
+  const variant = (svg, theme) => {
+    const rays = [];
+    let marked = String(svg).replace(/<title[^>]*>.*?<\/title>/s, "");
+    // Rays are the lines inside the mark's <g>; lines outside it (a glyph in
+    // the middle) stay as drawn.
+    marked = marked.replace(/<g\b[^>]*>[\s\S]*?<\/g>/, (group) =>
+      group.replace(/<line ([^>]*?)x1="([\d.]+)" y1="([\d.]+)"/g, (m, pre, x1, y1) => {
+        const i = rays.length;
+        const vars = `--i:${i};--low:${(0.15 + 0.4 * seeded(i, 1)).toFixed(2)};` +
+          `--high:${(1.05 + 0.3 * seeded(i, 2)).toFixed(2)};--dur:${(0.9 + 1.3 * seeded(i, 3)).toFixed(2)}s;` +
+          `--delay:${(-2 * seeded(i, 4)).toFixed(2)}s`;
+        rays.push({ x1: +x1, y1: +y1, vars });
+        return `<line class="ray" style="${vars};transform-origin:${x1}px ${y1}px" ${pre}x1="${x1}" y1="${y1}"`;
+      }));
+    // A dot rides on the tip of the ray pointing its way: it moves with the
+    // ray's length while its own size stays the same.
+    if (rays.length) {
+      marked = marked.replace(/<circle ([^>]*?)cx="([\d.]+)" cy="([\d.]+)"/g, (m, pre, cx, cy) => {
+        const angle = Math.atan2(cy - 60, cx - 60);
+        const gap = (r) => Math.abs(Math.atan2(Math.sin(r.a - angle), Math.cos(r.a - angle)));
+        const ray = rays.map((r) => ({ ...r, a: Math.atan2(r.y1 - 60, r.x1 - 60) }))
+          .reduce((best, r) => (gap(r) < gap(best) ? r : best));
+        const dx = (cx - ray.x1).toFixed(2);
+        const dy = (cy - ray.y1).toFixed(2);
+        return `<circle class="tip" style="${ray.vars};--dx:${dx};--dy:${dy}" ${pre}cx="${cx}" cy="${cy}"`;
+      });
+    }
+    return `<div class="logo-${theme}">${marked}</div>`;
+  };
+  return `<div class="logo">${variant(logo.light || logo.dark, "light")}${variant(logo.dark || logo.light, "dark")}</div>`;
+}
+
 // The whole page as HTML. title and version come from the app's settings.json.
-function loadingPage({ title, version, fontDir }) {
+function loadingPage({ title, version, fontDir, logo }) {
   const fonts = fontDir
     ? fontFace(fontDir, "Montserrat Alternates", "montserrat-alternates-latin-600-normal.woff2", 600) +
       fontFace(fontDir, "Raleway", "raleway-latin-500-normal.woff2", 500)
@@ -112,9 +168,11 @@ function loadingPage({ title, version, fontDir }) {
 ${fonts}
 :root{color-scheme:light dark;--bg:#eef1fd;--fg:#231f20;--muted:#5d5759;--track:#d3dbf7}
 @media (prefers-color-scheme:dark){:root{--bg:#1a1718;--fg:#f9f8f9;--muted:#a8a0a2;--track:#3a3335}}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;
+html,body{margin:0;background:var(--bg);color:var(--fg);overflow:hidden;
   font-family:Raleway,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-user-select:none;user-select:none;cursor:default}
-body{display:flex;align-items:center;justify-content:center}
+html{height:100%}
+body{position:relative;width:var(--window-width,100vw);height:var(--window-height,100vh);
+  display:flex;align-items:center;justify-content:center}
 html,body{transition:background-color .45s ease .2s}
 html.done,body.done{background-color:transparent}
 main{display:flex;flex-direction:column;align-items:center;width:min(640px,72vw);transition:opacity .45s ease,transform .45s ease}
@@ -144,12 +202,30 @@ h1{margin:26px 0 0;font:600 26px/1.2 "Montserrat Alternates",Raleway,system-ui,s
 .progress::before{content:"";display:block;height:100%;width:40%;border-radius:3px;
   background:linear-gradient(90deg,#ffb401,#ff7501,#ff03cb,#b503ff,#3157e9);animation:slide 1.6s cubic-bezier(.6,0,.4,1) infinite}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
-.version{position:fixed;bottom:18px;left:0;right:0;text-align:center;font-size:12px;color:var(--muted);
+.version{position:absolute;bottom:18px;left:0;right:0;text-align:center;font-size:12px;color:var(--muted);
   opacity:0;animation:fade-in .6s ease 1.5s forwards}
 @keyframes fade-in{to{opacity:1}}
 body.done .bar{animation:none;transform:scaleY(1);transition:transform .35s cubic-bezier(.25,1.4,.45,1)}
 body.done main{opacity:0;transform:scale(1.04);transition-delay:.2s}
 body.done .version{opacity:0;transition:opacity .3s}
+.logo{width:min(220px,40vw);aspect-ratio:1;position:relative;
+  animation:glow 2.4s ease-in-out 1.6s infinite}
+.logo>div{position:absolute;inset:0} .logo svg{width:100%;height:100%;overflow:visible}
+.logo-dark{display:none}
+@media (prefers-color-scheme:dark){.logo-light{display:none}.logo-dark{display:block}}
+.logo svg > :not(g):not(.tip),.logo svg g > :not(line){opacity:0;animation:fade-in .6s ease .9s forwards}
+@property --s{syntax:'<number>';inherits:false;initial-value:0}
+.ray,.tip{transform-box:view-box;
+  animation:ray-grow .75s cubic-bezier(.25,1.5,.45,1) calc(var(--i) * 35ms) both,
+            ray-live var(--dur) ease-in-out calc(1.6s + var(--delay) + 1s) infinite alternate}
+.ray{transform:scale(var(--s))}
+.tip{opacity:clamp(0,calc(var(--s) * 8),1);transform:translate(calc((var(--s) - 1) * var(--dx) * 1px),calc((var(--s) - 1) * var(--dy) * 1px))}
+@keyframes ray-grow{from{--s:0}to{--s:1}}
+@keyframes ray-live{0%{--s:1}50%{--s:var(--low)}100%{--s:var(--high)}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 0 rgba(255,3,203,0))}50%{filter:drop-shadow(0 0 18px rgba(255,3,203,.35))}}
+@media (prefers-reduced-motion:reduce){
+  .logo,.logo *{animation:none!important;opacity:1!important;transform:none!important}
+}
 @media (prefers-reduced-motion:reduce){
   .bar,.glyph,.baseline,h1,.status,.progress,.version{animation:none!important;opacity:1;transform:none;stroke-dashoffset:0}
   .sheen,.progress::before{animation:none!important;display:none}
@@ -157,7 +233,7 @@ body.done .version{opacity:0;transition:opacity .3s}
 }
 </style></head><body>
 <main>
-<svg viewBox="30 135 800 345" role="img" aria-label="OpenMS">
+${logo ? logoMarkup(logo) : `<svg viewBox="30 135 800 345" role="img" aria-label="OpenMS">
 <defs>
 <linearGradient id="openms-gradient" x1="44.08" y1="305.27" x2="811.73" y2="305.27" gradientUnits="userSpaceOnUse">
 <stop offset="0" stop-color="#ffb401"/><stop offset=".05" stop-color="#ff9701"/><stop offset=".11" stop-color="#ff8401"/>
@@ -174,7 +250,7 @@ body.done .version{opacity:0;transition:opacity .3s}
 <g>${barRects("url(#openms-gradient)", "")}</g>
 <g class="sheen">${barRects("url(#openms-sheen)", "")}</g>
 ${glyphs}
-</svg>
+</svg>`}
 <h1>${escapeHtml(title)}</h1>
 <div class="status" id="status"></div>
 <div class="progress"></div>
@@ -221,9 +297,43 @@ const APP_READY_SCRIPT = `(() => {
   return !!document.querySelector('[data-testid="stMain"] [data-testid="stElementContainer"]');
 })()`;
 
+// Where the loading view goes: at the window's top left corner, and at least
+// as large as the window and every display, so no edge of the app page shows
+// while the window grows faster than its size is reported. The window clips
+// the rest. Sizes are [width, height].
+function overlayBounds(windowSize, displaySizes = []) {
+  const [width, height] = windowSize;
+  return {
+    x: 0,
+    y: 0,
+    width: Math.max(width, ...displaySizes.map((d) => d.width)),
+    height: Math.max(height, ...displaySizes.map((d) => d.height)),
+  };
+}
+
+// Run in the loading screen: centres the logo in the part of the view the
+// window shows.
+function windowSizeScript([width, height]) {
+  const w = Math.max(0, Math.round(width));
+  const h = Math.max(0, Math.round(height));
+  return `(() => { const s = document.documentElement.style;
+    s.setProperty("--window-width", "${w}px"); s.setProperty("--window-height", "${h}px"); })()`;
+}
+
 // The window's own background, so no white frame flashes between the pages.
 function backgroundColor(dark) {
   return dark ? "#1a1718" : "#eef1fd";
 }
 
-module.exports = { loadingPage, loadingPageUrl, FINISH_SCRIPT, APP_READY_SCRIPT, backgroundColor, BARS, GLYPHS };
+module.exports = {
+  loadingPage,
+  readLogo,
+  loadingPageUrl,
+  overlayBounds,
+  windowSizeScript,
+  FINISH_SCRIPT,
+  APP_READY_SCRIPT,
+  backgroundColor,
+  BARS,
+  GLYPHS,
+};
