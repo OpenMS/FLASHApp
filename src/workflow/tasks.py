@@ -85,7 +85,7 @@ def execute_workflow(
         import importlib
 
         from src.workflow.CommandExecutor import CommandExecutor
-        from src.workflow.FileManager import FileManager
+        from src.workflow.FileManager import FileManager, cache_path_for
         from src.workflow.Logger import Logger
         from src.workflow.ParameterManager import ParameterManager
         from src.workflow.RunManager import RunManager
@@ -129,14 +129,12 @@ def execute_workflow(
             results_dir = runs.results_dir(run_id)
         else:
             results_dir = workflow_path / "results"
-
-        # Determine cache path based on workflow class configuration
-        share_cache = getattr(WorkflowClass, 'share_cache', False)
-        if share_cache:
-            cache_path = workflow_path.parent / 'cache'
-        else:
-            cache_path = workflow_path / 'cache'
-        file_manager = FileManager(workflow_path, results_dir, cache_path=cache_path)
+        file_manager = FileManager(
+            workflow_path, results_dir,
+            cache_path=cache_path_for(
+                workflow_path, getattr(WorkflowClass, "share_cache", False)
+            ),
+        )
         parameter_manager = ParameterManager(workflow_path)
         # run_topp / run_python read the parameters through the
         # ParameterManager while the run goes on: the same file as above.

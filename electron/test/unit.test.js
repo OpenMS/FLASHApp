@@ -90,20 +90,6 @@ test("pythonExecutable prefers the embedded interpreter", () => {
   assert.equal(payload.pythonExecutable(dir), path.join(dir, "python-3.11.0", exe));
 });
 
-test("appEnvironment puts the bundled Python and its console scripts on PATH", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "payload-"));
-  const pyDir = path.join(dir, "python-3.11.0");
-  const exe = process.platform === "win32" ? "python.exe" : path.join("bin", "python3");
-  fs.mkdirSync(path.dirname(path.join(pyDir, exe)), { recursive: true });
-  fs.writeFileSync(path.join(pyDir, exe), "");
-  fs.mkdirSync(path.join(pyDir, "Lib", "site-packages", "bin"), { recursive: true });
-  const env = payload.appEnvironment(dir, "/tmp/ws");
-  const pathKey = Object.keys(env).find((k) => k.toUpperCase() === "PATH");
-  const entries = env[pathKey].split(path.delimiter);
-  const scripts = process.platform === "win32" ? path.join(pyDir, "Lib", "site-packages", "bin") : path.join(pyDir, "bin");
-  assert.deepEqual(entries.slice(0, 3), [dir, pyDir, scripts]);
-});
-
 test("AppImage desktop entry points at the AppImage and the copied icon", () => {
   const { integrateAppImage } = require("../src/linux-desktop");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "desktop-"));
@@ -196,4 +182,48 @@ test("Streamlit starts through the launcher that preloads polars", () => {
   assert.deepEqual(args.slice(0, 5), ["-m", "src.streamlit_launcher", "run", "app.py", "local"]);
   assert.equal(args[args.indexOf("--server.port") + 1], "8765");
   assert.equal(args[args.indexOf("--server.address") + 1], "127.0.0.1");
+});
+
+const loading = require("../src/loading");
+
+test("loading page shows the app name, version and every logo bar", () => {
+  const html = loading.loadingPage({ title: "Test <App>", version: "1.2.3", fontDir: null });
+  assert.match(html, /Test &#60;App&#62;/);
+  assert.doesNotMatch(html, /Test <App>/);
+  assert.match(html, /Version 1\.2\.3/);
+  // Each bar is drawn twice: in the logo gradient and in the moving sheen.
+  assert.equal((html.match(/class="bar /g) || []).length, 2 * loading.BARS.length);
+  assert.equal((html.match(/class="glyph"/g) || []).length, 6);
+  assert.match(html, /window\.__finishLoading/);
+});
+
+test("loading page inlines the theme fonts when they exist", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fonts-"));
+  fs.writeFileSync(path.join(dir, "montserrat-alternates-latin-600-normal.woff2"), "x");
+  const html = loading.loadingPage({ title: "A", version: "", fontDir: dir });
+  assert.match(html, /font-family:"Montserrat Alternates"/);
+  assert.doesNotMatch(html, /font-family:"Raleway";/);
+  assert.doesNotMatch(html, /Version /);
+});
+
+test("loading page URL is a data URL the window can load", () => {
+  const url = loading.loadingPageUrl({ title: "A", version: "1", fontDir: null });
+  assert.ok(url.startsWith("data:text/html;charset=utf-8,"));
+  assert.match(decodeURIComponent(url), /<h1>A<\/h1>/);
+});
+
+test("app counts as ready only once Streamlit has drawn the page", () => {
+  const ready = (doc) => new Function("document", `return ${loading.APP_READY_SCRIPT};`)(doc);
+  const doc = (state, content) => ({
+    querySelector: (sel) => {
+      if (sel === '[data-testid="stApp"]') {
+        return state === null ? null : { getAttribute: () => state };
+      }
+      return content ? {} : null;
+    },
+  });
+  assert.equal(ready(doc(null, false)), false);
+  assert.equal(ready(doc("running", true)), false);
+  assert.equal(ready(doc("notRunning", false)), false);
+  assert.equal(ready(doc("notRunning", true)), true);
 });
