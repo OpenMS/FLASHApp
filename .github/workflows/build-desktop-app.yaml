@@ -58,7 +58,7 @@ jobs:
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           sparse-checkout: app.yaml
           sparse-checkout-cone-mode: false
@@ -153,7 +153,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7.0.1
       with:
         persist-credentials: false
 
@@ -172,7 +172,7 @@ jobs:
 
     - name: Download the OpenMS build
       if: needs.openms.outputs.source == 'build'
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: openms-${{ matrix.platform }}
         path: openms-package
@@ -230,7 +230,7 @@ jobs:
         du -sh "$p"
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
         node-version: '22'
         cache: 'npm'
@@ -295,14 +295,14 @@ jobs:
 
     - name: Archive end-to-end screenshots
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: electron-e2e-screenshots-${{ matrix.platform }}
         path: e2e-output
         if-no-files-found: ignore
 
     - name: Archive installer
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: OpenMS-App-${{ matrix.platform }}
         path: ${{ steps.package.outputs.installer }}
@@ -318,7 +318,7 @@ jobs:
       contents: write
     steps:
     - name: Download installers
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         pattern: OpenMS-App-*
         merge-multiple: true

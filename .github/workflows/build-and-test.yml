@@ -16,7 +16,7 @@ jobs:
   lint-manifests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Install kubeconform
         run: |
@@ -24,7 +24,7 @@ jobs:
           sudo mv kubeconform /usr/local/bin/
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v3
+        uses: azure/setup-kubectl@v5
 
       - name: Validate base manifests
         run: |
@@ -72,17 +72,17 @@ jobs:
           sudo docker image prune --all --force || true
           df -h
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Compute lowercase image name (OCI refs must be lowercase)
         run: echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -90,7 +90,7 @@ jobs:
 
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # No automatic `latest`: on a tag push metadata-action would add a
@@ -105,7 +105,7 @@ jobs:
             type=raw,value=latest-amd64,enable=${{ matrix.variant == 'full' && (github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) }}
 
       - name: Build and conditionally push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -150,7 +150,7 @@ jobs:
         run: docker save "$KIND_IMAGE" -o /tmp/image.tar
 
       - name: Upload image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openms-streamlit-${{ matrix.variant }}-amd64-image
           path: /tmp/image.tar
@@ -194,17 +194,17 @@ jobs:
           sudo docker image prune --all --force || true
           df -h
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Compute lowercase image name (OCI refs must be lowercase)
         run: echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -212,7 +212,7 @@ jobs:
 
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # No automatic `latest`: on a tag push metadata-action would add a
@@ -227,7 +227,7 @@ jobs:
             type=raw,value=latest-arm64,enable=${{ matrix.variant == 'full' && (github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) }}
 
       - name: Build and conditionally push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -268,7 +268,7 @@ jobs:
         run: docker save "$KIND_IMAGE" -o /tmp/image.tar
 
       - name: Upload image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openms-streamlit-${{ matrix.variant }}-arm64-image
           path: /tmp/image.tar
@@ -298,7 +298,7 @@ jobs:
         run: echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -306,7 +306,7 @@ jobs:
 
       - name: Compute manifest tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # No automatic `latest`: on a tag push metadata-action would add a
@@ -368,7 +368,7 @@ jobs:
       matrix:
         variant: [full]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Free disk space
         # ubuntu-latest has ~14 GB free; the full image (5-8 GB) plus kind
@@ -390,7 +390,7 @@ jobs:
           df -h
 
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openms-streamlit-${{ matrix.variant }}-amd64-image
           path: /tmp
@@ -414,7 +414,7 @@ jobs:
 
       - name: Download image artifact again
         if: steps.archive.outputs.ok == 'false'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openms-streamlit-${{ matrix.variant }}-amd64-image
           path: /tmp
@@ -424,7 +424,7 @@ jobs:
         run: tar -tf /tmp/image.tar >/dev/null
 
       - name: Install apptainer
-        uses: eWaterCycle/setup-apptainer@v2
+        uses: eWaterCycle/setup-apptainer@v3
         with:
           apptainer-version: 1.3.4
 
@@ -552,7 +552,7 @@ jobs:
 
       - name: Upload validated SIF artifact (push events only)
         if: success() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openms-streamlit-${{ matrix.variant }}-sif
           path: /tmp/openms.sif
@@ -579,19 +579,19 @@ jobs:
         variant: [full]
     steps:
       - name: Download validated SIF artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openms-streamlit-${{ matrix.variant }}-sif
           path: /tmp
 
       - name: Install apptainer
-        uses: eWaterCycle/setup-apptainer@v2
+        uses: eWaterCycle/setup-apptainer@v3
         with:
           apptainer-version: 1.3.4
 
       - name: Compute SIF tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/sif
           # No automatic `latest`: on a tag push metadata-action would add a
@@ -646,7 +646,7 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Free disk space
         # ubuntu-latest has ~14 GB free; the full image (5-8 GB) plus kind
@@ -668,7 +668,7 @@ jobs:
           df -h
 
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openms-streamlit-${{ matrix.variant }}-${{ matrix.arch }}-image
           path: /tmp
@@ -692,7 +692,7 @@ jobs:
 
       - name: Download image artifact again
         if: steps.archive.outputs.ok == 'false'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openms-streamlit-${{ matrix.variant }}-${{ matrix.arch }}-image
           path: /tmp
@@ -823,7 +823,7 @@ jobs:
             arch: arm64
             runner: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Free disk space
         # ubuntu-latest has ~14 GB free; the full image (5-8 GB) plus kind
@@ -845,7 +845,7 @@ jobs:
           df -h
 
       - name: Download image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openms-streamlit-${{ matrix.variant }}-${{ matrix.arch }}-image
           path: /tmp
@@ -869,7 +869,7 @@ jobs:
 
       - name: Download image artifact again
         if: steps.archive.outputs.ok == 'false'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: openms-streamlit-${{ matrix.variant }}-${{ matrix.arch }}-image
           path: /tmp
@@ -894,7 +894,7 @@ jobs:
           rm -f /tmp/image.tar
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Install Traefik via Helm
         run: |
