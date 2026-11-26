@@ -74,5 +74,9 @@
     },
     "structure_view": {
         "alphafold_download": true
+    },
+    "loading_logo": {
+        "light": "assets/flashapp-mark-transparent-dark.svg",
+        "dark": "assets/flashapp-mark-transparent-light.svg"
     }
 }
