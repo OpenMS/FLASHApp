@@ -18,11 +18,10 @@ _current: ContextVar = ContextVar('flash_viewer_component', default=None)
 
 COMPONENTS = {
     # Runs: deconvolution
-    'ms1_raw_heatmap': 'Every MS1 peak by retention time (x) and m/z (y), coloured by intensity. Zoom by dragging a box; a click picks the scan nearest to it.',
+    'ms1_raw_heatmap': 'Every MS1 peak by retention time (x) and m/z (y), coloured by intensity. Zoom by dragging a box; a click picks the scan nearest to it. 3D draws the same peaks as stems as high as their intensity, with the same zoom, filter and colours.',
     'ms2_raw_heatmap': 'Every MS2 peak by retention time (x) and m/z (y), coloured by intensity. Zoom by dragging a box; a click picks the scan nearest to it.',
     'ms1_deconv_heat_map': 'The monoisotopic masses deconvolved from the MS1 spectra, by retention time (x) and mass (y). Proteoforms show as horizontal traces; a click picks the scan.',
     'ms2_deconv_heat_map': 'The fragment masses deconvolved from the MS2 spectra, by retention time (x) and mass (y). A click picks the scan.',
-    'ms1_3d_map': 'The MS1 peaks in three dimensions: m/z, retention time and intensity. Drag to rotate, scroll to zoom.',
     'scan_table': 'Every spectrum of the run: scan number, MS level, retention time, precursor and the number of masses found. Picking a scan shows it in the spectra and the mass table.',
     'mass_table': 'The masses deconvolved from the picked scan, with charge range, intensity and quality score (QScore). Picking a mass marks its peaks in the raw spectrum.',
     'deconv_spectrum': 'The deconvolved spectrum of the picked scan: one line per neutral mass. The picked mass is highlighted; fragments matched by a sequence view are marked.',
