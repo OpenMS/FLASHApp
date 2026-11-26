@@ -305,6 +305,11 @@ if isinstance(link, dict):
             and from_view != st.session_state.get('matcher_sequence_seen')):
         st.session_state['matcher_sequence'] = from_view
         st.session_state['matcher_sequence_seen'] = from_view
+elif isinstance(link, str) and link != st.session_state.get('matcher_sequence_seen'):
+    # Before the page's first request the view writes a plain string
+    # (openms-insight keeps the form the identifier holds)
+    st.session_state['matcher_sequence'] = link
+    st.session_state['matcher_sequence_seen'] = link
 
 # Headings first, then what fills each box, then the boxes
 sequence_heading, masses_heading = st.columns(2)
@@ -645,10 +650,8 @@ def _hypotheses_table(workspace, stored, rows, manager):
 def _show_hypothesis(proforma):
     """Show a proteoform of the table in the view (as the sequence box does)."""
     st.session_state['matcher_sequence'] = proforma
-    st.session_state['matcher_sequence_seen'] = proforma
-    manager = state()
-    manager.set_selection(PROFORMA_IDENTIFIER, proforma)
-    manager.set_selection(HYPOTHESIS_IDENTIFIER, None)
+    request_proforma(proforma)
+    state().set_selection(HYPOTHESIS_IDENTIFIER, None)
 
 
 def _remove_hypothesis(stored, index):

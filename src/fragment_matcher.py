@@ -282,8 +282,18 @@ def uniprot_entry(text):
         raise UniProtLookupError(f"'{text}' is not a UniProt accession (e.g. P0ACF0 or P0ACF0-2)")
     isoform = re.search(rf'{accession}(-\d+)', text.upper())
     accession += isoform.group(1) if isoform else ''
+    # uniprot.entry_fasta is the template's public call for one entry
+    # (streamlit-template, feature/uniprot-entry-fasta); until it reaches
+    # FLASHApp through the template sync, the same request goes through the
+    # client's request helper
+    entry_fasta = getattr(uniprot, 'entry_fasta', None)
     try:
-        fasta = uniprot._get(f'/uniprotkb/{accession}.fasta', {}).text
+        if entry_fasta is not None:
+            fasta = entry_fasta(accession)
+        else:
+            fasta = uniprot._get(f'/uniprotkb/{accession}.fasta', {}).text
+    except ValueError as e:
+        raise UniProtLookupError(str(e)) from e
     except uniprot.UniProtError as e:
         message = str(e)
         if '400' in message or '404' in message:
