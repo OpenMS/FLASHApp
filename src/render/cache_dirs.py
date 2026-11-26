@@ -33,6 +33,24 @@ def insight_cache_dir(cache_path, dataset_id):
     return Path(cache_path, 'insight', short_name(dataset_id))
 
 
+def _viewer_caches(cache_path, dataset_id):
+    """The viewer caches removed with a dataset's results, or all of them
+    (`dataset_id` None) when the whole store is cleared."""
+    if dataset_id is None:
+        return Path(cache_path, 'insight')
+    return insight_cache_dir(cache_path, dataset_id)
+
+
+def register_cache_hook():
+    """Has FileManager.remove_results / clear_cache delete the viewer caches."""
+    from src.workflow.FileManager import FileManager
+    if _viewer_caches not in FileManager.cache_dir_hooks:
+        FileManager.cache_dir_hooks.append(_viewer_caches)
+
+
+register_cache_hook()
+
+
 _BUILD_LOCKS: dict[str, threading.Lock] = {}
 _BUILD_LOCKS_GUARD = threading.Lock()
 

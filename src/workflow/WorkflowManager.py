@@ -5,7 +5,7 @@ from .Logger import Logger
 from .ParameterManager import InvalidParameterFileError, ParameterManager
 from .CommandExecutor import CommandExecutor
 from .StreamlitUI import StreamlitUI
-from .FileManager import FileManager
+from .FileManager import FileManager, cache_path_for
 from .input_check import clash_message, selection_clashes
 from ._log_status import classify_log_outcome
 from .RunManager import RunManager, FINISHED, FAILED, CANCELLED, RUNNING, FOLLOW_UP_KEY, FOLLOW_UP_FILE, RUN_NAME_KEY, RUN_NAME_FILE, MAX_NAME_LENGTH, apply_settings, same_files_info
@@ -52,9 +52,17 @@ class WorkflowManager:
     # The configure page. A multi-run workflow that names it offers **Start
     # again with these settings** in the History of each run (start_again).
     configure_page = None
+    # The pages of Explore results and Export results, the last two of the
+    # four steps (src/workflow/guide.py). The Run page links the first when a
+    # run has finished; next_steps() links both.
+    results_page = None
+    export_page = None
+    # Keep the result store in <workspace>/cache, shared by the workspace's
+    # workflows; the worker reads this from the class.
+    share_cache = False
 
     # Core workflow logic using the above classes
-    def __init__(self, name: str, workspace: str, share_cache: bool = False):
+    def __init__(self, name: str, workspace: str):
         self.name = name
         self.workflow_dir = Path(workspace, name.replace(" ", "-").lower())
         # Where execution() writes and results() reads. For a multi-run
@@ -70,13 +78,10 @@ class WorkflowManager:
             self.run_id = get_selected_run(self.runs)
             if self.run_id:
                 self.results_dir = self.runs.results_dir(self.run_id)
-
-        if share_cache:
-            cache_path = Path(workspace, 'cache')
-        else:
-            cache_path = Path(self.workflow_dir, 'cache')
-        
-        self.file_manager = FileManager(self.workflow_dir, cache_path, self.results_dir)
+        self.file_manager = FileManager(
+            self.workflow_dir, self.results_dir,
+            cache_path=cache_path_for(self.workflow_dir, self.share_cache),
+        )
         self.logger = Logger(self.workflow_dir)
         self.parameter_manager = ParameterManager(self.workflow_dir, workflow_name=name)
         self.executor = CommandExecutor(self.workflow_dir, self.logger, self.parameter_manager)
@@ -713,7 +718,7 @@ class WorkflowManager:
 
     def show_run_button(
         self,
-        run_page,
+        run_page=None,
         label: str = "Run analysis",
         help: Optional[str] = None,
         key: str = "",
@@ -725,7 +730,7 @@ class WorkflowManager:
 
         For the end of the configure page, so a user who has described the
         experiment goes straight on: the settings are saved, ``run_page`` (a
-        page path or ``st.Page``) opens and the run starts at once. While a run
+        page path or ``st.Page``, by default the class attribute) opens and the run starts at once. While a run
         is going, the button opens the Run page to follow it instead.
 
         ``sticky`` (default) draws it in a bar that stays at the bottom of the
@@ -737,6 +742,8 @@ class WorkflowManager:
         beside the button, labelled ``name_label``: the start is given that
         name (``run_name()`` in ``execution()``).
         """
+        if run_page is None:
+            run_page = self.run_page
         running = self.get_workflow_status().get("running", False)
         if running:
             label, icon = "Follow the running analysis", ":material/hourglass_top:"
@@ -807,7 +814,7 @@ class WorkflowManager:
     def show_execution_section(
         self,
         results_page=None,
-        results_label: str = "Open results",
+        results_label: str = "Explore results",
     ) -> None:
         """
         Shows the execution section of the UI with content defined in self.execution().
@@ -816,6 +823,8 @@ class WorkflowManager:
         here at once. ``results_page`` (a page path or ``st.Page``) is linked
         when the run has finished, labelled ``results_label``.
         """
+        if results_page is None:
+            results_page = self.results_page
         autostart = bool(st.session_state.pop(self._autostart_key(), False))
         name_key = ""
         if self.multi_run:

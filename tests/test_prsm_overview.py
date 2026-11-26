@@ -84,7 +84,7 @@ def test_demo_workspace(tmp_path):
     cache.mkdir()
     shutil.copy(DEMO / 'cache.db', cache / 'cache.db')
     (cache / 'files').symlink_to(DEMO.resolve() / 'files')
-    file_manager = FileManager(cache, cache)
+    file_manager = FileManager(cache, cache_path=cache)
     datasets = file_manager.get_results_list(['protein_dfs'])
     assert datasets
     for dataset_id in datasets:

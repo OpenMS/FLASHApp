@@ -32,7 +32,7 @@ INI = """<?xml version="1.0" encoding="ISO-8859-1"?>
 
 def _file_manager(tmp_path):
     cache = Path(tmp_path, 'cache')
-    return FileManager(cache, cache)
+    return FileManager(cache, cache_path=cache)
 
 
 def _settings(fm, dataset_id, mzml, identify=False, quant='none'):

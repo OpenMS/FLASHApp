@@ -13,6 +13,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import streamlit as st
 
 from src.common.common import export_files, export_folder_input
+from src.workflow.linked_folders import own_folder
 
 DOWNLOAD_PAGE = 'content/TopDown/TopDownDownload.py'
 
@@ -76,6 +77,9 @@ def build_archive(files, target):
     target = Path(target)
     newest = max((f.stat().st_mtime for f in files), default=0)
     if not (target.exists() and target.stat().st_mtime >= newest):
+        # The run's folder may be linked from the demo: written into, it
+        # would change the demo, so it becomes the workspace's own first
+        own_folder(target.parent, target.parent.parent)
         target.parent.mkdir(parents=True, exist_ok=True)
         partial = target.with_suffix('.part')
         with ZipFile(partial, 'w', ZIP_DEFLATED) as zf:

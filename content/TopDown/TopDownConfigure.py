@@ -2,14 +2,14 @@ import streamlit as st
 
 from src.Workflow import TopDownWorkflow
 from src.common.common import page_setup, save_params
-from src.common.guide import PAGES, page_intro
+from src.common.guide import page_intro
 
 
 params = page_setup()
 
 wf = TopDownWorkflow()
 
-st.title('Describe your experiment')
+st.title('Describe experiment')
 page_intro(
     """
 Choose your runs and your analysis below. All other settings start at values that suit a typical experiment.
@@ -49,7 +49,7 @@ wf.analysis_section()
 wf.show_parameter_section()
 
 # Opens Run analysis and starts the analysis there at once
-wf.show_run_button(PAGES['topdown']['run'][0], label='Run analysis', summary=wf.run_bar_summary(),
+wf.show_run_button(label='Run analysis', summary=wf.run_bar_summary(),
                    name_label='Experiment name',
                    help='Save these settings, open Run analysis and start the analysis of the selected runs.')
 

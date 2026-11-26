@@ -76,7 +76,7 @@ def test_write_produces_the_contract_files(tmp_path):
 
 @pytest.fixture
 def stored(tmp_path):
-    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    file_manager = FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
     levels, runs = contract.build(CONSENSUS, IDENTIFICATIONS)
     design = {runs[0]: ('control', 1), runs[1]: ('treated', 1)}
     session.store(file_manager, 'comparison_20260101-120000', levels, runs, design, {}, 'flashtnt')
@@ -149,3 +149,26 @@ def test_a_proteoform_is_named_by_protein_residues_and_mass_shifts(tmp_path):
     assert contract.describe_proteoform('sp|P1|PROT_ECOLI', None, 1234.56, sequences)['label'] == 'PROT_ECOLI 1234.6 Da'
     assert contract.describe_proteoform('sp|P1|PROT_ECOLI', None, -1.0, sequences)['label'] == \
         'PROT_ECOLI mass not determined'
+
+
+def test_session_reads_each_stored_table_once(stored, monkeypatch):
+    """One session is made per rerun: each result is read from the cache
+    once, however many components ask for it, and a write forgets the reads."""
+    reads = []
+    original = stored.get_results
+
+    def counting(dataset_id, names, **kwargs):
+        reads.extend(names)
+        return original(dataset_id, names, **kwargs)
+
+    monkeypatch.setattr(stored, 'get_results', counting)
+    quant = session.QuantSession(stored, 'comparison_20260101-120000')
+    for _ in range(3):
+        quant.conditions()
+        quant.problem()
+    assert len(reads) == len(set(reads))
+    # A value handed out cannot change what the next caller gets
+    quant.conditions().clear()
+    assert quant.conditions()
+    quant.set_hidden([quant.all_runs[1]])
+    assert quant.runs == [quant.all_runs[0]]

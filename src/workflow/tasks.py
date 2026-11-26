@@ -136,7 +136,7 @@ def execute_workflow(
             cache_path = workflow_path.parent / 'cache'
         else:
             cache_path = workflow_path / 'cache'
-        file_manager = FileManager(workflow_path, cache_path, results_dir)
+        file_manager = FileManager(workflow_path, results_dir, cache_path=cache_path)
         parameter_manager = ParameterManager(workflow_path)
         # run_topp / run_python read the parameters through the
         # ParameterManager while the run goes on: the same file as above.

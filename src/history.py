@@ -87,7 +87,8 @@ def keep(workflow_dir, file_manager, dataset_ids, settings=None):
     """Keep the processing report of the start that just ended with each of
     its results, and its Markdown among their files (exported with them)."""
     for dataset_id in dataset_ids:
-        folder = report_dir(file_manager, dataset_id)
+        # The result's folder must be the workspace's own before the report goes there
+        folder = Path(file_manager.dataset_dir(dataset_id), REPORT_DIR)
         if not keep_report(workflow_dir, folder):
             continue
         try:

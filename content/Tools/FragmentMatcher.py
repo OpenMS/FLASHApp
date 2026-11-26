@@ -56,7 +56,7 @@ EXAMPLE_SEQUENCE = 'MNKTQLIDVIAEKAELSKTQAKAALESTLAAITESLKEGDAVQLVGFGTFKVNHRAERTG
 
 params = page_setup()
 workspace = Path(st.session_state['workspace'])
-file_manager = FileManager(workspace, Path(workspace, 'cache'))
+file_manager = FileManager(workspace, cache_path=Path(workspace, 'cache'))
 
 st.title('🧩 Match fragments')
 page_intro(
@@ -547,7 +547,8 @@ view = ProteinSequenceView(
 if hasattr(view, 'set_modification_picker'):
     view.set_modification_picker(_modification_picker_library(), FIXED_MODS_IDENTIFIER, mod_ids)
 _sequence_view_options(view)
-if hasattr(view, 'set_fragment_matches_proteoform'):
+# They need masses to compare against.
+if stored is not None and hasattr(view, 'set_fragment_matches_proteoform'):
     # The matched proteoform comes with its fragments, for the comparison below
     view.set_fragment_matches_identifier(FRAGMENT_MATCHES_IDENTIFIER)
     view.set_fragment_matches_proteoform()
@@ -655,8 +656,9 @@ def _remove_hypothesis(stored, index):
     state().set_selection(HYPOTHESIS_IDENTIFIER, None)
 
 
-# Proteoforms tried against these masses
-if hasattr(view, 'set_fragment_matches_proteoform'):
+# Proteoforms tried against these masses (only once there are masses to
+# compare them against)
+if stored is not None and hasattr(view, 'set_fragment_matches_proteoform'):
     st.subheader('Compare proteoforms')
     st.caption(
         'Change the sequence, its modifications or the ion types in the view, '

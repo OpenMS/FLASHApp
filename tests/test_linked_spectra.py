@@ -90,7 +90,7 @@ def test_demo_workspace(tmp_path):
     cache.mkdir()
     shutil.copy(DEMO / 'cache.db', cache / 'cache.db')
     (cache / 'files').symlink_to(DEMO.resolve() / 'files')
-    file_manager = FileManager(cache, cache)
+    file_manager = FileManager(cache, cache_path=cache)
     datasets = file_manager.get_results_list(['scan_table'])
     assert datasets
     for dataset_id in datasets:
@@ -143,7 +143,7 @@ def test_demo_isolation_windows(tmp_path):
     cache.mkdir()
     shutil.copy(DEMO / 'cache.db', cache / 'cache.db')
     (cache / 'files').symlink_to(DEMO.resolve() / 'files')
-    file_manager = FileManager(cache, cache)
+    file_manager = FileManager(cache, cache_path=cache)
     dataset_id = 'example_deconvolution'
     scans = pl.read_parquet(file_manager.get_result_path(dataset_id, 'scan_table'))
     levels = dict(zip(scans['index'].cast(pl.Int64), scans['MSLevel']))

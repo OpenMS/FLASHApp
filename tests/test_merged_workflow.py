@@ -87,7 +87,7 @@ def _layout(rows):
 def test_comparison_layout_of_identified_runs_carries_over(tmp_path):
     from src.render import quant_view
 
-    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    file_manager = FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
     file_manager.store_data('flashtnt_quant_layout', 'layout', _layout([['quant_table']]))
     quant_view.migrate_layout(file_manager)
     assert quant_view.layout(file_manager) == [['quant_table']]
@@ -97,7 +97,7 @@ def test_comparison_layout_of_identified_runs_carries_over(tmp_path):
 def test_saved_comparison_layout_wins(tmp_path):
     from src.render import quant_view
 
-    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    file_manager = FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
     file_manager.store_data('quant_layout', 'layout', _layout([['quant_volcano']]))
     file_manager.store_data('flashtnt_quant_layout', 'layout', _layout([['quant_table']]))
     quant_view.migrate_layout(file_manager)
@@ -125,7 +125,7 @@ def test_each_experiment_starts_from_the_default_of_its_run(tmp_path):
     from src.render import topdown_layout
     from src.render.layout_editor.catalog import DECONV_DEFAULT_LAYOUT, TNT_DEFAULT_LAYOUTS
 
-    file_manager = FileManager(tmp_path, Path(tmp_path, 'cache'))
+    file_manager = FileManager(tmp_path, cache_path=Path(tmp_path, 'cache'))
     assert topdown_layout.rows(file_manager, False, None) == DECONV_DEFAULT_LAYOUT
     assert topdown_layout.rows(file_manager, True, 'Native') == TNT_DEFAULT_LAYOUTS['Native']
     assert topdown_layout.rows(file_manager, True, 'Lysate') == TNT_DEFAULT_LAYOUTS['Lysate']

@@ -3,7 +3,7 @@ import streamlit as st
 from src import analysis
 from src.Workflow import TopDownWorkflow
 from src.common.common import page_setup, save_params
-from src.common.guide import PAGES, next_steps, page_intro
+from src.common.guide import next_steps, page_intro
 from src.workflow.RunManager import RUN_NAME_KEY
 
 
@@ -33,7 +33,7 @@ st.info(
     icon='🧭',
 )
 
-wf.show_execution_section(results_page=PAGES['topdown']['viewer'][0], results_label='Explore results')
+wf.show_execution_section()
 
 next_steps(
     'topdown',

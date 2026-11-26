@@ -12,6 +12,8 @@ entity in the level shown): clicking a proteoform in the table or the volcano
 plot shows it in the profile and the per-run table.
 """
 
+from pathlib import Path
+
 import polars as pl
 import streamlit as st
 
@@ -19,24 +21,35 @@ from openms_insight import ClusteredHeatmap, Heatmap, PCAPlot, SeriesPlot, Table
 
 from src.parse import differential as diff
 from src.quant import qc, sources
-from src.quant.session import LEVEL_NAMES, RESULTS, STATUS_LABELS
-from src.render import comparison_plots, go_terms, insight_data
-from src.render.postprocessing_plots import (
-    IMPUTED_COLORS, IMPUTED_SERIES, MISSING_COLORS, MISSING_SERIES, STAGE_COLORS, STAGE_SERIES,
-    imputed_value_preview, missingness_vs_intensity, pvalue_histogram, sample_distributions,
-)
+from src.quant.session import LEVEL_NAMES, STATUS_LABELS
+from src.render import go_terms, insight_data, teaching
 from src.render.render import RECLICK, MissingResult, _component, _fixed
 from src.render.series import show_series
+from src.viz.identification import (identification_frequency, identifications_across_runs,
+                                    identifications_per_run, shared_identifications)
+from src.viz.plumbing import group_colors as condition_colors
+from src.viz.quantification import (entry_per_run, feature_intensity, feature_map, feature_profile, feature_table,
+                                    labels_found, match_quality, replicate_cv, reporter_intensities,
+                                    reporter_ratios, sample_correlation, steps, total_intensity)
+from src.viz.quantification.abundance_profile import picked_set, profile_settings, profile_table
+from src.viz.quantification.clustered_heatmap import clustered_settings
+from src.viz.quantification.comparison_table import comparison_columns, comparison_table
+from src.viz.quantification.imputed_values import show_imputed_values
+from src.viz.quantification.missing_values import show_missing_values
+from src.viz.quantification.normalization import show_normalization
+from src.viz.quantification.pca import most_variable, pca_settings, sample_metadata
+from src.viz.quantification.pvalue_histogram import show_pvalues
+from src.viz.quantification.volcano import volcano_settings
 
+# The row of an entity in the level shown, shared by the cells of a comparison
+CONSENSUS = 'consensus'
 
-CONDITION_COLORS = ['#3366CC', '#DC3912', '#FF9900', '#109618', '#990099', '#0099C6']
 
 # OpenDDA's cut-offs for calling a change
 FC_CUTOFF = 1.0
 P_CUTOFF = 0.05
 
 _P = {'formatter': 'scientific', 'formatterParams': {'precision': 3}}
-_FC = {'formatter': 'signed', 'formatterParams': {'precision': 2}}
 
 
 def comparison_groups(conditions):
@@ -48,13 +61,10 @@ def comparison_groups(conditions):
 
 
 def _plot(session, name, spec, key, state_manager, height):
-    """Draw a plot of src/render/comparison_plots.py (its settings and ``data``)."""
+    """Draw a plot of the library (its settings and ``data``)."""
     show_series(spec.pop('data'), name, session.file_manager.cache_path, key, height=height,
                 state_manager=state_manager, **spec)
 
-
-def condition_colors(names):
-    return {name: CONDITION_COLORS[i % len(CONDITION_COLORS)] for i, name in enumerate(sorted(names))}
 
 STATUS_COLORS = {
     'detected': '#2E7D32', 'transferred, identified': '#1565C0',
@@ -85,15 +95,6 @@ def _ready(session):
 
 def _sources(session, *names):
     return [session.result_name(n) for n in names] + ['quant_design', 'quant_settings']
-
-
-def _change(compared, fc, padj):
-    significant = (pl.col('p-adj') <= padj) & (pl.col('log2FC').abs() >= fc)
-    return (
-        pl.when(significant & (pl.col('log2FC') > 0)).then(pl.lit(f'higher in {compared}'))
-        .when(significant & (pl.col('log2FC') < 0)).then(pl.lit(f'lower in {compared}'))
-        .otherwise(pl.lit('–'))
-    )
 
 
 def _sample(session):
@@ -133,12 +134,8 @@ def _table_columns(session, runs):
         hidden.append('proforma')
     if level == 'protein':
         columns.append({'title': 'Description', 'field': 'description', 'sorter': 'string'})
-    columns += [
-        {'title': 'Change', 'field': 'Change', 'sorter': 'string'},
-        {'title': 'log2 fold change', 'field': 'log2FC', 'sorter': 'number', **_FC},
-        {'title': 'Adjusted p-value', 'field': 'p-adj', 'sorter': 'number', **_P,
-         'headerTooltip': 'Empty: removed by the filter, so not tested.'},
-    ]
+    entity, before = columns[0], columns[1:]
+    columns = []
     if level != 'protein':
         columns.append({'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)})
         hidden.append('mass')
@@ -170,7 +167,9 @@ def _table_columns(session, runs):
         columns.append({'title': run, 'field': run, 'sorter': 'string',
                         'headerTooltip': 'detected; transferred, identified (match between runs, identified in the run); transferred (match between runs); missing'})
         hidden.append(run)
-    return columns, hidden
+    # The library's comparison columns, with this level's name and extras
+    return comparison_columns(entity['field'], entity['title'], entity_tooltip=entity['headerTooltip'],
+                              after_entity=before, after=columns, p_value=False), hidden
 
 
 def build_summary(session, state_manager, key, height=None):
@@ -178,7 +177,7 @@ def build_summary(session, state_manager, key, height=None):
     del state_manager, height
     if not _ready(session):
         return
-    reference, compared = comparison_groups(session.conditions().values())
+    _, compared = comparison_groups(session.conditions().values())
     fc, padj = _cutoffs(session)
     statistics = session.result('statistics').collect()
     tested = statistics.drop_nulls(['log2FC', 'p-adj'])
@@ -187,15 +186,11 @@ def build_summary(session, state_manager, key, height=None):
     down = significant.filter(pl.col('log2FC') <= -fc).height
     with st.container(key=f'{key}_summary', border=True):
         metrics = st.columns(4)
-        metrics[0].metric(f'{_sample(session)}s compared', len(session.conditions()))
+        metrics[0].metric(f'{_sample(session)}s compared', len(session.conditions()), help=teaching.help())
         metrics[1].metric(f'{_noun(session, True).capitalize()} tested', f'{tested.height:,}',
                           help=f'Of {statistics.height:,}; the others were removed by the filter.')
         metrics[2].metric(f'Higher in {compared}', f'{up:,}')
         metrics[3].metric(f'Lower in {compared}', f'{down:,}')
-        st.caption(
-            f'{compared} vs. {reference}: adjusted p-value ≤ {padj:g} and |log2 fold change| ≥ {fc:g}. '
-            'Change the conditions and cut-offs with **Edit comparison**.'
-        )
 
 
 def _comparison_table(session):
@@ -210,7 +205,7 @@ def _comparison_table(session):
             table = table.with_columns(
                 (pl.col('start').cast(pl.Utf8) + '\u2013' + pl.col('end').cast(pl.Utf8)).alias('residues'),
             )
-    return table.with_columns(_change(compared, fc, padj).alias('Change')).sort('p-adj', nulls_last=True).lazy()
+    return comparison_table(table.lazy(), compared, fc, padj)
 
 
 def build_table(session, state_manager, key, height):
@@ -237,7 +232,7 @@ def build_table(session, state_manager, key, height):
             multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
             reclick=RECLICK,
         ),
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def build_volcano(session, state_manager, key, height):
@@ -250,41 +245,85 @@ def build_volcano(session, state_manager, key, height):
         _sources(session, 'statistics'),
         lambda: dict(
             data=session.result('statistics').drop_nulls(['log2FC', 'p-adj']),
-            log2fc_column='log2FC', pvalue_column='p-adj', label_column='Proteoform',
-            interactivity={'consensus': 'ConsensusIndex'},
-            # A box or lasso, or All changed / Higher / Lower, picks entries
-            # for the GO enrichment cell
-            multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
-            selection_presets=True,
-            preset_labels={'up': f'Higher in {compared}', 'down': f'Lower in {compared}'},
-            title=f'{compared} vs. {reference}',
-            up_color='#E74C3C', down_color='#3498DB', ns_color='#95A5A6',
-            show_threshold_lines=True, threshold_line_style='dash',
-            x_label='log2 fold change', y_label='-log10(adjusted p-value)',
+            **volcano_settings(
+                pvalue_column='p-adj', label_column='Proteoform', reference=reference, compared=compared,
+                interactivity={'consensus': 'ConsensusIndex'},
+                # A box or lasso, or All changed / Higher / Lower, picks entries
+                # for the GO enrichment cell
+                multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
+            ),
         ),
-    )(key=key, state_manager=state_manager, height=height, fc_threshold=fc, p_threshold=padj, max_labels=10)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help(), fc_threshold=fc, p_threshold=padj, max_labels=10)
+
+
+def _picked_set(state_manager):
+    """The entries picked together (box, lasso, the volcano's presets or the
+    table's check boxes), when there are several."""
+    return picked_set(state_manager, go_terms.COMPARISON_SET)
+
+
+def _entity_names(session):
+    """ConsensusIndex -> Entity: the proteoform's name, with the feature's
+    mass and retention time when they are known (a feature level names its
+    entries by these alone)."""
+    statistics = session.result('statistics').select('ConsensusIndex', 'id', 'Proteoform')
+    annotations = session.annotations()
+    extra = [c for c in ('mass', 'rt') if c in annotations.collect_schema().names()]
+    frame = statistics.join(annotations.select('id', *extra), on='id', how='left')
+    parts = [pl.col('Proteoform').cast(pl.Utf8).fill_null('')]
+    if 'mass' in extra:
+        parts.append(pl.when(pl.col('mass').is_not_null())
+                     .then(pl.lit(' · ') + pl.col('mass').round(2).cast(pl.Utf8) + pl.lit(' Da'))
+                     .otherwise(pl.lit('')))
+    if 'rt' in extra:
+        parts.append(pl.when(pl.col('rt').is_not_null())
+                     .then(pl.lit(' @ ') + (pl.col('rt') / 60).round(1).cast(pl.Utf8) + pl.lit(' min'))
+                     .otherwise(pl.lit('')))
+    return frame.select('ConsensusIndex', pl.concat_str(parts).alias('Entity'))
+
+
+def _profile_arguments(session, several):
+    """The library's abundance profile of the level: one entry (by
+    ConsensusIndex) with the condition means, or every entry picked together."""
+    settings = session.settings
+    sample = _sample(session)
+    normalized = session.result('normalized')
+    if several:
+        names = session.result('statistics').select('ConsensusIndex', 'Proteoform')
+        long = normalized.join(names, on='ConsensusIndex', how='left').with_columns(
+            (pl.col('Proteoform') + ' in ' + pl.col('Run') + ': ' + pl.col('Status')).alias('Hover'),
+        )
+        id_column, keep, title = 'Proteoform', (), f'Abundance per {sample.lower()} of the picked {_noun(session, plural=True)}'
+    else:
+        long = normalized.join(_entity_names(session), on='ConsensusIndex', how='left').with_columns(
+            (pl.col('Entity') + '<br>' + pl.col('Run') + ': ' + pl.col('Status')).alias('Hover'),
+        )
+        id_column, keep, title = 'ConsensusIndex', ('Entity',), f'Abundance per {sample.lower()}'
+    table = profile_table(long.collect(), id_column, sample_column='Run', group_column='Condition',
+                          value_column='Abundance', hover_column='Hover', keep=keep, means=not several,
+                          samples=list(session.conditions()))
+    arguments = profile_settings(
+        table, id_column, go_terms.COMPARISON_SET if several else 'consensus', several=several,
+        empty_until_picked=False, title=title, x_label=sample,
+        y_label=f"Abundance ({settings['postproc-transform']}, normalized)",
+        subtitle_column=None if several else 'Entity',
+        groups=None if several else list(session.conditions().values()),
+    )
+    return dict(data=pl.from_pandas(table).lazy(), **arguments)
 
 
 def build_profile(session, state_manager, key, height):
-    """The selected entity's normalized abundance in every run (sample), by condition."""
+    """The selected entity's normalized abundance in every run (sample), by
+    condition with a line at each condition's mean; with several entries
+    picked together, each of them as a series."""
     if not _ready(session):
         return
-    colors = condition_colors(set(session.conditions().values()))
-    settings = session.settings
+    several = bool(_picked_set(state_manager))
     _component(
-        SeriesPlot, f'quant_profile_{session.level}', session.file_manager, session.dataset_id,
-        _sources(session, 'normalized'),
-        lambda: dict(
-            data=session.result('normalized').with_columns(
-                (pl.col('Run') + ': ' + pl.col('Status')).alias('Hover'),
-            ),
-            filters={'consensus': 'ConsensusIndex'},
-            x_column='Run', y_column='Abundance', series_column='Condition',
-            series_colors=colors, mode='markers', y_range_mode='normal', hover_column='Hover',
-            title=f'Abundance per {_sample(session).lower()}', x_label=_sample(session),
-            y_label=f"Abundance ({settings['postproc-transform']}, normalized)",
-        ),
-    )(key=key, state_manager=state_manager, height=height)
+        SeriesPlot, f'quant_{"profiles" if several else "profile"}_{session.level}', session.file_manager,
+        session.dataset_id, _sources(session, 'normalized'),
+        lambda: _profile_arguments(session, several),
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def _runs_frame(session):
@@ -316,28 +355,18 @@ def build_runs(session, state_manager, key, height):
         _sources(session, 'statistics') + [f'quant_{session.level}'],
         lambda: dict(
             data=_runs_frame(session),
-            column_definitions=[
-                {'title': _sample(session), 'field': 'Run', 'sorter': 'string'},
-                {'title': 'Condition', 'field': 'Condition', 'sorter': 'string'},
-                {'title': 'Abundance', 'field': 'Abundance', 'sorter': 'number',
-                 'formatter': 'scientific', 'formatterParams': {'precision': 3},
-                 'headerTooltip': 'Raw signal (intensity × seconds), before normalization; summed over the features of a proteoform or protein.'},
-                {'title': 'Status', 'field': 'Status', 'sorter': 'string',
-                 'headerTooltip': 'detected: FLASHDeconv found it in this run. transferred: measured where another run found it (match between runs, FDR 1%); identified: and a PrSM of this run confirms it.'},
-                {'title': 'Match score', 'field': 'MatchScore', 'sorter': 'number', **_fixed(3)},
-                {'title': 'Match q-value', 'field': 'MatchQvalue', 'sorter': 'number', **_P},
-            ],
-            title=f'Selected {_noun(session)} per {_sample(session).lower()}', index_field='RowIndex',
-            filters={'consensus': 'ConsensusIndex'}, go_to_fields=[], reclick=RECLICK, pagination=False,
+            **entry_per_run.settings(
+                _noun(session), _sample(session), selection=CONSENSUS,
+                abundance_help='Raw signal (intensity × seconds), before normalization; summed over the features of a proteoform or protein.',
+                status_help='detected: FLASHDeconv found it in this run. transferred: measured where another run found it (match between runs, FDR 1%); identified: and a PrSM of this run confirms it.',
+            ),
         ),
-    )(key=key, state_manager=state_manager, height=height)
+        render=entry_per_run.RENDER,
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def _metadata(conditions):
-    return pl.DataFrame(
-        {'sample_id': list(conditions), 'group': list(conditions.values())},
-        schema={'sample_id': pl.String, 'group': pl.String},
-    )
+    return sample_metadata(conditions)
 
 
 def build_pca(session, state_manager, key, height):
@@ -348,42 +377,36 @@ def build_pca(session, state_manager, key, height):
     if len(runs) < 3:
         st.info(f'PCA needs at least three {_sample(session).lower()}s with a condition.')
         return
-    colors = condition_colors(set(conditions.values()))
-    wide = session.result('normalized_wide').select('Proteoform', *runs).collect()
-    variance = wide.select(pl.concat_list(runs).list.var().alias('v'))['v']
-    top = wide.with_columns(variance.alias('_v')).sort('_v', descending=True).head(500).drop('_v')
+    top = most_variable(session.result('normalized_wide').select('Proteoform', *runs).collect(), runs,
+                        id_column='Proteoform')
     try:
         pca = _component(
             PCAPlot, f'quant_pca_{session.level}', session.file_manager, session.dataset_id,
             _sources(session, 'normalized_wide'),
-            lambda: dict(
-                data=top.lazy(), metadata=_metadata(conditions), sample_id_field='sample_id',
-                group_field='group', n_components=min(5, len(runs)), title='Sample similarity (PCA)',
-                group_colors=colors,
-            ),
+            lambda: dict(data=top.lazy(), **pca_settings(conditions)),
         )
     except ValueError as e:
         st.info(f'PCA could not be computed: {e}')
         return
-    pca(key=key, state_manager=state_manager, height=height, pc_x=1, pc_y=2)
+    pca(key=key, state_manager=state_manager, height=height, help=teaching.help(), pc_x=1, pc_y=2)
 
 
 def build_heatmap(session, state_manager, key, height):
     if not _ready(session):
         return
     conditions = session.conditions()
-    colors = condition_colors(set(conditions.values()))
     _component(
         ClusteredHeatmap, f'quant_heatmap_{session.level}', session.file_manager, session.dataset_id,
         _sources(session, 'zscores'),
         lambda: dict(
-            data=session.result('zscores'), id_col='Proteoform', metadata=_metadata(conditions),
-            title=f'Most significant {_noun(session, True)} (z-scores, clustered)',
-            x_label=f'{_sample(session)}s', y_label=LEVEL_NAMES[session.level],
-            intensity_label='Z-score', group_colors=colors,
-            multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
+            data=session.result('zscores'),
+            **clustered_settings(
+                conditions, 'Proteoform', title=f'Most significant {_noun(session, True)} (z-scores, clustered)',
+                x_label=f'{_sample(session)}s', y_label=LEVEL_NAMES[session.level],
+                multi_select={go_terms.COMPARISON_SET: 'Proteoform'},
+            ),
         ),
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def _frame(session, name):
@@ -411,7 +434,7 @@ def build_id_counts(session, state_manager, key, height=None):
     level = _id_level(session)
     counts = qc.counts_per_run(session.long(level).collect(), session.runs)
     _plot(session, f'quant-id-counts-{level}',
-          comparison_plots.counts_per_run(counts, _id_noun(session, level), _sample(session)),
+          identifications_per_run.settings(counts, _id_noun(session, level), _sample(session)),
           key, state_manager, height)
 
 
@@ -420,7 +443,7 @@ def build_id_frequency(session, state_manager, key, height=None):
     level = _id_level(session)
     table = qc.frequency(session.long(level).collect(), session.runs)
     _plot(session, f'quant-id-frequency-{level}',
-          comparison_plots.frequency(table, _id_noun(session, level), _sample(session)), key, state_manager, height)
+          identification_frequency.settings(table, _id_noun(session, level), _sample(session)), key, state_manager, height)
 
 
 def build_id_overlap(session, state_manager, key, height):
@@ -436,15 +459,15 @@ def build_id_overlap(session, state_manager, key, height):
         ClusteredHeatmap, f'quant_id_overlap_{level}', session.file_manager, session.dataset_id,
         [f'quant_{level}', 'quant_design', 'quant_settings'],
         lambda: dict(
-            data=qc.overlap(session.long(level).collect(), runs).lazy(), id_col='Sample',
-            metadata=_metadata(conditions) if conditions else None,
-            title=f'Shared {_id_noun(session, level)} (% of those either {_sample(session).lower()} detected)',
-            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Shared (%)',
-            colorscale='Blues', reversescale=True,
-            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            data=qc.overlap(session.long(level).collect(), runs).lazy(),
+            **shared_identifications.settings(
+                _id_noun(session, level), _sample(session),
+                metadata=_metadata(conditions) if conditions else None,
+                group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            ),
         ),
         required=[f'quant_{level}'],
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def build_id_table(session, state_manager, key, height):
@@ -453,35 +476,18 @@ def build_id_table(session, state_manager, key, height):
     runs = session.runs
     table = qc.identification_table(session.long(level).collect(), session.annotations(level).collect(), runs)
     noun = _id_noun(session, level)
-    columns = [{'title': noun[:-1].capitalize() if noun.endswith('s') else noun, 'field': 'label', 'sorter': 'string'}]
-    if 'protein_label' in table.columns and level == 'proteoform':
-        columns.append({'title': 'Protein', 'field': 'protein_label', 'sorter': 'string'})
-    if 'mass' in table.columns:
-        columns.append({'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)})
-    if 'proteoforms' in table.columns:
-        columns.append({'title': 'Proteoforms', 'field': 'proteoforms', 'sorter': 'number'})
-    if 'PrSMs' in table.columns:
-        columns.append({'title': 'PrSMs', 'field': 'PrSMs', 'sorter': 'number',
-                        'headerTooltip': 'Spectra (PrSMs) that identify it, over all runs.'})
-    columns += [
-        {'title': 'Detected', 'field': 'Detected', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s that found it themselves.'},
-        {'title': 'Found', 'field': 'Found', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s that found it themselves or matched it from another one.'},
-    ]
-    for run in runs:
-        columns.append({'title': run, 'field': run, 'sorter': 'string',
-                        'headerTooltip': 'detected; matched, identified (match between runs, identified in the run); matched (match between runs); missing'})
+    columns = identifications_across_runs.columns(
+        table.columns, runs, noun, _sample(session), with_protein=level == 'proteoform')
     _component(
         Table, f'quant_id_table_{level}', session.file_manager, session.dataset_id,
         [f'quant_{level}', f'quant_{level}_annotations', 'quant_design', 'quant_settings'],
         lambda: dict(
-            data=table.lazy(), column_definitions=columns, index_field='RowIndex',
-            title=f'{LEVEL_NAMES[level]} across the {_sample(session).lower()}s',
-            go_to_fields=['label'], row_overview='{label}', interactivity={'quant_form': 'RowIndex'},
+            data=table.lazy(),
+            **identifications_across_runs.settings(
+                columns, f'{LEVEL_NAMES[level]} across the {_sample(session).lower()}s', selection='quant_form'),
         ),
         required=[f'quant_{level}', f'quant_{level}_annotations'],
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 # -- quality control -------------------------------------------------------
@@ -491,7 +497,7 @@ def build_totals(session, state_manager, key, height=None):
     mean the samples were not loaded alike (normalization corrects for it)."""
     conditions = session.conditions()
     frame = qc.totals(session.long().collect(), session.runs)
-    _plot(session, 'quant-totals', comparison_plots.totals(
+    _plot(session, 'quant-totals', total_intensity.settings(
         frame, condition_colors(set(conditions.values())), conditions, _sample(session)), key, state_manager, height)
     unlike = qc.unlike_replicates(frame, conditions)
     if unlike:
@@ -512,15 +518,15 @@ def build_correlation(session, state_manager, key, height):
         ClusteredHeatmap, f'quant_correlation_{level}', session.file_manager, session.dataset_id,
         [f'quant_{level}', 'quant_design', 'quant_settings'],
         lambda: dict(
-            data=qc.correlation(session.long(level).collect(), runs).lazy(), id_col='Sample',
-            metadata=_metadata(conditions) if conditions else None,
-            title=f'Correlation of the {_sample(session).lower()}s (log2 intensities of {_noun(session, True)})',
-            x_label=f'{_sample(session)}s', y_label=f'{_sample(session)}s', intensity_label='Pearson r',
-            colorscale='Viridis', reversescale=False,
-            group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            data=qc.correlation(session.long(level).collect(), runs).lazy(),
+            **sample_correlation.settings(
+                _noun(session, True), _sample(session),
+                metadata=_metadata(conditions) if conditions else None,
+                group_colors=condition_colors(set(conditions.values())) if conditions else None,
+            ),
         ),
         required=[f'quant_{level}'],
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def build_cv(session, state_manager, key, height=None):
@@ -533,8 +539,8 @@ def build_cv(session, state_manager, key, height=None):
     if frame.height == 0:
         st.info('A CV needs at least two replicates of a condition.')
         return
-    _plot(session, 'quant-cv', comparison_plots.coefficients_of_variation(
-        frame, condition_colors(set(conditions.values()))), key, state_manager, height)
+    _plot(session, 'quant-cv', replicate_cv.settings(
+        frame, condition_colors(set(conditions.values())), selection=CONSENSUS), key, state_manager, height)
 
 
 def build_match_quality(session, state_manager, key, height=None):
@@ -545,7 +551,7 @@ def build_match_quality(session, state_manager, key, height=None):
         st.info('No values were matched between runs: the samples were measured together '
                 '(isobaric labels) or every run found every feature itself.')
         return
-    _plot(session, 'quant-match-quality', comparison_plots.match_quality(frame, session.runs, _sample(session)),
+    _plot(session, 'quant-match-quality', match_quality.settings(frame, session.runs, _sample(session)),
           key, state_manager, height)
 
 
@@ -553,19 +559,20 @@ def build_match_quality(session, state_manager, key, height=None):
 # Saved layouts written before they were split name them together as
 # 'quant_diagnostics' (quant_view.split_diagnostics).
 
+def _step(session, key, state_manager, height):
+    """Where a comparison-step plot of the library is cached and drawn."""
+    return dict(cache_path=Path(session.file_manager.cache_path, 'insight'), key=key,
+                state_manager=state_manager, height=height, help=teaching.help())
+
+
 def build_missing_values(session, state_manager, key, height=None):
     """Where missing values occur: mean intensity of complete entries and of
     entries with gaps."""
     if not _ready(session):
         return
-    runs = list(session.conditions())
-    data, gaps = missingness_vs_intensity(_frame(session, 'filtered'), runs)
-    show_series(
-        data, 'quant-missing-values', session.file_manager.cache_path, key, height=height,
-        state_manager=state_manager, x_column='x', y_column='y', series_column='series',
-        series_names=MISSING_SERIES, series_colors=MISSING_COLORS,
-        title=f'Where missing values occur ({gaps} of {len(_frame(session, "filtered"))} have gaps)',
-        x_label='Mean log2 intensity', y_label='Density',
+    show_missing_values(
+        _frame(session, 'filtered'), list(session.conditions()), 'quant-missing-values',
+        x_label='Mean log2 intensity', **_step(session, key, state_manager, height),
     )
 
 
@@ -573,37 +580,20 @@ def build_imputed_values(session, state_manager, key, height=None):
     """The values imputed for the gaps against the measured ones."""
     if not _ready(session):
         return
-    runs = list(session.conditions())
-    show_series(
-        imputed_value_preview(_frame(session, 'filtered'), _frame(session, 'imputed'), runs),
-        'quant-imputed-values', session.file_manager.cache_path, key, height=height,
-        state_manager=state_manager, x_column='x', y_column='y', series_column='series',
-        series_names=IMPUTED_SERIES, series_colors=IMPUTED_COLORS,
-        title='Observed values and the values imputation fills in', x_label='log2 intensity', y_label='Values',
+    show_imputed_values(
+        _frame(session, 'filtered'), _frame(session, 'imputed'), list(session.conditions()),
+        'quant-imputed-values', x_label='log2 intensity', **_step(session, key, state_manager, height),
     )
-
-
-def _normalization_height(samples):
-    """A box per sample, laid out horizontally."""
-    return 44 * samples + 140
 
 
 def build_normalization(session, state_manager, key, height=None):
     """Intensity distribution of each sample before and after normalization."""
     if not _ready(session):
         return
-    samples = list(session.conditions())
-    data = sample_distributions(
-        _frame(session, 'imputed'), _frame(session, 'normalized_wide'), samples,
-        after_is_log=session.settings['postproc-transform'] != 'None',
-    )
-    show_series(
-        data, 'quant-run-distributions', session.file_manager.cache_path, key,
-        height=max(height or 0, _normalization_height(len(samples))), state_manager=state_manager,
-        x_column='Sample', y_column='Intensity', series_column='Stage', series_names=STAGE_SERIES,
-        series_colors=STAGE_COLORS, mode='box', orientation='h',
-        title='Intensity distributions before and after normalization', x_label=_sample(session),
-        y_label='log2 intensity', y_range_mode='normal',
+    show_normalization(
+        _frame(session, 'imputed'), _frame(session, 'normalized_wide'), list(session.conditions()),
+        session.settings['postproc-transform'] != 'None', 'quant-run-distributions',
+        sample_label=_sample(session), y_label='log2 intensity', **_step(session, key, state_manager, height),
     )
 
 
@@ -611,12 +601,9 @@ def build_pvalues(session, state_manager, key, height=None):
     """Distribution of the p-values of the group comparison."""
     if not _ready(session):
         return
-    data, expected = pvalue_histogram(_frame(session, 'statistics'))
-    show_series(
-        data, 'quant-p-values', session.file_manager.cache_path, key, height=height,
-        state_manager=state_manager, x_column='p-value', y_column='Proteoforms', mode='bars', show_legend=False,
-        title=f'p-value distribution ({expected:.0f} per bin if nothing changes)', x_label='p-value',
-        y_label=_noun(session, True).capitalize(),
+    show_pvalues(
+        _frame(session, 'statistics'), 'quant-p-values', noun=_noun(session, True).capitalize(),
+        **_step(session, key, state_manager, height),
     )
 
 
@@ -700,7 +687,7 @@ def build_id_prsms(session, state_manager, key, height):
         ),
         extra=sorted(sources.run_datasets(session.file_manager, session.manifest).items()),
         required=[f'quant_{level}', 'identifications_tsv'],
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def _run_state(session, run_ds, extra=''):
@@ -713,25 +700,53 @@ def _set(state, identifier, value):
         state.set_selection(identifier, value)
 
 
-def _selected_prsm(session, state_manager):
-    """(run name, dataset id, state, scan) of the PrSM picked in the PrSM
-    table, its run's state pointing at it; None (with a note) otherwise."""
+def _no_spectrum_note(frame, form, runs):
+    """Why no PrSM of the picked identification can be shown: the runs that
+    identified it, and that their results are not in this workspace."""
+    picked = frame if form is None else frame.filter(pl.col('RowIndex') == form)
+    found = [run for run in picked['Run'].unique(maintain_order=True).to_list() if run]
+    missing = [run for run in found if run not in runs]
+    if not missing:
+        return 'None of the PrSMs of this identification has its spectrum in this workspace.'
+    names = ', '.join(missing)
+    return (f"This identification was found in {names}, whose results are not in this workspace. "
+            "The comparison keeps every run's PrSMs, but a spectrum is in its run's own results. "
+            'Pick an identification with Spectrum: yes in the PrSM table, or process that run here.')
+
+
+def _selected_prsm(session, state_manager, note=True):
+    """(dataset id, state) of the run of the PrSM picked in the PrSM table,
+    its state pointing at that PrSM; None (with a note) otherwise.
+
+    A pick whose spectrum is not in this workspace (its run was compared but
+    its results were not kept), or no pick at all, falls back to the first
+    PrSM of the picked identification that can be shown."""
     from src.render import render
     _, frame = _prsm_frame(session)
     if frame is None or frame.height == 0:
         _no_prsms_note(session)
         return None
-    picked = state_manager.get_selection('quant_prsm')
-    row = frame.filter(pl.col('prsm_row') == picked) if picked is not None else frame.head(0)
+    runs = sources.run_datasets(session.file_manager, session.manifest)
+    shown = frame.filter((pl.col('Spectrum') == 'yes') & pl.col('Run').is_in(list(runs)))
     form = state_manager.get_selection('quant_form')
-    if row.height == 0 or (form is not None and row['RowIndex'][0] != form):
-        st.info('Pick a PrSM in **PrSMs of the selected identification** to see its spectrum here.')
+    if form is not None:
+        shown = shown.filter(pl.col('RowIndex') == form)
+    picked = state_manager.get_selection('quant_prsm')
+    row = shown.filter(pl.col('prsm_row') == picked) if picked is not None else shown.head(0)
+    if row.height == 0:
+        row = shown.head(1)
+        lost = frame.filter(pl.col('prsm_row') == picked) if picked is not None else frame.head(0)
+        if form is not None:
+            lost = lost.filter(pl.col('RowIndex') == form)
+        if note and lost.height and row.height:
+            gone, first = lost.row(0, named=True), row.row(0, named=True)
+            st.caption(f"Scan {gone['Scan']} of {gone['Run']} has no spectrum in this workspace; "
+                       f"showing scan {first['Scan']} of {first['Run']}.")
+    if row.height == 0:
+        st.info(_no_spectrum_note(frame, form, runs))
         return None
     prsm = row.row(0, named=True)
-    run_ds = sources.run_datasets(session.file_manager, session.manifest).get(prsm['Run'])
-    if run_ds is None:
-        st.info(f"The results of {prsm['Run']} are not in this workspace, so its spectra cannot be shown.")
-        return None
+    run_ds = runs[prsm['Run']]
     hit = sources.prsm_in_run(render.insight_data.proteins(session.file_manager, run_ds).collect(), prsm['Scan'])
     if hit is None:
         st.info(f"Scan {prsm['Scan']} of {prsm['Run']} has no PrSM in the run's own results.")
@@ -741,13 +756,12 @@ def _selected_prsm(session, state_manager):
     _set(state, 'protein', index)
     _set(state, 'scan', scan_idx)
     _set(state, 'pscan', scan_idx)
-    st.caption(f"{prsm['label']}: scan {prsm['Scan']} of {prsm['Run']}")
     return run_ds, state
 
 
 def _run_cell(comp_name, session, state_manager, key):
     from src.render import render
-    picked = _selected_prsm(session, state_manager)
+    picked = _selected_prsm(session, state_manager, note=comp_name == 'sequence_view')
     if picked is None:
         return
     run_ds, state = picked
@@ -808,7 +822,7 @@ def build_reporter_intensities(session, state_manager, key, height=None):
     ions, channels = got
     conditions = session.conditions()
     presence = sources.channel_presence(ions, channels)
-    _plot(session, 'quant-reporter-intensities', comparison_plots.reporter_intensities(
+    _plot(session, 'quant-reporter-intensities', reporter_intensities.settings(
         presence, ions, condition_colors(set(conditions.values())), conditions), key, state_manager, height)
     low = [f"{r['channel']} ({r['sample']})" for r in presence.iter_rows(named=True) if r['present'] < 50]
     if low:
@@ -828,7 +842,7 @@ def build_reporter_ratios(session, state_manager, key, height=None):
     reference = channels[0]
     ratios = sources.reporter_ratios(ions, reference)
     names = dict(zip(channels, session.runs))
-    _plot(session, 'quant-reporter-ratios', comparison_plots.reporter_ratios(
+    _plot(session, 'quant-reporter-ratios', reporter_ratios.settings(
         ratios, f'{reference} ({names.get(reference, reference)})', [(c, names.get(c, c)) for c in channels[1:]]),
         key, state_manager, height)
 
@@ -839,7 +853,7 @@ def build_reporter_labels(session, state_manager, key, height=None):
     if got is None:
         return
     ions, channels = got
-    _plot(session, 'quant-reporter-labels', comparison_plots.labels_found(
+    _plot(session, 'quant-reporter-labels', labels_found.settings(
         sources.labels_found(ions, channels), _plex_label(session)), key, state_manager, height)
 
 
@@ -898,14 +912,10 @@ def build_feature_map(session, state_manager, key, height):
         Heatmap, 'quant_feature_map', session.file_manager, session.dataset_id,
         ['quant_feature', 'quant_feature_annotations'],
         lambda: dict(
-            data=overview.filter(pl.col('rt').is_not_null() & pl.col('mass').is_not_null()).lazy(),
-            x_column='rt', y_column='mass', intensity_column='Detected', log_scale=False,
-            interactivity={'quant_feature': 'RowIndex'}, highlight={'quant_feature': 'RowIndex'},
-            title=f'Consensus features (colour: {_sample(session).lower()}s that detected them)',
-            x_label='Retention time (min)', y_label='Monoisotopic mass (Da)',
-            intensity_label=f'Detected in ({_sample(session).lower()}s)', colorscale='Viridis',
+            data=feature_map.rows(overview).lazy(),
+            **feature_map.settings(_sample(session), selection='quant_feature'),
         ),
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
     del long
 
 
@@ -913,70 +923,35 @@ def build_feature_intensity(session, state_manager, key, height=None):
     """Intensity of the features each run detected and of those matched into it."""
     long, overview = _features(session)
     values = sources.feature_values(long, overview, session.runs)
-    _plot(session, 'quant-feature-intensity', comparison_plots.feature_intensity(
-        values, session.runs, _sample(session)), key, state_manager, height)
+    _plot(session, 'quant-feature-intensity', feature_intensity.settings(
+        values, session.runs, _sample(session), selection='quant_feature'), key, state_manager, height)
 
 
 def build_feature_table(session, state_manager, key, height):
     """Every consensus feature: mass, retention time, charges and how many
     runs detected it, matched it or miss it."""
     _, overview = _features(session)
-    columns = [
-        {'title': 'Feature', 'field': 'label', 'sorter': 'string'},
-        {'title': 'Mass (Da)', 'field': 'mass', 'sorter': 'number', **_fixed(2)},
-        {'title': 'RT (min)', 'field': 'rt', 'sorter': 'number', **_fixed(2)},
-        {'title': 'Charges', 'field': 'charges', 'sorter': 'string'},
-        {'title': 'Detected', 'field': 'Detected', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s that detected it themselves.'},
-        {'title': 'Matched', 'field': 'Matched', 'sorter': 'number',
-         'headerTooltip': f'{_sample(session)}s it was matched into (match between runs).'},
-        {'title': 'Missing', 'field': 'Missing', 'sorter': 'number'},
-        {'title': 'Proteoform', 'field': 'proteoform', 'sorter': 'string'},
-    ]
-    frame = overview
-    if 'MinCharge' in frame.columns and 'MaxCharge' in frame.columns:
-        frame = frame.with_columns(
-            pl.when(pl.col('MinCharge') == pl.col('MaxCharge')).then(pl.col('MinCharge').cast(pl.Utf8))
-            .otherwise(pl.col('MinCharge').cast(pl.Utf8) + '–' + pl.col('MaxCharge').cast(pl.Utf8))
-            .alias('charges'),
-        )
-    else:
-        frame = frame.with_columns(pl.lit(None, pl.Utf8).alias('charges'))
-    if 'label' not in frame.columns:
-        frame = frame.with_columns(pl.col('id').alias('label'))
+    frame = feature_table.rows(overview)
     _component(
         Table, 'quant_feature_table', session.file_manager, session.dataset_id,
         ['quant_feature', 'quant_feature_annotations'],
         lambda: dict(
-            data=frame.lazy(), column_definitions=columns, index_field='RowIndex',
-            title='Consensus features', go_to_fields=['label'], interactivity={'quant_feature': 'RowIndex'},
-            reclick=RECLICK, reset_sort=True,
+            data=frame.lazy(), **feature_table.settings(_sample(session), selection='quant_feature'),
         ),
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 def build_feature_profile(session, state_manager, key, height):
     """The picked consensus feature in every run: detected, matched or missing."""
     long, overview = _features(session)
-    values = sources.feature_values(long, overview, session.runs).with_columns(
-        (2 ** pl.col('log2_intensity')).alias('intensity'),
-    )
-    columns = [
-        {'title': _sample(session), 'field': 'Run', 'sorter': 'string'},
-        {'title': 'Found', 'field': 'Found', 'sorter': 'string'},
-        {'title': 'Intensity', 'field': 'intensity', 'sorter': 'number', **_P},
-        {'title': 'log2 intensity', 'field': 'log2_intensity', 'sorter': 'number', **_fixed(2)},
-    ]
+    values = feature_profile.rows(sources.feature_values(long, overview, session.runs))
     _component(
         Table, 'quant_feature_profile', session.file_manager, session.dataset_id,
         ['quant_feature', 'quant_feature_annotations'],
         lambda: dict(
-            data=values.with_row_index('ValueIndex').with_columns(pl.col('ValueIndex').cast(pl.Int64)).lazy(),
-            column_definitions=columns, index_field='ValueIndex',
-            title=f'Selected feature per {_sample(session).lower()}', filters={'quant_feature': 'RowIndex'},
-            pagination=False, default_row_selects=False,
+            data=values.lazy(), **feature_profile.settings(_sample(session), selection='quant_feature'),
         ),
-    )(key=key, state_manager=state_manager, height=height)
+    )(key=key, state_manager=state_manager, height=height, help=teaching.help())
 
 
 BUILDERS = {
@@ -1028,7 +1003,7 @@ def row_height(row, samples=0):
     heights = [BUILDERS[name][1] or DEFAULT_HEIGHT for name in row
                if name in BUILDERS and name not in FREE_HEIGHT]
     if 'quant_normalization' in row:
-        heights.append(_normalization_height(samples))
+        heights.append(steps.plot_height(range(samples)))
     return max(heights) if len(row) > 1 and heights else None
 
 
@@ -1036,89 +1011,162 @@ def render_cell(comp_name, session, state_manager, key, height=None):
     builder, default = BUILDERS[comp_name]
     height = height or default
     try:
-        builder(session, state_manager, key, height)
+        with teaching.drawing(comp_name):
+            builder(session, state_manager, key, height)
     except MissingResult as e:
         st.info(f'This comparison has no data for this view ({e}).')
 
 
 # -- settings ---------------------------------------------------------------
 
-def settings_form(session, container=None):
-    """The design (condition and replicate per run) and the analysis settings
-    of a comparison. Returns True when they were saved."""
+def _sample_step(session, form):
+    """1. Samples and conditions, and the level compared."""
+    st.caption(f'{_sample(session)}s with the same condition are replicates. Untick **Compared** to leave '
+               f'a {_sample(session).lower()} out; a {_sample(session).lower()} without a condition is left out too.')
+    hidden = set(session.hidden)
+    table = session.design().to_pandas()
+    table.insert(0, 'compared', [s not in hidden for s in table['sample']])
+    form['design'] = st.data_editor(
+        table,
+        column_config={
+            'compared': st.column_config.CheckboxColumn('Compared', width='small'),
+            'sample': st.column_config.TextColumn(_sample(session), disabled=True),
+            'condition': st.column_config.TextColumn('Condition'),
+            'replicate': st.column_config.NumberColumn('Replicate', min_value=1, step=1),
+        },
+        hide_index=True, use_container_width=True, key=f'{session.dataset_id}_design_editor',
+    )
+    form['level'] = st.segmented_control(
+        'Compare', [l for l in session.levels], default=session.level,
+        format_func=lambda l: LEVEL_NAMES[l], key=f'{session.dataset_id}_level_choice',
+        help='Proteoforms and proteins need identifications (FLASHTnT).',
+    ) or session.level
+
+
+def _choice(session, form, label, options, setting, column=st, help=None):
+    value = session.settings[setting]
+    form[setting] = column.selectbox(label, options, index=options.index(value) if value in options else 0,
+                                     key=f'{session.dataset_id}_{setting}', help=help)
+    return form[setting]
+
+
+def _filter_step(session, form):
+    """2. Which features are compared."""
+    st.caption('Features measured in too few samples, or barely at all, are left out before the test.')
+    a, b = st.columns(2)
+    method = _choice(session, form, 'Filter by', diff.FILTER_METHODS, 'postproc-filter-method', a)
+    setting, label = {
+        'Low Repeatability': ('postproc-filter-max-missing', 'Max missing ratio (%)'),
+        'Low Abundance': ('postproc-filter-abundance-percentile', 'Threshold percentile (%)'),
+        'Low Variance': ('postproc-filter-variance-percentile', 'Threshold percentile (%)'),
+    }[method]
+    form[setting] = b.slider(label, 0.0, 100.0, float(session.settings[setting]), 5.0,
+                             key=f'{session.dataset_id}_{setting}')
+
+
+def _missing_step(session, form):
+    """3. How missing values are filled in."""
+    st.caption('Values missing at random are filled from the condition; values missing because they are '
+               'below the detection limit get a small value.')
+    a, b = st.columns(2)
+    impute = _choice(session, form, 'Why are values missing?', diff.IMPUTE_CLASSES, 'postproc-impute-class', a)
+    if impute.startswith('MAR'):
+        _choice(session, form, 'Fill with the condition', diff.MAR_STRATEGIES, 'postproc-impute-mar-strategy', b)
+    else:
+        _choice(session, form, 'Smallest value of', diff.MNAR_SCOPES, 'postproc-impute-mnar-scope', b)
+
+
+def _normalize_step(session, form):
+    """4. Transformation, normalization and scaling."""
+    st.caption('Normalization lines up the samples, so differences come from biology rather than loading.')
+    a, b, c = st.columns(3)
+    _choice(session, form, 'Transformation', diff.TRANSFORMS, 'postproc-transform', a)
+    _choice(session, form, 'Normalization', diff.NORMALIZATIONS, 'postproc-normalization', b)
+    _choice(session, form, 'Scaling', diff.SCALINGS, 'postproc-scaling', c)
+
+
+def _test_step(session, form):
+    """5. The test, its correction and what counts as a change."""
     used = session.settings
-    with container if container is not None else st.container():
-        st.markdown(f'**{_sample(session)}s and conditions**')
-        st.caption(f'{_sample(session)}s with the same condition are replicates. Untick **Compared** to leave '
-                   f'a {_sample(session).lower()} out; a {_sample(session).lower()} without a condition is left out too.')
-        hidden = set(session.hidden)
-        table = session.design().to_pandas()
-        table.insert(0, 'compared', [s not in hidden for s in table['sample']])
-        design = st.data_editor(
-            table,
-            column_config={
-                'compared': st.column_config.CheckboxColumn('Compared', width='small'),
-                'sample': st.column_config.TextColumn(_sample(session), disabled=True),
-                'condition': st.column_config.TextColumn('Condition'),
-                'replicate': st.column_config.NumberColumn('Replicate', min_value=1, step=1),
-            },
-            hide_index=True, use_container_width=True, key=f'{session.dataset_id}_design_editor',
-        )
-        level = st.segmented_control(
-            'Compare', [l for l in session.levels], default=session.level,
-            format_func=lambda l: LEVEL_NAMES[l], key=f'{session.dataset_id}_level_choice',
-            help='Proteoforms and proteins need identifications (FLASHTnT).',
-        ) or session.level
-        st.markdown('**Calling a change**')
-        c1, c2 = st.columns(2)
-        fc = c1.number_input('Minimum |log2 fold change|', 0.0, 5.0, float(used.get('fc-cutoff', FC_CUTOFF)), 0.1,
-                             key=f'{session.dataset_id}_fc', help='1 = at least twice (or half) as abundant.')
-        padj = c2.number_input('Maximum adjusted p-value', 0.0001, 0.5, float(used.get('padj-cutoff', P_CUTOFF)), 0.005,
-                               format='%.4f', key=f'{session.dataset_id}_padj')
-        chosen = {}
-        with st.expander('Analysis steps (filter, missing values, normalization, test)'):
-            def choice(label, options, setting, column=st, help=None):
-                value = used[setting]
-                return column.selectbox(label, options, index=options.index(value) if value in options else 0,
-                                        key=f'{session.dataset_id}_{setting}', help=help)
-            a, b = st.columns(2)
-            method = choice('1. Filter by', diff.FILTER_METHODS, 'postproc-filter-method', a)
-            chosen['postproc-filter-method'] = method
-            setting, label = {
-                'Low Repeatability': ('postproc-filter-max-missing', 'Max missing ratio (%)'),
-                'Low Abundance': ('postproc-filter-abundance-percentile', 'Threshold percentile (%)'),
-                'Low Variance': ('postproc-filter-variance-percentile', 'Threshold percentile (%)'),
-            }[method]
-            chosen[setting] = b.slider(label, 0.0, 100.0, float(used[setting]), 5.0, key=f'{session.dataset_id}_{setting}')
-            a, b = st.columns(2)
-            impute = choice('2. Why are values missing?', diff.IMPUTE_CLASSES, 'postproc-impute-class', a)
-            chosen['postproc-impute-class'] = impute
-            if impute.startswith('MAR'):
-                chosen['postproc-impute-mar-strategy'] = choice('Fill with the condition', diff.MAR_STRATEGIES,
-                                                                'postproc-impute-mar-strategy', b)
-            else:
-                chosen['postproc-impute-mnar-scope'] = choice('Smallest value of', diff.MNAR_SCOPES,
-                                                              'postproc-impute-mnar-scope', b)
-            a, b, c = st.columns(3)
-            chosen['postproc-transform'] = choice('3. Transformation', diff.TRANSFORMS, 'postproc-transform', a)
-            chosen['postproc-normalization'] = choice('Normalization', diff.NORMALIZATIONS, 'postproc-normalization', b)
-            chosen['postproc-scaling'] = choice('Scaling', diff.SCALINGS, 'postproc-scaling', c)
-            a, b = st.columns(2)
-            n_conditions = max(len({c for c in design['condition'] if str(c).strip()}), 2)
-            chosen['postproc-stat-test'] = choice('4. Test', diff.test_options(n_conditions), 'postproc-stat-test', a,
-                                                  help='limma_like: moderated t-test (recommended).')
-            chosen['postproc-fdr'] = choice('Correction', diff.FDR_METHODS, 'postproc-fdr', b)
-        if st.button('Apply', type='primary', key=f'{session.dataset_id}_apply'):
-            compared = [str(s) for s, keep in zip(design['sample'], design['compared']) if keep]
-            if len(compared) < 2:
-                st.error(f'A comparison needs at least two {_sample(session).lower()}s.')
-                return False
-            frame = pl.from_pandas(design.drop(columns='compared')).with_columns(
-                pl.col('condition').fill_null('').cast(pl.Utf8).str.strip_chars(),
-                pl.col('replicate').fill_null(1).cast(pl.Int64),
-            )
-            session.save_design(frame)
-            session.save_settings({**used, **chosen, 'level': level, 'fc-cutoff': fc, 'padj-cutoff': padj,
-                                   'hidden': [s for s in session.all_runs if s not in compared]})
+    a, b = st.columns(2)
+    design = form.get('design')
+    conditions = design['condition'] if design is not None else session.design()['condition']
+    n_conditions = max(len({c for c in conditions if str(c).strip()}), 2)
+    _choice(session, form, 'Test', diff.test_options(n_conditions), 'postproc-stat-test', a,
+            help='limma_like: moderated t-test (recommended).')
+    _choice(session, form, 'Correction', diff.FDR_METHODS, 'postproc-fdr', b)
+    st.markdown('**Calling a change**')
+    c1, c2 = st.columns(2)
+    form['fc-cutoff'] = c1.number_input('Minimum |log2 fold change|', 0.0, 5.0, float(used.get('fc-cutoff', FC_CUTOFF)),
+                                        0.1, key=f'{session.dataset_id}_fc',
+                                        help='1 = at least twice (or half) as abundant.')
+    form['padj-cutoff'] = c2.number_input('Maximum adjusted p-value', 0.0001, 0.5,
+                                          float(used.get('padj-cutoff', P_CUTOFF)), 0.005,
+                                          format='%.4f', key=f'{session.dataset_id}_padj')
+
+
+# Widget keys of the steps, without the dataset id
+_STEP_SETTINGS = (
+    'postproc-filter-method', 'postproc-filter-max-missing', 'postproc-filter-abundance-percentile',
+    'postproc-filter-variance-percentile', 'postproc-impute-class', 'postproc-impute-mar-strategy',
+    'postproc-impute-mnar-scope', 'postproc-transform', 'postproc-normalization', 'postproc-scaling',
+    'postproc-stat-test', 'postproc-fdr', 'fc', 'padj',
+)
+
+
+def comparison_steps(session):
+    """The steps of Edit comparison (label, draw), what **Done** saves and what
+    **Start over** resets: ``(steps, apply, reset)``.
+
+    ``apply()`` saves the design and settings drawn in this run and returns
+    False (after an error) when fewer than two samples are compared.
+    """
+    form = {}
+    sample = _sample(session)
+    steps = [
+        (f'1. {sample}s and conditions', lambda: _sample_step(session, form)),
+        ('2. Filter', lambda: _filter_step(session, form)),
+        ('3. Missing values', lambda: _missing_step(session, form)),
+        ('4. Normalize', lambda: _normalize_step(session, form)),
+        ('5. Test', lambda: _test_step(session, form)),
+    ]
+
+    def apply():
+        design = form.get('design')
+        if design is None:
             return True
+        compared = [str(s) for s, keep in zip(design['sample'], design['compared']) if keep]
+        if len(compared) < 2:
+            st.error(f'A comparison needs at least two {sample.lower()}s.')
+            return False
+        frame = pl.from_pandas(design.drop(columns='compared')).with_columns(
+            pl.col('condition').fill_null('').cast(pl.Utf8).str.strip_chars(),
+            pl.col('replicate').fill_null(1).cast(pl.Int64),
+        )
+        chosen = {k: v for k, v in form.items() if k not in ('design',)}
+        session.save_design(frame)
+        session.save_settings({**session.settings, **chosen,
+                               'hidden': [s for s in session.all_runs if s not in compared]})
+        return True
+
+    def reset():
+        """The recommended analysis settings; the conditions and the level stay."""
+        from src.parse.differential import default_settings  # pylint: disable=import-outside-toplevel
+        used = session.settings
+        session.save_settings({**default_settings(), 'level': used.get('level'), 'hidden': used.get('hidden', [])})
+        for name in _STEP_SETTINGS:
+            st.session_state.pop(f'{session.dataset_id}_{name}', None)
+
+    return steps, apply, reset
+
+
+def settings_form(session, container=None):
+    """Every step of Edit comparison on one page, with **Apply**. Returns True when saved."""
+    steps, apply, _ = comparison_steps(session)
+    with container if container is not None else st.container():
+        for label, draw in steps:
+            st.markdown(f'**{label}**')
+            draw()
+        if st.button('Apply', type='primary', key=f'{session.dataset_id}_apply'):
+            return apply()
     return False
