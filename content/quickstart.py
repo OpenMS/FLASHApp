@@ -1,12 +1,41 @@
+from html import escape
+
 import streamlit as st
 
 from src.common.common import page_setup, themed_asset, v_space
 from src.common.contributors import render_contributors
 from src.common.installers import render_installer_buttons
 
+try:  # from the template; an older one does not list the command line tools
+    from src.common.installers import TOOL_PLATFORMS, find_tool_installers
+except ImportError:  # pragma: no cover
+    TOOL_PLATFORMS, find_tool_installers = [], dict
+
 page_setup(page="main", captcha=False)
 
+# Where the command line tools are offered while the latest release has none of its own.
 CLI_TOOLS_URL = "https://abibuilder.cs.uni-tuebingen.de/archive/openms/OpenMSInstaller/experimental/FVdeploy/"
+
+
+def cli_tools_line() -> str:
+    """The line offering the FLASH* command line tools: the installers attached to
+    the latest release, one link per platform, else the OpenMS download folder."""
+    found = find_tool_installers()
+    links = [
+        f'<a href="{escape(found[key])}" title="{escape(help_text)}">{label}</a>'
+        for key, label, _, help_text in TOOL_PLATFORMS
+        if key in found
+    ]
+    if links:
+        return (
+            "Prefer scripting? Get the FLASH* command line tools FLASHApp runs "
+            "(FLASHDeconv, FLASHTnT and more, as part of OpenMS) for "
+            + " · ".join(links) + "."
+        )
+    return (
+        f'Prefer scripting? Get the <a href="{CLI_TOOLS_URL}" target="_blank">FLASH* '
+        "command line tools</a> (FLASHDeconv, FLASHTnT and more, as part of OpenMS)."
+    )
 
 
 def render_download_section():
@@ -30,9 +59,7 @@ def render_download_section():
             st.caption("The desktop app of the latest release cannot be listed right now. "
                        "See the [releases](https://github.com/OpenMS/FLASHApp/releases).")
         st.markdown(
-            f'<div class="fa-downloads-cli">Prefer scripting? Get the '
-            f'<a href="{CLI_TOOLS_URL}" target="_blank">FLASH* command line tools</a> '
-            f'(FLASHDeconv, FLASHTnT and more, as part of OpenMS).</div>',
+            f'<div class="fa-downloads-cli">{cli_tools_line()}</div>',
             unsafe_allow_html=True,
         )
     st.markdown(

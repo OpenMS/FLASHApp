@@ -26,6 +26,10 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
+# The heatmaps of MS data also draw their points in 3D (one cell instead of a
+# heatmap and a 3D map); an openms-insight release without it draws 2D only
+PeakMap = getattr(openms_insight, 'PeakMap', None)
+
 try:  # the comparison plots
     from openms_insight import PCAPlot, VolcanoPlot
     _QUANT_ZOOMABLE = (PCAPlot, VolcanoPlot)
@@ -270,15 +274,18 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
         return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom, **build())
 
 
-def _heatmap(comp_name, file_manager, dataset_id):
+def _heatmap(comp_name, file_manager, dataset_id, view='2d'):
+    """A heatmap of MS data, which its toolbar also draws in 3D; ``view``
+    is the drawing it opens with."""
     result, title, y_label, sets_mass = HEATMAPS[comp_name]
     shared = dict(min_points=insight_data.HEATMAP_MIN_POINTS, **_svg('heatmap'))
+    cls = PeakMap or Heatmap
     if insight_data.result_path(file_manager, dataset_id, result) is None:
         raise MissingResult(result)
     # The levels the parse downsampled; without them Insight builds its own
     levels = insight_data.heatmap_levels(file_manager, dataset_id, result)
     return _component(
-        Heatmap, comp_name, file_manager, dataset_id, [result, *(levels or [])],
+        cls, comp_name, file_manager, dataset_id, [result, *(levels or [])],
         lambda: dict(
             data=insight_data.scan(file_manager, dataset_id, result),
             levels=None if levels is None else [
@@ -287,6 +294,7 @@ def _heatmap(comp_name, file_manager, dataset_id):
             **(deconvolved_heatmap.settings(title, **shared) if sets_mass
                else raw_heatmap.settings(title, y_label, **shared)),
         ),
+        render=dict(view=view) if PeakMap is not None else None,
     )
 
 
@@ -873,6 +881,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
         ), {'height': 800}
 
     if comp_name == 'ms1_3d_map':
+        # The MS1 heatmap opened in 3D (layouts saved before the two were one)
+        if PeakMap is not None:
+            return _heatmap('ms1_raw_heatmap', fm, ds, view='3d'), {'height': 600}
         return _ms1_3d_map(comp_name, fm, ds, tool, state_manager), {'height': 600}
 
     if comp_name == 'fragment_error_plot':

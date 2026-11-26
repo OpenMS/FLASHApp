@@ -15,7 +15,7 @@ they are about (``_GROUPS`` below).
 from src.workflow.guide import COMPONENT_GROUPS, FEATURES, IDENTIFICATION as ID_GROUP, MS_DATA, QUANTIFICATION
 
 DECONV_COMPONENTS = [
-    {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
+    {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap (2D or 3D)', 'group': 'Heatmaps'},
     {'name': 'ms2_raw_heatmap', 'label': 'MS2 raw heatmap', 'group': 'Heatmaps'},
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
     {'name': 'ms2_deconv_heat_map', 'label': 'MS2 deconvolved heatmap', 'group': 'Heatmaps'},
@@ -25,7 +25,6 @@ DECONV_COMPONENTS = [
     {'name': 'anno_spectrum', 'label': 'Raw spectrum', 'group': 'Spectra & plots', 'requires': 'scan_table'},
     {'name': 'survey_spectrum', 'label': 'Precursor spectrum (MS1)', 'group': 'Spectra & plots', 'requires': 'scan_table'},
     {'name': '3D_SN_plot', 'label': '3D S/N plot', 'group': 'Spectra & plots', 'requires': 'mass_table'},
-    {'name': 'ms1_3d_map', 'label': '3D MS1 map (peaks by m/z, RT and intensity)', 'group': 'Heatmaps'},
     {'name': 'fdr_plot', 'label': 'Score distribution plot', 'group': 'Spectra & plots'},
     {'name': 'chromatogram', 'label': 'Chromatogram (TIC, base peak, deconvolved)', 'group': 'Spectra & plots'},
     {'name': 'isotope_envelope', 'label': 'Isotope envelope fit', 'group': 'Validation', 'requires': 'scan_table'},
@@ -66,7 +65,7 @@ TNT_COMPONENTS = [
     {'name': 'go_enrichment', 'label': 'GO enrichment of the selected proteins', 'group': 'Functional analysis',
      'requires': ['protein_table', 'protein_group_table', 'proteoform_table', 'proteoform_prsm_table', 'proteoform_heatmap'],
      'requires_label': 'a protein, proteoform or PrSM table, or the proteoform heatmap'},
-    {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap', 'group': 'Heatmaps'},
+    {'name': 'ms1_raw_heatmap', 'label': 'MS1 raw heatmap (2D or 3D)', 'group': 'Heatmaps'},
     {'name': 'ms1_deconv_heat_map', 'label': 'MS1 deconvolved heatmap', 'group': 'Heatmaps'},
 ]
 
@@ -100,7 +99,7 @@ ISOBARIC_ONLY = {c['name'] for c in ISOBARIC_COMPONENTS}
 # The component group of each component (see the module docstring)
 _GROUPS = {
     MS_DATA: [
-        'ms1_raw_heatmap', 'ms2_raw_heatmap', 'ms1_3d_map', 'scan_table', 'anno_spectrum',
+        'ms1_raw_heatmap', 'ms2_raw_heatmap', 'scan_table', 'anno_spectrum',
         'survey_spectrum', 'chromatogram', 'precursor_xic',
     ],
     FEATURES: [
