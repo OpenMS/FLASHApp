@@ -283,7 +283,7 @@ def uniprot_entry(text):
     isoform = re.search(rf'{accession}(-\d+)', text.upper())
     accession += isoform.group(1) if isoform else ''
     # uniprot.entry_fasta is the template's public call for one entry
-    # (streamlit-template, feature/uniprot-entry-fasta); until it reaches
+    # (OpenMS/streamlit-template#631); until it reaches
     # FLASHApp through the template sync, the same request goes through the
     # client's request helper
     entry_fasta = getattr(uniprot, 'entry_fasta', None)
