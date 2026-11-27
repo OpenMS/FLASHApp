@@ -75,6 +75,23 @@ def test_clear_input(tmp_path):
     assert fm.load_input(tmp_path) is None
 
 
+def test_hand_over_is_taken_once(tmp_path):
+    """The Viewer's inspect button hands its spectrum over: the page takes it
+    once (and does not start empty), a later session starts empty again."""
+    assert fm.claim_hand_over(tmp_path) is None
+    fm.store_input(tmp_path, [1000.0], sequence='PEPK', name='scan 12', hand_over=True)
+    taken = fm.claim_hand_over(tmp_path)
+    assert taken['masses'] == [1000.0] and taken['sequence'] == 'PEPK'
+    assert 'hand_over' not in taken and 'hand_over' not in fm.load_input(tmp_path)
+    assert fm.claim_hand_over(tmp_path) is None
+    # the page's own input is never a hand-over
+    fm.store_input(tmp_path, [2000.0])
+    assert fm.claim_hand_over(tmp_path) is None
+    # the mark does not change which cache the view uses
+    assert fm.input_stamp(fm.store_input(tmp_path, [1.0], hand_over=True)) == \
+        fm.input_stamp(fm.store_input(tmp_path, [1.0]))
+
+
 def test_load_missing_or_broken(tmp_path):
     assert fm.load_input(tmp_path) is None
     fm.input_path(tmp_path).parent.mkdir(parents=True)
@@ -89,6 +106,91 @@ def test_average_fragment_masses():
     assert mono['theoretical_mass'] == pytest.approx(799.36, abs=0.01)
     assert avg['theoretical_mass'] == pytest.approx(799.82, abs=0.01)
     assert avg['fragment_masses_b'][1][0] > mono['fragment_masses_b'][1][0]
+
+
+def _isotope_peaks(sequence, charges=(3, 4, 5)):
+    """m/z and intensity of a peptide's isotope pattern at several charges."""
+    import pyopenms as oms
+    peptide = oms.AASequence.fromString(sequence)
+    mono = peptide.getMonoWeight()
+    pattern = peptide.getFormula().getIsotopeDistribution(oms.CoarseIsotopePatternGenerator(8))
+    mz, intensities = [], []
+    for z in charges:
+        for k, peak in enumerate(pattern.getContainer()):
+            mz.append((mono + k * 1.00235 + z * fm.PROTON) / z)
+            intensities.append(peak.getIntensity() * 1e6)
+    return mono, mz, intensities
+
+
+def test_deconvolve_mz_finds_the_monoisotopic_mass():
+    mono, mz, intensities = _isotope_peaks('MNKTQLIDVIAEKAELSKTQAKAAL')
+    found = fm.deconvolve_mz(mz, intensities)
+    assert len(found['masses']) == 1
+    assert found['masses'][0] == pytest.approx(mono, abs=0.01)
+    assert found['intensities'][0] > 0
+
+
+def test_deconvolve_mz_without_peaks():
+    assert fm.deconvolve_mz([]) == {'masses': [], 'intensities': []}
+
+
+class _Response:
+    def __init__(self, text):
+        self.text = text
+
+
+def test_uniprot_entry(monkeypatch):
+    from src.workflow import uniprot
+    asked = []
+
+    def get(path, params):
+        asked.append(path)
+        return _Response('>sp|P0ACF0|DBHA_ECOLI DNA-binding protein HU-alpha '
+                         'OS=Escherichia coli (strain K12) OX=83333 GN=hupA PE=1 SV=2\nMNKT\nQLID\n')
+
+    monkeypatch.setattr(uniprot, '_get', get)
+    entry = fm.uniprot_entry('sp|P0ACF0|DBHA_ECOLI')
+    assert entry == {'accession': 'P0ACF0', 'entry': 'DBHA_ECOLI',
+                     'name': 'DNA-binding protein HU-alpha',
+                     'organism': 'Escherichia coli (strain K12)', 'sequence': 'MNKTQLID'}
+    fm.uniprot_entry('p0acf0-2')
+    assert asked == ['/uniprotkb/P0ACF0.fasta', '/uniprotkb/P0ACF0-2.fasta']
+
+
+def test_uniprot_entry_errors(monkeypatch):
+    from src.workflow import uniprot
+
+    def missing(path, params):
+        raise uniprot.UniProtError('UniProt answered 404')
+
+    monkeypatch.setattr(uniprot, '_get', missing)
+    with pytest.raises(fm.UniProtLookupError, match='not a UniProt accession'):
+        fm.uniprot_entry('hello')
+    with pytest.raises(fm.UniProtLookupError, match='has no entry Q9ZZZ9'):
+        fm.uniprot_entry('Q9ZZZ9')
+
+
+def test_range_fragments_with_and_without_the_shift():
+    """A range of residues 3-5 (1-based): an ion holding part of it gets both
+    masses (ambiguous), one holding all of it only the shifted mass."""
+    from src.render.sequence import getFragmentDataFromSeq
+    plain = getFragmentDataFromSeq('PEPTIDEK', fixed_mods={'fixed_modifications': []})
+    ranged = getFragmentDataFromSeq('PEPTIDEK', fixed_mods={'fixed_modifications': []},
+                                    modifications=[(3, 5, 16.0)])
+
+    def kinds(ion):
+        out = []
+        for base, masses in zip(plain[f'fragment_masses_{ion}'], ranged[f'fragment_masses_{ion}']):
+            if len(masses) == 2:
+                out.append('both')
+            else:
+                out.append('shifted' if masses[0] == pytest.approx(base[0] + 16.0) else 'plain')
+        return out
+
+    # b1..b8: b1, b2 before the range; b3, b4 cut inside it; b5.. hold all of it
+    assert kinds('b') == ['plain', 'plain', 'both', 'both', 'shifted', 'shifted', 'shifted', 'shifted']
+    # y1..y8: y1-y3 after the range; y4, y5 cut inside it; y6.. hold all of it
+    assert kinds('y') == ['plain', 'plain', 'plain', 'both', 'both', 'shifted', 'shifted', 'shifted']
 
 
 def _matches(proforma, mass, names, cleavages=50.0, tolerance=10):
