@@ -31,12 +31,11 @@ from src.common.common import page_setup, save_params
 from src.workflow.FileManager import FileManager
 from src import analysis, former_examples, sample_type
 from openms_insight import StateManager
-from src.render.render import _state_manager, render_grid
+from src.render.render import FRAGMENT_MATCHES_IDENTIFIER, _state_manager, render_grid
 from src.render import topdown_layout
 from src.render.layout_editor.catalog import MAX_EXPERIMENTS
 from src.layout_manager import DatasetKind, ViewerSpec, show_dataset, show_viewer
 from src.render import missing_analysis
-from src.render.view_state import ViewState
 from src.render import quant_view
 from src.render import inspect_scan
 from src.render.tool_results import tool_results_button, tool_results_dialog
@@ -86,6 +85,7 @@ file_manager = FileManager(
 quant_view.migrate_layout(file_manager)
 quant_view.adopt_saved_layout(file_manager, workspace)
 topdown_layout.adopt_saved_layout(file_manager, workspace)
+topdown_layout.merge_saved_views(workspace)
 
 # Every deconvolved run, of which some were identified, then the comparisons
 results = file_manager.get_results_list(['threedim_SN_plot'])
@@ -207,11 +207,10 @@ RUNS = DatasetKind(
         on_missing=lambda missing, component, c=ctx: c.request_analysis(missing, component),
         on_inspect=request_inspect,
     ),
-    # 🔗: a link that opens this view with each run and what is picked in it
-    link=True,
-    # A view of one's own keeps each experiment's zoom and selection (📌), without
-    # what the components publish themselves (the matched fragments)
-    states=lambda ctx: ViewState(_state_manager(TOOL, selection_key(ctx.index), ctx.dataset)),
+    states=lambda ctx: _state_manager(TOOL, selection_key(ctx.index), ctx.dataset),
+    # 🔗 and 📌 keep what is picked and zoomed, not what the sequence views publish
+    # themselves whenever they are drawn (the matched fragments)
+    not_kept=(FRAGMENT_MATCHES_IDENTIFIER,),
     available=lambda ctx: missing_analysis.available(file_manager, ctx.dataset),
     analyses=missing_analysis.ANALYSES,
     unavailable_options=lambda missing, view, ctx: (
@@ -243,7 +242,8 @@ COMPARISONS = DatasetKind(
     default_view=lambda ctx: quant_view.default_view(file_manager, ctx.dataset),
     rows=lambda ctx, rows, saved: quant_view.view_rows(file_manager, workspace, ctx.dataset),
     render=lambda ctx, rows: quant_view.render(file_manager, ctx.dataset, rows),
-    states=None, max_experiments=1,
+    # A comparison keeps no selection, so a link would only name it
+    states=None, max_experiments=1, link=False,
     available=lambda ctx: quant_view.available(file_manager, ctx.dataset),
     analyses=missing_analysis.ANALYSES,
     unavailable_options=lambda missing, view, ctx: quant_view._options(workspace, file_manager, ctx.dataset)(

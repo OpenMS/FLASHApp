@@ -64,6 +64,51 @@ def with_reporters(rows, after):
     return rows + [list(REPORTER_ROW)]
 
 
+# Components another one draws now: the 3D MS1 map is the MS1 heatmap's 3D drawing
+MERGED_COMPONENTS = {'ms1_3d_map': 'ms1_raw_heatmap'}
+
+
+def merge_components(rows):
+    """``rows`` with each merged component replaced by the one that draws it
+    now, left out where that one is in the rows already; rows left empty go."""
+    present = {name for row in rows for name in row}
+    seen = set()
+    merged = []
+    for row in rows:
+        new = []
+        for name in row:
+            target = MERGED_COMPONENTS.get(name)
+            if target is None:
+                new.append(name)
+            elif target not in present and target not in seen:
+                new.append(target)
+                seen.add(target)
+        if new:
+            merged.append(new)
+    return merged
+
+
+def merge_saved_views(workspace):
+    """Apply ``merge_components`` to every view and experiment saved in the
+    views file, once (a file without merged components is left as it is)."""
+    import json
+    path = views_path(workspace)
+    if not path.exists():
+        return
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return
+    if not any(name in path.read_text() for name in MERGED_COMPONENTS):
+        return
+    for view in data.get('views', []):
+        if isinstance(view.get('rows'), list):
+            view['rows'] = merge_components(view['rows'])
+    if isinstance(data.get('layout'), list):
+        data['layout'] = [merge_components(rows) for rows in data['layout']]
+    path.write_text(json.dumps(data, indent=1))
+
+
 def default_rows(file_manager, identified, sample_type, index=0, labelled=False):
     """Rows of experiment ``index`` without a saved layout: the former
     Viewer's saved layout of the run's kind, else the built-in default of the
@@ -72,7 +117,7 @@ def default_rows(file_manager, identified, sample_type, index=0, labelled=False)
     legacy = get_saved_layout(file_manager, LEGACY_LAYOUT_DATASET[identified])
     if legacy:
         experiments = legacy[0]
-        rows = experiments[index] if index < len(experiments) else experiments[0]
+        rows = merge_components(experiments[index] if index < len(experiments) else experiments[0])
     elif identified:
         rows = TNT_DEFAULT_LAYOUTS[sample_type]
     else:
@@ -87,7 +132,7 @@ def rows(file_manager, identified, sample_type, index=0, labelled=False):
     layout = saved(file_manager)
     if layout:
         experiments = layout[0]
-        return experiments[index] if index < len(experiments) else experiments[0]
+        return merge_components(experiments[index] if index < len(experiments) else experiments[0])
     return default_rows(file_manager, identified, sample_type, index, labelled)
 
 

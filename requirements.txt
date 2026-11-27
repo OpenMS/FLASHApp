@@ -26,7 +26,7 @@ contourpy==1.3.1
     # via matplotlib
 cycler==0.12.1
     # via matplotlib
-fonttools==4.60.2
+fonttools==4.68.0
     # via matplotlib
 gitdb==4.0.12
     # via gitpython
@@ -127,7 +127,7 @@ toml==0.10.2
     # via streamlit
 tornado==6.6.1
     # via streamlit
-typing-extensions==4.13.0
+typing-extensions==4.16.0
     # via
     #   altair
     #   referencing
@@ -158,7 +158,7 @@ pyyaml>=6.0
 # The viewers' components (tables, heatmaps, spectra, sequence view).
 # Its dependencies are listed in this file too; mygene and plotly are its
 # `analysis` extra (GO enrichment).
-openms-insight==0.7.7
+openms-insight==0.7.9
 scikit-learn>=1.0
 # Writes the processing report of a run as PDF (src/workflow/processing_report.py)
 reportlab>=4.0
