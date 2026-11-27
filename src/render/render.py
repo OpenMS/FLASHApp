@@ -26,6 +26,10 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
+# The fragment ions of a proteoform under its sequence; an openms-insight
+# release without it shows a note in its place
+SequenceCoverage = getattr(openms_insight, 'SequenceCoverage', None)
+
 # The heatmaps of MS data also draw their points in 3D (one cell instead of a
 # heatmap and a 3D map); an openms-insight release without it draws 2D only
 PeakMap = getattr(openms_insight, 'PeakMap', None)
@@ -44,7 +48,7 @@ from src.render.cache_dirs import build_lock, insight_cache_dir
 from src.render.fragmentation import mzml_scan_methods
 from src.quant import isobaric
 from src.common.plot_style import PEAK, PICKED, spectrum_styling
-from src.render import proteoform_edits, teaching
+from src.render import fragment_coverage, proteoform_edits, teaching
 from src.render.sequence import getFragmentDataFromSeq
 from src.render.structure import (
     StructureStore, download_enabled, get_structure, structure_dir, structure_key,
@@ -58,7 +62,7 @@ from src.viz.features import (
 from src.viz.identification import (
     _hierarchy, fragment_errors, identification_qc, mass_shift_histogram, mass_shift_table, prsm_mass_table,
     prsm_table, proteoform_heatmap, proteoform_prsms, proteoforms, protein_groups, score_distribution,
-    sequence_view, structure_view, tag_table,
+    sequence_coverage, sequence_view, structure_view, tag_table,
 )
 from src.viz.quantification import reporter_ions, reporter_table
 
@@ -70,7 +74,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
-        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__,
+        hierarchy_data.__file__, fragment_coverage.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__,
         str(Path(__file__).with_name('quant_cells.py')),
         # The library panels the cells are configured with
         *sorted(str(f) for f in Path(__file__).parents[1].joinpath('viz').rglob('*.py')),
@@ -762,6 +766,44 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
     return table, height
 
 
+def _fragment_coverage(comp_name, file_manager, dataset_id, state_manager):
+    """The fragment ions matched in the spectrum of the proteoform picked in
+    a protein or proteoform table, drawn under the residues they hold."""
+    if SequenceCoverage is None:
+        raise MissingResult('a newer openms-insight')
+    sequences = insight_data.proteoform_sequences(file_manager, dataset_id)
+    if 'annotated_fragments' not in sequences.collect_schema().names():
+        raise MissingResult('fragment annotations')
+    component = _component(
+        SequenceCoverage, comp_name, file_manager, dataset_id, ['sequence_data', 'protein_dfs'],
+        lambda: dict(
+            data=fragment_coverage.from_sequence_data(sequences).lazy(),
+            **sequence_coverage.settings(
+                '', count_label='Charge states', match='coverage_fragment', reference_filter='protein',
+                title='Fragment ion coverage', track_order=fragment_coverage.track_order(),
+                empty_message='No fragment ion of this proteoform was matched.',
+                count_bins=fragment_coverage.COUNT_BINS, notes=fragment_coverage.NOTES,
+            ),
+        ),
+    )
+    proteoform = state_manager.get_selection('protein')
+    entry = _search_entry(file_manager, dataset_id, proteoform)
+    if entry is None:
+        component.set_reference('', 'Pick a proteoform in a protein or proteoform table')
+    else:
+        entry = {
+            'proteoform_start': entry.get('start_position'), 'proteoform_end': entry.get('end_position'),
+            **entry,
+        }
+        accession = (
+            insight_data.proteins(file_manager, dataset_id)
+            .filter(pl.col('index') == int(proteoform)).select('accession').head(1).collect()
+        )
+        name = str(accession.item()) if accession.height else f'Proteoform {proteoform}'
+        component.set_reference(fragment_coverage.residues(entry), name)
+    return component
+
+
 def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     """Insight component of a layout cell, and keyword arguments for rendering it."""
     fm, ds = file_manager, dataset_id
@@ -904,6 +946,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name in ('protein_group_table', 'proteoform_table', 'proteoform_prsm_table'):
         table, height = _hierarchy_table(comp_name, fm, ds)
         return table, {'height': height}
+
+    if comp_name == 'fragment_coverage':
+        return _fragment_coverage(comp_name, fm, ds, state_manager), {'height': 520}
 
     if comp_name == 'protein_table':
         return _component(
@@ -1215,6 +1260,8 @@ def _draw_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on
                 'No PrSM of this dataset has a proteoform or precursor mass, '
                 'so the proteoform heatmap has nothing to show.'
             )
+        elif str(e) == 'a newer openms-insight':
+            st.info('The fragment ion coverage map needs a newer openms-insight than the one installed.')
         else:
             st.info(f'This dataset has no data for this view ({e}).')
         return
