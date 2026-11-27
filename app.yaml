@@ -67,8 +67,20 @@ deploy:
     - flashapp.webapps.openms.org
     worker_tier: high
   docker_compose: true
+  # Only the full image: FLASHApp needs the TOPP tools (Dockerfile_simple is gone).
+  images: [full]
   desktop:
   - windows
+  # The desktop app's values, read by the template's build-desktop-app.yaml.
+  desktop_app:
+    name: FLASHApp
+    installer_version: true
+    topp_tools: [FLASHDeconv, FLASHTnT, FLASHAnnotator, DecoyDatabase, FileConverter]
+    # The OpenMS branch with FLASHAnnotator, the same as the Docker image.
+    openms: t0mdavid-m/OpenMS@FDmerge
+    synopsis: Visualization of top-down proteomics results from FLASHDeconv and FLASHTnT
+    e2e_scenarios: [tests/e2e/electron-workflows.js]
+    stage_script: scripts/desktop-stage.sh
   online_deployment: false
 
 # Optional CI checks, all on by default. An app with few CI minutes turns off
@@ -94,9 +106,8 @@ sync:
   - example-data/*
   - assets/*
   - k8s/overlays/*
-  - .github/workflows/build-and-test.yml
-  - .github/kind-config.yaml
   - CLAUDE.app.md
+  - scripts/desktop-stage.sh
   - src/Workflow.py
   - js-component/*
   - .gitmodules

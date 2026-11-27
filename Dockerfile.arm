@@ -17,8 +17,9 @@
 # The same file builds amd64 and arm64.
 
 FROM ubuntu:24.04 AS setup-build-system
-ARG OPENMS_REPO=https://github.com/OpenMS/OpenMS.git
-ARG OPENMS_BRANCH=v3.6.0
+# FDmerge: the OpenMS branch with FLASHAnnotator (same as the desktop build).
+ARG OPENMS_REPO=https://github.com/t0mdavid-m/OpenMS.git
+ARG OPENMS_BRANCH=FDmerge
 ARG PORT=8501
 # GitHub repository whose latest release supplies the bundled Windows
 # installer. Empty: `github-user` and `repository-name` from settings.json,
@@ -121,11 +122,13 @@ ENV PATH="${PATH}:/usr/share/dotnet"
 # pyopenms_wheel target only in the nanobind generation.
 # cython<3.3: Cython 3.3.0 (2026-08-22) removed Cython.Compiler.Nodes.CConstOrVolatileTypeNode,
 # which autowrap up to 0.24 needs, breaking `make pyopenms`.
+# FLASHApp: for FDmerge (requirements_bld.txt) autowrap is pinned to 0.23.0: its
+# create_cpp_extension.py passes include_boost, which autowrap 0.24 removed.
 RUN pip install --upgrade pip && python -m pip install -U setuptools wheel pandas numpy pytest \
     && if grep -q pyopenms_wheel src/CMakeLists.txt; then \
         python -c "import tomllib; print('\n'.join(tomllib.load(open('src/pyOpenMS/pyproject.toml', 'rb'))['build-system']['requires']))" > /tmp/pyopenms-build.txt; \
     elif [ -f src/pyOpenMS/requirements_bld.txt ]; then \
-        { cat src/pyOpenMS/requirements_bld.txt; echo; printf '%s\n' nose "cython<3.3" "autowrap<=0.24"; } > /tmp/pyopenms-build.txt; \
+        { cat src/pyOpenMS/requirements_bld.txt; echo; printf '%s\n' nose "cython<3.3" "autowrap==0.23.0"; } > /tmp/pyopenms-build.txt; \
     else \
         printf '%s\n' nose "cython>=3.1.0,<3.3" "autowrap<=0.24" > /tmp/pyopenms-build.txt; \
     fi \
@@ -165,6 +168,7 @@ RUN cmake -S /OpenMS -B /openms-build \
         -DCMAKE_PREFIX_PATH='/usr/;/usr/local' \
         -DHAS_XSERVER=OFF \
         -DBOOST_USE_STATIC=OFF \
+        -DOPENMP=ON \
         -DOPENMS_USE_VCPKG=OFF \
         -DWITH_UV=OFF \
         -DWITH_THERMO_RAW=$([ -x /usr/share/dotnet/dotnet ] && echo ON || echo OFF) \

@@ -1,0 +1,80 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The production overlay with exactly one thing changed: the rq-worker is
+# shrunk to a size a GitHub-hosted runner can schedule. APPLIED ONLY BY THE
+# KIND JOBS in .github/workflows/build-and-test.yml - operators and every
+# static assertion still use k8s/overlays/prod.
+#
+# k8s/components/memory-tier-low sizes a worker at 16Gi / 4 cpu with
+# requests == limits, which is right on production-sized nodes and impossible
+# in kind. An ubuntu-latest runner has 4 vCPU and ~15.6Gi of RAM in total; every
+# kind node is a container on that one host advertising the whole of it, and
+# kube-system already holds ~1 cpu of that in requests. Both worker replicas
+# would sit Pending for ever and take the whole kind suite down with them -
+# including the two assertions that exist to watch the workers
+# (assert_workers_spread_across_nodes, assert_worker_qos_guaranteed) and the
+# storage assertions that need a running deployment to look at.
+#
+# CI bends, not k8s/components/: production sizing is the thing under test
+# everywhere else. Nothing else differs from prod, so the spread constraint,
+# the replica count, the labels, the namePrefix and the images are all the
+# production ones - shrinking the worker is not allowed to change what the
+# suite is observing.
+#
+# The `lint-manifests` job renders this root and checks two things about the
+# result, because kustomize does NOT error on a `patches:` entry whose target
+# matches nothing - it renders happily and applies nothing. So: that the
+# worker really came out smaller than prod's (the patch below landed), and
+# that requests still equal limits (the shrink did not make it Burstable and
+# so turn assert_worker_qos_guaranteed red over CI's own sizing).
+resources:
+  - ../prod
+
+patches:
+  # An overlay that enables k8s/components/storage-s3 claims the class
+  # openms-juicefs-s3, which the kind jobs do not install (no S3 server in
+  # kind). Put the claim back on the class k8s/ci-storage/ publishes; the
+  # claim name and the WORKSPACES_S3_* variables stay (their secret is
+  # optional, so the pods start without it and the app reads local paths).
+  # kustomize matches the claim's original name; without the component the
+  # patch sets the class the claim already has.
+  - target:
+      kind: PersistentVolumeClaim
+      name: workspaces-manila-pvc
+    patch: |
+      - op: replace
+        path: /spec/storageClassName
+        value: openms-manila-nfs
+  # Production asks for 20T, which the kind jobs' size rewrite (it looks
+  # for `storage: <N>Gi`) does not recognise. Give CI a Gi figure; the job
+  # then shrinks it to what the runner's disk can hold.
+  - target:
+      kind: PersistentVolumeClaim
+      name: workspaces-manila-pvc
+    patch: |
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 50Gi
+  # The worker spread assertion needs at least two workers to observe
+  # anything; production may run one (memory-tier-high) or more than a
+  # runner can hold. CI runs two.
+  - target:
+      kind: Deployment
+      name: rq-worker
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  # Production runs 10 Streamlit pods; a 4-cpu runner holds two.
+  - target:
+      kind: Deployment
+      name: streamlit
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - path: worker-resources.yaml
+    target:
+      kind: Deployment
+      name: rq-worker
