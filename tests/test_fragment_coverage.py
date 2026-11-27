@@ -33,25 +33,24 @@ def test_residues_are_the_proteoform():
 def test_one_bar_per_fragment_with_its_charge_states():
     rows = fc.rows(7, _entry())
     by_track = {(r['track'], r['start'], r['end']): r for r in rows}
-    # Terminal ions at the residue next to their cleaved bond, internal ones spanned
-    assert set(by_track) == {('b ions', 4, 4), ('y ions', 6, 6), (fc.INTERNAL, 3, 6)}
-    assert by_track[('b ions', 4, 4)]['count'] == 2
+    # Terminal ions cover their prefix or suffix, internal ones their stretch
+    assert set(by_track) == {('b ions', 1, 4), ('y ions', 6, 9), (fc.INTERNAL, 3, 6)}
+    assert by_track[('b ions', 1, 4)]['count'] == 2
     assert all(r['reference'] == 7 for r in rows)
 
 
 def test_a_fragment_names_the_modifications_it_holds():
     rows = {(r['track'], r['start']): r for r in fc.rows(0, _entry())}
-    assert rows[('b ions', 4)]['sequence'] == 'b4 (Phospho)'
+    assert rows[('b ions', 1)]['sequence'] == 'b4 (Phospho)'
     assert rows[('y ions', 6)]['sequence'] == 'y4'
     assert rows[(fc.INTERNAL, 3)]['mod_positions'] == [3]
 
 
-def test_a_series_fits_in_one_row():
+def test_a_series_covers_growing_prefixes():
     entry = {'sequence': list('PEPTIDEKR'), 'annotated_fragments': [
         _fragment('b', 'N', 0, k, 1, offset=0) for k in range(1, 8)]}
-    rows = fc.rows(0, entry)
-    spans = sorted((r['start'], r['end']) for r in rows)
-    assert all(a[1] < b[0] for a, b in zip(spans, spans[1:]))
+    spans = sorted((r['start'], r['end']) for r in fc.rows(0, entry))
+    assert spans == [(1, k + 1) for k in range(1, 8)]
 
 
 def test_mass_shift_without_one_name():

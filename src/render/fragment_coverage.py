@@ -2,12 +2,9 @@
 coverage panel (src/viz/identification/sequence_coverage.py).
 
 Every fragment ion FLASHAnnotator matched in the proteoform's spectrum is a
-mark on the proteoform's sequence, one track per ion type. A terminal ion
-(a, b, c from the N-terminus, x, y, z from the C-terminus) is drawn at the
-residue next to the bond it was cleaved at, so the ions of a series sit side
-by side in one row as the classic fragment map shows them instead of piling
-up as nested full-length bars; an internal fragment is a bar over the
-residues it holds. A fragment seen at several charges is one mark whose count
+bar over the residues it holds, one track per ion type: a terminal ion
+(a, b, c from the N-terminus, x, y, z from the C-terminus) covers its whole
+prefix or suffix, an internal fragment the stretch between its two cleavages. A fragment seen at several charges is one mark whose count
 is its number of charge states. A fragment's label names the modifications it
 holds. Streamlit-free.
 """
@@ -100,10 +97,7 @@ def rows(proteoform_index, entry):
         if fragment.get('first') is None or fragment.get('last') is None:
             continue
         first, last = int(fragment['first']) + 1, int(fragment['last']) + 1
-        kind = fragment.get('kind')
-        # The residue next to the cleaved bond: last of an N-terminal ion,
-        # first of a C-terminal one
-        start, end = {'N': (last, last), 'C': (first, first)}.get(kind, (first, last))
+        start, end = first, last
         key = (track_of(fragment), start, end)
         bar = bars.setdefault(key, {'name': fragment.get('name') or '', 'charges': set(),
                                     'held': [l for p, l in marks if first <= p <= last]})
@@ -150,5 +144,5 @@ def from_sequence_data(sequences):
 # Charge states per fragment: few, so four shades of the matched-fragment blue
 COUNT_BINS = [(1, '1', '#c7d3fb'), (2, '2', '#8ea6f5'), (3, '3', '#5c7ff0'),
               (float('inf'), '4+', '#3157e9')]
-NOTES = ['A terminal ion is marked at the residue next to the bond it was cleaved at: '
-         'a b ion at its last residue, a y ion at its first.']
+NOTES = ['A terminal ion covers its whole prefix (a, b, c) or suffix (x, y, z); '
+         'an internal fragment the residues between its two cleavages.']
