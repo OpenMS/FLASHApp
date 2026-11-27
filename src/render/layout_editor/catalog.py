@@ -47,6 +47,7 @@ TNT_COMPONENTS = [
     {'name': 'protein_group_table', 'label': 'Proteins', 'group': 'Tables'},
     {'name': 'proteoform_table', 'label': 'Proteoforms of the protein', 'group': 'Tables', 'requires': 'protein_group_table'},
     {'name': 'proteoform_prsm_table', 'label': 'PrSMs of the proteoform', 'group': 'Tables', 'requires': 'proteoform_table'},
+    {'name': 'protein_coverage', 'label': 'Sequence coverage of the protein', 'group': 'Sequence', 'requires': 'protein_group_table'},
     {'name': 'prsm_mass_table', 'label': 'PrSM mass table', 'group': 'Tables', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
@@ -109,7 +110,7 @@ _GROUPS = {
     ],
     ID_GROUP: [
         'protein_table', 'protein_group_table', 'proteoform_table', 'proteoform_prsm_table',
-        'prsm_mass_table', 'tag_table', 'sequence_view', 'internal_fragment_map', 'structure_view',
+        'protein_coverage', 'prsm_mass_table', 'tag_table', 'sequence_view', 'internal_fragment_map', 'structure_view',
         'combined_spectrum', 'proteoform_heatmap', 'id_fdr_plot', 'fragment_error_plot', 'mass_shifts',
         'id_qc', 'go_enrichment',
         'quant_id_counts', 'quant_id_frequency', 'quant_id_overlap', 'quant_id_table', 'quant_id_prsms',
@@ -171,6 +172,8 @@ TNT_LYSATE_LAYOUT = [
     # Two tables per row: three side by side left each too narrow to read
     ['protein_group_table', 'proteoform_table'],
     ['proteoform_prsm_table'],
+    # Where the protein's proteoforms lie on its sequence
+    ['protein_coverage'],
     ['proteoform_heatmap'],
     ['sequence_view'],
     ['anno_spectrum', 'deconv_spectrum'],

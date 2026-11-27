@@ -233,3 +233,103 @@ def most_rows(hits):
 def level_title(name, count):
     """Title of one level's table with its total, e.g. "Proteins (12)"."""
     return f'{name} ({count})'
+
+
+# ---- Sequence coverage of a protein -----------------------------------------
+
+def _split(value):
+    """FLASHTnT joins the values of several modifications with ';'."""
+    if value is None:
+        return []
+    return [part.strip() for part in str(value).split(';') if part.strip() and part.strip() != 'nan']
+
+
+def _modification_marks(row):
+    """(positions, labels) of a PrSM's modifications on the protein: the first
+    residue each may sit on (1-based), labelled with its name when FLASHTnT
+    names one, else its mass shift."""
+    if not row.get('ModCount'):
+        return [], []
+    starts, ends = _split(row.get('ModStart')), _split(row.get('ModEnd'))
+    masses, names = _split(row.get('ModMass')), _split(row.get('ModID'))
+    positions, labels = [], []
+    for i, start in enumerate(starts):
+        try:
+            position = int(float(start))
+        except ValueError:
+            continue
+        if position <= 0:
+            continue
+        candidates = [n for n in (names[i] if i < len(names) else '').split(',') if n]
+        if len(candidates) == 1:
+            label = candidates[0]
+        else:
+            try:
+                label = f'{float(masses[i]):+.2f} Da'
+            except (IndexError, ValueError):
+                label = 'modified'
+        if i < len(ends):
+            try:
+                end = int(float(ends[i]))
+                if end > position:
+                    label = f'{label} ({position}–{end})'
+            except ValueError:
+                pass
+        positions.append(position)
+        labels.append(label)
+    return positions, labels
+
+
+COVERAGE_SCHEMA = {
+    'match_id': pl.Int64, 'reference': pl.Int64, 'track': pl.String, 'start': pl.Int64,
+    'end': pl.Int64, 'sequence': pl.String, 'count': pl.Int64,
+    'mod_positions': pl.List(pl.Int64), 'mod_labels': pl.List(pl.String),
+}
+
+
+def coverage_rows(hits, track):
+    """One bar per proteoform for the sequence coverage map: where on its
+    protein it lies (1-based, inclusive; an undetermined terminus is the
+    protein's), its PrSMs and the modifications of its best PrSM. ``reference``
+    is the protein group the protein table selects, ``match_id`` the
+    proteoform the proteoform table selects."""
+    if not hits.height:
+        return pl.DataFrame(schema=COVERAGE_SCHEMA)
+    best = (
+        hits.sort('Score', descending=True, nulls_last=True)
+        .group_by('proteoform_id', maintain_order=True)
+        .agg(
+            pl.col('protein_group').first(),
+            pl.col('proteoform_key').first(),
+            pl.col('StartPosition').first(),
+            pl.col('EndPosition').first(),
+            pl.col('sequence').first().str.len_chars().alias('_length'),
+            pl.col('ModCount').first(), pl.col('ModMass').first(), pl.col('ModStart').first(),
+            pl.col('ModEnd').first(), pl.col('ModID').first(),
+            pl.len().alias('count'),
+        )
+        .sort('proteoform_id')
+    )
+    records = []
+    for row in best.iter_rows(named=True):
+        length = row['_length'] or 0
+        start = row['StartPosition'] if (row['StartPosition'] or 0) > 0 else 1
+        end = row['EndPosition'] if (row['EndPosition'] or 0) > 0 else max(length, start)
+        positions, labels = _modification_marks(row)
+        records.append({
+            'match_id': row['proteoform_id'], 'reference': row['protein_group'], 'track': track,
+            'start': int(start), 'end': int(end), 'sequence': row['proteoform_key'],
+            'count': int(row['count']), 'mod_positions': positions, 'mod_labels': labels,
+        })
+    return pl.DataFrame(records, schema=COVERAGE_SCHEMA)
+
+
+def protein_of(hits, protein_group):
+    """(accession, database sequence) of a protein group, or None."""
+    if protein_group is None or not hits.height:
+        return None
+    rows = hits.filter(pl.col('protein_group') == int(protein_group)).select('accession', 'sequence').head(1)
+    if not rows.height:
+        return None
+    accession, sequence = rows.row(0)
+    return accession, str(sequence or '')

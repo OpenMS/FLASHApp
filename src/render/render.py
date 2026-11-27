@@ -26,6 +26,10 @@ from openms_insight import (
 )
 from openms_insight.core.cache import CacheMissError
 
+# Where the proteoforms of a protein lie on its sequence; an openms-insight
+# release without it shows a note in its place
+SequenceCoverage = getattr(openms_insight, 'SequenceCoverage', None)
+
 # The heatmaps of MS data also draw their points in 3D (one cell instead of a
 # heatmap and a 3D map); an openms-insight release without it draws 2D only
 PeakMap = getattr(openms_insight, 'PeakMap', None)
@@ -58,7 +62,7 @@ from src.viz.features import (
 from src.viz.identification import (
     _hierarchy, fragment_errors, identification_qc, mass_shift_histogram, mass_shift_table, prsm_mass_table,
     prsm_table, proteoform_heatmap, proteoform_prsms, proteoforms, protein_groups, score_distribution,
-    sequence_view, structure_view, tag_table,
+    sequence_coverage, sequence_view, structure_view, tag_table,
 )
 from src.viz.quantification import reporter_ions, reporter_table
 
@@ -762,6 +766,31 @@ def _hierarchy_table(comp_name, file_manager, dataset_id):
     return table, height
 
 
+def _protein_coverage(comp_name, file_manager, dataset_id, state_manager):
+    """The proteoforms of the protein picked in the protein table, drawn
+    where they lie on its sequence; a click picks the proteoform."""
+    if SequenceCoverage is None:
+        raise MissingResult('a newer openms-insight')
+    hits = hierarchy_data.prsms(file_manager, dataset_id)
+    if not hits.height:
+        raise MissingResult('PrSMs')
+    track = file_manager.get_display_name(dataset_id) or str(dataset_id)
+    component = _component(
+        SequenceCoverage, comp_name, file_manager, dataset_id, ['protein_dfs', 'scan_table'],
+        lambda: dict(
+            data=hierarchy_data.coverage_rows(hits, track).lazy(),
+            **sequence_coverage.settings(
+                '', count_label='PrSMs', match='proteoform', reference_filter='protein_group',
+                title='Sequence coverage', track_order=[track],
+            ),
+        ),
+        extra=track,
+    )
+    protein = hierarchy_data.protein_of(hits, state_manager.get_selection('protein_group'))
+    component.set_reference(*(protein[::-1] if protein else ('', 'Pick a protein in the protein table')))
+    return component
+
+
 def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     """Insight component of a layout cell, and keyword arguments for rendering it."""
     fm, ds = file_manager, dataset_id
@@ -904,6 +933,9 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name in ('protein_group_table', 'proteoform_table', 'proteoform_prsm_table'):
         table, height = _hierarchy_table(comp_name, fm, ds)
         return table, {'height': height}
+
+    if comp_name == 'protein_coverage':
+        return _protein_coverage(comp_name, fm, ds, state_manager), {'height': 420}
 
     if comp_name == 'protein_table':
         return _component(
@@ -1215,6 +1247,8 @@ def _draw_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on
                 'No PrSM of this dataset has a proteoform or precursor mass, '
                 'so the proteoform heatmap has nothing to show.'
             )
+        elif str(e) == 'a newer openms-insight':
+            st.info('The sequence coverage map needs a newer openms-insight than the one installed.')
         else:
             st.info(f'This dataset has no data for this view ({e}).')
         return

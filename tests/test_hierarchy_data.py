@@ -151,3 +151,51 @@ def test_proteoform_map_shortens_long_proteoforms():
 def test_proteoform_map_empty():
     hits = hierarchy_data.assign_groups(_hits()).clear()
     assert hierarchy_data.proteoform_map_from(hits).height == 0
+
+
+def _coverage_hits():
+    return hierarchy_data.assign_groups(_hits()).with_columns(
+        pl.when(pl.col('accession') == 'P1').then(pl.lit('ACDEKG')).otherwise(pl.lit('XXMKLVAAAA'))
+        .alias('sequence'),
+        pl.when(pl.col('index') == 2).then(1).otherwise(0).alias('ModCount'),
+        pl.when(pl.col('index') == 2).then(pl.lit('15.99')).otherwise(None).alias('ModMass'),
+        pl.when(pl.col('index') == 2).then(pl.lit('3')).otherwise(None).alias('ModStart'),
+        pl.when(pl.col('index') == 2).then(pl.lit('3')).otherwise(None).alias('ModEnd'),
+        pl.when(pl.col('index') == 2).then(pl.lit('Oxidation')).otherwise(None).alias('ModID'),
+    )
+
+
+def test_coverage_one_bar_per_proteoform_on_its_protein():
+    hits = _coverage_hits()
+    bars = hierarchy_data.coverage_rows(hits, 'Run 1')
+    forms = hierarchy_data.proteoforms_from(hits)
+    assert bars['match_id'].to_list() == forms['proteoform_id'].to_list()
+    assert set(bars['track']) == {'Run 1'}
+    acdek = bars.filter(pl.col('sequence') == 'ACDEK').row(0, named=True)
+    assert (acdek['start'], acdek['end'], acdek['count']) == (1, 5, 2)
+    # The protein table selects by protein_group, which the bars carry
+    p1 = forms.filter(pl.col('proteoform') == 'ACDEK')['protein_group'][0]
+    assert acdek['reference'] == p1
+
+
+def test_coverage_undetermined_termini_span_the_protein():
+    bars = hierarchy_data.coverage_rows(_coverage_hits(), 'Run 1')
+    mklv = bars.filter(pl.col('sequence') == 'MKLV').row(0, named=True)
+    assert (mklv['start'], mklv['end']) == (1, 10)
+
+
+def test_coverage_marks_modifications_by_name_or_mass():
+    bars = hierarchy_data.coverage_rows(_coverage_hits(), 'Run 1')
+    cdek = bars.filter(pl.col('sequence') == 'CDEK').row(0, named=True)
+    assert cdek['mod_positions'] == [3]
+    assert cdek['mod_labels'] == ['Oxidation']
+    row = {'ModCount': 1, 'ModMass': '42.01', 'ModStart': '2.0', 'ModEnd': '4.0', 'ModID': 'Acetyl,Trimethyl,'}
+    assert hierarchy_data._modification_marks(row) == ([2], ['+42.01 Da (2–4)'])
+
+
+def test_coverage_reference_of_the_picked_protein():
+    hits = _coverage_hits()
+    group = hits.filter(pl.col('accession') == 'P1')['protein_group'][0]
+    assert hierarchy_data.protein_of(hits, group) == ('P1', 'ACDEKG')
+    assert hierarchy_data.protein_of(hits, None) is None
+    assert hierarchy_data.coverage_rows(hits.head(0), 'Run 1').height == 0
