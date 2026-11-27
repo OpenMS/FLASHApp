@@ -47,10 +47,10 @@ TNT_COMPONENTS = [
     {'name': 'protein_group_table', 'label': 'Proteins', 'group': 'Tables'},
     {'name': 'proteoform_table', 'label': 'Proteoforms of the protein', 'group': 'Tables', 'requires': 'protein_group_table'},
     {'name': 'proteoform_prsm_table', 'label': 'PrSMs of the proteoform', 'group': 'Tables', 'requires': 'proteoform_table'},
-    {'name': 'protein_coverage', 'label': 'Sequence coverage of the protein', 'group': 'Sequence', 'requires': 'protein_group_table'},
     {'name': 'prsm_mass_table', 'label': 'PrSM mass table', 'group': 'Tables', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'sequence_view', 'label': 'Sequence view', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     {'name': 'structure_view', 'label': 'Structure view (3D)', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
+    {'name': 'fragment_coverage', 'label': 'Fragment ion coverage', 'group': 'Sequence', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
     # Internal fragment map is disabled for FLASHTnT for now.
     {'name': 'combined_spectrum', 'label': 'Sequence tag view', 'group': 'Sequence', 'requires': 'tag_table'},
     {'name': 'survey_spectrum', 'label': 'Precursor spectrum (MS1)', 'group': 'Spectra & plots', 'requires': _SELECTED_PROTEOFORM, 'requires_label': 'a protein or proteoform table'},
@@ -110,7 +110,7 @@ _GROUPS = {
     ],
     ID_GROUP: [
         'protein_table', 'protein_group_table', 'proteoform_table', 'proteoform_prsm_table',
-        'protein_coverage', 'prsm_mass_table', 'tag_table', 'sequence_view', 'internal_fragment_map', 'structure_view',
+        'prsm_mass_table', 'tag_table', 'sequence_view', 'fragment_coverage', 'internal_fragment_map', 'structure_view',
         'combined_spectrum', 'proteoform_heatmap', 'id_fdr_plot', 'fragment_error_plot', 'mass_shifts',
         'id_qc', 'go_enrichment',
         'quant_id_counts', 'quant_id_frequency', 'quant_id_overlap', 'quant_id_table', 'quant_id_prsms',
@@ -166,16 +166,17 @@ DECONV_DEFAULT_LAYOUT = [['ms1_deconv_heat_map'], ['scan_table', 'mass_table'],
 # identifications, browsed protein by protein.
 # The raw and the deconvolved spectrum below the sequence view show the
 # fragment ions it matched.
-TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['anno_spectrum', 'deconv_spectrum'],
+TNT_NATIVE_LAYOUT = [['protein_table'], ['sequence_view'], ['fragment_coverage'],
+                     ['anno_spectrum', 'deconv_spectrum'],
                      ['structure_view'], ['tag_table'], ['combined_spectrum']]
 TNT_LYSATE_LAYOUT = [
     # Two tables per row: three side by side left each too narrow to read
     ['protein_group_table', 'proteoform_table'],
     ['proteoform_prsm_table'],
-    # Where the protein's proteoforms lie on its sequence
-    ['protein_coverage'],
     ['proteoform_heatmap'],
     ['sequence_view'],
+    # The fragment ions of the proteoform under its sequence
+    ['fragment_coverage'],
     ['anno_spectrum', 'deconv_spectrum'],
     ['fragment_error_plot', 'precursor_xic'],
     ['id_qc'],
