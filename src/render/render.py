@@ -38,7 +38,7 @@ except ImportError:
 
 from src.render import (
     envelope_overlay, go_terms, hierarchy_data, insight_data, linked_spectra, mass_shifts, modifications,
-    prsm_data, prsm_overview, qc_data, validation_data,
+    id_diagnosis, prsm_data, prsm_overview, qc_data, validation_data,
 )
 from src.render.cache_dirs import build_lock, insight_cache_dir
 from src.render.fragmentation import mzml_scan_methods
@@ -56,6 +56,7 @@ from src.viz.features import (
     deconvolved_heatmap, isotope_envelope, mass_table, precursor_xic, qscore_fdr, run_qc, signal_noise_3d,
 )
 from src.viz.identification import (
+    identification_steps,
     _hierarchy, fragment_errors, identification_qc, mass_shift_histogram, mass_shift_table, prsm_mass_table,
     prsm_table, proteoform_heatmap, proteoform_prsms, proteoforms, protein_groups, score_distribution,
     sequence_view, structure_view, tag_table,
@@ -70,7 +71,7 @@ def _code_version():
     digest = hashlib.md5(openms_insight.__version__.encode())
     for module in (
         __file__, insight_data.__file__, validation_data.__file__, qc_data.__file__,
-        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__,
+        hierarchy_data.__file__, prsm_data.__file__, go_terms.__file__, mass_shifts.__file__, id_diagnosis.__file__,
         str(Path(__file__).with_name('quant_cells.py')),
         # The library panels the cells are configured with
         *sorted(str(f) for f in Path(__file__).parents[1].joinpath('viz').rglob('*.py')),
@@ -1142,6 +1143,31 @@ def _render_mass_shifts(file_manager, dataset_id, state_manager, key):
                 height=mass_shift_table.height(groups.height, TABLE_HEIGHT))
 
 
+# Identification diagnostics (src/render/id_diagnosis.py)
+def _render_id_diagnostics(file_manager, dataset_id, state_manager, key):
+    """The run's MS2 spectra step by step to a PrSM (deconvolved, with a
+    precursor mass, tagged, matched, within the FDR), with the likely cause
+    beside each step that loses more than is usual."""
+    counts = id_diagnosis.steps(file_manager, dataset_id)
+    if counts is None:
+        st.info('This dataset has no data for this view (scan_table).')
+        return
+    table = id_diagnosis.diagnose(counts)
+    st.caption(id_diagnosis.headline(counts))
+    sources = ['scan_table', 'protein_dfs', 'tag_dfs', 'settings']
+    component = _component(
+        Table, 'id_diagnostics', file_manager, dataset_id, sources,
+        lambda: dict(
+            data=table.with_row_index('row').lazy(),
+            **identification_steps.settings(max_causes=id_diagnosis.MAX_CAUSES),
+        ),
+        required=['scan_table'],
+    )
+    rows_with_causes = sum(bool(cause) for cause in table['cause'])
+    component(key=key, state_manager=state_manager,
+              height=min(TABLE_HEIGHT + 300, 200 + 36 * table.height + 60 * rows_with_causes))
+
+
 INSPECT_LABEL = 'Inspect this spectrum in Match fragments'
 
 
@@ -1202,6 +1228,9 @@ def _draw_cell(comp_name, file_manager, dataset_id, tool, state_manager, key, on
         return
     if comp_name == 'mass_shifts':
         _render_mass_shifts(file_manager, dataset_id, state_manager, key)
+        return
+    if comp_name == 'id_diagnostics':
+        _render_id_diagnostics(file_manager, dataset_id, state_manager, key)
         return
     if comp_name == 'go_enrichment':
         from src.render import go_view
