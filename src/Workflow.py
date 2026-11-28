@@ -903,6 +903,14 @@ class IdaWorkflow(WorkflowManager):
                  "built-in presets are saved there once.",
             reactive=True,
         )
+        self.ui.input_widget(
+            key="contact-closure", name="Wait for the contact closure", default=True,
+            widget_type="checkbox",
+            help="In a sequence, FLASHIda waits for the instrument's contact closure (the start "
+                 "signal of the LC) before it sends its first scan. Switch off for direct "
+                 "infusion or a sequence without a contact closure: FLASHIda then starts as soon "
+                 "as the run's raw file appears. A single run always starts at once.",
+        )
 
     def _single_run(self, exe, raw_dir, folder, single) -> bool:
         """FLASHIda for one raw file the instrument is writing already, with a
@@ -933,7 +941,11 @@ class IdaWorkflow(WorkflowManager):
         flashida.remember_log_folder(self.workflow_dir, log_dir)
         self.logger.log(f"Single run: starting FLASHIda for '{raw.name}' with the method '{method_file}' "
                         f"(logs in '{log_dir}')...")
-        done = self.executor.run_command([exe, '-m', method_path, '-r', raw], cwd=exe.parent)
+        # The contact closure of this run has passed already: FLASHIda starts at once (-o)
+        done = self.executor.run_command(
+            flashida.flash_command(exe, method_path, raw, wait_for_contact_closure=False),
+            cwd=exe.parent,
+        )
         status['runs'][name] = {'state': 'done' if done else 'failed',
                                 'since': status['runs'][name]['since'], 'ended': time.time()}
         flashida.write_status(self.workflow_dir, status)
@@ -965,6 +977,7 @@ class IdaWorkflow(WorkflowManager):
             finally:
                 flashida.clear_single_run(self.workflow_dir)
 
+        wait_cc = params.get('contact-closure', True) not in (False, 'false', 0)
         runs = flashida_method.load_runs(self.workflow_dir)
         if not runs:
             self.logger.log('Add the runs to acquire to the table first.')
@@ -1033,7 +1046,9 @@ class IdaWorkflow(WorkflowManager):
                 state[methods[name.casefold()][0]] = {'state': 'skipped'}
 
         sequence_key = None
-        self.logger.log(f"Watching '{raw_dir}' for the newest sequence and new raw files...")
+        self.logger.log(f"Watching '{raw_dir}' for the newest sequence and new raw files"
+                        + (' (FLASHIda waits for each run\'s contact closure)...' if wait_cc
+                           else ' (FLASHIda starts without waiting for a contact closure)...'))
         while True:
             sld = flashida.newest_sequence(raw_dir)
             try:
@@ -1087,7 +1102,8 @@ class IdaWorkflow(WorkflowManager):
                     self.logger.log(f"WARNING: the status file could not be written: the page keeps "
                                     f"the old status of '{run_name}' while FLASHIda runs.")
                 done = self.executor.run_command(
-                    [exe, '-m', method_path, '-r', Path(raw_dir, name + '.raw')],
+                    flashida.flash_command(exe, method_path, Path(raw_dir, name + '.raw'),
+                                           wait_for_contact_closure=wait_cc),
                     cwd=exe.parent,
                 )
                 state[run_name] = {'state': 'done' if done else 'failed',
