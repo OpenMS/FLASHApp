@@ -274,11 +274,15 @@ def _component(cls, name, file_manager, dataset_id, sources, build, extra=None, 
         return cls(cache_id=cache_id, cache_path=str(cache_path), **zoom, **build())
 
 
-def _heatmap(comp_name, file_manager, dataset_id, view='2d'):
+def _heatmap(comp_name, file_manager, dataset_id, view='2d', tool=None, state_manager=None):
     """A heatmap of MS data, which its toolbar also draws in 3D; ``view``
-    is the drawing it opens with."""
+    is the drawing it opens with. A raw map marks the peaks of the selected
+    spectrum: the MS1 map those of its precursor spectrum, the MS2 map its own."""
     result, title, y_label, sets_mass = HEATMAPS[comp_name]
     shared = dict(min_points=insight_data.HEATMAP_MIN_POINTS, **_svg('heatmap'))
+    marked = _marked_spectrum(comp_name, file_manager, dataset_id, tool, state_manager)
+    if marked:
+        shared['highlight'] = {marked: 'scan_idx'}
     cls = PeakMap or Heatmap
     if insight_data.result_path(file_manager, dataset_id, result) is None:
         raise MissingResult(result)
@@ -296,6 +300,24 @@ def _heatmap(comp_name, file_manager, dataset_id, view='2d'):
         ),
         render=dict(view=view) if PeakMap is not None else None,
     )
+
+
+def _marked_spectrum(comp_name, file_manager, dataset_id, tool, state_manager):
+    """The selection whose spectrum a raw heatmap marks, or None: the precursor
+    spectrum of the selected spectrum on the MS1 map, the selected spectrum on
+    the MS2 map."""
+    if state_manager is None or comp_name not in ('ms1_raw_heatmap', 'ms2_raw_heatmap'):
+        return None
+    scan_identifier = 'pscan' if tool == 'flashtnt' else 'scan'
+    if comp_name == 'ms2_raw_heatmap':
+        return scan_identifier
+    if insight_data.result_path(file_manager, dataset_id, 'scan_table') is None:
+        return None
+    try:
+        _follow_selected_spectrum(file_manager, dataset_id, state_manager, scan_identifier)
+    except MissingResult:
+        return None
+    return SURVEY
 
 
 # Whether Plot3D draws the points of a selected value apart; left out with an
@@ -767,7 +789,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     fm, ds = file_manager, dataset_id
 
     if comp_name in HEATMAPS:
-        return _heatmap(comp_name, fm, ds), {'height': 450}
+        return _heatmap(comp_name, fm, ds, tool=tool, state_manager=state_manager), {'height': 450}
 
     if comp_name == 'proteoform_heatmap':
         return _proteoform_heatmap(comp_name, fm, ds), {'height': 450}
@@ -883,7 +905,7 @@ def _build(comp_name, file_manager, dataset_id, tool, state_manager):
     if comp_name == 'ms1_3d_map':
         # The MS1 heatmap opened in 3D (layouts saved before the two were one)
         if PeakMap is not None:
-            return _heatmap('ms1_raw_heatmap', fm, ds, view='3d'), {'height': 600}
+            return _heatmap('ms1_raw_heatmap', fm, ds, view='3d', tool=tool, state_manager=state_manager), {'height': 600}
         return _ms1_3d_map(comp_name, fm, ds, tool, state_manager), {'height': 600}
 
     if comp_name == 'fragment_error_plot':
